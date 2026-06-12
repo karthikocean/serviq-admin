@@ -1,0 +1,106 @@
+/* Order Management specific styles */
+
+.incoming-orders-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.incoming-order-bar {
+  background-color: #ffffff;
+  border-radius: var(--border-radius-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.order-bar-header {
+  padding: 12px 20px;
+  background-color: #fdfdfd;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.order-bar-id {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--black);
+}
+
+.order-bar-table {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-main);
+}
+
+.order-bar-time {
+  font-size: 12px;
+  color: gray;
+}
+
+.order-bar-content {
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.order-bar-details {
+  flex: 1;
+}
+
+.order-item-pill {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--black);
+  display: inline-flex;
+  align-items: center;
+}
+
+.order-item-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: black;
+  font-style: italic;
+}
+
+.order-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-print {
+  background: white;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.btn-print:hover {
+  background-color: var(--bg-secondary);
+}
+
+.btn-mark-complete {
+  background-color: var(--black);
+  color: white;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.btn-mark-complete:hover {
+  background-color: #1f2937;
+}

@@ -1,0 +1,134 @@
+/* QR Code Management specific styles */
+
+.qr-customizer-column {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.customizer-header {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--black);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.sticker-preview-card {
+  background: white;
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+  position: relative;
+  color: #000000;
+}
+
+.sticker-restaurant-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #000000;
+  margin-bottom: 2px;
+}
+
+.sticker-subtitle {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+
+.sticker-qr-wrapper {
+  width: 160px;
+  height: 160px;
+  background-color: white;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fancy-qr-code {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sticker-table-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.sticker-url-text {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+.sticker-footer-instructions {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.customizer-controls-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.control-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: black;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.qr-color-dots {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.qr-color-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px #cbd5e1;
+  cursor: pointer;
+  outline: none;
+  transition: var(--transition);
+}
+
+.qr-color-dot:hover {
+  transform: scale(1.15);
+}
+
+.qr-color-dot.active {
+  box-shadow: 0 0 0 2px var(--primary);
+  transform: scale(1.1);
+}
