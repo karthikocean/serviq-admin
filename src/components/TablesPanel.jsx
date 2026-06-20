@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAppState } from '../config/AppContext';
+import { Modal } from './Modal';
 
 // Clean SVG Icons to replace raw emojis
 const WaiterIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -31,23 +32,6 @@ const WarningIcon = ({ size = 14, color = '#f59e0b' }) => (
   </svg>
 );
 
-const PrintIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <polyline points="6 9 6 2 18 2 18 9" />
-    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-    <rect x="6" y="14" width="12" height="8" />
-  </svg>
-);
-
-const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="7 10 12 15 17 10" />
-    <line x1="12" y1="15" x2="12" y2="3" />
-  </svg>
-);
-
-
 const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M3 6h18" />
@@ -59,7 +43,6 @@ const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
 export default function TablesPanel({
   tables = [],
   staff = [],
-  orders = [],
   activeRestaurant = {},
   updateDiningTable,
   deleteDiningTable,
@@ -67,16 +50,12 @@ export default function TablesPanel({
   setAddTableForm,
   setActivePage
 }) {
-  const { assignQrCode, revokeQrCode } = useAppState();
+  const [tableToDelete, setTableToDelete] = React.useState(null);
   const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
-  
-  const qrCodes = activeRestaurant.qrCodes || [];
-  const unassignedQrCodes = qrCodes.filter(q => q.status === 'Unassigned');
 
   const getTableWaiterInfo = (t) => {
     const primary = staff.find(s => s.id === t.assignedWaiterId);
-    const cover = staff.find(s => s.id === t.tempWaiterId);
-    return { primary, cover };
+    return { primary };
   };
 
   return (
@@ -159,17 +138,12 @@ export default function TablesPanel({
                 <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>SEATS CAPACITY</th>
                 <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>STATUS</th>
                 <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PRIMARY WAITER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>COVER WAITER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>ACTIVE SESSION</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', width: '220px' }}>LINKED QR CODE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', width: '280px' }}>ACTIONS</th>
+                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', width: '120px' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {tables.map(table => {
-                const { primary, cover } = getTableWaiterInfo(table);
-                const tableNum = table.id.replace('T-', '');
-                const activeTableOrder = orders.find(o => (o.table === tableNum || parseInt(o.table) === parseInt(tableNum)) && o.billingStatus === 'unpaid');
+                const { primary } = getTableWaiterInfo(table);
                 
                 return (
                   <tr key={table.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -181,7 +155,6 @@ export default function TablesPanel({
                       <input
                         type="number"
                         min="1"
-                        max="20"
                         value={table.seats || 4}
                         onChange={e => {
                           const val = parseInt(e.target.value) || 1;
@@ -214,8 +187,14 @@ export default function TablesPanel({
                       </span>
                     </td>
 
-                    {/* Read-Only Primary Waiter */}
-                    <td style={{ padding: '14px' }}>
+                    {/* Primary Waiter - Click to Assign */}
+                    <td 
+                      style={{ padding: '14px', cursor: 'pointer', transition: 'background-color 0.15s' }} 
+                      onClick={() => handleOpenAssignTablesModal(primary?.id)}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      title="Assign Waiter"
+                    >
                       {primary ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontWeight: '600', color: 'var(--text-main)', textDecoration: primary.status === 'Off Duty' ? 'line-through' : 'none', opacity: primary.status === 'Off Duty' ? 0.7 : 1 }}>
@@ -244,144 +223,9 @@ export default function TablesPanel({
                       ) : (
                         <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>Unassigned</span>
                       )}
-                    </td>
-
-                    {/* Read-Only Cover Waiter */}
-                    <td style={{ padding: '14px' }}>
-                      {cover ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: '600', color: 'var(--text-main)', textDecoration: cover.status === 'Off Duty' ? 'line-through' : 'none', opacity: cover.status === 'Off Duty' ? 0.7 : 1 }}>
-                            {cover.name}
-                          </span>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            borderRadius: '12px', 
-                            fontSize: '10px', 
-                            fontWeight: '700', 
-                            backgroundColor: cover.status === 'On Duty' ? '#dcfce7' : '#fee2e2', 
-                            color: cover.status === 'On Duty' ? '#15803d' : '#ef4444',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: cover.status === 'On Duty' ? '#2ebd59' : '#ef4444', display: 'inline-block' }}></span>
-                            {cover.status === 'On Duty' ? 'On Duty' : 'Off Duty'}
-                          </span>
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>None</span>
-                      )}
-                    </td>
-
-                    {/* Active Session info */}
-                    <td style={{ padding: '14px', color: 'var(--text-main)' }}>
-                      {activeTableOrder ? (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 600 }}>#ORD-{activeTableOrder.id}</span>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>₹{activeTableOrder.total}</span>
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>-</span>
-                      )}
-                    </td>
-
-                    {/* Linked QR Code (dropdown to map to unassigned QRs) */}
-                    <td style={{ padding: '14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {table.assignedQrId ? (
-                          <>
-                            <span style={{
-                              fontWeight: '700',
-                              fontSize: '12px',
-                              backgroundColor: 'var(--primary-light)',
-                              color: 'var(--primary)',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid var(--primary-light)'
-                            }}>
-                              {table.assignedQrId}
-                            </span>
-                            <button
-                              title="Unlink QR Code"
-                              onClick={() => revokeQrCode(activeRestaurant.id, table.assignedQrId)}
-                              style={{
-                                border: '1px solid var(--border)',
-                                background: '#fef2f2',
-                                color: '#ef4444',
-                                padding: '4px 8px',
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                borderRadius: '6px',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              Unlink
-                            </button>
-                          </>
-                        ) : (
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                assignQrCode(activeRestaurant.id, e.target.value, table.id);
-                              }
-                            }}
-                            style={{
-                              padding: '6px 8px',
-                              borderRadius: '6px',
-                              border: '1px solid var(--border)',
-                              backgroundColor: 'var(--bg-primary)',
-                              color: 'var(--text-muted)',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              width: '100%',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <option value="">Link QR Code...</option>
-                            {unassignedQrCodes.map(q => (
-                              <option key={q.id} value={q.id}>
-                                {q.id}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Unified Actions Column (consistently styled, prevents button wrap) */}
+                    </td>                    {/* Unified Actions Column (consistently styled, prevents button wrap) */}
                     <td style={{ padding: '14px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                        <button 
-                          className="table-action-btn" 
-                          title="Print Table QR Sticker"
-                          onClick={() => {
-                            if (table.assignedQrId) {
-                              alert(`Sticker template print sent for Table ${tableNum} (${table.assignedQrId})!`);
-                            } else {
-                              alert(`Please link a QR Code to Table ${tableNum} first.`);
-                            }
-                          }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px' }}
-                        >
-                          <PrintIcon size={12} />
-                          Print
-                        </button>
-                        <button 
-                          className="table-action-btn" 
-                          title="Download Table QR vector SVG"
-                          onClick={() => {
-                            if (table.assignedQrId) {
-                              alert(`SVG downloaded for Table ${tableNum} (${table.assignedQrId})!`);
-                            } else {
-                              alert(`Please link a QR Code to Table ${tableNum} first.`);
-                            }
-                          }}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px' }}
-                        >
-                          <DownloadIcon size={12} />
-                          SVG
-                        </button>
                         <button 
                           className="table-action-btn" 
                           title="Edit Table"
@@ -397,9 +241,7 @@ export default function TablesPanel({
                           className="table-action-btn delete-btn" 
                           title="Delete Table"
                           onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete Table ${table.id}?`)) {
-                              deleteDiningTable(activeRestaurant.id, table.id);
-                            }
+                            setTableToDelete(table);
                           }}
                           style={{ padding: '6px' }}
                         >
@@ -414,6 +256,61 @@ export default function TablesPanel({
           </table>
         </div>
       </div>
+
+      <Modal
+        isOpen={!!tableToDelete}
+        onClose={() => setTableToDelete(null)}
+        title="Confirm Deletion"
+        maxWidth="400px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Dining Table</p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                Are you sure you want to delete Table {tableToDelete?.id}? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+            <button 
+              className="btn btn-outline" 
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => setTableToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button 
+              className="btn btn-black" 
+              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
+              onClick={() => {
+                if (tableToDelete) {
+                  deleteDiningTable(activeRestaurant.id, tableToDelete.id);
+                  setTableToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

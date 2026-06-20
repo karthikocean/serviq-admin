@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import TablesPanel from '../../components/TablesPanel';
 import { Modal } from '../../components/Modal';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 import './TableManagement.css';
 
 export default function TableManagement() {
@@ -61,7 +62,7 @@ export default function TableManagement() {
     setShowAssignTablesModal(false);
   };
 
-  const handleAddTableSubmit = (e) => {
+  const handleAddTableSubmit = async (e) => {
     e.preventDefault();
     const tableId = addTableForm.id.trim();
     if (!tableId) return;
@@ -73,22 +74,18 @@ export default function TableManagement() {
         seats: seats,
         status: addTableForm.status || 'Free'
       });
-      alert('Table updated successfully!');
       setAddTableForm({ id: '', seats: 4 });
       setActivePage(null);
     } else {
-      const success = addDiningTable(activeRestaurant.id, {
+      const success = await addDiningTable(activeRestaurant.id, {
         id: tableId,
         status: 'Free',
         seats: seats
       });
 
       if (success) {
-        alert('Table created successfully!');
         setAddTableForm({ id: '', seats: 4 });
         setActivePage(null);
-      } else {
-        alert('Table ID already exists! Please use a unique ID.');
       }
     }
   };
@@ -140,7 +137,6 @@ export default function TableManagement() {
                   <input
                     type="number"
                     min="1"
-                    max="20"
                     value={addTableForm.seats}
                     onChange={(e) => setAddTableForm({ ...addTableForm, seats: parseInt(e.target.value) || 4 })}
                     required

@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { initialRestaurantsData, initialState } from './initialData';
+import MemberApi from '../api/Table.js';
+import QrCodeApi from '../api/QrCode.js';
+import OrderApi from '../api/Order.js';
 
 const AppContext = createContext();
 
@@ -80,6 +83,132 @@ export const AppProvider = ({ children }) => {
 
   // Active computed tenant info
   const activeRestaurant = currentRestaurantId ? restaurantsData[currentRestaurantId] : null;
+
+  const computeBillingData = (ordersList = [], tablesList = []) => {
+    return tablesList.map(t => {
+      const tableNum = t.id.replace('T-', '');
+      const tableLabel = `Table ${tableNum}`;
+      const unpaidOrders = ordersList.filter(o => {
+        const oTable = o.table.replace('Table ', '').trim();
+        return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'unpaid';
+      });
+
+      if (unpaidOrders.length > 0) {
+        const total = unpaidOrders.reduce((sum, o) => sum + o.total, 0);
+        return {
+          table: tableLabel,
+          orders: unpaidOrders.length,
+          total: total,
+          status: 'Unpaid'
+        };
+      } else {
+        const paidOrders = ordersList.filter(o => {
+          const oTable = o.table.replace('Table ', '').trim();
+          return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'paid';
+        });
+        const lastPaidTotal = paidOrders.length > 0 ? paidOrders[paidOrders.length - 1].total : 0;
+        return {
+          table: tableLabel,
+          orders: 0,
+          total: lastPaidTotal,
+          status: 'Paid'
+        };
+      }
+    });
+  };
+
+  const fetchTables = async () => {
+    if (!currentRestaurantId) return;
+    try {
+      const res = await MemberApi.getTables();
+      if (res && res.status && res.response && res.response.data) {
+        setRestaurantsData(prev => {
+          const rest = prev[currentRestaurantId];
+          if (!rest) return prev;
+          const localTables = rest.tables || [];
+          const mapped = res.response.data.map(t => {
+            const localT = localTables.find(lt => lt.id.toLowerCase() === t.tableNumber.toLowerCase());
+            return {
+              _id: t._id,
+              id: t.tableNumber,
+              seats: t.seatingCapacity,
+              status: t.status ? 'Occupied' : 'Free',
+              isActive: t.isActive,
+              assignedWaiterId: localT?.assignedWaiterId || null,
+              tempWaiterId: localT?.tempWaiterId || null,
+              assignedQrId: t.assignedQrId || null
+            };
+          });
+          const computedBillData = computeBillingData(rest.orders || [], mapped);
+          return {
+            ...prev,
+            [currentRestaurantId]: {
+              ...rest,
+              tables: mapped,
+              billingData: computedBillData
+            }
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch tables", e);
+    }
+  };
+
+  const fetchQrCodes = async () => {
+    if (!currentRestaurantId) return;
+    try {
+      const res = await QrCodeApi.getQrCodes();
+      if (res && res.status && res.response && res.response.data) {
+        setRestaurantsData(prev => {
+          const rest = prev[currentRestaurantId];
+          if (!rest) return prev;
+          return {
+            ...prev,
+            [currentRestaurantId]: {
+              ...rest,
+              qrCodes: res.response.data
+            }
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch QR codes", e);
+    }
+  };
+
+  const fetchOrders = async () => {
+    if (!currentRestaurantId) return;
+    try {
+      const res = await OrderApi.getOrders();
+      if (res && res.status && res.response && res.response.data) {
+        setRestaurantsData(prev => {
+          const rest = prev[currentRestaurantId];
+          if (!rest) return prev;
+          const computedBillData = computeBillingData(res.response.data, rest.tables || []);
+          return {
+            ...prev,
+            [currentRestaurantId]: {
+              ...rest,
+              orders: res.response.data,
+              billingData: computedBillData
+            }
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch orders", e);
+    }
+  };
+
+  useEffect(() => {
+    const initData = async () => {
+      await fetchTables();
+      await fetchOrders();
+      await fetchQrCodes();
+    };
+    initData();
+  }, [currentRestaurantId]);
 
   // Sync theme changes with body class and css variables
   useEffect(() => {
@@ -244,45 +373,53 @@ export const AppProvider = ({ children }) => {
     });
   };
 
-  const addDiningTable = (id, table) => {
-    let success = false;
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      
-      // Check if table ID already exists
-      if (rest.tables.some(t => t.id.toLowerCase() === table.id.toLowerCase())) {
-        return prev;
-      }
-      
-      success = true;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          tables: [...rest.tables, table],
-          settings: {
-            ...rest.settings,
-            tablesCount: rest.tables.length + 1
-          }
-        }
+  const addDiningTable = async (id, table) => {
+    try {
+      const payload = {
+        tableNumber: table.id,
+        seatingCapacity: table.seats
       };
-    });
-    return success;
+      const res = await MemberApi.createTable(payload);
+      if (res && res.status) {
+        await fetchTables();
+        return true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return false;
   };
 
-  const updateDiningTable = (id, tableId, updatedFields) => {
+  const updateDiningTable = async (id, tableId, updatedFields) => {
+    const rest = restaurantsData[id];
+    if (!rest) return;
+    const targetTable = rest.tables?.find(t => t.id === tableId);
+    if (!targetTable) return;
+
+    const payload = {};
+    if (updatedFields.seats !== undefined) payload.seatingCapacity = updatedFields.seats;
+    if (updatedFields.status !== undefined) payload.status = updatedFields.status === 'Occupied';
+    if (updatedFields.isActive !== undefined) payload.isActive = updatedFields.isActive;
+    
+    // Update local state optimistically
     setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
+      const restObj = prev[id];
+      if (!restObj) return prev;
       return {
         ...prev,
         [id]: {
-          ...rest,
-          tables: rest.tables.map(t => t.id === tableId ? { ...t, ...updatedFields } : t)
+          ...restObj,
+          tables: restObj.tables.map(t => t.id === tableId ? { ...t, ...updatedFields } : t)
         }
       };
     });
+
+    try {
+      await MemberApi.updateTable(targetTable._id, payload);
+      await fetchTables();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const assignTablesToWaiter = (id, waiterId, tableIds, coverWaiterId) => {
@@ -315,57 +452,54 @@ export const AppProvider = ({ children }) => {
     });
   };
 
-  const updateOrderItemStatus = (id, orderId, itemName, nextStatus) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: rest.orders.map(order => {
-            if (order.id === orderId) {
-              const updatedItems = order.items.map(item => {
-                if (item.name === itemName) {
-                  return { ...item, status: nextStatus };
-                }
-                return item;
-              });
+  const updateOrderItemStatus = async (id, orderId, itemName, nextStatus) => {
+    const rest = restaurantsData[id];
+    if (!rest) return;
+    const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
+    if (!order) return;
 
-              // Determine overall order status based on item statuses
-              const statuses = updatedItems.map(item => item.status || 'new');
-              const allServed = statuses.every(s => s === 'done' || s === 'served');
-              const allReadyOrServed = statuses.every(s => s === 'ready' || s === 'done' || s === 'served');
-              const anyPreparingOrReady = statuses.some(s => s === 'preparing' || s === 'ready');
-              
-              let newOrderStatus = order.status;
-              if (allServed) {
-                newOrderStatus = 'done';
-              } else if (allReadyOrServed) {
-                newOrderStatus = 'ready';
-              } else if (anyPreparingOrReady) {
-                newOrderStatus = 'preparing';
-              } else {
-                newOrderStatus = 'new';
-              }
-
-              const updatedOrder = {
-                ...order,
-                items: updatedItems,
-                status: newOrderStatus
-              };
-
-              if (newOrderStatus === 'done') {
-                updatedOrder.billingStatus = 'paid';
-              }
-
-              return updatedOrder;
-            }
-            return order;
-          })
-        }
-      };
+    const updatedItems = order.items.map(item => {
+      if (item.name === itemName) {
+        return { ...item, status: nextStatus };
+      }
+      return item;
     });
+
+    const statuses = updatedItems.map(item => item.status || 'new');
+    const allServed = statuses.every(s => s === 'done' || s === 'served');
+    const allReadyOrServed = statuses.every(s => s === 'ready' || s === 'done' || s === 'served');
+    const anyPreparingOrReady = statuses.some(s => s === 'preparing' || s === 'ready');
+
+    let newOrderStatus = order.status;
+    if (allServed) {
+      newOrderStatus = 'done';
+    } else if (allReadyOrServed) {
+      newOrderStatus = 'ready';
+    } else if (anyPreparingOrReady) {
+      newOrderStatus = 'preparing';
+    } else {
+      newOrderStatus = 'new';
+    }
+
+    const payload = {
+      items: updatedItems,
+      status: newOrderStatus
+    };
+
+    if (newOrderStatus === 'done') {
+      payload.billingStatus = 'paid';
+    }
+
+    try {
+      const idToUpdate = order._id || order.id || order.orderId;
+      const res = await OrderApi.updateOrder(idToUpdate, payload);
+      if (res && res.status) {
+        await fetchOrders();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const upgradeRestaurantPlan = (id, planName) => {
@@ -386,11 +520,17 @@ export const AppProvider = ({ children }) => {
     updateDiningTable(id, tableId, { seats });
   };
 
-  const deleteDiningTable = (id, tableId) => {
+  const deleteDiningTable = async (id, tableId) => {
+    const rest = restaurantsData[id];
+    if (!rest) return;
+    const targetTable = rest.tables?.find(t => t.id === tableId);
+    if (!targetTable) return;
+
+    // Update local state optimistically
     setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      const qrs = rest.qrCodes || [];
+      const restObj = prev[id];
+      if (!restObj) return prev;
+      const qrs = restObj.qrCodes || [];
       const updatedQrCodes = qrs.map(q => {
         if (q.tableId === tableId) {
           return { ...q, status: 'Unassigned', tableId: null };
@@ -400,143 +540,70 @@ export const AppProvider = ({ children }) => {
       return {
         ...prev,
         [id]: {
-          ...rest,
-          tables: rest.tables.filter(t => t.id !== tableId),
+          ...restObj,
+          tables: restObj.tables.filter(t => t.id !== tableId),
           qrCodes: updatedQrCodes,
           settings: {
-            ...rest.settings,
-            tablesCount: Math.max(0, rest.tables.length - 1)
+            ...restObj.settings,
+            tablesCount: Math.max(0, restObj.tables.length - 1)
           }
         }
       };
     });
+
+    try {
+      await MemberApi.deleteTable(targetTable._id);
+      await fetchTables();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const generateQrCode = (restId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[restId];
-      if (!rest) return prev;
-      const qrs = rest.qrCodes || [];
-      let maxNum = 100;
-      qrs.forEach(q => {
-        const num = parseInt(q.id.replace('QR-', ''));
-        if (!isNaN(num) && num > maxNum) maxNum = num;
-      });
-      const nextId = `QR-${maxNum + 1}`;
-      const newQr = {
-        id: nextId,
-        status: 'Unassigned',
-        tableId: null,
-        scansCount: 0,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      return {
-        ...prev,
-        [restId]: {
-          ...rest,
-          qrCodes: [...qrs, newQr]
-        }
-      };
-    });
+  const generateQrCode = async (restId) => {
+    try {
+      const res = await QrCodeApi.generateQrCode();
+      if (res && res.status) {
+        await fetchQrCodes();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const assignQrCode = (restId, qrId, tableId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[restId];
-      if (!rest) return prev;
-      
-      const qrs = rest.qrCodes || [];
-      const tables = rest.tables || [];
-
-      const updatedQrCodes = qrs.map(q => {
-        if (q.id === qrId) {
-          return { ...q, status: tableId ? 'Assigned' : 'Unassigned', tableId: tableId || null };
-        }
-        if (tableId && q.tableId === tableId) {
-          return { ...q, status: 'Unassigned', tableId: null };
-        }
-        return q;
-      });
-
-      const updatedTables = tables.map(t => {
-        if (t.id === tableId) {
-          return { ...t, assignedQrId: qrId };
-        }
-        if (t.assignedQrId === qrId) {
-          return { ...t, assignedQrId: null };
-        }
-        return t;
-      });
-
-      return {
-        ...prev,
-        [restId]: {
-          ...rest,
-          qrCodes: updatedQrCodes,
-          tables: updatedTables
-        }
-      };
-    });
+  const assignQrCode = async (restId, qrId, tableId) => {
+    try {
+      const res = await QrCodeApi.assignQrCode(qrId, tableId);
+      if (res && res.status) {
+        await fetchQrCodes();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const revokeQrCode = (restId, qrId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[restId];
-      if (!rest) return prev;
-      
-      const qrs = rest.qrCodes || [];
-      const tables = rest.tables || [];
-
-      const updatedQrCodes = qrs.map(q => {
-        if (q.id === qrId) {
-          return { ...q, status: 'Unassigned', tableId: null };
-        }
-        return q;
-      });
-
-      const updatedTables = tables.map(t => {
-        if (t.assignedQrId === qrId) {
-          return { ...t, assignedQrId: null };
-        }
-        return t;
-      });
-
-      return {
-        ...prev,
-        [restId]: {
-          ...rest,
-          qrCodes: updatedQrCodes,
-          tables: updatedTables
-        }
-      };
-    });
+  const revokeQrCode = async (restId, qrId) => {
+    try {
+      const res = await QrCodeApi.revokeQrCode(qrId);
+      if (res && res.status) {
+        await fetchQrCodes();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteQrCode = (restId, qrId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[restId];
-      if (!rest) return prev;
-      
-      const qrs = rest.qrCodes || [];
-      const tables = rest.tables || [];
-
-      const updatedQrCodes = qrs.filter(q => q.id !== qrId);
-      const updatedTables = tables.map(t => {
-        if (t.assignedQrId === qrId) {
-          return { ...t, assignedQrId: null };
-        }
-        return t;
-      });
-
-      return {
-        ...prev,
-        [restId]: {
-          ...rest,
-          qrCodes: updatedQrCodes,
-          tables: updatedTables
-        }
-      };
-    });
+  const deleteQrCode = async (restId, qrId) => {
+    try {
+      const res = await QrCodeApi.deleteQrCode(qrId);
+      if (res && res.status) {
+        await fetchQrCodes();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const addStaff = (id, staffMember) => {
@@ -599,122 +666,92 @@ export const AppProvider = ({ children }) => {
   };
 
   // Inbound Orders
-  const updateOrderStatus = (id, orderId, nextStatus) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
+  const updateOrderStatus = async (id, orderId, nextStatus) => {
+    try {
+      const rest = restaurantsData[id];
+      if (!rest) return;
+      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
+      if (!order) return;
       
-      const updatedOrders = rest.orders.map(order => {
-        if (order.id === orderId) {
-          const updated = { ...order, status: nextStatus };
-          if (nextStatus === 'done') {
-            updated.billingStatus = 'paid';
-          }
-          return updated;
-        }
-        return order;
-      });
-
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: updatedOrders
-        }
-      };
-    });
+      const payload = { status: nextStatus };
+      if (nextStatus === 'done') {
+        payload.billingStatus = 'paid';
+      }
+      
+      const idToUpdate = order._id || order.id || order.orderId;
+      const res = await OrderApi.updateOrder(idToUpdate, payload);
+      if (res && res.status) {
+        await fetchOrders();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const assignWaiterToOrder = (id, orderId, waiterName) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      const updatedOrders = rest.orders.map(order => {
-        if (order.id === orderId) {
-          return { ...order, waiter: waiterName };
-        }
-        return order;
-      });
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: updatedOrders
-        }
-      };
-    });
+  const assignWaiterToOrder = async (id, orderId, waiterName) => {
+    try {
+      const rest = restaurantsData[id];
+      if (!rest) return;
+      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
+      if (!order) return;
+
+      const idToUpdate = order._id || order.id || order.orderId;
+      const res = await OrderApi.updateOrder(idToUpdate, { waiter: waiterName });
+      if (res && res.status) {
+        await fetchOrders();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const deleteOrder = (id, orderId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: rest.orders.filter(order => order.id !== orderId)
-        }
-      };
-    });
+  const deleteOrder = async (id, orderId) => {
+    try {
+      const rest = restaurantsData[id];
+      if (!rest) return;
+      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
+      if (!order) return;
+
+      const idToDelete = order._id || order.id || order.orderId;
+      const res = await OrderApi.deleteOrder(idToDelete);
+      if (res && res.status) {
+        await fetchOrders();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const updateOrder = (id, orderId, updatedFields) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: rest.orders.map(order => order.id === orderId ? { ...order, ...updatedFields } : order)
-        }
-      };
-    });
+  const updateOrder = async (id, orderId, updatedFields) => {
+    try {
+      const rest = restaurantsData[id];
+      if (!rest) return;
+      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
+      if (!order) return;
+
+      const idToUpdate = order._id || order.id || order.orderId;
+      const res = await OrderApi.updateOrder(idToUpdate, updatedFields);
+      if (res && res.status) {
+        await fetchOrders();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const markBillAsPaid = (id, tableLabel) => {
-    const rawNum = tableLabel.replace('Table ', '');
-    const cleanTableId = rawNum.length === 1 ? `T-0${rawNum}` : `T-${rawNum}`;
-
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-
-      // Update billing status inside orders
-      const updatedOrders = rest.orders.map(ord => {
-        if (ord.table === rawNum || parseInt(ord.table) === parseInt(rawNum)) {
-          return { ...ord, billingStatus: 'paid', status: 'done' };
-        }
-        return ord;
-      });
-
-      // Update billing list status
-      const updatedBillingData = rest.billingData.map(b => {
-        if (b.table === tableLabel) {
-          return { ...b, status: 'Paid' };
-        }
-        return b;
-      });
-
-      // Free dining table status
-      const updatedTables = rest.tables.map(t => {
-        if (t.id === cleanTableId) {
-          return { ...t, status: 'Free' };
-        }
-        return t;
-      });
-
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          orders: updatedOrders,
-          billingData: updatedBillingData,
-          tables: updatedTables
-        }
-      };
-    });
+  const markBillAsPaid = async (id, tableLabel) => {
+    try {
+      const res = await OrderApi.payBill(tableLabel);
+      if (res && res.status) {
+        await fetchOrders();
+        await fetchTables();
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const updateRolePermissions = (restaurantId, roleName, permissions) => {

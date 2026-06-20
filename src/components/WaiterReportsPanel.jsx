@@ -9,10 +9,12 @@ const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   </svg>
 );
 
-const DollarIcon = ({ size = 18, color = 'currentColor' }) => (
+const ReceiptIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <line x1="12" y1="1" x2="12" y2="23" />
-    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    <path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2z" />
+    <line x1="8" y1="6" x2="16" y2="6" />
+    <line x1="8" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="12" y2="14" />
   </svg>
 );
 
@@ -197,134 +199,132 @@ export default function WaiterReportsPanel({
 
   return (
     <section className="panel-view active">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 900, margin: 0, color: 'var(--black)' }}>Waiter Report</h2>
+        <button style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Export Report</button>
+      </div>
 
       {/* Filters Block */}
-      <div className="premium-filter-card">
-        <div className="premium-filter-title">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary)' }}>
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-            <span>Filter Query Logs</span>
-          </div>
-          <span className="premium-filter-count-badge">
-            {filteredWaiterReports.length} {filteredWaiterReports.length === 1 ? 'record' : 'records'} found
-          </span>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderLeft: '4px solid #ea580c', borderRadius: '12px', padding: '24px', marginBottom: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+          </svg>
+          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>Waiter Filters</span>
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', flex: 1 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Start Date</label>
-            <input 
-              type="date"
-              value={dateStart}
-              onChange={e => setDateStart(e.target.value)}
-              className="premium-filter-input"
-            />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Date From</label>
+              <input 
+                type="date"
+                value={dateStart}
+                onChange={e => setDateStart(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Date To</label>
+              <input 
+                type="date"
+                value={dateEnd}
+                onChange={e => setDateEnd(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Waiter</label>
+              <select 
+                value={filterWaiter}
+                onChange={e => setFilterWaiter(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Waiters</option>
+                {waitersList.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Table</label>
+              <select 
+                value={filterTable}
+                onChange={e => setFilterTable(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Tables</option>
+                {uniqueTables.map(t => <option key={t} value={t}>Table {t}</option>)}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Source</label>
+              <select 
+                value={filterSource}
+                onChange={e => setFilterSource(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Sources</option>
+                <option value="Dine-In">Dine-In</option>
+                <option value="Website">Website</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Mode</label>
+              <select 
+                value={filterPaymentMode}
+                onChange={e => setFilterPaymentMode(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Modes</option>
+                <option value="UPI">UPI</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="Pending">Pending</option>
+              </select>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">End Date</label>
-            <input 
-              type="date"
-              value={dateEnd}
-              onChange={e => setDateEnd(e.target.value)}
-              className="premium-filter-input"
-            />
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Status</label>
+              <select 
+                value={filterPaymentStatus}
+                onChange={e => setFilterPaymentStatus(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Statuses</option>
+                <option value="Paid">Paid</option>
+                <option value="Unpaid">Unpaid</option>
+              </select>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Waiter Staff</label>
-            <select 
-              value={filterWaiter}
-              onChange={e => setFilterWaiter(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Waiters</option>
-              {waitersList.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Status</label>
+              <select 
+                value={filterOrderStatus}
+                onChange={e => setFilterOrderStatus(e.target.value)}
+                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
+              >
+                <option value="All">All Statuses</option>
+                <option value="New">New</option>
+                <option value="Preparing">Preparing</option>
+                <option value="Ready">Ready</option>
+                <option value="Done">Done</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={handleResetFilters}
+                style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 700, padding: '10px 20px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}
+              >
+                Reset Filters
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Table</label>
-            <select 
-              value={filterTable}
-              onChange={e => setFilterTable(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Tables</option>
-              {uniqueTables.map(t => <option key={t} value={t}>Table {t}</option>)}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Order Source</label>
-            <select 
-              value={filterSource}
-              onChange={e => setFilterSource(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Sources</option>
-              <option value="Dine-In">Dine-In</option>
-              <option value="Website">Website</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Payment Mode</label>
-            <select 
-              value={filterPaymentMode}
-              onChange={e => setFilterPaymentMode(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Modes</option>
-              <option value="UPI">UPI</option>
-              <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
-              <option value="Pending">Pending</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Payment Status</label>
-            <select 
-              value={filterPaymentStatus}
-              onChange={e => setFilterPaymentStatus(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Statuses</option>
-              <option value="Paid">Paid</option>
-              <option value="Unpaid">Unpaid</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Order Status</label>
-            <select 
-              value={filterOrderStatus}
-              onChange={e => setFilterOrderStatus(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Statuses</option>
-              <option value="New">New</option>
-              <option value="Preparing">Preparing</option>
-              <option value="Ready">Ready</option>
-              <option value="Done">Done</option>
-            </select>
-          </div>
-          </div>
-          <button 
-            className="premium-filter-btn-reset" 
-            onClick={handleResetFilters}
-            title="Reset Filters"
-            style={{ padding: '0', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: '8px' }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{margin: 0}}>
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-            </svg>
-          </button>
         </div>
       </div>
 
@@ -339,17 +339,17 @@ export default function WaiterReportsPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>ORDER ID</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>DATE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>TABLE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>WAITER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>SOURCE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>STATUS</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PAYMENT MODE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PAYMENT STATUS</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>AMOUNT</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#111111', borderTop: '4px solid #ea580c' }}>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER ID</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER DATE</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>TABLE NUMBER</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>WAITER NAME</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER SOURCE</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER STATUS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PAYMENT MODE</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PAYMENT STATUS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>TOTAL AMOUNT</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -365,62 +365,73 @@ export default function WaiterReportsPanel({
                   const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Website');
                   const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
                   return (
-                    <tr key={ord.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '13px' }}>#ORD-{ord.id}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px' }}>{date}</td>
-                      <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: '13px' }}>Table {ord.table}</td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px' }}>{ord.waiter || 'Unassigned'}</td>
-                      <td style={{ padding: '12px 14px' }}>
+                    <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>#ORD-{ord.id}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>{date}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>Table {ord.table}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{ord.waiter || 'Unassigned'}</td>
+                      <td style={{ padding: '16px 14px' }}>
                         <span style={{ 
-                          padding: '2px 8px', 
-                          borderRadius: '4px', 
+                          padding: '4px 12px', 
+                          borderRadius: '6px', 
                           fontSize: '11px', 
-                          fontWeight: 600, 
-                          backgroundColor: source === 'Dine-In' ? '#eff6ff' : '#faf5ff',
-                          color: source === 'Dine-In' ? '#1d4ed8' : '#7e22ce'
+                          fontWeight: 700, 
+                          backgroundColor: '#f8fafc',
+                          color: '#475569'
                         }}>
                           {source}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px' }}><Badge status={ord.status} /></td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ fontWeight: 600, fontSize: '13px' }}>{paymentMode}</span>
+                      <td style={{ padding: '16px 14px' }}>
+                        <span style={{
+                          padding: '4px 12px',
+                          border: `1px solid ${ord.status === 'new' ? '#ea580c' : ord.status === 'preparing' ? '#3b82f6' : '#10b981'}`,
+                          color: ord.status === 'new' ? '#ea580c' : ord.status === 'preparing' ? '#3b82f6' : '#10b981',
+                          borderRadius: '20px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          backgroundColor: '#ffffff'
+                        }}>
+                          {ord.status.toUpperCase()}
+                        </span>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                        {paymentMode}
+                      </td>
+                      <td style={{ padding: '16px 14px' }}>
                         <span style={{ 
-                          padding: '4px 8px', 
-                          borderRadius: '6px', 
+                          padding: '4px 12px', 
+                          borderRadius: '20px', 
                           fontSize: '11px', 
-                          fontWeight: 700, 
-                          backgroundColor: ord.billingStatus === 'paid' ? 'var(--success-light)' : 'var(--danger-light)',
-                          color: ord.billingStatus === 'paid' ? 'var(--success)' : 'var(--danger)'
+                          fontWeight: 800, 
+                          backgroundColor: '#ffffff',
+                          border: `1px solid ${ord.billingStatus === 'paid' ? '#10b981' : '#ef4444'}`,
+                          color: ord.billingStatus === 'paid' ? '#10b981' : '#ef4444'
                         }}>
                           {ord.billingStatus === 'paid' ? 'Paid' : 'Unpaid'}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 700, fontSize: '13px' }}>₹{ord.total}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '16px 14px', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>₹{ord.total}</td>
+                      <td style={{ padding: '16px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <IconBtn 
-                          icon={<EyeIcon size={18} />} 
+                          icon={<EyeIcon size={14} />} 
                           tooltip="View Timeline" 
-                          style={iconBtnViewStyle} 
+                          style={{ border: '1px solid #fed7aa', color: '#ea580c', backgroundColor: '#ffffff', borderRadius: '4px', padding: '4px', marginRight: '6px' }} 
                           onClick={() => {
                             setSelectedTimelineOrder(ord);
                             setShowTimelineModal(true);
                           }} 
                         />
-                        {ord.billingStatus !== 'paid' && (
-                          <IconBtn 
-                            icon={<DollarIcon size={18} />} 
-                            tooltip="Record Offline Payment" 
-                            style={{ ...iconBtnStyle, color: '#10b981' }} 
-                            onClick={() => {
-                              setSelectedPaymentOrder(ord);
-                              setOfflinePaymentType('Cash');
-                              setShowPaymentModal(true);
-                            }} 
-                          />
-                        )}
+                        <IconBtn 
+                          icon={<ReceiptIcon size={14} />} 
+                          tooltip="Record Payment" 
+                          style={{ border: '1px solid #fed7aa', color: '#ea580c', backgroundColor: '#ffffff', borderRadius: '4px', padding: '4px' }} 
+                          onClick={() => {
+                            setSelectedPaymentOrder(ord);
+                            setOfflinePaymentType('Cash');
+                            setShowPaymentModal(true);
+                          }} 
+                        />
                       </td>
                     </tr>
                   );

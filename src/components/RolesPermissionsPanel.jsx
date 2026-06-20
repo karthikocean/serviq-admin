@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import { Modal } from './Modal';
 
 const PencilIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -51,6 +52,7 @@ export default function RolesPermissionsPanel() {
   const [viewState, setViewState] = useState('list'); // 'list' | 'edit' | 'add'
   const [editingRoleName, setEditingRoleName] = useState('');
   const [permissionsState, setPermissionsState] = useState({});
+  const [roleToDelete, setRoleToDelete] = useState(null);
 
   const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
 
@@ -59,9 +61,7 @@ export default function RolesPermissionsPanel() {
       alert("System default roles cannot be deleted.");
       return;
     }
-    if (window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) {
-      deleteRole(activeRestaurant.id, roleName);
-    }
+    setRoleToDelete(roleName);
   };
 
   const handleEditRole = (roleName) => {
@@ -283,6 +283,61 @@ export default function RolesPermissionsPanel() {
           </table>
         </div>
       </div>
+
+      <Modal
+        isOpen={!!roleToDelete}
+        onClose={() => setRoleToDelete(null)}
+        title="Confirm Deletion"
+        maxWidth="400px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Role</p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                Are you sure you want to delete the role "{roleToDelete}"? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+            <button 
+              className="btn btn-outline" 
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => setRoleToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button 
+              className="btn btn-black" 
+              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
+              onClick={() => {
+                if (roleToDelete) {
+                  deleteRole(activeRestaurant.id, roleToDelete);
+                  setRoleToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

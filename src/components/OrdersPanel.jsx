@@ -213,6 +213,8 @@ export default function OrdersPanel({
               <th style={{ padding: '14px' }}>ITEMS</th>
               <th style={{ padding: '14px', width: '180px' }}>TIME / ELAPSED</th>
               <th style={{ padding: '14px', width: '140px' }}>ASSIGNED WAITER</th>
+              <th style={{ padding: '14px', width: '100px' }}>PAYMENT</th>
+              <th style={{ padding: '14px', width: '100px' }}>TOTAL</th>
               <th style={{ padding: '14px', width: '120px' }}>STATUS</th>
               <th style={{ padding: '14px', textAlign: 'right', width: '220px' }}>ACTIONS</th>
             </tr>
@@ -264,15 +266,31 @@ export default function OrdersPanel({
 
                   {/* 5. Waiter */}
                   <td style={{ padding: '14px' }}>
-                    <span style={{ 
+                    <span 
+                      onClick={() => {
+                        setActiveEditOrder(ord);
+                        setEditOrderForm({
+                          table: ord.table,
+                          notes: ord.notes || '',
+                          waiter: ord.waiter || 'Unassigned'
+                        });
+                        setActivePage('order-edit-form');
+                      }}
+                      style={{ 
                       display: 'inline-flex', 
                       padding: '4px 10px', 
                       borderRadius: '6px', 
                       fontSize: '13px', 
                       background: 'var(--bg-tertiary)', 
                       color: 'var(--text-main)',
-                      fontWeight: 600
-                    }}>
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      border: '1px solid var(--border)',
+                      transition: 'background-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--border)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                    >
                       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '4px'}}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         {ord.waiter || 'Unassigned'}
@@ -280,12 +298,31 @@ export default function OrdersPanel({
                     </span>
                   </td>
 
-                  {/* 6. Status badge */}
+                  {/* 6. Payment */}
+                  <td style={{ padding: '14px' }}>
+                    <span style={{ 
+                      padding: '4px 10px', 
+                      borderRadius: '6px', 
+                      fontSize: '11px', 
+                      fontWeight: 700, 
+                      backgroundColor: ord.billingStatus === 'paid' ? '#dcfce7' : '#fef2f2', 
+                      color: ord.billingStatus === 'paid' ? '#15803d' : '#ef4444' 
+                    }}>
+                      {ord.billingStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                    </span>
+                  </td>
+
+                  {/* 7. Total */}
+                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px' }}>
+                    ₹{(ord.total || 0).toFixed(2)}
+                  </td>
+
+                  {/* 8. Status badge */}
                   <td style={{ padding: '14px' }}>
                     <Badge status={ord.status} />
                   </td>
 
-                  {/* 7. Action buttons */}
+                  {/* 9. Action buttons */}
                   <td style={{ padding: '14px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <button 
@@ -297,23 +334,7 @@ export default function OrdersPanel({
                       >
                         <EyeIcon size={14} />
                       </button>
-                      <button 
-                        type="button" 
-                        title="Edit Order"
-                        className="btn btn-outline" 
-                        style={{ padding: '6px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border)' }}
-                        onClick={() => {
-                          setActiveEditOrder(ord);
-                          setEditOrderForm({
-                            table: ord.table,
-                            notes: ord.notes || '',
-                            waiter: ord.waiter || 'Unassigned'
-                          });
-                          setActivePage('order-edit-form');
-                        }}
-                      >
-                        <PencilIcon size={14} />
-                      </button>
+
                       <button 
                         type="button" 
                         title="Cancel Order"
@@ -412,7 +433,7 @@ export default function OrdersPanel({
             })}
             {filteredOrders.length === 0 && (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No orders match selected criteria.</td>
+                <td colSpan="9" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No orders match selected criteria.</td>
               </tr>
             )}
           </tbody>

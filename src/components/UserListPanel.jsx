@@ -33,6 +33,7 @@ export default function UserListPanel({
   // User Management Modal states
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [userToDelete, setUserToDelete] = useState(null);
   const [userForm, setUserForm] = useState({
     name: '',
     role: 'Waiter',
@@ -84,10 +85,8 @@ export default function UserListPanel({
     setIsUserModalOpen(false);
   };
 
-  const handleDeleteUser = (userId) => {
-    if (window.confirm('Are you sure you want to delete this user account?')) {
-      deleteStaff(activeRestaurant.id, userId);
-    }
+  const handleDeleteUser = (user) => {
+    setUserToDelete(user);
   };
 
   return (
@@ -167,7 +166,7 @@ export default function UserListPanel({
                           type="button" 
                           className="btn btn-outline" 
                           style={{ padding: '6px', color: 'var(--danger)', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => handleDeleteUser(user)}
                           title="Delete User"
                         >
                           <TrashIcon size={12} color="var(--danger)" />
@@ -264,6 +263,61 @@ export default function UserListPanel({
             <button type="submit" className="btn btn-black" style={{ border: 'none', background: 'var(--primary)', color: 'white' }}>Save User</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        title="Confirm Deletion"
+        maxWidth="400px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete User Account</p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                Are you sure you want to delete user "{userToDelete?.name}"? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+            <button 
+              className="btn btn-outline" 
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => setUserToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button 
+              className="btn btn-black" 
+              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
+              onClick={() => {
+                if (userToDelete) {
+                  deleteStaff(activeRestaurant.id, userToDelete.id);
+                  setUserToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </Modal>
     </section>
   );

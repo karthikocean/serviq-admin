@@ -1,0 +1,74 @@
+import axios from "axios";
+
+const APP_ENV = "dev";
+
+let IMAGE_BASE_URL = "";
+let BASE_URL = "";
+let server = "";
+
+switch (APP_ENV) {
+  case "dev":
+    IMAGE_BASE_URL = "http://localhost:5000/public";
+    BASE_URL = "http://localhost:5000/api/admin";
+    server = "http://localhost:5000";
+    break;
+
+  case "production":
+    IMAGE_BASE_URL = "https://api.serviq.tech/public";
+    BASE_URL = "https://api.serviq.tech/api/admin";
+    server = "https://api.serviq.tech";
+    break;
+
+  case "local":
+  default:
+    IMAGE_BASE_URL = "http://localhost:5000/public";
+    BASE_URL = "http://localhost:5000/api/admin";
+    server = "http://localhost:5000";
+    break;
+}
+
+export { IMAGE_BASE_URL, BASE_URL, server };
+
+export const apiClient = axios.create({
+  baseURL: BASE_URL,
+});
+
+apiClient.interceptors.request.use(
+  function (config) {
+    const token = localStorage.getItem("userToken");
+
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    if (config.data instanceof FormData) {
+      config.headers["Content-Type"] = "multipart/form-data";
+    } else {
+      config.headers["Content-Type"] = "application/json";
+    }
+
+    return config;
+  },
+  function (error) {
+    return Promise.reject(error);
+  }
+);
+
+apiClient.interceptors.response.use(
+  function (response) {
+    return response;
+  },
+  function (error) {
+    if (
+      error.response?.status === 401 &&
+      !error.config.url.includes("/auth/login") &&
+      !window.location.pathname.includes("/sign-in")
+    ) {
+      localStorage.removeItem("userToken");
+      window.location.href = "/sign-in";
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;

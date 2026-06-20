@@ -46,13 +46,7 @@ export const initialRestaurantsData = {
       { id: "843", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
       { id: "842", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
     ],
-    tables: [
-      { id: "T-01", status: "Occupied", seats: 4, assignedQrId: "QR-101" },
-      { id: "T-02", status: "Occupied", seats: 2, assignedQrId: "QR-102" },
-      { id: "T-03", status: "Occupied", seats: 4, assignedQrId: "QR-103" },
-      { id: "T-04", status: "Free", seats: 6, assignedQrId: "QR-104" },
-      { id: "T-05", status: "Occupied", seats: 2, assignedQrId: "QR-105" }
-    ],
+    tables: [],
     qrCodes: [
       { id: "QR-101", status: "Assigned", tableId: "T-01", scansCount: 42, createdAt: "2026-06-01" },
       { id: "QR-102", status: "Assigned", tableId: "T-02", scansCount: 28, createdAt: "2026-06-01" },
@@ -185,16 +179,7 @@ export const initialRestaurantsData = {
       { id: "201", table: "04", time: "12:05 PM", timeAgo: "10 min ago", items: [{ name: "Tandoori Chicken", qty: 1, price: 280 }, { name: "Garlic Naan", qty: 3, price: 55 }, { name: "Mango Lassi", qty: 2, price: 70 }], notes: "Spicy", subtotal: 585, tax: 29.25, charge: 11.7, total: 625.95, status: "preparing", billingStatus: "unpaid" },
       { id: "202", table: "02", time: "12:10 PM", timeAgo: "5 min ago", items: [{ name: "Paneer Tikka", qty: 1, price: 190 }, { name: "Butter Naan", qty: 2, price: 45 }], notes: "", subtotal: 280, tax: 14, charge: 5.6, total: 299.6, status: "new", billingStatus: "unpaid" }
     ],
-    tables: [
-      { id: "T-01", status: "Free", seats: 4, assignedQrId: "QR-201" },
-      { id: "T-02", status: "Occupied", seats: 2, assignedQrId: "QR-202" },
-      { id: "T-03", status: "Free", seats: 4, assignedQrId: "QR-203" },
-      { id: "T-04", status: "Occupied", seats: 6, assignedQrId: "QR-204" },
-      { id: "T-05", status: "Free", seats: 4, assignedQrId: "QR-205" },
-      { id: "T-06", status: "Free", seats: 2, assignedQrId: "QR-206" },
-      { id: "T-07", status: "Free", seats: 4, assignedQrId: "QR-207" },
-      { id: "T-08", status: "Free", seats: 8, assignedQrId: "QR-208" }
-    ],
+    tables: [],
     qrCodes: [
       { id: "QR-201", status: "Assigned", tableId: "T-01", scansCount: 12, createdAt: "2026-06-01" },
       { id: "QR-202", status: "Assigned", tableId: "T-02", scansCount: 19, createdAt: "2026-06-01" },
@@ -253,12 +238,7 @@ export const initialRestaurantsData = {
     orders: [
       { id: "301", table: "01", time: "11:50 AM", timeAgo: "25 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 290 }], notes: "", subtotal: 580, tax: 14.5, charge: 0, total: 594.5, status: "ready", billingStatus: "unpaid" }
     ],
-    tables: [
-      { id: "T-01", status: "Occupied", seats: 4, assignedQrId: "QR-301" },
-      { id: "T-02", status: "Free", seats: 4, assignedQrId: "QR-302" },
-      { id: "T-03", status: "Free", seats: 4, assignedQrId: "QR-303" },
-      { id: "T-04", status: "Free", seats: 2, assignedQrId: "QR-304" }
-    ],
+    tables: [],
     qrCodes: [
       { id: "QR-301", status: "Assigned", tableId: "T-01", scansCount: 5, createdAt: "2026-06-01" },
       { id: "QR-302", status: "Assigned", tableId: "T-02", scansCount: 2, createdAt: "2026-06-01" },
@@ -309,10 +289,7 @@ export const initialRestaurantsData = {
       { id: "menu-4-3", name: "Filter Coffee", category: "Drinks", price: 40, desc: "Chicory infused traditional South Indian coffee.", image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: true }
     ],
     orders: [],
-    tables: [
-      { id: "T-01", status: "Free", seats: 4, assignedQrId: "QR-401" },
-      { id: "T-02", status: "Free", seats: 4, assignedQrId: "QR-402" }
-    ],
+    tables: [],
     qrCodes: [
       { id: "QR-401", status: "Assigned", tableId: "T-01", scansCount: 0, createdAt: "2026-06-01" },
       { id: "QR-402", status: "Assigned", tableId: "T-02", scansCount: 0, createdAt: "2026-06-01" }

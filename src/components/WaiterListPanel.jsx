@@ -1,5 +1,14 @@
 import React from 'react';
-import { Badge } from './Badge';
+import { Modal } from './Modal';
+
+const WaiterAvatarIcon = ({ size = 16, color = '#ea580c' }) => (
+  <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '10px' }}>
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  </div>
+);
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -44,16 +53,15 @@ const iconBtnStyle = {
   transition: 'all 0.2s ease'
 };
 
-const iconBtnEditStyle = {
-  ...iconBtnStyle,
-  color: 'var(--primary)',
-  backgroundColor: 'var(--primary-light)',
-  marginRight: '8px'
-};
-
 const iconBtnDeleteStyle = {
   ...iconBtnStyle,
-  color: '#ef4444'
+  color: '#94a3b8'
+};
+
+const iconBtnEditStyle = {
+  ...iconBtnStyle,
+  color: '#94a3b8',
+  marginRight: '8px'
 };
 
 const IconBtn = ({ icon, tooltip, style, onClick }) => {
@@ -86,6 +94,7 @@ const IconBtn = ({ icon, tooltip, style, onClick }) => {
 export default function WaiterListPanel({
   staff = [],
   tables = [],
+  orders = [],
   activeRestaurant = {},
   updateStaff,
   deleteStaff,
@@ -93,9 +102,8 @@ export default function WaiterListPanel({
   openEditStaffModal,
   handleOpenAssignTablesModal
 }) {
+  const [waiterToDelete, setWaiterToDelete] = React.useState(null);
   const waiters = staff.filter(s => s.role === 'Waiter');
-  const onDutyCount = waiters.filter(w => w.status === 'On Duty').length;
-  const offDutyCount = waiters.filter(w => w.status === 'Off Duty').length;
 
   // Find all dining tables assigned to a waiter
   const getAssignedTables = (waiterId) => {
@@ -114,144 +122,97 @@ export default function WaiterListPanel({
 
   return (
     <section className="panel-view active">
-      <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
-        <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Waiter Management</h2>
-          <p className="panel-inner-desc">Manage your waiter staff, track their status, and control table coverage assignments.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-outline" onClick={() => handleOpenAssignTablesModal()}>
+      <div className="panel-header-flex" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--black)', margin: 0 }}>waiters list</h2>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => handleOpenAssignTablesModal()}>
             Assign Tables
           </button>
-          <button className="btn btn-black" onClick={() => openAddStaffModal('Waiter')}>
-            Add New Waiter
+          <button style={{ background: '#ff5a1f', color: '#ffffff', border: 'none', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => openAddStaffModal('Waiter')}>
+            Add Waiter
           </button>
         </div>
       </div>
 
-      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-        <div className="stat-card" style={{ borderLeft: '5px solid var(--primary)' }}>
-          <div className="stat-main-row">
-            <div className="stat-info">
-              <div className="stat-label" style={{ color: '#64748b' }}>Total Waiters</div>
-              <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '20px', fontWeight: '700' }}>{waiters.length}</h3>
-              <div className="stat-sub-label green-label">Service team</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '5px solid #10b981' }}>
-          <div className="stat-main-row">
-            <div className="stat-info">
-              <div className="stat-label" style={{ color: '#64748b' }}>On Duty</div>
-              <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '20px', fontWeight: '700' }}>{onDutyCount}</h3>
-              <div className="stat-sub-label green-label">Active on floor</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '5px solid #ef4444' }}>
-          <div className="stat-main-row">
-            <div className="stat-info">
-              <div className="stat-label" style={{ color: '#64748b' }}>Off Duty</div>
-              <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '20px', fontWeight: '700' }}>{offDutyCount}</h3>
-              <div className="stat-sub-label red-label">Standby</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card" style={{ borderLeft: '5px solid #3b82f6' }}>
-          <div className="stat-main-row">
-            <div className="stat-info">
-              <div className="stat-label" style={{ color: '#64748b' }}>Assigned Tables</div>
-              <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '20px', fontWeight: '700' }}>
-                {tables.filter(t => t.assignedWaiterId).length}
-              </h3>
-              <div className="stat-sub-label blue-label">Tables covered</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: 'var(--border-radius-sm)', padding: '24px', boxShadow: 'var(--card-shadow)' }}>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>WAITER ID</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>NAME</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PHONE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>LOGIN EMAIL</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>ASSIGNED TABLES</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>STATUS</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#111111', borderTop: '4px solid #ea580c' }}>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>S.NO.</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>WAITER NAME</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PHONE NUMBER</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>EMAIL ADDRESS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ASSIGNED TABLES</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIVE ORDERS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>COMPLETED ORDERS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {waiters.map(s => {
+              {waiters.map((s, index) => {
                 const assigned = getAssignedTables(s.id);
+                const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
+                const completedOrdersCount = orders.filter(o => o.waiter === s.name && o.status === 'done').length;
+                const isActive = s.status === 'On Duty' || s.status === 'Active';
+
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: '13px' }}>{s.id}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: '13px' }}>{s.name}</td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px' }}>{s.phone}</td>
-                    <td style={{ padding: '12px 14px', fontSize: '13px' }}>{s.email}</td>
-                    <td style={{ padding: '12px 14px' }}>
+                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>{index + 1}</td>
+                    <td style={{ padding: '18px 14px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
+                      <WaiterAvatarIcon />
+                      {s.name}
+                    </td>
+                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
+                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
+                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
                       {assigned.length > 0 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {assigned.map(tId => {
-                            const isCover = tId.includes('(Cover)');
-                            return (
-                              <span key={tId} style={{
-                                fontSize: '11px',
-                                backgroundColor: isCover ? '#fef3c7' : 'var(--bg-tertiary)',
-                                color: isCover ? '#d97706' : 'var(--text-main)',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                fontWeight: '600',
-                                border: isCover ? '1px solid #fde68a' : 'none'
-                              }}>
-                                {tId}
-                              </span>
-                            );
-                          })}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
+                          {assigned.map(tId => (
+                            <span key={tId} style={{
+                              fontSize: '11px',
+                              backgroundColor: '#ea580c',
+                              color: '#ffffff',
+                              padding: '4px 10px',
+                              borderRadius: '12px',
+                              fontWeight: '800'
+                            }}>
+                              {tId.replace(' (Cover)', '')}
+                            </span>
+                          ))}
                         </div>
                       ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>None</span>
+                        <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', fontWeight: 500 }}>None</span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <Badge 
-                        status={s.status} 
-                        onClick={() => handleToggleDuty(s)} 
-                        title="Click to toggle duty status" 
-                      />
+                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
+                      {activeOrdersCount}
                     </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <button
-                        className="table-action-btn"
-                        onClick={() => handleOpenAssignTablesModal(s.id)}
+                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                      {completedOrdersCount}
+                    </td>
+                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
+                      <span 
+                        onClick={() => handleToggleDuty(s)}
                         style={{
-                          padding: '5px 10px',
-                          fontSize: '12px',
-                          marginRight: '8px',
-                          backgroundColor: 'var(--bg-primary)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '6px',
+                          display: 'inline-block',
+                          padding: '4px 16px',
+                          border: isActive ? '1.5px solid #10b981' : '1.5px solid #ef4444',
+                          color: isActive ? '#10b981' : '#ef4444',
+                          borderRadius: '20px',
+                          fontSize: '11px',
+                          fontWeight: '700',
                           cursor: 'pointer',
-                          fontWeight: '600',
-                          display: 'inline-flex',
-                          alignItems: 'center'
+                          backgroundColor: '#ffffff'
                         }}
                       >
-                        <LinkIcon size={12} /> Assign
-                      </button>
-                      <IconBtn icon={<PencilIcon size={18} />} tooltip="Edit Waiter" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
-                      <IconBtn icon={<TrashIcon size={18} />} tooltip="Delete Waiter" style={iconBtnDeleteStyle} onClick={() => {
-                        if (window.confirm(`Are you sure you want to delete waiter ${s.name}?`)) {
-                          deleteStaff(activeRestaurant.id, s.id);
-                        }
-                      }} />
+                        {isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '18px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <IconBtn icon={<PencilIcon size={16} />} tooltip="Edit Waiter" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
+                      <IconBtn icon={<TrashIcon size={16} />} tooltip="Delete Waiter" style={iconBtnDeleteStyle} onClick={() => setWaiterToDelete(s)} />
                     </td>
                   </tr>
                 );
@@ -267,6 +228,60 @@ export default function WaiterListPanel({
           </table>
         </div>
       </div>
+      <Modal
+        isOpen={!!waiterToDelete}
+        onClose={() => setWaiterToDelete(null)}
+        title="Confirm Deletion"
+        maxWidth="400px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Waiter Staff</p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                Are you sure you want to delete waiter {waiterToDelete?.name}? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+            <button 
+              className="btn btn-outline" 
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => setWaiterToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button 
+              className="btn btn-black" 
+              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
+              onClick={() => {
+                if (waiterToDelete) {
+                  deleteStaff(activeRestaurant.id, waiterToDelete.id);
+                  setWaiterToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }
