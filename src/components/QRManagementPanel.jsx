@@ -110,7 +110,7 @@ export default function QRManagementPanel({
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingTop: '20px' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0, color: 'var(--black)' }}>QR lists</h2>
+        <h2 className="panel-inner-title">QR lists</h2>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 
             onClick={() => ShowNotifications.showAlertNotification("Table Setup feature coming soon!", true)}

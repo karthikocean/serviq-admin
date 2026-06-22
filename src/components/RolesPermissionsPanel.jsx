@@ -41,7 +41,7 @@ const MODULES_LIST = [
   { id: 'billing', name: 'Billing & Payments' },
   { id: 'waiter', name: 'Waiter List & Reports' },
   { id: 'kitchen', name: 'Kitchen Screen & Reports' },
-  { id: 'reports', name: 'Overall Reports' },
+  { id: 'Reports', name: 'Overall Reports' },
   { id: 'users', name: 'User Accounts' },
   { id: 'roles-permissions', name: 'Roles & Permissions' },
   { id: 'settings', name: 'Settings' }
@@ -138,7 +138,7 @@ export default function RolesPermissionsPanel() {
 
         <div className="settings-card" style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden' }}>
           <div style={{ padding: '24px', borderBottom: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--primary)', margin: '0 0 24px 0' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--black)', margin: '0 0 24px 0' }}>
               {viewState === 'add' ? 'Add New Role' : 'Edit Role Permissions'}
             </h2>
             <div style={{ maxWidth: '400px' }}>

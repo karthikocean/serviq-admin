@@ -41,9 +41,9 @@ const IconBtn = ({ icon, tooltip, style, onClick }) => {
   const isDelete = style?.color === '#ef4444';
   const isBlue = style?.color === '#3b82f6';
   return (
-    <button 
-      title={tooltip} 
-      style={style} 
+    <button
+      title={tooltip}
+      style={style}
       onClick={onClick}
       onMouseEnter={e => {
         e.currentTarget.style.transform = 'scale(1.15)';
@@ -96,24 +96,24 @@ export default function KitchenReportsPanel({
       let hours = parseInt(match[1]);
       let minutes = parseInt(match[2]);
       const ampm = match[3];
-      
+
       if (ampm) {
         if (ampm.toUpperCase() === 'PM' && hours < 12) hours += 12;
         if (ampm.toUpperCase() === 'AM' && hours === 12) hours = 0;
       }
-      
+
       minutes += mins;
       hours += Math.floor(minutes / 60);
       minutes = minutes % 60;
       hours = hours % 24;
-      
+
       let returnAmpm = '';
       if (ampm) {
         returnAmpm = hours >= 12 ? ' PM' : ' AM';
         hours = hours % 12;
         if (hours === 0) hours = 12;
       }
-      
+
       const pad = (num) => String(num).padStart(2, '0');
       return `${hours}:${pad(minutes)}${returnAmpm}`;
     } catch (e) {
@@ -188,89 +188,89 @@ export default function KitchenReportsPanel({
             <span>Filter Query Logs</span>
           </div>
           <span className="premium-filter-count-badge">
-            {filteredKitchenReports.length} {filteredKitchenReports.length === 1 ? 'record' : 'records'} found
+            {filteredKitchen.length} {filteredKitchenReports.length === 1 ? 'record' : 'records'} found
           </span>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', flex: 1 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Start Date</label>
-            <input 
-              type="date"
-              value={dateStart}
-              onChange={e => setDateStart(e.target.value)}
-              className="premium-filter-input"
-            />
-          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label className="premium-filter-label">Start Date</label>
+              <input
+                type="date"
+                value={dateStart}
+                onChange={e => setDateStart(e.target.value)}
+                className="premium-filter-input"
+              />
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">End Date</label>
-            <input 
-              type="date"
-              value={dateEnd}
-              onChange={e => setDateEnd(e.target.value)}
-              className="premium-filter-input"
-            />
-          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label className="premium-filter-label">End Date</label>
+              <input
+                type="date"
+                value={dateEnd}
+                onChange={e => setDateEnd(e.target.value)}
+                className="premium-filter-input"
+              />
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Kitchen Staff</label>
-            <select 
-              value={filterStaff}
-              onChange={e => setFilterStaff(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Staff</option>
-              {kitchenStaffList.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label className="premium-filter-label">Kitchen Staff</label>
+              <select
+                value={filterStaff}
+                onChange={e => setFilterStaff(e.target.value)}
+                className="premium-filter-select"
+              >
+                <option value="All">All Staff</option>
+                {kitchenStaffList.map(w => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Dish / Menu Item</label>
-            <select 
-              value={filterDish}
-              onChange={e => setFilterDish(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Dishes</option>
-              {uniqueDishes.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label className="premium-filter-label">Dish / Menu Item</label>
+              <select
+                value={filterDish}
+                onChange={e => setFilterDish(e.target.value)}
+                className="premium-filter-select"
+              >
+                <option value="All">All Dishes</option>
+                {uniqueDishes.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label className="premium-filter-label">Priority Level</label>
-            <select 
-              value={filterPriority}
-              onChange={e => setFilterPriority(e.target.value)}
-              className="premium-filter-select"
-            >
-              <option value="All">All Priorities</option>
-              <option value="Normal">Normal</option>
-              <option value="Urgent">Urgent</option>
-            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label className="premium-filter-label">Priority Level</label>
+              <select
+                value={filterPriority}
+                onChange={e => setFilterPriority(e.target.value)}
+                className="premium-filter-select"
+              >
+                <option value="All">All Priorities</option>
+                <option value="Normal">Normal</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
           </div>
-          </div>
-          <button 
-            className="premium-filter-btn-reset" 
+          <button
+            className="premium-filter-btn-reset"
             onClick={handleResetFilters}
             title="Reset Filters"
             style={{ padding: '0', width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, borderRadius: '8px' }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{margin: 0}}>
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: 0 }}>
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
             </svg>
           </button>
         </div>
       </div>
 
       {/* Reports Table */}
-      <div style={{ 
-        backgroundColor: '#ffffff', 
-        border: '1px solid var(--border)', 
-        borderRadius: 'var(--border-radius-sm)', 
-        padding: '24px', 
-        boxShadow: 'var(--card-shadow)' 
+      <div style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--border-radius-sm)',
+        padding: '24px',
+        boxShadow: 'var(--card-shadow)'
       }}>
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -304,10 +304,10 @@ export default function KitchenReportsPanel({
                       <td style={{ padding: '12px 14px', maxWidth: '240px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                           {ord.items.map((it, i) => (
-                            <span key={i} style={{ 
-                              fontSize: '11px', 
-                              backgroundColor: 'var(--bg-tertiary)', 
-                              padding: '2px 6px', 
+                            <span key={i} style={{
+                              fontSize: '11px',
+                              backgroundColor: 'var(--bg-tertiary)',
+                              padding: '2px 6px',
                               borderRadius: '4px',
                               fontWeight: 500,
                               color: 'var(--text-main)'
@@ -321,11 +321,11 @@ export default function KitchenReportsPanel({
                       <td style={{ padding: '12px 14px', fontSize: '13px' }}>{ord.waiter || 'Unassigned'}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 500, fontSize: '13px' }}>{kitchenStaffName}</td>
                       <td style={{ padding: '12px 14px' }}>
-                        <span style={{ 
-                          padding: '2px 8px', 
-                          borderRadius: '4px', 
-                          fontSize: '11px', 
-                          fontWeight: 700, 
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 700,
                           backgroundColor: priority === 'Urgent' ? 'var(--danger-light)' : 'var(--bg-tertiary)',
                           color: priority === 'Urgent' ? 'var(--danger)' : '#64748b'
                         }}>
@@ -333,23 +333,23 @@ export default function KitchenReportsPanel({
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <IconBtn 
-                          icon={<EyeIcon size={18} />} 
-                          tooltip="View KOT Timeline" 
-                          style={iconBtnViewStyle} 
+                        <IconBtn
+                          icon={<EyeIcon size={18} />}
+                          tooltip="View KOT Timeline"
+                          style={iconBtnViewStyle}
                           onClick={() => {
                             setSelectedTimelineOrder(ord);
                             setShowTimelineModal(true);
-                          }} 
+                          }}
                         />
-                        <IconBtn 
-                          icon={<InfoIcon size={18} />} 
-                          tooltip="Item Details" 
-                          style={{ ...iconBtnStyle, color: '#3b82f6' }} 
+                        <IconBtn
+                          icon={<InfoIcon size={18} />}
+                          tooltip="Item Details"
+                          style={{ ...iconBtnStyle, color: '#3b82f6' }}
                           onClick={() => {
                             setSelectedDetailsOrder(ord);
                             setShowDetailsModal(true);
-                          }} 
+                          }}
                         />
                       </td>
                     </tr>
@@ -527,11 +527,11 @@ export default function KitchenReportsPanel({
                         <td style={{ padding: '10px 12px' }}>{cat}</td>
                         <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{it.qty}</td>
                         <td style={{ padding: '10px 12px' }}>
-                          <span style={{ 
-                            padding: '2px 6px', 
-                            borderRadius: '4px', 
-                            fontSize: '11px', 
-                            fontWeight: 700, 
+                          <span style={{
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 700,
                             backgroundColor: priority === 'Urgent' ? 'var(--danger-light)' : 'var(--bg-tertiary)',
                             color: priority === 'Urgent' ? 'var(--danger)' : '#64748b'
                           }}>
@@ -553,8 +553,8 @@ export default function KitchenReportsPanel({
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
-              <button 
-                className="btn btn-black" 
+              <button
+                className="btn btn-black"
                 style={{ padding: '8px 24px' }}
                 onClick={() => {
                   setShowDetailsModal(false);

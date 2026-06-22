@@ -1074,13 +1074,15 @@ color: #000000;
   margin-bottom: 24px;
 }
 
-.panel-inner-title {
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(90deg, #000000 0%, #ff7a00 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.panel-inner-title,
+.header-title {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: #000000 !important;
+  background: none !important;
+  -webkit-text-fill-color: initial !important;
+  background-clip: initial !important;
+  margin: 0 !important;
 }
 
 .panel-inner-desc {

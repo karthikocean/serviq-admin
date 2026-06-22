@@ -214,10 +214,10 @@ export default function Admin() {
     'waiter-reports': 'Waiter Management',
     'kitchen-list': 'Kitchen Management',
     'kitchen-reports': 'Kitchen Reports',
-    'reports': 'reports',
+    'Reports': 'Reports',
     'roles-permissions': 'Users',
     'users': 'User Management',
-    'settings': 'settings',
+    'Settings': 'Settings',
     'qr-code-config': 'QR Code Management'
   };
   const [dateTimeStr, setDateTimeStr] = useState('');
@@ -430,7 +430,7 @@ export default function Admin() {
         'waiter-reports',
         'kitchen-list',
         'kitchen-reports',
-        'reports',
+        'Reports',
         'roles-permissions',
         'users',
         'settings'
@@ -1340,11 +1340,11 @@ export default function Admin() {
             </li>
           )}
           {/* 10. Reports */}
-          {isTabAllowed('reports') && (
-            <li className={`sidebar-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => { setActiveTab('reports'); setActivePage(null); }}>
+          {isTabAllowed('Reports') && (
+            <li className={`sidebar-item ${activeTab === 'Reports' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/></svg>
-                reports
+                Reports
               </a>
             </li>
           )}
@@ -1646,7 +1646,7 @@ export default function Admin() {
                   menu={menu}
                 />
               )}
-              {activeTab === 'reports' && (
+              {activeTab === 'Reports' && (
                 <ReportsPanel
                   orders={orders}
                   menu={menu}

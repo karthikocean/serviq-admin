@@ -99,7 +99,7 @@ export default function MenuPanel({
       <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <h2 className="panel-inner-title" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>Menu Management</h2>
+            <h2 className="panel-inner-title" style={{ margin: 0 }}>Menu List</h2>
             <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
               • {menu.length} items actively listed
             </p>

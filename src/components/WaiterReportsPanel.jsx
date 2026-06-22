@@ -200,7 +200,7 @@ export default function WaiterReportsPanel({
   return (
     <section className="panel-view active">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '20px', fontWeight: 900, margin: 0, color: 'var(--black)' }}>Waiter Report</h2>
+        <h2 className="panel-inner-title">Waiter Report</h2>
         <button style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Export Report</button>
       </div>
 

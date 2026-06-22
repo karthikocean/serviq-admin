@@ -18,7 +18,7 @@ let restaurantsData = {
     banner: "",
     plan: "Standard",
     status: "Active",
-    settings: {
+    Settings: {
       name: "Serviq SaaS",
       tagline: "High Quality South Indian Vegetarian Food",
       currency: "₹",

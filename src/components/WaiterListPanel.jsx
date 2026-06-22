@@ -123,7 +123,7 @@ export default function WaiterListPanel({
   return (
     <section className="panel-view active">
       <div className="panel-header-flex" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--black)', margin: 0 }}>waiters list</h2>
+        <h2 className="panel-inner-title">Waiters list</h2>
         <div style={{ display: 'flex', gap: '12px' }}>
           <button style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => handleOpenAssignTablesModal()}>
             Assign Tables

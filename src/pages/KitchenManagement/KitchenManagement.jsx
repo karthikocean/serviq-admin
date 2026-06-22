@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState } from '../../config/AppContext';
 import KitchenListPanel from '../../components/KitchenListPanel';
-import KitchenReportsPanel from '../../components/KitchenReportsPanel';
+import KitchenReportsPanel from '../../components/KitchenPanel';
 
 export default function KitchenManagement({ activeSubTab }) {
   const {

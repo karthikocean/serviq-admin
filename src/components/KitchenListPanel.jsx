@@ -101,7 +101,7 @@ export default function KitchenListPanel({
   return (
     <section className="panel-view active">
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--black)', margin: 0 }}>Kitchen list</h2>
+        <h2 className="panel-inner-title">Kitchen list</h2>
         <button style={{ background: '#ff5a1f', color: '#ffffff', border: 'none', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => openAddStaffModal('Kitchen')}>
           Add Kitchen Staff
         </button>

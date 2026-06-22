@@ -16,7 +16,7 @@ export const DEFAULT_ROLES = {
       billing: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
-      reports: { view: true, add: true, edit: true, delete: true },
+      Reports: { view: true, add: true, edit: true, delete: true },
       users: { view: true, add: true, edit: true, delete: true },
       'roles-permissions': { view: true, add: true, edit: true, delete: true },
       settings: { view: true, add: true, edit: true, delete: true }
@@ -31,7 +31,7 @@ export const DEFAULT_ROLES = {
       billing: { view: true, add: true, edit: true, delete: false },
       waiter: { view: true, add: true, edit: true, delete: false },
       kitchen: { view: true, add: true, edit: true, delete: false },
-      reports: { view: true, add: false, edit: false, delete: false },
+      Reports: { view: true, add: false, edit: false, delete: false },
       users: { view: true, add: true, edit: true, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
       settings: { view: false, add: false, edit: false, delete: false }
@@ -46,7 +46,7 @@ export const DEFAULT_ROLES = {
       billing: { view: false, add: false, edit: false, delete: false },
       waiter: { view: true, add: false, edit: false, delete: false },
       kitchen: { view: false, add: false, edit: false, delete: false },
-      reports: { view: false, add: false, edit: false, delete: false },
+      Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
       settings: { view: false, add: false, edit: false, delete: false }
@@ -61,7 +61,7 @@ export const DEFAULT_ROLES = {
       billing: { view: false, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
       kitchen: { view: true, add: false, edit: true, delete: false },
-      reports: { view: false, add: false, edit: false, delete: false },
+      Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
       settings: { view: false, add: false, edit: false, delete: false }
