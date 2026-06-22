@@ -111,16 +111,16 @@ export default function KitchenListPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: '#111111', borderTop: '4px solid #ea580c' }}>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>S.NO.</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>KITCHEN STAFF NAME</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PHONE NUMBER</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>EMAIL ADDRESS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ASSIGNED TABLES</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIVE ORDERS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>COMPLETED ORDERS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIONS</th>
+              <tr>
+                <th style={{ padding: '16px 14px' }}>S.NO.</th>
+                <th style={{ padding: '16px 14px' }}>KITCHEN STAFF NAME</th>
+                <th style={{ padding: '16px 14px' }}>PHONE NUMBER</th>
+                <th style={{ padding: '16px 14px' }}>EMAIL ADDRESS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ASSIGNED TABLES</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIVE ORDERS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>COMPLETED ORDERS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>

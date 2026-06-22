@@ -155,7 +155,7 @@ export default function QRManagementPanel({
 
       {/* Grid of QR Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(280px, 320px))', gap: '32px', justifyContent: 'flex-start' }}>
-        {qrCodes.map(qr => {
+        {qrCodes.map((qr, index) => {
           const table = tables.find(t => t.id === qr.tableId);
           const tableStr = qr.tableId ? `?table=${qr.tableId.replace('T-', '')}` : '';
           const qrUrl = `http://serviq-super-admin.vercel.app/menu/${activeRestaurant.id}${tableStr}`;
@@ -201,7 +201,7 @@ export default function QRManagementPanel({
                     TT
                   </div>
                   <span style={{ fontWeight: '700', fontSize: '18px', letterSpacing: '0.5px' }}>
-                    {table ? `Table ${table.id.replace('T-', '')}` : 'Unassigned'}
+                    {table ? `Table ${table.id.replace('T-', '')}` : `Table ${index + 1}`}
                   </span>
                 </div>
                 

@@ -62,7 +62,7 @@ export default function TablesPanel({
     <section className="panel-view active">
       <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
         <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Dining Tables Registry</h2>
+          <h2 className="panel-inner-title">Tables list</h2>
           <p className="panel-inner-desc">Manage seating capacity, waiters, and link tables to active ordering QR codes.</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -133,12 +133,12 @@ export default function TablesPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto', backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>TABLE ID</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>SEATS CAPACITY</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>STATUS</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PRIMARY WAITER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right', width: '120px' }}>ACTIONS</th>
+              <tr>
+                <th style={{ padding: '12px 14px' }}>TABLE ID</th>
+                <th style={{ padding: '12px 14px' }}>SEATS CAPACITY</th>
+                <th style={{ padding: '12px 14px' }}>STATUS</th>
+                <th style={{ padding: '12px 14px' }}>PRIMARY WAITER</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>

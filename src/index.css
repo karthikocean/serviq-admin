@@ -1354,13 +1354,14 @@ color: #000000;
 }
 
 .menu-items-table thead th {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%);
-  color: rgb(255, 255, 255);
+  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
+  color: rgb(255, 255, 255) !important;
   padding: 12px 14px !important;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 11px;
   text-transform: uppercase;
   border-bottom: 3px solid #ff7a00;
+  letter-spacing: 0.5px;
 }
 
 .menu-items-table tbody td {

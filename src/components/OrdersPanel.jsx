@@ -95,7 +95,7 @@ export default function OrdersPanel({
       <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
-            <h2 className="panel-inner-title" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>Incoming Orders</h2>
+            <h2 className="panel-inner-title" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>Order management</h2>
             <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
               Manage and process active client sessions and dispatch statuses
             </p>
@@ -208,15 +208,15 @@ export default function OrdersPanel({
         <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr>
-              <th style={{ padding: '14px', width: '100px' }}>ORDER ID</th>
-              <th style={{ padding: '14px', width: '110px' }}>TABLE</th>
+              <th style={{ padding: '14px' }}>ORDER ID</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>TABLE</th>
               <th style={{ padding: '14px' }}>ITEMS</th>
-              <th style={{ padding: '14px', width: '180px' }}>TIME / ELAPSED</th>
-              <th style={{ padding: '14px', width: '140px' }}>ASSIGNED WAITER</th>
-              <th style={{ padding: '14px', width: '100px' }}>PAYMENT</th>
-              <th style={{ padding: '14px', width: '100px' }}>TOTAL</th>
-              <th style={{ padding: '14px', width: '120px' }}>STATUS</th>
-              <th style={{ padding: '14px', textAlign: 'right', width: '220px' }}>ACTIONS</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>TIME / ELAPSED</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>ASSIGNED WAITER</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>PAYMENT</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>TOTAL</th>
+              <th style={{ padding: '14px', textAlign: 'center' }}>STATUS</th>
+              <th style={{ padding: '14px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -226,26 +226,27 @@ export default function OrdersPanel({
                 <tr key={ord.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.15s' }}>
                   
                   {/* 1. Order ID */}
-                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px' }}>#ORD-{ord.id}</td>
+                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px', verticalAlign: 'middle' }}>#ORD-{ord.id}</td>
 
                   {/* 2. Table */}
-                  <td style={{ padding: '14px' }}>
+                  <td style={{ padding: '14px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <span style={{ 
                       display: 'inline-flex', 
                       background: 'var(--primary-light)', 
                       color: 'var(--primary)', 
                       padding: '4px 10px', 
                       borderRadius: '6px', 
-                      fontSize: '13px', 
-                      fontWeight: 700 
+                      fontSize: '12px', 
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap'
                     }}>
                       Table {ord.table}
                     </span>
                   </td>
 
                   {/* 3. Items */}
-                  <td style={{ padding: '14px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', maxWidth: '350px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={itemSummary}>
+                  <td style={{ padding: '14px', verticalAlign: 'middle' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={itemSummary}>
                       {itemSummary}
                     </div>
                     {ord.notes && (
@@ -259,13 +260,13 @@ export default function OrdersPanel({
                   </td>
 
                   {/* 4. Time */}
-                  <td style={{ padding: '14px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  <td style={{ padding: '14px', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', verticalAlign: 'middle' }}>
                     <div>{ord.time}</div>
                     <div style={{ fontWeight: 600, color: 'var(--primary)', marginTop: '2px' }}>{ord.timeAgo}</div>
                   </td>
 
                   {/* 5. Waiter */}
-                  <td style={{ padding: '14px' }}>
+                  <td style={{ padding: '14px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <span 
                       onClick={() => {
                         setActiveEditOrder(ord);
@@ -299,7 +300,7 @@ export default function OrdersPanel({
                   </td>
 
                   {/* 6. Payment */}
-                  <td style={{ padding: '14px' }}>
+                  <td style={{ padding: '14px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <span style={{ 
                       padding: '4px 10px', 
                       borderRadius: '6px', 
@@ -313,17 +314,17 @@ export default function OrdersPanel({
                   </td>
 
                   {/* 7. Total */}
-                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px' }}>
+                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px', textAlign: 'center', verticalAlign: 'middle' }}>
                     ₹{(ord.total || 0).toFixed(2)}
                   </td>
 
                   {/* 8. Status badge */}
-                  <td style={{ padding: '14px' }}>
+                  <td style={{ padding: '14px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <Badge status={ord.status} />
                   </td>
 
                   {/* 9. Action buttons */}
-                  <td style={{ padding: '14px', textAlign: 'right' }}>
+                  <td style={{ padding: '14px', textAlign: 'right', verticalAlign: 'middle' }}>
                     <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <button 
                         type="button" 

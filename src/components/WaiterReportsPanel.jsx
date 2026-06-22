@@ -339,17 +339,17 @@ export default function WaiterReportsPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: '#111111', borderTop: '4px solid #ea580c' }}>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER ID</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER DATE</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>TABLE NUMBER</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>WAITER NAME</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER SOURCE</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>ORDER STATUS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PAYMENT MODE</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>PAYMENT STATUS</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff' }}>TOTAL AMOUNT</th>
-                <th style={{ padding: '16px 14px', fontSize: '10px', fontWeight: 800, color: '#ffffff', textAlign: 'center' }}>ACTIONS</th>
+              <tr>
+                <th style={{ padding: '16px 14px' }}>ORDER ID</th>
+                <th style={{ padding: '16px 14px' }}>ORDER DATE</th>
+                <th style={{ padding: '16px 14px' }}>TABLE NUMBER</th>
+                <th style={{ padding: '16px 14px' }}>WAITER NAME</th>
+                <th style={{ padding: '16px 14px' }}>ORDER SOURCE</th>
+                <th style={{ padding: '16px 14px' }}>ORDER STATUS</th>
+                <th style={{ padding: '16px 14px' }}>PAYMENT MODE</th>
+                <th style={{ padding: '16px 14px' }}>PAYMENT STATUS</th>
+                <th style={{ padding: '16px 14px' }}>TOTAL AMOUNT</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>

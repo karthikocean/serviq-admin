@@ -205,19 +205,19 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState('overview');
 
   const tabTitles = {
-    'overview': 'Dashboard Overview',
-    'orders': 'Incoming Orders',
+    'overview': 'Dashboard',
+    'orders': 'Order management',
     'menu': 'Menu Management',
     'billing': 'Billing & Settlement',
-    'tables': 'Dining Tables & QR Management',
+    'tables': 'Table Management',
     'waiter-list': 'Waiter Management',
-    'waiter-reports': 'Waiter Performance Reports',
+    'waiter-reports': 'Waiter Management',
     'kitchen-list': 'Kitchen Management',
-    'kitchen-reports': 'Kitchen KOT Reports',
-    'reports': 'Business Reports & Analytics',
-    'roles-permissions': 'Roles & Permissions',
+    'kitchen-reports': 'Kitchen Reports',
+    'reports': 'reports',
+    'roles-permissions': 'Users',
     'users': 'User Management',
-    'settings': 'Store Configurations',
+    'settings': 'settings',
     'qr-code-config': 'QR Code Management'
   };
   const [dateTimeStr, setDateTimeStr] = useState('');
@@ -1239,7 +1239,7 @@ export default function Admin() {
             <li className={`sidebar-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => { setActiveTab('orders'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1m3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg>
-                Order Management
+                Order management
               </a>
             </li>
           )}
@@ -1321,7 +1321,7 @@ export default function Admin() {
               {sidebarUsersOpen && (
                 <ul className="sidebar-submenu">
                   <li className={`sidebar-item ${activeTab === 'roles-permissions' ? 'active' : ''}`} onClick={() => { setActiveTab('roles-permissions'); setActivePage(null); }}>
-                    <a href="#">Roles & Permissions</a>
+                    <a href="#">Users</a>
                   </li>
                   <li className={`sidebar-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => { setActiveTab('users'); setActivePage(null); }}>
                     <a href="#">User Lists</a>
@@ -1344,7 +1344,7 @@ export default function Admin() {
             <li className={`sidebar-item ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => { setActiveTab('reports'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/></svg>
-                Reports
+                reports
               </a>
             </li>
           )}
@@ -1353,7 +1353,7 @@ export default function Admin() {
             <li className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => { setActiveTab('settings'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/></svg>
-                Settings
+                settings
               </a>
             </li>
           )}

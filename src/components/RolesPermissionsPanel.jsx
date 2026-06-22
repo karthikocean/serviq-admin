@@ -213,7 +213,7 @@ export default function RolesPermissionsPanel() {
     <section className="panel-view active" style={{ paddingBottom: '60px' }}>
       <div className="panel-header-flex" style={{ marginBottom: '24px' }}>
         <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Roles & Permissions</h2>
+          <h2 className="panel-inner-title">Users</h2>
           <p className="panel-inner-desc">Manage system roles, configure authority, and control module access</p>
         </div>
       </div>

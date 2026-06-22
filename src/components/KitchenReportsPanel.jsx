@@ -275,15 +275,15 @@ export default function KitchenReportsPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ borderBottom: '1.5px solid var(--border)', backgroundColor: 'var(--bg-secondary)' }}>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>KOT NUMBER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>ORDER ID</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>ITEMS</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>TABLE</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>WAITER</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>KITCHEN STAFF</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PRIORITY</th>
-                <th style={{ padding: '12px 14px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
+              <tr>
+                <th style={{ padding: '12px 14px' }}>KOT NUMBER</th>
+                <th style={{ padding: '12px 14px' }}>ORDER ID</th>
+                <th style={{ padding: '12px 14px' }}>ITEMS</th>
+                <th style={{ padding: '12px 14px' }}>TABLE</th>
+                <th style={{ padding: '12px 14px' }}>WAITER</th>
+                <th style={{ padding: '12px 14px' }}>KITCHEN STAFF</th>
+                <th style={{ padding: '12px 14px' }}>PRIORITY</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
