@@ -120,7 +120,7 @@ export default function KitchenListPanel({
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIVE ORDERS</th>
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>COMPLETED ORDERS</th>
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIONS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>

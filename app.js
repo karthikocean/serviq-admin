@@ -404,7 +404,7 @@ window.switchLoginRole = function(role) {
     emailInput.placeholder = "admin@restaurant.com";
     pwdInput.value = "admin123";
     pwdInput.placeholder = "Enter admin password";
-    submitBtn.textContent = "Login as Admin";
+    submitBtn.textContent = "Login";
   }
 };
 
@@ -465,7 +465,7 @@ function switchTab(tabId) {
     billing: "Billing Panel",
     saas: "Tables & QR Management",
     staff: "Staff Management",
-    settings: "Settings"
+    Settings: "Settings"
   };
   activePanelTitle.textContent = titles[tabId] || "Dashboard";
 
@@ -758,7 +758,7 @@ function setupEventListeners() {
           closingTime: closingTime || "22:00",
           logo: logo || "",
           banner: banner || "",
-          settings: {
+          Settings: {
             name: name,
             tagline: "SaaS Multi-tenant Restaurant",
             currency: "₹",

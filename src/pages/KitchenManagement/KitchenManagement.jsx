@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState } from '../../config/AppContext';
 import KitchenListPanel from '../../components/KitchenListPanel';
 import KitchenReportsPanel from '../../components/KitchenPanel';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 
 export default function KitchenManagement({ activeSubTab }) {
   const {
@@ -69,14 +70,14 @@ export default function KitchenManagement({ activeSubTab }) {
         ...staffData,
         id: staffForm.id
       });
-      alert('Staff details updated successfully!');
+      ShowNotifications.showAlertNotification('Staff details updated successfully!', true);
     } else {
       const newId = 'S-' + Math.floor(1000 + Math.random() * 9000);
       addStaff(activeRestaurant.id, {
         ...staffData,
         id: newId
       });
-      alert('New staff registered successfully!');
+      ShowNotifications.showAlertNotification('New staff registered successfully!', true);
     }
     setActivePage(null);
   };
@@ -84,7 +85,7 @@ export default function KitchenManagement({ activeSubTab }) {
   const handleKitchenPasswordSubmit = (e) => {
     e.preventDefault();
     updateKitchenPassword(activeRestaurant.id, kitchenPasswordForm);
-    alert('Kitchen password updated successfully!');
+    ShowNotifications.showAlertNotification('Kitchen password updated successfully!', true);
     setActivePage(null);
   };
 

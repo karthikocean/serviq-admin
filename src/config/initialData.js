@@ -91,7 +91,7 @@ export const initialRestaurantsData = {
           reports: { view: true, add: true, edit: true, delete: true },
           users: { view: true, add: true, edit: true, delete: true },
           'roles-permissions': { view: true, add: true, edit: true, delete: true },
-          settings: { view: true, add: true, edit: true, delete: true }
+          Settings: { view: true, add: true, edit: true, delete: true }
         }
       },
       Manager: {
@@ -106,7 +106,7 @@ export const initialRestaurantsData = {
           reports: { view: true, add: false, edit: false, delete: false },
           users: { view: true, add: true, edit: true, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
-          settings: { view: false, add: false, edit: false, delete: false }
+          Settings: { view: false, add: false, edit: false, delete: false }
         }
       },
       Waiter: {
@@ -121,7 +121,7 @@ export const initialRestaurantsData = {
           reports: { view: false, add: false, edit: false, delete: false },
           users: { view: false, add: false, edit: false, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
-          settings: { view: false, add: false, edit: false, delete: false }
+          Settings: { view: false, add: false, edit: false, delete: false }
         }
       },
       Kitchen: {
@@ -136,7 +136,7 @@ export const initialRestaurantsData = {
           reports: { view: false, add: false, edit: false, delete: false },
           users: { view: false, add: false, edit: false, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
-          settings: { view: false, add: false, edit: false, delete: false }
+          Settings: { view: false, add: false, edit: false, delete: false }
         }
       }
     }

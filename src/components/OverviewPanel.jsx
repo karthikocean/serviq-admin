@@ -132,7 +132,6 @@ export default function OverviewPanel({ orders = [], tables = [], todayRevenue =
         {/* Revenue Growth Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
           <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--black)' }}>Revenue Growth</h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 24px 0' }}>Past 6 Months</p>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', height: '180px', padding: '0 10px', marginTop: '20px' }}>
             {[
@@ -163,7 +162,6 @@ export default function OverviewPanel({ orders = [], tables = [], todayRevenue =
         {/* Order Breakdown Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
           <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--black)' }}>Order Breakdown</h3>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '0 0 24px 0' }}>By Menu Category</p>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
             {[

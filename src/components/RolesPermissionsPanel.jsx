@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Modal } from './Modal';
+import ShowNotifications from '../helper/ShowNotifications.js';
 
 const PencilIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -35,7 +36,7 @@ const TrashCanIcon = TrashIcon;
 
 const MODULES_LIST = [
   { id: 'overview', name: 'Dashboard / Overview' },
-  { id: 'orders', name: 'Orders & POS' },
+  { id: 'orders', name: 'Orders Management' },
   { id: 'menu', name: 'Menu Management' },
   { id: 'tables', name: 'Tables Management' },
   { id: 'billing', name: 'Billing & Payments' },
@@ -44,7 +45,7 @@ const MODULES_LIST = [
   { id: 'Reports', name: 'Overall Reports' },
   { id: 'users', name: 'User Accounts' },
   { id: 'roles-permissions', name: 'Roles & Permissions' },
-  { id: 'settings', name: 'Settings' }
+  { id: 'Settings', name: 'Settings' }
 ];
 
 export default function RolesPermissionsPanel() {
@@ -58,7 +59,7 @@ export default function RolesPermissionsPanel() {
 
   const handleDeleteRole = (roleName) => {
     if (roleName === 'Admin' || roleName === 'Waiter' || roleName === 'Kitchen') {
-      alert("System default roles cannot be deleted.");
+      ShowNotifications.showAlertNotification("System default roles cannot be deleted.", false);
       return;
     }
     setRoleToDelete(roleName);
@@ -82,20 +83,20 @@ export default function RolesPermissionsPanel() {
 
   const handleSaveRole = () => {
     if (!editingRoleName.trim()) {
-      alert("Role Name is required.");
+      ShowNotifications.showAlertNotification("Role Name is required.", false);
       return;
     }
     
     if (viewState === 'add') {
       if (rolesConfig[editingRoleName]) {
-        alert("A role with this name already exists.");
+        ShowNotifications.showAlertNotification("A role with this name already exists.", false);
         return;
       }
       addNewRole(activeRestaurant.id, editingRoleName);
     }
     
     updateRolePermissions(activeRestaurant.id, editingRoleName, permissionsState);
-    alert(`Role ${editingRoleName} saved successfully!`);
+    ShowNotifications.showAlertNotification(`Role ${editingRoleName} saved successfully!`, true);
     setViewState('list');
   };
 
@@ -211,12 +212,7 @@ export default function RolesPermissionsPanel() {
 
   return (
     <section className="panel-view active" style={{ paddingBottom: '60px' }}>
-      <div className="panel-header-flex" style={{ marginBottom: '24px' }}>
-        <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Users</h2>
-          <p className="panel-inner-desc">Manage system roles, configure authority, and control module access</p>
-        </div>
-      </div>
+     
 
       <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '32px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -233,48 +229,48 @@ export default function RolesPermissionsPanel() {
           </button>
         </div>
 
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ padding: '14px', width: '50px' }}>S.NO</th>
-                <th style={{ padding: '14px', textAlign: 'center', width: '50%' }}>ROLE NAME</th>
-                <th style={{ padding: '14px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ width: '15%', padding: '14px 16px' }}>S.NO</th>
+                <th style={{ width: '65%', padding: '14px 16px', textAlign: 'center' }}>ROLE NAME</th>
+                <th style={{ width: '20%', padding: '14px 16px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {Object.keys(rolesConfig).map((role, index) => {
-                const perms = rolesConfig[role].permissions || {};
-                const accessibleModules = Object.keys(perms).filter(k => perms[k].view).length;
-                const totalModules = MODULES_LIST.length;
-                
                 return (
-                  <tr key={role} style={{ borderBottom: '1px solid var(--border)' }}>
-                    <td style={{ padding: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{index + 1}</td>
-                    <td style={{ padding: '14px', fontWeight: 700, color: role === 'Admin' ? 'var(--primary)' : 'var(--text-main)', textAlign: 'center' }}>
+                  <tr key={role} style={{ borderBottom: '1px solid #e2e8f0', height: '52px' }}>
+                    <td style={{ padding: '12px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace' }}>
+                      {index + 1}
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, color: role === 'Admin' ? '#ff5a1f' : '#0f172a', textAlign: 'center', fontSize: '13px' }}>
                       {role}
                     </td>
-                    <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '8px' }}>
-                          <button 
-                            type="button" 
-                            className="btn btn-outline" 
-                            style={{ padding: '6px', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                            onClick={() => handleEditRole(role)}
-                            title="Edit Role"
-                          >
-                            <PencilIcon size={14} />
-                          </button>
-                          <button 
-                            type="button" 
-                            className="btn btn-outline" 
-                            style={{ padding: '6px', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}
-                            onClick={() => handleDeleteRole(role)}
-                            title="Delete Role"
-                          >
-                            <TrashIcon size={14} />
-                          </button>
-                        </div>
+                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button 
+                          type="button" 
+                          style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                          onClick={() => handleEditRole(role)}
+                          title="Edit Role"
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                        >
+                          <PencilIcon size={16} />
+                        </button>
+                        <button 
+                          type="button" 
+                          style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                          onClick={() => handleDeleteRole(role)}
+                          title="Delete Role"
+                          onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
+                        >
+                          <TrashIcon size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );

@@ -238,6 +238,9 @@ export default function Admin() {
   const [activePage, setActivePage] = useState(null); // 'menu-form' | 'table-form' | 'staff-form' | 'kitchen-form'
   const [menuItemToDelete, setMenuItemToDelete] = useState(null);
   const [menuForm, setMenuForm] = useState({ id: '', name: '', desc: '', price: '', category: 'Starters', image: '' });
+  const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [previousCategory, setPreviousCategory] = useState('Starters');
 
   // 4. Billing Panel states
   const [selectedBillingTable, setSelectedBillingTable] = useState('');
@@ -433,7 +436,7 @@ export default function Admin() {
         'Reports',
         'roles-permissions',
         'users',
-        'settings'
+        'Settings'
       ];
       const allowedTab = tabsOrder.find(t => isTabAllowed(t));
       if (allowedTab) {
@@ -497,7 +500,7 @@ export default function Admin() {
       const date = getOrderDate(ord);
       const waiter = ord.waiter || 'Unassigned';
       const table = ord.table || '';
-      const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Website');
+      const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
       const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
       const paymentStatus = ord.billingStatus || 'unpaid';
       const orderStatus = ord.status || 'new';
@@ -664,7 +667,7 @@ export default function Admin() {
 
   const openAddMenuModal = () => {
     if (!hasPermission('menu', 'add')) {
-      alert('Action not allowed: You do not have permission to add menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to add menu items.', false);
       return;
     }
     setMenuForm({ id: '', name: '', desc: '', price: '', category: 'Starters', image: '', foodType: 'Veg', status: 'Available', prepTime: '' });
@@ -673,7 +676,7 @@ export default function Admin() {
 
   const openEditMenuModal = (item) => {
     if (!hasPermission('menu', 'edit')) {
-      alert('Action not allowed: You do not have permission to edit menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to edit menu items.', false);
       return;
     }
     setMenuForm({
@@ -692,7 +695,7 @@ export default function Admin() {
 
   const handleDeleteMenu = (itemId) => {
     if (!hasPermission('menu', 'delete')) {
-      alert('Action not allowed: You do not have permission to delete menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to delete menu items.', false);
       return;
     }
     const item = activeRestaurant.menu.find(m => m.id === itemId);
@@ -717,14 +720,14 @@ export default function Admin() {
         ...itemData,
         id: menuForm.id
       });
-      alert('Menu item updated successfully!');
+      ShowNotifications.showAlertNotification('Menu item updated successfully!', true);
     } else {
       const newId = 'menu-' + Math.floor(1000 + Math.random() * 9000);
       addMenuItem(activeRestaurant.id, {
         ...itemData,
         id: newId
       });
-      alert('Menu item added successfully!');
+      ShowNotifications.showAlertNotification('Menu item added successfully!', true);
     }
     setActivePage(null);
   };
@@ -759,11 +762,33 @@ export default function Admin() {
 
   const handleStaffSubmit = (e) => {
     e.preventDefault();
+
+    // 1. Name validation (letters and spaces only)
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test((staffForm.name || '').trim())) {
+      ShowNotifications.showAlertNotification("Name should contain letters only (no numbers or special characters).", false);
+      return;
+    }
+
+    // 2. Mobile validation (exactly 10 digits)
+    const phoneDigits = (staffForm.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
+      ShowNotifications.showAlertNotification("Mobile number must be exactly 10 digits.", false);
+      return;
+    }
+
+    // 3. Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test((staffForm.email || '').trim())) {
+      ShowNotifications.showAlertNotification("Please enter a valid email address.", false);
+      return;
+    }
+
     const staffData = {
-      name: staffForm.name,
+      name: staffForm.name.trim(),
       role: staffForm.role,
-      phone: staffForm.phone,
-      email: staffForm.email,
+      phone: phoneDigits,
+      email: staffForm.email.trim(),
       password: staffForm.password,
       status: staffForm.status
     };
@@ -773,14 +798,14 @@ export default function Admin() {
         ...staffData,
         id: staffForm.id
       });
-      alert('Staff details updated successfully!');
+      ShowNotifications.showAlertNotification('Staff details updated successfully!', true);
     } else {
       const newId = 'S-' + Math.floor(1000 + Math.random() * 9000);
       addStaff(activeRestaurant.id, {
         ...staffData,
         id: newId
       });
-      alert('New staff registered successfully!');
+      ShowNotifications.showAlertNotification('New staff registered successfully!', true);
     }
     setActivePage(null);
   };
@@ -788,7 +813,7 @@ export default function Admin() {
   const handleKitchenPasswordSubmit = (e) => {
     e.preventDefault();
     updateKitchenPassword(activeRestaurant.id, kitchenPasswordForm);
-    alert('Kitchen password updated successfully!');
+    ShowNotifications.showAlertNotification('Kitchen password updated successfully!', true);
     setActivePage(null);
   };
 
@@ -828,7 +853,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader subtitle={`Modify details for order #ORD-${activeEditOrder.id}`} />
+           
             <div style={sty.pageCard}>
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -840,7 +865,7 @@ export default function Admin() {
                 setActiveEditOrder(null);
                 setActivePage(null);
                 setActiveTab('orders');
-                alert('Order updated successfully!');
+                ShowNotifications.showAlertNotification('Order updated successfully!', true);
               }} style={{ width: '100%' }}>
                 <div className="form-group" style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>Table Number</label>
@@ -911,6 +936,122 @@ export default function Admin() {
       );
     }
 
+    if (activePage === 'order-view' && activeViewOrder) {
+      return (
+        <section>
+          <div style={{ width: '100%' }}>
+            
+            <div style={sty.pageCard}>
+              {/* Order Info Bar */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px', 
+                padding: '20px 24px', 
+                background: '#f8fafc', 
+                borderRadius: '12px', 
+                border: '1px solid var(--border)', 
+                marginBottom: '28px' 
+              }}>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Table Number</span>
+                  <strong style={{ fontSize: '16px', color: 'var(--text-main)' }}>Table {activeViewOrder.table}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Order Time</span>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)' }}>
+                    {activeViewOrder.time} <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>({activeViewOrder.timeAgo})</span>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Order Status</span>
+                  <Badge status={activeViewOrder.status} />
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Assigned Waiter</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--text-main)' }}>{activeViewOrder.waiter || 'Unassigned'}</strong>
+                </div>
+              </div>
+
+              {activeViewOrder.notes && (
+                <div style={{ padding: '12px 16px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '10px', marginBottom: '24px', fontSize: '13px', color: '#d48806' }}>
+                  <strong>Order Notes:</strong> {activeViewOrder.notes}
+                </div>
+              )}
+
+              {/* Items Table */}
+              <div style={{ marginBottom: '28px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 14px 0', color: 'var(--text-main)', fontFamily: "'Outfit', sans-serif" }}>Items Summary</h3>
+                <div className="menu-table-wrapper" style={{ maxHeight: 'none' }}>
+                  <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '14px 16px' }}>Item Name</th>
+                        <th style={{ textAlign: 'center', padding: '14px 16px' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '14px 16px' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right', padding: '14px 16px' }}>Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeViewOrder.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-main)' }}>{item.name}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700 }}>{item.qty}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: '#64748b' }}>₹{(item.price || 0).toFixed(2)}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--text-main)' }}>₹{((item.price || 0) * item.qty).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Calculation & Total Box */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                <div style={{ width: '100%', maxWidth: '340px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
+                    <span>Subtotal</span>
+                    <strong style={{ color: 'var(--text-main)' }}>₹{(activeViewOrder.subtotal || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
+                    <span>Tax</span>
+                    <strong style={{ color: 'var(--text-main)' }}>₹{(activeViewOrder.tax || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, borderTop: '2px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
+                    <span style={{ color: 'var(--primary)' }}>Grand Total</span>
+                    <span style={{ color: 'var(--primary)' }}>₹{(activeViewOrder.total || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '28px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    setActiveViewOrder(null);
+                    setActivePage(null);
+                  }}
+                  style={{ padding: '10px 24px' }}
+                >
+                  Back to Orders
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-black"
+                  onClick={() => ShowNotifications.showAlertNotification('Printing order receipt...', true)}
+                  style={{ padding: '10px 24px' }}
+                >
+                  Print Receipt
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
 
 
 
@@ -926,7 +1067,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader subtitle={menuForm.id ? 'Modify menu item details' : 'Create a new dish for the menu'} />
+            <PageHeader/>
             <div style={sty.pageCard}>
               <form onSubmit={handleMenuSubmit} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
@@ -978,10 +1119,9 @@ export default function Admin() {
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Category</label>
                         <select value={menuForm.category} onChange={(e) => {
                           if (e.target.value === 'custom') {
-                            const newCat = prompt('Enter new category name:');
-                            if (newCat && newCat.trim()) {
-                              setMenuForm({ ...menuForm, category: newCat.trim() });
-                            }
+                            setPreviousCategory(menuForm.category || 'Starters');
+                            setCustomCategoryInput('');
+                            setShowCustomCategoryModal(true);
                           } else {
                             setMenuForm({ ...menuForm, category: e.target.value });
                           }
@@ -1035,6 +1175,66 @@ export default function Admin() {
                   </div>
                 </div>
               </form>
+              <Modal
+                isOpen={showCustomCategoryModal}
+                onClose={() => {
+                  setShowCustomCategoryModal(false);
+                  setMenuForm({ ...menuForm, category: previousCategory });
+                }}
+                title="Add Custom Category"
+                maxWidth="400px"
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000' }}>
+                      Enter new category name:
+                    </label>
+                    <input
+                      type="text"
+                      value={customCategoryInput}
+                      onChange={(e) => setCustomCategoryInput(e.target.value)}
+                      placeholder="e.g. Rice Platters"
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        fontSize: '14px'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      style={{ padding: '8px 16px', fontSize: '13px' }}
+                      onClick={() => {
+                        setShowCustomCategoryModal(false);
+                        setMenuForm({ ...menuForm, category: previousCategory });
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-black"
+                      style={{ padding: '8px 16px', fontSize: '13px' }}
+                      onClick={() => {
+                        if (customCategoryInput.trim()) {
+                          setMenuForm({ ...menuForm, category: customCategoryInput.trim() });
+                          setShowCustomCategoryModal(false);
+                        } else {
+                          ShowNotifications.showAlertNotification('Please enter a valid category name.', false);
+                        }
+                      }}
+                    >
+                      OK
+                    </button>
+                  </div>
+                </div>
+              </Modal>
             </div>
           </div>
         </section>
@@ -1045,7 +1245,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader subtitle={addTableForm.isEdit ? "Update dining table settings" : "Create a new physical dining table with capacity"} />
+            <PageHeader />
             <div style={sty.pageCard}>
               <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
                 <div className="form-group" style={{ marginBottom: '16px' }}>
@@ -1058,7 +1258,6 @@ export default function Admin() {
                     required
                     disabled={addTableForm.isEdit}
                   />
-                  {!addTableForm.isEdit && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Recommended format: T-XX (e.g. T-06, T-07)</p>}
                 </div>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label>Seating Capacity</label>
@@ -1100,7 +1299,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader subtitle={staffForm.id ? 'Update employee profile' : 'Add a new member to the restaurant staff'} />
+            <PageHeader />
             <div style={sty.pageCard}>
               <form onSubmit={handleStaffSubmit} style={{ width: '100%' }}>
                 <div style={sty.formGrid2}>
@@ -1302,7 +1501,7 @@ export default function Admin() {
             </li>
           )}
           {/* 8. Users Dropdown */}
-          {isTabAllowed('settings') && (
+          {isTabAllowed('Settings') && (
             <li className={`sidebar-group ${sidebarUsersOpen ? 'open' : ''}`}>
               <div
                 className="sidebar-item dropdown-trigger"
@@ -1349,11 +1548,11 @@ export default function Admin() {
             </li>
           )}
           {/* 11. Settings */}
-          {isTabAllowed('settings') && (
-            <li className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => { setActiveTab('settings'); setActivePage(null); }}>
+          {isTabAllowed('Settings') && (
+            <li className={`sidebar-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveTab('Settings'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/></svg>
-                settings
+                Settings
               </a>
             </li>
           )}
@@ -1382,7 +1581,7 @@ export default function Admin() {
               <span className="header-subtitle-date">{dateTimeStr}</span>
             </div>
             <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => alert('No new notifications.')}>
+              <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 {pendingOrdersCount > 0 && (
                   <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
@@ -1458,7 +1657,7 @@ export default function Admin() {
                     </div>
                     
                     <div style={{ padding: '12px' }}>
-                      {isTabAllowed('settings') && (
+                      {isTabAllowed('Settings') && (
                         <button 
                           style={{ 
                             width: '100%', 
@@ -1478,7 +1677,7 @@ export default function Admin() {
                           onMouseEnter={(e) => e.target.style.background = '#27272a'}
                           onMouseLeave={(e) => e.target.style.background = 'transparent'}
                           onClick={() => {
-                            setActiveTab('settings');
+                            setActiveTab('Settings');
                             setActivePage(null);
                             setIsProfileMenuOpen(false);
                           }}
@@ -1525,7 +1724,7 @@ export default function Admin() {
 
         {/* CONTENT BODY */}
         <div className="content-body">
-          {activePage && activePage !== 'order-view' ? renderActivePage() : (
+          {activePage ? renderActivePage() : (
             <>
               {activeTab === 'overview' && (
                 <OverviewPanel
@@ -1601,6 +1800,7 @@ export default function Admin() {
                   revokeQrCode={revokeQrCode}
                   deleteQrCode={deleteQrCode}
                   updateDiningTable={updateDiningTable}
+                  setActiveTab={setActiveTab}
                 />
               )}
               {activeTab === 'waiter-list' && (
@@ -1653,7 +1853,7 @@ export default function Admin() {
                   activeRestaurant={activeRestaurant}
                 />
               )}
-              {activeTab === 'settings' && (
+              {activeTab === 'Settings' && (
                 <SettingsPanel
                   activeRestaurant={activeRestaurant}
                   saveRestaurantSettings={saveRestaurantSettings}
@@ -1680,111 +1880,7 @@ export default function Admin() {
           )}
         </div>
 
-        {/* MODAL OVERLAY FOR ORDER VIEW */}
-        {activePage === 'order-view' && activeViewOrder && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            backdropFilter: 'blur(4px)'
-          }}>
-            <div style={{
-              background: '#ffffff',
-              borderRadius: '16px',
-              padding: '32px',
-              border: '1px solid var(--border)',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
-              width: '90%',
-              maxWidth: '500px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              position: 'relative'
-            }}>
-              {/* Close Button Top Right */}
-              <button
-                style={{
-                  position: 'absolute',
-                  top: '20px',
-                  right: '20px',
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '20px',
-                  cursor: 'pointer',
-                  color: '#64748b'
-                }}
-                onClick={() => {
-                  setActiveViewOrder(null);
-                  setActivePage(null);
-                }}
-              >
-                ✕
-              </button>
 
-              <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: 'var(--black)' }}>
-                Order Details
-              </h2>
-              <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '20px' }}>
-                View details for order #ORD-{activeViewOrder.id}
-              </span>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', marginBottom: '20px', color: '#000000' }}>
-                <div><strong>Table:</strong> Table {activeViewOrder.table}</div>
-                <div><strong>Time:</strong> {activeViewOrder.time} ({activeViewOrder.timeAgo})</div>
-                <div><strong>Status:</strong> <Badge status={activeViewOrder.status} /></div>
-                <div><strong>Assigned Waiter:</strong> {activeViewOrder.waiter || 'Unassigned'}</div>
-                {activeViewOrder.notes && <div><strong>Notes:</strong> {activeViewOrder.notes}</div>}
-
-                <div style={{ borderTop: '1px dashed var(--border)', paddingTop: '12px', marginTop: '8px' }}>
-                  <strong style={{ display: 'block', marginBottom: '8px' }}>Items Summary:</strong>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>
-                        <th style={{ padding: '6px 0' }}>Item Name</th>
-                        <th style={{ padding: '6px 0', textAlign: 'center' }}>Qty</th>
-                        <th style={{ padding: '6px 0', textAlign: 'right' }}>Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeViewOrder.items.map((item, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}>
-                          <td style={{ padding: '8px 0' }}>{item.name}</td>
-                          <td style={{ padding: '8px 0', textAlign: 'center' }}>{item.qty}</td>
-                          <td style={{ padding: '8px 0', textAlign: 'right' }}>₹{item.price * item.qty}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', borderTop: '1px dashed var(--border)', paddingTop: '12px', marginTop: '8px', alignItems: 'flex-end' }}>
-                  <div>Subtotal: <strong>₹{activeViewOrder.subtotal}</strong></div>
-                  <div>Tax: <strong>₹{activeViewOrder.tax}</strong></div>
-                  <div>Total: <strong style={{ fontSize: '16px', color: 'var(--primary)' }}>₹{activeViewOrder.total}</strong></div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
-                <button
-                  className="btn btn-black"
-                  style={{ padding: '10px 24px' }}
-                  onClick={() => {
-                    setActiveViewOrder(null);
-                    setActivePage(null);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* MODAL OVERLAY FOR ASSIGN TABLES */}
         <Modal
@@ -1889,7 +1985,7 @@ export default function Admin() {
             {/* Cover Waiter Selection */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>
-                Cover Waiter <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(Optional)</span>
+                Cover Waiter
               </label>
               <select
                 value={modalCoverWaiterId}
@@ -1915,9 +2011,7 @@ export default function Admin() {
                     </option>
                   ))}
               </select>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Assigned as fallback if primary waiter goes Off Duty.
-              </span>
+             
             </div>
 
             {/* Form Actions */}
@@ -2158,10 +2252,10 @@ export default function Admin() {
                     });
                     setShowOfflinePaymentModal(false);
                     setSelectedPaymentOrder(null);
-                    alert(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`);
+                    ShowNotifications.showAlertNotification(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`, true);
                   }}
                 >
-                  Submit Settlement
+                  Submit 
                 </button>
               </div>
             </div>

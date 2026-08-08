@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState } from '../../config/AppContext';
 import OrdersPanel from '../../components/OrdersPanel';
 import { Badge } from '../../components/Badge';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 import './OrderManagement.css';
 
 export default function OrderManagement() {
@@ -76,7 +77,7 @@ export default function OrderManagement() {
                 });
                 setActiveEditOrder(null);
                 setActivePage(null);
-                alert('Order updated successfully!');
+                ShowNotifications.showAlertNotification('Order updated successfully!', true);
               }} style={{ width: '100%' }}>
                 <div className="form-group" style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>Table Number</label>
@@ -144,6 +145,117 @@ export default function OrderManagement() {
             </div>
           </div>
         </section>
+      ) : activePage === 'order-view' && activeViewOrder ? (
+        <section>
+          <div style={{ width: '100%' }}>
+            <div style={sty.pageCard}>
+              {/* Order Info Bar */}
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                gap: '16px', 
+                padding: '20px 24px', 
+                background: '#f8fafc', 
+                borderRadius: '12px', 
+                border: '1px solid var(--border)', 
+                marginBottom: '28px' 
+              }}>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Table Number</span>
+                  <strong style={{ fontSize: '16px', color: 'var(--text-main)' }}>Table {activeViewOrder.table}</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Order Time</span>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)' }}>
+                    {activeViewOrder.time} <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>({activeViewOrder.timeAgo})</span>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Order Status</span>
+                  <Badge status={activeViewOrder.status} />
+                </div>
+                <div>
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Assigned Waiter</span>
+                  <strong style={{ fontSize: '14px', color: 'var(--text-main)' }}>{activeViewOrder.waiter || 'Unassigned'}</strong>
+                </div>
+              </div>
+
+              {activeViewOrder.notes && (
+                <div style={{ padding: '12px 16px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '10px', marginBottom: '24px', fontSize: '13px', color: '#d48806' }}>
+                  <strong>Order Notes:</strong> {activeViewOrder.notes}
+                </div>
+              )}
+
+              {/* Items Table */}
+              <div style={{ marginBottom: '28px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 14px 0', color: 'var(--text-main)', fontFamily: "'Outfit', sans-serif" }}>Items Summary</h3>
+                <div className="menu-table-wrapper" style={{ maxHeight: 'none' }}>
+                  <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '14px 16px' }}>Item Name</th>
+                        <th style={{ textAlign: 'center', padding: '14px 16px' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '14px 16px' }}>Unit Price</th>
+                        <th style={{ textAlign: 'right', padding: '14px 16px' }}>Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeViewOrder.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-main)' }}>{item.name}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700 }}>{item.qty}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', color: '#64748b' }}>₹{(item.price || 0).toFixed(2)}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--text-main)' }}>₹{((item.price || 0) * item.qty).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Calculation & Total Box */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+                <div style={{ width: '100%', maxWidth: '340px', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
+                    <span>Subtotal</span>
+                    <strong style={{ color: 'var(--text-main)' }}>₹{(activeViewOrder.subtotal || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
+                    <span>Tax</span>
+                    <strong style={{ color: 'var(--text-main)' }}>₹{(activeViewOrder.tax || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, borderTop: '2px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
+                    <span style={{ color: 'var(--primary)' }}>Grand Total</span>
+                    <span style={{ color: 'var(--primary)' }}>₹{(activeViewOrder.total || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '28px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => {
+                    setActiveViewOrder(null);
+                    setActivePage(null);
+                  }}
+                  style={{ padding: '10px 24px' }}
+                >
+                  Back to Orders
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-black"
+                  onClick={() => ShowNotifications.showAlertNotification('Printing order receipt...', true)}
+                  style={{ padding: '10px 24px' }}
+                >
+                  Print Receipt
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       ) : (
         <OrdersPanel
           orders={orders}
@@ -166,111 +278,6 @@ export default function OrderManagement() {
           updateOrderStatus={updateOrderStatus}
           plan={plan}
         />
-      )}
-
-      {/* MODAL OVERLAY FOR ORDER VIEW */}
-      {activePage === 'order-view' && activeViewOrder && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(4px)'
-        }}>
-          <div style={{
-            background: '#ffffff',
-            borderRadius: '16px',
-            padding: '32px',
-            border: '1px solid var(--border)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
-            width: '90%',
-            maxWidth: '500px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            position: 'relative'
-          }}>
-            <button
-              style={{
-                position: 'absolute',
-                top: '20px',
-                right: '20px',
-                background: 'transparent',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer',
-                color: '#64748b'
-              }}
-              onClick={() => {
-                setActiveViewOrder(null);
-                setActivePage(null);
-              }}
-            >
-              ✕
-            </button>
-
-            <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif", color: 'var(--black)' }}>
-              Order Details
-            </h2>
-            <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '20px' }}>
-              View details for order #ORD-{activeViewOrder.id}
-            </span>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', marginBottom: '20px', color: '#000000' }}>
-              <div><strong>Table:</strong> Table {activeViewOrder.table}</div>
-              <div><strong>Time:</strong> {activeViewOrder.time} ({activeViewOrder.timeAgo})</div>
-              <div><strong>Status:</strong> <Badge status={activeViewOrder.status} /></div>
-              <div><strong>Assigned Waiter:</strong> {activeViewOrder.waiter || 'Unassigned'}</div>
-              {activeViewOrder.notes && <div><strong>Notes:</strong> {activeViewOrder.notes}</div>}
-
-              <div style={{ borderTop: '1px dashed var(--border)', paddingTop: '12px', marginTop: '8px' }}>
-                <strong style={{ display: 'block', marginBottom: '8px' }}>Items Summary:</strong>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', fontSize: '12px', color: '#64748b' }}>
-                      <th style={{ padding: '6px 0', background: 'transparent', color: '#64748b !important' }}>Item Name</th>
-                      <th style={{ padding: '6px 0', textAlign: 'center', background: 'transparent', color: '#64748b !important' }}>Qty</th>
-                      <th style={{ padding: '6px 0', textAlign: 'right', background: 'transparent', color: '#64748b !important' }}>Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeViewOrder.items.map((item, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}>
-                        <td style={{ padding: '8px 0', color: 'black' }}>{item.name}</td>
-                        <td style={{ padding: '8px 0', textAlign: 'center', color: 'black' }}>{item.qty}</td>
-                        <td style={{ padding: '8px 0', textAlign: 'right', color: 'black' }}>₹{item.price * item.qty}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', borderTop: '1px dashed var(--border)', paddingTop: '12px', marginTop: '8px', alignItems: 'flex-end' }}>
-                <div>Subtotal: <strong>₹{activeViewOrder.subtotal}</strong></div>
-                <div>Tax: <strong>₹{activeViewOrder.tax}</strong></div>
-                <div>Total: <strong style={{ fontSize: '16px', color: 'var(--primary)' }}>₹{activeViewOrder.total}</strong></div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
-              <button
-                className="btn btn-black"
-                style={{ padding: '10px 24px' }}
-                onClick={() => {
-                  setActiveViewOrder(null);
-                  setActivePage(null);
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

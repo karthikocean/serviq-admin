@@ -3,6 +3,7 @@ import { useAppState } from '../../config/AppContext';
 import WaiterListPanel from '../../components/WaiterListPanel';
 import WaiterReportsPanel from '../../components/WaiterReportsPanel';
 import { Modal } from '../../components/Modal';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 
 export default function WaiterManagement({ activeSubTab }) {
   const {
@@ -80,11 +81,33 @@ export default function WaiterManagement({ activeSubTab }) {
 
   const handleStaffSubmit = (e) => {
     e.preventDefault();
+
+    // 1. Name validation (letters and spaces only)
+    const nameRegex = /^[a-zA-Z\s]+$/;
+    if (!nameRegex.test((staffForm.name || '').trim())) {
+      ShowNotifications.showAlertNotification("Name should contain letters only (no numbers or special characters).", false);
+      return;
+    }
+
+    // 2. Mobile validation (exactly 10 digits)
+    const phoneDigits = (staffForm.phone || '').replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
+      ShowNotifications.showAlertNotification("Mobile number must be exactly 10 digits.", false);
+      return;
+    }
+
+    // 3. Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test((staffForm.email || '').trim())) {
+      ShowNotifications.showAlertNotification("Please enter a valid email address.", false);
+      return;
+    }
+
     const staffData = {
-      name: staffForm.name,
+      name: staffForm.name.trim(),
       role: staffForm.role,
-      phone: staffForm.phone,
-      email: staffForm.email,
+      phone: phoneDigits,
+      email: staffForm.email.trim(),
       password: staffForm.password,
       status: staffForm.status
     };
@@ -94,14 +117,14 @@ export default function WaiterManagement({ activeSubTab }) {
         ...staffData,
         id: staffForm.id
       });
-      alert('Staff details updated successfully!');
+      ShowNotifications.showAlertNotification('Staff details updated successfully!', true);
     } else {
       const newId = 'S-' + Math.floor(1000 + Math.random() * 9000);
       addStaff(activeRestaurant.id, {
         ...staffData,
         id: newId
       });
-      alert('New staff registered successfully!');
+      ShowNotifications.showAlertNotification('New staff registered successfully!', true);
     }
     setActivePage(null);
   };

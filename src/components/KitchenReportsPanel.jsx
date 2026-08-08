@@ -188,7 +188,7 @@ export default function KitchenReportsPanel({
             <span>Filter Query Logs</span>
           </div>
           <span className="premium-filter-count-badge">
-            {filteredKitchen.length} {filteredKitchenReports.length === 1 ? 'record' : 'records'} found
+            {filteredKitchenReports.length} {filteredKitchenReports.length === 1 ? 'record' : 'records'} found
           </span>
         </div>
 
@@ -279,10 +279,10 @@ export default function KitchenReportsPanel({
                 <th style={{ padding: '12px 14px' }}>KOT NUMBER</th>
                 <th style={{ padding: '12px 14px' }}>ORDER ID</th>
                 <th style={{ padding: '12px 14px' }}>ITEMS</th>
-                <th style={{ padding: '12px 14px' }}>TABLE</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>TABLE</th>
                 <th style={{ padding: '12px 14px' }}>WAITER</th>
                 <th style={{ padding: '12px 14px' }}>KITCHEN STAFF</th>
-                <th style={{ padding: '12px 14px' }}>PRIORITY</th>
+                <th style={{ padding: '12px 14px', textAlign: 'center' }}>PRIORITY</th>
                 <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
@@ -317,10 +317,10 @@ export default function KitchenReportsPanel({
                           ))}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: '13px' }}>Table {ord.table}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, fontSize: '13px', textAlign: 'center' }}>Table {ord.table}</td>
                       <td style={{ padding: '12px 14px', fontSize: '13px' }}>{ord.waiter || 'Unassigned'}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 500, fontSize: '13px' }}>{kitchenStaffName}</td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                         <span style={{
                           padding: '2px 8px',
                           borderRadius: '4px',

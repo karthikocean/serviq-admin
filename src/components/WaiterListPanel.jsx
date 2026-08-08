@@ -134,47 +134,45 @@ export default function WaiterListPanel({
         </div>
       </div>
 
-      <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th style={{ padding: '16px 14px' }}>S.NO.</th>
-                <th style={{ padding: '16px 14px' }}>WAITER NAME</th>
-                <th style={{ padding: '16px 14px' }}>PHONE NUMBER</th>
-                <th style={{ padding: '16px 14px' }}>EMAIL ADDRESS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ASSIGNED TABLES</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIVE ORDERS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>COMPLETED ORDERS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIONS</th>
+                <th style={{ width: '6%', padding: '14px 16px' }}>S.NO</th>
+                <th style={{ width: '20%', padding: '14px 16px' }}>WAITER NAME</th>
+                <th style={{ width: '15%', padding: '14px 16px' }}>PHONE NUMBER</th>
+                <th style={{ width: '18%', padding: '14px 16px' }}>EMAIL ADDRESS</th>
+                <th style={{ width: '14%', padding: '14px 16px', textAlign: 'center' }}>ASSIGNED TABLES</th>
+                <th style={{ width: '10%', padding: '14px 16px', textAlign: 'center' }}>ACTIVE ORDERS</th>
+                <th style={{ width: '9%', padding: '14px 16px', textAlign: 'center' }}>STATUS</th>
+                <th style={{ width: '8%', padding: '14px 16px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {waiters.map((s, index) => {
                 const assigned = getAssignedTables(s.id);
                 const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
-                const completedOrdersCount = orders.filter(o => o.waiter === s.name && o.status === 'done').length;
                 const isActive = s.status === 'On Duty' || s.status === 'Active';
 
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>{index + 1}</td>
-                    <td style={{ padding: '18px 14px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
+                  <tr key={s.id} style={{ borderBottom: '1px solid #e2e8f0', height: '52px' }}>
+                    <td style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
                       <WaiterAvatarIcon />
                       {s.name}
                     </td>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500, color: '#334155' }}>{s.phone}</td>
+                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500, color: '#334155' }}>{s.email}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       {assigned.length > 0 ? (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
                           {assigned.map(tId => (
                             <span key={tId} style={{
                               fontSize: '11px',
-                              backgroundColor: '#ea580c',
+                              backgroundColor: '#ff5a1f',
                               color: '#ffffff',
-                              padding: '4px 10px',
+                              padding: '3px 8px',
                               borderRadius: '12px',
                               fontWeight: '800'
                             }}>
@@ -186,23 +184,20 @@ export default function WaiterListPanel({
                         <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', fontWeight: 500 }}>None</span>
                       )}
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ff5a1f' }}>
                       {activeOrdersCount}
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
-                      {completedOrdersCount}
-                    </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                       <span 
                         onClick={() => handleToggleDuty(s)}
                         style={{
                           display: 'inline-block',
-                          padding: '4px 16px',
+                          padding: '3px 12px',
                           border: isActive ? '1.5px solid #10b981' : '1.5px solid #ef4444',
                           color: isActive ? '#10b981' : '#ef4444',
                           borderRadius: '20px',
                           fontSize: '11px',
-                          fontWeight: '700',
+                          fontWeight: '800',
                           cursor: 'pointer',
                           backgroundColor: '#ffffff'
                         }}
@@ -210,7 +205,7 @@ export default function WaiterListPanel({
                         {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <IconBtn icon={<PencilIcon size={16} />} tooltip="Edit Waiter" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
                       <IconBtn icon={<TrashIcon size={16} />} tooltip="Delete Waiter" style={iconBtnDeleteStyle} onClick={() => setWaiterToDelete(s)} />
                     </td>
@@ -219,8 +214,8 @@ export default function WaiterListPanel({
               })}
               {waiters.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
-                    No waiters registered. Click "Add New Waiter" to start.
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                    No waiters registered. Click "Add Waiter" to start.
                   </td>
                 </tr>
               )}

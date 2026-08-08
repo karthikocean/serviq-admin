@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
+import { Modal } from '../../components/Modal';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -13,7 +15,10 @@ export default function MenuManagement() {
   } = useAppState();
 
   const [activePage, setActivePage] = useState(null); // null | 'menu-form'
-  const [menuForm, setMenuForm] = useState({ id: '', name: '', desc: '', price: '', category: 'Starters', image: '' });
+  const [menuForm, setMenuForm] = useState({ _id: '', name: '', desc: '', price: '', category: 'Starters', image: '', veg: true, available: true, bestseller: false });
+  const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [previousCategory, setPreviousCategory] = useState('Starters');
 
   if (!activeRestaurant) return null;
 
@@ -31,32 +36,35 @@ export default function MenuManagement() {
 
   const openAddMenuModal = () => {
     if (!hasPermission('menu', 'add')) {
-      alert('Action not allowed: You do not have permission to add menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to add menu items.', false);
       return;
     }
-    setMenuForm({ id: '', name: '', desc: '', price: '', category: 'Starters', image: '' });
+    setMenuForm({ _id: '', name: '', desc: '', price: '', category: 'Starters', image: '', veg: true, available: true, bestseller: false });
     setActivePage('menu-form');
   };
 
   const openEditMenuModal = (item) => {
     if (!hasPermission('menu', 'edit')) {
-      alert('Action not allowed: You do not have permission to edit menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to edit menu items.', false);
       return;
     }
     setMenuForm({
-      id: item.id,
+      _id: item._id,
       name: item.name,
       desc: item.desc || '',
       price: item.price,
       category: item.category,
-      image: item.image || ''
+      image: item.image || '',
+      veg: item.veg !== undefined ? item.veg : true,
+      available: item.available !== undefined ? item.available : true,
+      bestseller: item.bestseller !== undefined ? item.bestseller : false
     });
     setActivePage('menu-form');
   };
 
   const handleDeleteMenu = (itemId) => {
     if (!hasPermission('menu', 'delete')) {
-      alert('Action not allowed: You do not have permission to delete menu items.');
+      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to delete menu items.', false);
       return;
     }
     if (window.confirm('Are you sure you want to delete this menu item?')) {
@@ -64,7 +72,7 @@ export default function MenuManagement() {
     }
   };
 
-  const handleMenuSubmit = (e) => {
+  const handleMenuSubmit = async (e) => {
     e.preventDefault();
     const itemData = {
       name: menuForm.name,
@@ -72,24 +80,15 @@ export default function MenuManagement() {
       price: parseFloat(menuForm.price),
       category: menuForm.category,
       image: menuForm.image,
-      available: true,
-      veg: true,
-      bestseller: false
+      available: menuForm.available,
+      veg: menuForm.veg,
+      bestseller: menuForm.bestseller
     };
 
-    if (menuForm.id) {
-      updateMenuItem(activeRestaurant.id, {
-        ...itemData,
-        id: menuForm.id
-      });
-      alert('Menu item updated successfully!');
+    if (menuForm._id) {
+      await updateMenuItem(activeRestaurant.id, menuForm._id, itemData);
     } else {
-      const newId = 'menu-' + Math.floor(1000 + Math.random() * 9000);
-      addMenuItem(activeRestaurant.id, {
-        ...itemData,
-        id: newId
-      });
-      alert('Menu item added successfully!');
+      await addMenuItem(activeRestaurant.id, itemData);
     }
     setActivePage(null);
   };
@@ -119,10 +118,7 @@ export default function MenuManagement() {
       {activePage === 'menu-form' ? (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader
-              title={menuForm.id ? 'Edit Menu Item' : 'Add New Menu Item'}
-              subtitle={menuForm.id ? 'Modify menu item details' : 'Create a new dish for the menu'}
-            />
+            <PageHeader />
             <div style={sty.pageCard}>
               <form onSubmit={handleMenuSubmit} style={{ width: '100%' }}>
                 <div
@@ -223,10 +219,9 @@ export default function MenuManagement() {
                       value={menuForm.category}
                       onChange={(e) => {
                         if (e.target.value === 'custom') {
-                          const newCat = prompt('Enter new category name:');
-                          if (newCat && newCat.trim()) {
-                            setMenuForm({ ...menuForm, category: newCat.trim() });
-                          }
+                          setPreviousCategory(menuForm.category || 'Starters');
+                          setCustomCategoryInput('');
+                          setShowCustomCategoryModal(true);
                         } else {
                           setMenuForm({ ...menuForm, category: e.target.value });
                         }
@@ -259,6 +254,67 @@ export default function MenuManagement() {
           hasPermission={hasPermission}
         />
       )}
+
+      <Modal
+        isOpen={showCustomCategoryModal}
+        onClose={() => {
+          setShowCustomCategoryModal(false);
+          setMenuForm({ ...menuForm, category: previousCategory });
+        }}
+        title="Add Custom Category"
+        maxWidth="400px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000' }}>
+              Enter new category name:
+            </label>
+            <input
+              type="text"
+              value={customCategoryInput}
+              onChange={(e) => setCustomCategoryInput(e.target.value)}
+              placeholder="e.g. Rice Platters"
+              required
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid var(--border)',
+                fontSize: '14px'
+              }}
+              autoFocus
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => {
+                setShowCustomCategoryModal(false);
+                setMenuForm({ ...menuForm, category: previousCategory });
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-black"
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+              onClick={() => {
+                if (customCategoryInput.trim()) {
+                  setMenuForm({ ...menuForm, category: customCategoryInput.trim() });
+                  setShowCustomCategoryModal(false);
+                } else {
+                  ShowNotifications.showAlertNotification('Please enter a valid category name.', false);
+                }
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

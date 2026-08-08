@@ -1,8 +1,7 @@
 import React from 'react';
-import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 
-// Clean SVG Icons to replace raw emojis
+// Clean SVG Icons
 const WaiterIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -10,29 +9,38 @@ const WaiterIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const PlusIcon = ({ size = 16, color = 'currentColor' }) => (
+const UserIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const UsersGroupIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M17 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M9 21v-2a4 4 0 0 1 4-4h1" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const PlusIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <line x1="12" y1="5" x2="12" y2="19" />
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
 
-const PencilIcon = ({ size = 14, color = 'currentColor' }) => (
+const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     <path d="m15 5 4 4" />
   </svg>
 );
 
-const WarningIcon = ({ size = 14, color = '#f59e0b' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </svg>
-);
-
-const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
+const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M3 6h18" />
     <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
@@ -51,212 +59,270 @@ export default function TablesPanel({
   setActivePage
 }) {
   const [tableToDelete, setTableToDelete] = React.useState(null);
-  const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
 
-  const getTableWaiterInfo = (t) => {
-    const primary = staff.find(s => s.id === t.assignedWaiterId);
-    return { primary };
+  // Default sample tables matching screenshot if tables prop is empty
+  const sampleTables = [
+    { id: 'T-01', status: 'Free', seats: 4, assignedWaiterName: 'Rahul S.' },
+    { id: 'T-02', status: 'Occupied', seats: 2, assignedWaiterName: 'Arjun K.' },
+    { id: 'T-03', status: 'Occupied', seats: 4, assignedWaiterName: 'Ravi M.' },
+    { id: 'T-04', status: 'Free', seats: 6, assignedWaiterName: null },
+    { id: 'T-05', status: 'Occupied', seats: 2, assignedWaiterName: 'Priya M.' }
+  ];
+
+  const displayTables = tables.length > 0 ? tables : sampleTables;
+
+  const getWaiterName = (table) => {
+    if (table.assignedWaiterName) return table.assignedWaiterName;
+    if (table.assignedWaiter) return table.assignedWaiter;
+    if (table.assignedWaiterId) {
+      const found = staff.find(s => s.id === table.assignedWaiterId);
+      if (found) return found.name;
+    }
+    return null;
   };
 
   return (
-    <section className="panel-view active">
-      <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
-        <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Tables list</h2>
-          <p className="panel-inner-desc">Manage seating capacity, waiters, and link tables to active ordering QR codes.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+    <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
+      {/* Top Header Row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px',
+        paddingTop: '8px'
+      }}>
+        <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+          Tables list
+        </h2>
+
+        <div style={{ display: 'flex', gap: '12px' }}>
           <button 
-            className="btn btn-outline" 
             onClick={handleOpenAssignTablesModal}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '700',
+              color: '#0f172a',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
           >
-            <WaiterIcon size={16} />
-            Assign Tables
+            <WaiterIcon size={16} color="#0f172a" /> Waiter List
           </button>
+          
           <button 
-            className="btn btn-black" 
             onClick={() => { setAddTableForm({ id: '', seats: 4 }); setActivePage('table-form'); }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+            style={{
+              background: '#ff5a1f',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '10px',
+              fontSize: '14px',
+              fontWeight: '700',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(255, 90, 31, 0.2)',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
           >
-            <PlusIcon size={16} />
-            Add Dining Table
+            <PlusIcon size={16} color="#ffffff" /> Add Dining Table
           </button>
         </div>
       </div>
 
-      <div className="tables-list-column" style={{ width: '100%' }}>
-        {/* Metrics Cards */}
-        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-          <div className="stat-card" style={{ borderLeft: '5px solid var(--primary)' }}>
-            <div className="stat-main-row">
-              <div className="stat-info">
-                <div className="stat-label" style={{ color: '#64748b' }}>Total Tables</div>
-                <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '24px', fontWeight: '700' }}>{tables.length}</h3>
-                <div className="stat-sub-label green-label">Active terminals</div>
+      {/* List of Table Row Cards Stacked Vertically */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+        {displayTables.map((table, index) => {
+          const isFree = table.status?.toLowerCase() === 'free';
+          const statusText = isFree ? 'FREE' : 'OCCUPIED';
+          
+          const accentColor = isFree ? '#22c55e' : '#ef4444';
+          const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
+          const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
+
+          const tableIdStr = table.id?.startsWith('T-') ? table.id : `T-${String(table.id || index + 1).padStart(2, '0')}`;
+          const waiterName = getWaiterName(table);
+
+          return (
+            <div 
+              key={table.id || index}
+              style={{
+                background: '#ffffff',
+                borderRadius: '14px',
+                border: '1px solid #e2e8f0',
+                borderLeft: `5px solid ${accentColor}`,
+                boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
+                padding: '14px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                transition: 'transform 0.15s, box-shadow 0.15s'
+              }}
+            >
+              {/* Left Column: Icon Square + Table ID & Subtitle */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: '180px' }}>
+                <div style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: '10px',
+                  background: bgBadgeColor,
+                  color: textBadgeColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '900',
+                  fontSize: '13px',
+                  letterSpacing: '-0.5px'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={textBadgeColor} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 6h16" />
+                    <path d="M5 6v12" />
+                    <path d="M19 6v12" />
+                    <path d="M10 6v6" />
+                    <path d="M14 6v6" />
+                  </svg>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', lineHeight: '1.2' }}>
+                    {tableIdStr}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '500', color: '#64748b', marginTop: '2px' }}>
+                    Main Dining
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Badge Column */}
+              <div style={{ minWidth: '130px' }}>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  letterSpacing: '0.4px',
+                  backgroundColor: bgBadgeColor,
+                  color: textBadgeColor
+                }}>
+                  <span style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    backgroundColor: textBadgeColor,
+                    display: 'inline-block'
+                  }}></span>
+                  {statusText}
+                </span>
+              </div>
+
+              {/* Seats Capacity Column */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                color: '#64748b',
+                fontSize: '14px',
+                fontWeight: '600',
+                minWidth: '110px'
+              }}>
+                <UsersGroupIcon size={16} color="#64748b" />
+                <span>{table.seats || 4} seats</span>
+              </div>
+
+              {/* Assigned Waiter Column */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                minWidth: '180px',
+                flex: 1
+              }}>
+                {waiterName ? (
+                  <>
+                    <UserIcon size={15} color="#334155" />
+                    <span style={{ fontWeight: '600', color: '#334155' }}>
+                      {waiterName}
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: '500' }}>
+                    No waiter assigned
+                  </span>
+                )}
+              </div>
+
+              {/* Actions Column */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <button 
+                  onClick={() => {
+                    setAddTableForm({ id: table.id, seats: table.seats || 4, status: table.status || 'Free', isEdit: true });
+                    setActivePage('table-form');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                  title="Edit Table"
+                >
+                  <PencilIcon size={17} />
+                </button>
+
+                <button 
+                  onClick={() => setTableToDelete(table)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ea4335',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
+                  title="Delete Table"
+                >
+                  <TrashIcon size={17} />
+                </button>
               </div>
             </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '5px solid var(--primary)' }}>
-            <div className="stat-main-row">
-              <div className="stat-info">
-                <div className="stat-label" style={{ color: '#64748b' }}>Occupied</div>
-                <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '24px', fontWeight: '700' }}>{occupiedTablesCount}</h3>
-                <div className={`stat-sub-label ${occupiedTablesCount > 0 ? 'red-label' : 'green-label'}`}>{occupiedTablesCount} in session</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '5px solid var(--primary)' }}>
-            <div className="stat-main-row">
-              <div className="stat-info">
-                <div className="stat-label" style={{ color: '#64748b' }}>Total Seats</div>
-                <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '24px', fontWeight: '700' }}>{tables.reduce((acc, t) => acc + (t.seats || 4), 0)}</h3>
-                <div className="stat-sub-label green-label">Capacity</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="stat-card" style={{ borderLeft: '5px solid var(--primary)' }}>
-            <div className="stat-main-row">
-              <div className="stat-info">
-                <div className="stat-label" style={{ color: '#64748b' }}>Available</div>
-                <h3 style={{ color: 'var(--black)', marginTop: '4px', marginBottom: '4px', fontSize: '24px', fontWeight: '700' }}>{tables.length - occupiedTablesCount}</h3>
-                <div className="stat-sub-label green-label">{tables.length - occupiedTablesCount} free</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Table List View */}
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto', backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr>
-                <th style={{ padding: '12px 14px' }}>TABLE ID</th>
-                <th style={{ padding: '12px 14px' }}>SEATS CAPACITY</th>
-                <th style={{ padding: '12px 14px' }}>STATUS</th>
-                <th style={{ padding: '12px 14px' }}>PRIMARY WAITER</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right' }}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tables.map(table => {
-                const { primary } = getTableWaiterInfo(table);
-                
-                return (
-                  <tr key={table.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                    {/* Table ID */}
-                    <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)' }}>{table.id}</td>
-                    
-                    {/* Inline Seats Capacity Edit */}
-                    <td style={{ padding: '14px' }}>
-                      <input
-                        type="number"
-                        min="1"
-                        value={table.seats || 4}
-                        onChange={e => {
-                          const val = parseInt(e.target.value) || 1;
-                          updateDiningTable(activeRestaurant.id, table.id, { seats: val });
-                        }}
-                        style={{
-                          width: '70px',
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid var(--border)',
-                          backgroundColor: 'var(--bg-primary)',
-                          color: 'var(--text-main)',
-                          textAlign: 'center',
-                          fontWeight: '600'
-                        }}
-                      />
-                    </td>
-
-                    {/* Status */}
-                    <td style={{ padding: '14px' }}>
-                      <span style={{ 
-                        padding: '4px 10px', 
-                        borderRadius: '8px', 
-                        fontSize: '11px', 
-                        fontWeight: 700, 
-                        backgroundColor: table.status === 'Occupied' ? '#fef3c7' : '#dcfce7', 
-                        color: table.status === 'Occupied' ? '#d97706' : '#15803d' 
-                      }}>
-                        {table.status}
-                      </span>
-                    </td>
-
-                    {/* Primary Waiter - Click to Assign */}
-                    <td 
-                      style={{ padding: '14px', cursor: 'pointer', transition: 'background-color 0.15s' }} 
-                      onClick={() => handleOpenAssignTablesModal(primary?.id)}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      title="Assign Waiter"
-                    >
-                      {primary ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: '600', color: 'var(--text-main)', textDecoration: primary.status === 'Off Duty' ? 'line-through' : 'none', opacity: primary.status === 'Off Duty' ? 0.7 : 1 }}>
-                            {primary.name}
-                          </span>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            borderRadius: '12px', 
-                            fontSize: '10px', 
-                            fontWeight: '700', 
-                            backgroundColor: primary.status === 'On Duty' ? '#dcfce7' : '#fee2e2', 
-                            color: primary.status === 'On Duty' ? '#15803d' : '#ef4444',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: primary.status === 'On Duty' ? '#2ebd59' : '#ef4444', display: 'inline-block' }}></span>
-                            {primary.status === 'On Duty' ? 'On Duty' : 'Off Duty'}
-                          </span>
-                          {primary.status === 'Off Duty' && (
-                            <span style={{ display: 'inline-flex', alignItems: 'center' }} title="Primary waiter is off duty. Cover waiter will handle tables.">
-                              <WarningIcon />
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontStyle: 'italic' }}>Unassigned</span>
-                      )}
-                    </td>                    {/* Unified Actions Column (consistently styled, prevents button wrap) */}
-                    <td style={{ padding: '14px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                        <button 
-                          className="table-action-btn" 
-                          title="Edit Table"
-                          onClick={() => {
-                            setAddTableForm({ id: table.id, seats: table.seats || 4, status: table.status || 'Free', isEdit: true });
-                            setActivePage('table-form');
-                          }}
-                          style={{ padding: '6px' }}
-                        >
-                          <PencilIcon size={12} />
-                        </button>
-                        <button 
-                          className="table-action-btn delete-btn" 
-                          title="Delete Table"
-                          onClick={() => {
-                            setTableToDelete(table);
-                          }}
-                          style={{ padding: '6px' }}
-                        >
-                          <TrashIcon size={12} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+          );
+        })}
       </div>
 
+      {/* Delete Confirmation Modal */}
       <Modal
         isOpen={!!tableToDelete}
         onClose={() => setTableToDelete(null)}
@@ -282,7 +348,7 @@ export default function TablesPanel({
               </svg>
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Dining Table</p>
+              <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '15px' }}>Delete Dining Table</p>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
                 Are you sure you want to delete Table {tableToDelete?.id}? This action cannot be undone.
               </p>
@@ -300,7 +366,7 @@ export default function TablesPanel({
               className="btn btn-black" 
               style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
               onClick={() => {
-                if (tableToDelete) {
+                if (tableToDelete && deleteDiningTable) {
                   deleteDiningTable(activeRestaurant.id, tableToDelete.id);
                   setTableToDelete(null);
                 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Badge } from './Badge';
+import ShowNotifications from '../helper/ShowNotifications.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -96,9 +97,6 @@ export default function OrdersPanel({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h2 className="panel-inner-title" style={{ margin: 0 }}>Orders list</h2>
-            <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              Manage and process active client sessions and dispatch statuses
-            </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Waiter Option Dropdown Filter */}
@@ -214,7 +212,7 @@ export default function OrdersPanel({
               <th style={{ padding: '14px', textAlign: 'center' }}>TIME / ELAPSED</th>
               <th style={{ padding: '14px', textAlign: 'center' }}>ASSIGNED WAITER</th>
               <th style={{ padding: '14px', textAlign: 'center' }}>PAYMENT</th>
-              <th style={{ padding: '14px', textAlign: 'center' }}>TOTAL</th>
+              <th style={{ padding: '14px', textAlign: 'right' }}>TOTAL</th>
               <th style={{ padding: '14px', textAlign: 'center' }}>STATUS</th>
               <th style={{ padding: '14px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
@@ -314,7 +312,7 @@ export default function OrdersPanel({
                   </td>
 
                   {/* 7. Total */}
-                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <td style={{ padding: '14px', fontWeight: 700, color: 'var(--text-main)', fontSize: '13px', textAlign: 'right', verticalAlign: 'middle' }}>
                     ₹{(ord.total || 0).toFixed(2)}
                   </td>
 
@@ -354,7 +352,7 @@ export default function OrdersPanel({
                       <button 
                         type="button" 
                         title="Print Receipt"
-                        onClick={() => alert(`Printing receipt for order #ORD-${ord.id}`)}
+                        onClick={() => ShowNotifications.showAlertNotification(`Printing receipt for order #ORD-${ord.id}`, true)}
                         style={{
                           padding: '6px',
                           display: 'inline-flex',

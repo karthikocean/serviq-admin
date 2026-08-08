@@ -114,10 +114,7 @@ export default function TableManagement() {
       {activePage === 'table-form' ? (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader
-              title={addTableForm.isEdit ? "Edit Dining Table" : "Add Dining Table"}
-              subtitle={addTableForm.isEdit ? "Update dining table settings" : "Create a new physical dining table with capacity"}
-            />
+            
             <div style={sty.pageCard}>
               <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
                 <div className="form-group" style={{ marginBottom: '16px' }}>
@@ -130,7 +127,7 @@ export default function TableManagement() {
                     required
                     disabled={addTableForm.isEdit}
                   />
-                  {!addTableForm.isEdit && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>Recommended format: T-XX (e.g. T-06, T-07)</p>}
+                  {!addTableForm.isEdit && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}></p>}
                 </div>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label>Seating Capacity</label>
@@ -309,9 +306,7 @@ export default function TableManagement() {
                   </option>
                 ))}
             </select>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Assigned as fallback if primary waiter goes Off Duty.
-            </span>
+           
           </div>
 
           {/* Form Actions */}

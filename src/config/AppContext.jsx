@@ -3,6 +3,7 @@ import { initialRestaurantsData, initialState } from './initialData';
 import MemberApi from '../api/Table.js';
 import QrCodeApi from '../api/QrCode.js';
 import OrderApi from '../api/Order.js';
+import MenuApi from '../api/Menu.js';
 
 const AppContext = createContext();
 
@@ -19,7 +20,7 @@ export const DEFAULT_ROLES = {
       Reports: { view: true, add: true, edit: true, delete: true },
       users: { view: true, add: true, edit: true, delete: true },
       'roles-permissions': { view: true, add: true, edit: true, delete: true },
-      settings: { view: true, add: true, edit: true, delete: true }
+      Settings: { view: true, add: true, edit: true, delete: true }
     }
   },
   Manager: {
@@ -34,7 +35,7 @@ export const DEFAULT_ROLES = {
       Reports: { view: true, add: false, edit: false, delete: false },
       users: { view: true, add: true, edit: true, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
-      settings: { view: false, add: false, edit: false, delete: false }
+      Settings: { view: false, add: false, edit: false, delete: false }
     }
   },
   Waiter: {
@@ -49,7 +50,7 @@ export const DEFAULT_ROLES = {
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
-      settings: { view: false, add: false, edit: false, delete: false }
+      Settings: { view: false, add: false, edit: false, delete: false }
     }
   },
   Kitchen: {
@@ -64,7 +65,7 @@ export const DEFAULT_ROLES = {
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
-      settings: { view: false, add: false, edit: false, delete: false }
+      Settings: { view: false, add: false, edit: false, delete: false }
     }
   }
 };
@@ -201,11 +202,34 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const fetchMenu = async () => {
+    if (!currentRestaurantId) return;
+    try {
+      const res = await MenuApi.getMenuItems();
+      if (res && res.status && res.response && res.response.data) {
+        setRestaurantsData(prev => {
+          const rest = prev[currentRestaurantId];
+          if (!rest) return prev;
+          return {
+            ...prev,
+            [currentRestaurantId]: {
+              ...rest,
+              menu: res.response.data
+            }
+          };
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch menu items", e);
+    }
+  };
+
   useEffect(() => {
     const initData = async () => {
       await fetchTables();
       await fetchOrders();
       await fetchQrCodes();
+      await fetchMenu();
     };
     initData();
   }, [currentRestaurantId]);
@@ -331,46 +355,37 @@ export const AppProvider = ({ children }) => {
     setDarkMode(!!settings.darkMode);
   };
 
-  const addMenuItem = (id, item) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          menu: [...rest.menu, item]
-        }
-      };
-    });
+  const addMenuItem = async (id, itemData) => {
+    try {
+      const res = await MenuApi.createMenuItem(itemData);
+      if (res && res.status) {
+        await fetchMenu();
+      }
+    } catch (e) {
+      console.error("Failed to add menu item", e);
+    }
   };
 
-  const updateMenuItem = (id, updatedItem) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          menu: rest.menu.map(item => item.id === updatedItem.id ? updatedItem : item)
-        }
-      };
-    });
+  const updateMenuItem = async (id, itemId, updatedData) => {
+    try {
+      const res = await MenuApi.updateMenuItem(itemId, updatedData);
+      if (res && res.status) {
+        await fetchMenu();
+      }
+    } catch (e) {
+      console.error("Failed to update menu item", e);
+    }
   };
 
-  const deleteMenuItem = (id, itemId) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          menu: rest.menu.filter(item => item.id !== itemId)
-        }
-      };
-    });
+  const deleteMenuItem = async (id, itemId) => {
+    try {
+      const res = await MenuApi.deleteMenuItem(itemId);
+      if (res && res.status) {
+        await fetchMenu();
+      }
+    } catch (e) {
+      console.error("Failed to delete menu item", e);
+    }
   };
 
   const addDiningTable = async (id, table) => {
@@ -789,10 +804,10 @@ export const AppProvider = ({ children }) => {
         billing: { view: false, add: false, edit: false, delete: false },
         waiter: { view: false, add: false, edit: false, delete: false },
         kitchen: { view: false, add: false, edit: false, delete: false },
-        reports: { view: false, add: false, edit: false, delete: false },
+        Reports: { view: false, add: false, edit: false, delete: false },
         users: { view: false, add: false, edit: false, delete: false },
         'roles-permissions': { view: false, add: false, edit: false, delete: false },
-        settings: { view: false, add: false, edit: false, delete: false }
+        Settings: { view: false, add: false, edit: false, delete: false }
       };
       return {
         ...prev,

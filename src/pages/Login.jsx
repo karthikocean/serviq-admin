@@ -100,7 +100,7 @@ export default function Login() {
           )}
           
           <button type="submit" className="btn btn-black" style={{ width: '100%', marginTop: '10px' }}>
-            Login as Admin
+            Login 
           </button>
         </form>
 

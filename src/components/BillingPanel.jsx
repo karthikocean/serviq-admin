@@ -1,9 +1,20 @@
 import React from 'react';
 import { Badge } from './Badge';
+import ShowNotifications from '../helper/ShowNotifications.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill={color} viewBox="0 0 16 16" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-3.5 1a.5.5 0 0 0-.374.374l1 3.5a.5.5 0 0 0 .49.49l3.468-1.026z"/>
+  </svg>
+);
+
+const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M3 6h18" />
+    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    <line x1="10" x2="10" y1="11" y2="17" />
+    <line x1="14" x2="14" y1="11" y2="17" />
   </svg>
 );
 
@@ -51,7 +62,7 @@ export default function BillingPanel({
   const handleMarkAsPaidSubmit = () => {
     if (!selectedBillingTable) return;
     markBillAsPaid(activeRestaurant.id, selectedBillingTable);
-    alert(`Marked bill as paid for ${selectedBillingTable}!`);
+    ShowNotifications.showAlertNotification(`Marked bill as paid for ${selectedBillingTable}!`, true);
   };
 
   return (
@@ -59,7 +70,6 @@ export default function BillingPanel({
       <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
         <div className="panel-title-desc">
           <h2 className="panel-inner-title">Billing Panel</h2>
-          <p className="panel-inner-desc">Manage table bills, GST and payment status</p>
         </div>
       </div>
 
@@ -131,16 +141,56 @@ export default function BillingPanel({
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
-                className="btn btn-outline" 
-                style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 600 }}
+                title="Edit Bill"
+                aria-label="Edit Bill"
+                style={{ 
+                  padding: '8px 12px', 
+                  fontSize: '12px', 
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: '#ffffff',
+                  color: 'var(--text-main)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-main)'; }}
                 onClick={() => {
                   setEditItems(billingItems.map(item => ({ ...item })));
                   setIsEditing(true);
                 }}
               >
-                Edit
+                <PencilIcon size={14} />
               </button>
-              <button className="btn btn-outline" style={{ padding: '8px 12px', fontSize: '12px', fontWeight: 600, color: '#ef4444', borderColor: '#fca5a5' }}>Delete</button>
+              <button 
+                title="Delete Bill"
+                aria-label="Delete Bill"
+                style={{ 
+                  padding: '8px 12px', 
+                  fontSize: '12px', 
+                  fontWeight: 600, 
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  borderRadius: '8px',
+                  border: '1px solid #fca5a5', 
+                  background: '#fff',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; }}
+                onClick={() => {
+                  ShowNotifications.showAlertNotification('Bill deleted', false);
+                }}
+              >
+                <TrashIcon size={14} color="#000000ff" />
+              </button>
             </div>
           </div>
 
@@ -286,14 +336,14 @@ export default function BillingPanel({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <button 
                   className="btn btn-outline" 
-                  onClick={() => alert('PDF invoice downloaded!')}
+                  onClick={() => ShowNotifications.showAlertNotification('PDF invoice downloaded!', true)}
                   style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
                 >
                   Print
                 </button>
                 <button 
                   className="btn btn-outline" 
-                  onClick={() => alert('Invoice link copied!')}
+                  onClick={() => ShowNotifications.showAlertNotification('Invoice link copied!', true)}
                   style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
                 >
                   Share

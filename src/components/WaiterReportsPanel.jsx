@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import ShowNotifications from '../helper/ShowNotifications.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -148,7 +149,7 @@ export default function WaiterReportsPanel({
     const date = getOrderDate(ord);
     const waiter = ord.waiter || 'Unassigned';
     const table = ord.table || '';
-    const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Website');
+    const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
     const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
     const paymentStatus = ord.billingStatus || 'unpaid';
     const orderStatus = ord.status || 'new';
@@ -194,7 +195,7 @@ export default function WaiterReportsPanel({
     });
     setShowPaymentModal(false);
     setSelectedPaymentOrder(null);
-    alert(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`);
+    ShowNotifications.showAlertNotification(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`, true);
   };
 
   return (
@@ -268,7 +269,7 @@ export default function WaiterReportsPanel({
               >
                 <option value="All">All Sources</option>
                 <option value="Dine-In">Dine-In</option>
-                <option value="Website">Website</option>
+                <option value="Mobile">Mobile</option>
               </select>
             </div>
 
@@ -342,14 +343,14 @@ export default function WaiterReportsPanel({
               <tr>
                 <th style={{ padding: '16px 14px' }}>ORDER ID</th>
                 <th style={{ padding: '16px 14px' }}>ORDER DATE</th>
-                <th style={{ padding: '16px 14px' }}>TABLE NUMBER</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>TABLE NUMBER</th>
                 <th style={{ padding: '16px 14px' }}>WAITER NAME</th>
-                <th style={{ padding: '16px 14px' }}>ORDER SOURCE</th>
-                <th style={{ padding: '16px 14px' }}>ORDER STATUS</th>
-                <th style={{ padding: '16px 14px' }}>PAYMENT MODE</th>
-                <th style={{ padding: '16px 14px' }}>PAYMENT STATUS</th>
-                <th style={{ padding: '16px 14px' }}>TOTAL AMOUNT</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIONS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ORDER SOURCE</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ORDER STATUS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>PAYMENT MODE</th>
+                <th style={{ padding: '16px 14px', textAlign: 'center' }}>PAYMENT STATUS</th>
+                <th style={{ padding: '16px 14px', textAlign: 'right' }}>TOTAL AMOUNT</th>
+                <th style={{ padding: '16px 14px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -362,15 +363,15 @@ export default function WaiterReportsPanel({
               ) : (
                 filteredWaiterReports.map(ord => {
                   const date = getOrderDate(ord);
-                  const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Website');
+                  const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
                   const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>#ORD-{ord.id}</td>
                       <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>{date}</td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>Table {ord.table}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center' }}>Table {ord.table}</td>
                       <td style={{ padding: '16px 14px', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{ord.waiter || 'Unassigned'}</td>
-                      <td style={{ padding: '16px 14px' }}>
+                      <td style={{ padding: '16px 14px', textAlign: 'center' }}>
                         <span style={{ 
                           padding: '4px 12px', 
                           borderRadius: '6px', 
@@ -382,7 +383,7 @@ export default function WaiterReportsPanel({
                           {source}
                         </span>
                       </td>
-                      <td style={{ padding: '16px 14px' }}>
+                      <td style={{ padding: '16px 14px', textAlign: 'center' }}>
                         <span style={{
                           padding: '4px 12px',
                           border: `1px solid ${ord.status === 'new' ? '#ea580c' : ord.status === 'preparing' ? '#3b82f6' : '#10b981'}`,
@@ -395,10 +396,10 @@ export default function WaiterReportsPanel({
                           {ord.status.toUpperCase()}
                         </span>
                       </td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center' }}>
                         {paymentMode}
                       </td>
-                      <td style={{ padding: '16px 14px' }}>
+                      <td style={{ padding: '16px 14px', textAlign: 'center' }}>
                         <span style={{ 
                           padding: '4px 12px', 
                           borderRadius: '20px', 
@@ -411,8 +412,8 @@ export default function WaiterReportsPanel({
                           {ord.billingStatus === 'paid' ? 'Paid' : 'Unpaid'}
                         </span>
                       </td>
-                      <td style={{ padding: '16px 14px', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>₹{ord.total}</td>
-                      <td style={{ padding: '16px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '16px 14px', fontWeight: 800, fontSize: '13px', color: '#0f172a', textAlign: 'right' }}>₹{ord.total}</td>
+                      <td style={{ padding: '16px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <IconBtn 
                           icon={<EyeIcon size={14} />} 
                           tooltip="View Timeline" 
@@ -649,7 +650,7 @@ export default function WaiterReportsPanel({
                 style={{ padding: '10px 24px', backgroundColor: '#10b981', color: 'white', border: 'none' }}
                 onClick={handleRecordPayment}
               >
-                Submit Settlement
+                Submit
               </button>
             </div>
           </div>

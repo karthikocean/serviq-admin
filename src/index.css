@@ -1346,38 +1346,88 @@ color: #000000;
 }
 
 .menu-table-wrapper {
+  overflow-x: auto;
   overflow-y: auto;
-  max-height: 520px;
+  max-height: 620px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary, #ffffff);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
 }
 
-.menu-items-table {
+/* Custom subtle scrollbar for tables */
+.menu-table-wrapper::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.menu-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+.menu-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.menu-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.menu-items-table, .admin-table {
   width: 100%;
   border-collapse: collapse;
+  text-align: left;
 }
 
-.menu-items-table thead th {
+.menu-items-table thead th, .admin-table thead th {
   background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
-  color: rgb(255, 255, 255) !important;
-  padding: 12px 14px !important;
+  color: #ffffff !important;
+  padding: 14px 16px !important;
   font-weight: 800;
   font-size: 11px;
   text-transform: uppercase;
   border-bottom: 3px solid #ff7a00;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
-.menu-items-table tbody td {
+.menu-items-table tbody td, .admin-table tbody td {
+  padding: 14px 16px;
   font-size: 13px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border, #f1f5f9);
+  color: var(--text-main, #0f172a);
 }
 
-.menu-items-table tbody tr:hover {
-  background-color: #fff5f0;
+.menu-items-table tbody tr, .admin-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+.menu-items-table tbody tr:hover, .admin-table tbody tr:hover {
+  background-color: #fff8f3 !important;
+}
+
+.col-left, th.text-left, td.text-left {
+  text-align: left !important;
+}
+.col-center, th.text-center, td.text-center {
+  text-align: center !important;
+}
+.col-right, th.text-right, td.text-right {
+  text-align: right !important;
+}
+
+.col-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .menu-item-row td {
-  padding: 12px 8px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  vertical-align: center;
+  vertical-align: middle;
   font-size: 13px;
 }
 

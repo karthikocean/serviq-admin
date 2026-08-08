@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
+import ShowNotifications from '../helper/ShowNotifications.js';
 
 const PlusIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill={color} viewBox="0 0 16 16" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}>
@@ -77,7 +78,7 @@ export default function SettingsPanel({
         darkMode
       }
     });
-    alert('Settings saved successfully!');
+    ShowNotifications.showAlertNotification('Settings saved successfully!', true);
   };
 
   const cardStyle = {
