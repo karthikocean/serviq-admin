@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from './Modal';
+import GenerateQRModal from './GenerateQRModal';
 
 // Clean SVG Icons
 const WaiterIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -48,6 +49,15 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const QrIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <rect x="3" y="3" width="7" height="7" />
+    <rect x="14" y="3" width="7" height="7" />
+    <rect x="14" y="14" width="7" height="7" />
+    <rect x="3" y="14" width="7" height="7" />
+  </svg>
+);
+
 export default function TablesPanel({
   tables = [],
   staff = [],
@@ -58,7 +68,9 @@ export default function TablesPanel({
   setAddTableForm,
   setActivePage
 }) {
-  const [tableToDelete, setTableToDelete] = React.useState(null);
+  const [tableToDelete, setTableToDelete] = useState(null);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [selectedQrTableId, setSelectedQrTableId] = useState('T-07');
 
   // Default sample tables matching screenshot if tables prop is empty
   const sampleTables = [
@@ -83,6 +95,12 @@ export default function TablesPanel({
 
   return (
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
+      <GenerateQRModal
+        isOpen={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        defaultTableId={selectedQrTableId}
+      />
+
       {/* Top Header Row */}
       <div style={{
         display: 'flex',
@@ -97,7 +115,10 @@ export default function TablesPanel({
 
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 
-            onClick={handleOpenAssignTablesModal}
+            onClick={() => {
+              if (setActivePage) setActivePage('waiter-list');
+              else if (handleOpenAssignTablesModal) handleOpenAssignTablesModal();
+            }}
             style={{
               background: '#ffffff',
               border: '1px solid #e2e8f0',
@@ -271,7 +292,31 @@ export default function TablesPanel({
               </div>
 
               {/* Actions Column */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <button 
+                  onClick={() => {
+                    setSelectedQrTableId(tableIdStr);
+                    setShowGenerateModal(true);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ff5a1f',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = '#e04d16'}
+                  onMouseLeave={e => e.currentTarget.style.color = '#ff5a1f'}
+                  title="Generate QR Code"
+                >
+                  <QrIcon size={17} />
+                </button>
+
                 <button 
                   onClick={() => {
                     setAddTableForm({ id: table.id, seats: table.seats || 4, status: table.status || 'Free', isEdit: true });

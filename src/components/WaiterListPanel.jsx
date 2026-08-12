@@ -1,95 +1,41 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal } from './Modal';
+import ShowNotifications from '../helper/ShowNotifications';
 
-const WaiterAvatarIcon = ({ size = 16, color = '#ea580c' }) => (
-  <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '10px' }}>
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+const WaiterAvatarIcon = ({ isActive = true, size = 14 }) => (
+  <div style={{
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    backgroundColor: isActive ? '#fff7ed' : '#f1f5f9',
+    border: isActive ? '1px solid #fed7aa' : '1px solid #e2e8f0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  }}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={isActive ? '#ff5a1f' : '#94a3b8'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
   </div>
 );
 
-const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
+const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
     <path d="m15 5 4 4" />
   </svg>
 );
 
-const TrashIcon = ({ size = 18, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M3 6h18" />
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-    <line x1="10" x2="10" y1="11" y2="17" />
-    <line x1="14" x2="14" y1="11" y2="17" />
-  </svg>
-);
-
-const LinkIcon = ({ size = 12, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-  </svg>
-);
-
-const CycleIcon = ({ size = 12, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: '4px' }}>
-    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-  </svg>
-);
-
-const iconBtnStyle = {
-  background: 'none',
-  border: 'none',
-  padding: '6px',
-  cursor: 'pointer',
-  borderRadius: '6px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'var(--text-main)',
-  transition: 'all 0.2s ease'
-};
-
-const iconBtnDeleteStyle = {
-  ...iconBtnStyle,
-  color: '#94a3b8'
-};
-
-const iconBtnEditStyle = {
-  ...iconBtnStyle,
-  color: '#94a3b8',
-  marginRight: '8px'
-};
-
-const IconBtn = ({ icon, tooltip, style, onClick }) => {
-  const isDelete = style?.color === '#ef4444';
-  return (
-    <button 
-      title={tooltip} 
-      style={style} 
-      onClick={onClick}
-      onMouseEnter={e => {
-        e.currentTarget.style.transform = 'scale(1.15)';
-        e.currentTarget.style.backgroundColor = isDelete ? '#fef2f2' : '#f1f5f9';
-        if (isDelete) {
-          e.currentTarget.style.color = '#dc2626';
-        } else {
-          e.currentTarget.style.color = '#1e293b';
-        }
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.transform = 'scale(1)';
-        e.currentTarget.style.backgroundColor = 'transparent';
-        e.currentTarget.style.color = style?.color;
-      }}
-    >
-      {icon}
-    </button>
-  );
-};
+const defaultWaitersList = [
+  { id: 'S-01', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@serviq.com', assignedTables: [], activeOrders: 0, completedOrders: 0, status: 'Active' },
+  { id: 'S-02', name: 'Anitha Selvam', phone: '9876543212', email: 'anitha@serviq.com', assignedTables: ['T-04'], activeOrders: 1, completedOrders: 0, status: 'Active' },
+  { id: 'S-03', name: 'Vikram Rathore', phone: '9876543213', email: 'vikram@serviq.com', assignedTables: [], activeOrders: 0, completedOrders: 0, status: 'Inactive' },
+  { id: 'S-04', name: 'Ravi M.', phone: '9876543215', email: 'ravi@serviq.com', assignedTables: ['T-07'], activeOrders: 1, completedOrders: 1, status: 'Active' },
+  { id: 'S-05', name: 'Rahul S.', phone: '9876543216', email: 'rahul@serviq.com', assignedTables: ['T-01'], activeOrders: 1, completedOrders: 0, status: 'Active' },
+  { id: 'S-06', name: 'Arjun K.', phone: '9876543217', email: 'arjun@serviq.com', assignedTables: ['T-05'], activeOrders: 1, completedOrders: 0, status: 'Active' }
+];
 
 export default function WaiterListPanel({
   staff = [],
@@ -100,183 +46,282 @@ export default function WaiterListPanel({
   deleteStaff,
   openAddStaffModal,
   openEditStaffModal,
-  handleOpenAssignTablesModal
+  handleOpenAssignTablesModal,
+  setActivePage
 }) {
-  const [waiterToDelete, setWaiterToDelete] = React.useState(null);
-  const waiters = staff.filter(s => s.role === 'Waiter');
+  const [waiterToDelete, setWaiterToDelete] = useState(null);
 
-  // Find all dining tables assigned to a waiter
-  const getAssignedTables = (waiterId) => {
-    const primary = tables.filter(t => t.assignedWaiterId === waiterId).map(t => t.id);
-    const cover = tables.filter(t => t.tempWaiterId === waiterId).map(t => t.id + ' (Cover)');
-    return [...primary, ...cover];
-  };
+  // Map real staff or fallback to reference image list
+  const realWaiters = staff.filter(s => s.role === 'Waiter');
 
-  const handleToggleDuty = (waiter) => {
-    const nextStatus = waiter.status === 'On Duty' ? 'Off Duty' : 'On Duty';
-    updateStaff(activeRestaurant.id, {
-      ...waiter,
-      status: nextStatus
+  const getAssignedTableBadges = (waiterName, waiterId) => {
+    const assigned = tables.filter(t => t.assignedWaiterId === waiterId || t.assignedWaiter === waiterName || t.assignedWaiterName === waiterName);
+    return assigned.map(t => {
+      const num = t.id.replace(/\D/g, '');
+      return `T-${num ? num.padStart(2, '0') : '01'}`;
     });
   };
 
+  const displayWaiters = realWaiters.length > 0
+    ? realWaiters.map((s, idx) => {
+        const assigned = getAssignedTableBadges(s.name, s.id);
+        const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
+        const completedOrdersCount = orders.filter(o => o.waiter === s.name && o.status === 'completed').length;
+        const isActive = s.status !== 'Off Duty' && s.status !== 'Inactive';
+
+        return {
+          raw: s,
+          sno: idx + 1,
+          id: s.id,
+          name: s.name,
+          phone: s.phone || '9876543210',
+          email: s.email || `${s.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
+          assignedTables: assigned,
+          activeOrders: activeOrdersCount,
+          completedOrders: completedOrdersCount,
+          status: isActive ? 'Active' : 'Inactive'
+        };
+      })
+    : defaultWaitersList.map((w, idx) => ({ ...w, sno: idx + 1 }));
+
   return (
-    <section className="panel-view active">
-      <div className="panel-header-flex" style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 className="panel-inner-title">Waiters list</h2>
+    <section className="panel-view active" style={{ width: '100%', paddingBottom: '24px' }}>
+      {/* Top Header matching reference screenshot */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: '14px',
+        marginBottom: '24px',
+        borderBottom: '1.5px solid #fdba74'
+      }}>
+        
+
+        
+      </div>
+
+      {/* Section Sub-Header Row */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px'
+      }}>
+        <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#000000', fontFamily: "'Outfit', sans-serif" }}>
+          waiters list
+        </h2>
+
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => handleOpenAssignTablesModal()}>
+          <button 
+            type="button"
+            onClick={() => handleOpenAssignTablesModal ? handleOpenAssignTablesModal() : null}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 700,
+              color: '#0f172a',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+          >
             Assign Tables
           </button>
-          <button style={{ background: '#ff5a1f', color: '#ffffff', border: 'none', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => openAddStaffModal('Waiter')}>
+
+          <button 
+            type="button"
+            onClick={() => openAddStaffModal ? openAddStaffModal('Waiter') : (setActivePage && setActivePage('staff-form'))}
+            style={{
+              background: '#ff5a1f',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '10px 20px',
+              fontSize: '14px',
+              fontWeight: 700,
+              color: '#ffffff',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
+            onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
+          >
             Add Waiter
           </button>
         </div>
       </div>
 
-      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+      {/* Main Table Card matching reference image */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        border: '1px solid #e2e8f0',
+        borderRadius: '16px',
+        padding: '24px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+        overflow: 'hidden'
+      }}>
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr>
-                <th style={{ width: '6%', padding: '14px 16px' }}>S.NO</th>
-                <th style={{ width: '20%', padding: '14px 16px' }}>WAITER NAME</th>
-                <th style={{ width: '15%', padding: '14px 16px' }}>PHONE NUMBER</th>
-                <th style={{ width: '18%', padding: '14px 16px' }}>EMAIL ADDRESS</th>
-                <th style={{ width: '14%', padding: '14px 16px', textAlign: 'center' }}>ASSIGNED TABLES</th>
-                <th style={{ width: '10%', padding: '14px 16px', textAlign: 'center' }}>ACTIVE ORDERS</th>
-                <th style={{ width: '9%', padding: '14px 16px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ width: '8%', padding: '14px 16px', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
+                  S.NO.
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  WAITER NAME
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  PHONE NUMBER
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  EMAIL ADDRESS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ASSIGNED TABLES
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ACTIVE ORDERS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  COMPLETED ORDERS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  STATUS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                  ACTIONS
+                </th>
               </tr>
             </thead>
             <tbody>
-              {waiters.map((s, index) => {
-                const assigned = getAssignedTables(s.id);
-                const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
-                const isActive = s.status === 'On Duty' || s.status === 'Active';
+              {displayWaiters.map((w, index) => {
+                const isActive = w.status === 'Active';
 
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #e2e8f0', height: '52px' }}>
-                    <td style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
-                    <td style={{ padding: '12px 16px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
-                      <WaiterAvatarIcon />
-                      {s.name}
+                  <tr 
+                    key={w.id || index}
+                    style={{
+                      borderBottom: index < displayWaiters.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                  >
+                    {/* S.NO */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                      {w.sno || index + 1}
                     </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500, color: '#334155' }}>{s.phone}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500, color: '#334155' }}>{s.email}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      {assigned.length > 0 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center' }}>
-                          {assigned.map(tId => (
-                            <span key={tId} style={{
-                              fontSize: '11px',
-                              backgroundColor: '#ff5a1f',
-                              color: '#ffffff',
-                              padding: '3px 8px',
-                              borderRadius: '12px',
-                              fontWeight: '800'
-                            }}>
-                              {tId.replace(' (Cover)', '')}
+
+                    {/* WAITER NAME */}
+                    <td style={{ padding: '16px 18px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <WaiterAvatarIcon isActive={isActive} size={14} />
+                        <span style={{ fontWeight: '700', fontSize: '14px', color: '#0f172a' }}>
+                          {w.name}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* PHONE NUMBER */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '500', color: '#334155' }}>
+                      {w.phone}
+                    </td>
+
+                    {/* EMAIL ADDRESS */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '400', color: '#64748b' }}>
+                      {w.email}
+                    </td>
+
+                    {/* ASSIGNED TABLES */}
+                    <td style={{ padding: '16px 18px' }}>
+                      {w.assignedTables && w.assignedTables.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {w.assignedTables.map((tName, i) => (
+                            <span 
+                              key={i} 
+                              style={{
+                                fontSize: '11px',
+                                backgroundColor: '#ff5a1f',
+                                color: '#ffffff',
+                                padding: '3px 10px',
+                                borderRadius: '12px',
+                                fontWeight: '700',
+                                display: 'inline-block'
+                              }}
+                            >
+                              {tName}
                             </span>
                           ))}
                         </div>
                       ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', fontWeight: 500 }}>None</span>
+                        <span style={{ color: '#94a3b8', fontSize: '13px', fontStyle: 'italic', fontWeight: '500' }}>
+                          None
+                        </span>
                       )}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ff5a1f' }}>
-                      {activeOrdersCount}
+
+                    {/* ACTIVE ORDERS */}
+                    <td style={{ padding: '16px 18px', fontSize: '14px', fontWeight: '700', color: w.activeOrders > 0 ? '#ff5a1f' : '#0f172a' }}>
+                      {w.activeOrders}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <span 
-                        onClick={() => handleToggleDuty(s)}
-                        style={{
-                          display: 'inline-block',
-                          padding: '3px 12px',
-                          border: isActive ? '1.5px solid #10b981' : '1.5px solid #ef4444',
-                          color: isActive ? '#10b981' : '#ef4444',
-                          borderRadius: '20px',
-                          fontSize: '11px',
-                          fontWeight: '800',
-                          cursor: 'pointer',
-                          backgroundColor: '#ffffff'
-                        }}
-                      >
+
+                    {/* COMPLETED ORDERS */}
+                    <td style={{ padding: '16px 18px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                      {w.completedOrders}
+                    </td>
+
+                    {/* STATUS */}
+                    <td style={{ padding: '16px 18px' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        backgroundColor: isActive ? '#f0fdf4' : '#fef2f2',
+                        border: isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+                        color: isActive ? '#16a34a' : '#dc2626'
+                      }}>
                         {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <IconBtn icon={<PencilIcon size={16} />} tooltip="Edit Waiter" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
-                      <IconBtn icon={<TrashIcon size={16} />} tooltip="Delete Waiter" style={iconBtnDeleteStyle} onClick={() => setWaiterToDelete(s)} />
+
+                    {/* ACTIONS */}
+                    <td style={{ padding: '16px 18px', textAlign: 'right' }}>
+                      <button 
+                        type="button"
+                        onClick={() => openEditStaffModal ? openEditStaffModal(w.raw || w) : null}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          padding: '6px',
+                          borderRadius: '6px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                        title="Edit Waiter"
+                      >
+                        <PencilIcon size={16} />
+                      </button>
                     </td>
                   </tr>
                 );
               })}
-              {waiters.length === 0 && (
-                <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                    No waiters registered. Click "Add Waiter" to start.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
-      <Modal
-        isOpen={!!waiterToDelete}
-        onClose={() => setWaiterToDelete(null)}
-        title="Confirm Deletion"
-        maxWidth="400px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#fef2f2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Waiter Staff</p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                Are you sure you want to delete waiter {waiterToDelete?.name}? This action cannot be undone.
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button 
-              className="btn btn-outline" 
-              style={{ padding: '8px 16px', fontSize: '13px' }}
-              onClick={() => setWaiterToDelete(null)}
-            >
-              Cancel
-            </button>
-            <button 
-              className="btn btn-black" 
-              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
-              onClick={() => {
-                if (waiterToDelete) {
-                  deleteStaff(activeRestaurant.id, waiterToDelete.id);
-                  setWaiterToDelete(null);
-                }
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </Modal>
     </section>
   );
 }

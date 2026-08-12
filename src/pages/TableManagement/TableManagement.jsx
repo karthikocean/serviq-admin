@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import TablesPanel from '../../components/TablesPanel';
+import WaiterListPanel from '../../components/WaiterListPanel';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import './TableManagement.css';
@@ -112,56 +113,203 @@ export default function TableManagement() {
   return (
     <div style={{ width: '100%' }}>
       {activePage === 'table-form' ? (
-        <section>
-          <div style={{ width: '100%' }}>
-            
-            <div style={sty.pageCard}>
-              <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label>Table Number / ID</label>
-                  <input
-                    type="text"
-                    value={addTableForm.id}
-                    onChange={(e) => setAddTableForm({ ...addTableForm, id: e.target.value })}
-                    placeholder="e.g. T-06"
-                    required
-                    disabled={addTableForm.isEdit}
-                  />
-                  {!addTableForm.isEdit && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}></p>}
-                </div>
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label>Seating Capacity</label>
+        <section style={{ width: '100%' }}>
+          {/* Header Row matching Image 2 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
+            <button 
+              type="button"
+              onClick={() => setActivePage(null)}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: '700',
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                flexShrink: 0
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
+                {addTableForm.isEdit ? 'Edit Dining Table' : 'Add Dining Table'}
+              </h2>
+
+            </div>
+          </div>
+
+          {/* Form Card matching Image 2 */}
+          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+            <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
+              {/* Field 1: Table Number / ID */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                  Table Number / ID
+                </label>
+                <input
+                  type="text"
+                  value={addTableForm.id}
+                  onChange={(e) => setAddTableForm({ ...addTableForm, id: e.target.value })}
+                  placeholder="e.g. T-06"
+                  required
+                  disabled={addTableForm.isEdit}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    outline: 'none',
+                    color: '#0f172a',
+                    backgroundColor: '#ffffff'
+                  }}
+                />
+                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '6px 0 0 0' }}>
+                  Recommended format: T-XX (e.g. T-06, T-07)
+                </p>
+              </div>
+
+              {/* Field 2: Table Name */}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                  Table Name
+                </label>
+                <input
+                  type="text"
+                  value={addTableForm.name || ''}
+                  onChange={(e) => setAddTableForm({ ...addTableForm, name: e.target.value })}
+                  placeholder="e.g. Window Seat 1"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    outline: 'none',
+                    color: '#0f172a',
+                    backgroundColor: '#ffffff'
+                  }}
+                />
+              </div>
+
+              {/* Field 3 & 4: Seating Capacity + Area / Section */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                    Seating Capacity
+                  </label>
                   <input
                     type="number"
                     min="1"
-                    value={addTableForm.seats}
+                    value={addTableForm.seats || 4}
                     onChange={(e) => setAddTableForm({ ...addTableForm, seats: parseInt(e.target.value) || 4 })}
                     required
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '14px',
+                      outline: 'none',
+                      color: '#0f172a',
+                      backgroundColor: '#ffffff'
+                    }}
                   />
                 </div>
-                {addTableForm.isEdit && (
-                  <div className="form-group" style={{ marginBottom: '20px' }}>
-                    <label>Status</label>
-                    <select
-                      value={addTableForm.status || 'Free'}
-                      onChange={(e) => setAddTableForm({ ...addTableForm, status: e.target.value })}
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', backgroundColor: 'var(--bg-primary)' }}
-                    >
-                      <option value="Free">Free</option>
-                      <option value="Occupied">Occupied</option>
-                    </select>
-                  </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-                  <button type="button" className="btn btn-outline" style={{ padding: '10px 24px' }} onClick={() => setActivePage(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>
-                    {addTableForm.isEdit ? 'Update Table' : 'Create Table'}
-                  </button>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                    Area / Section
+                  </label>
+                  <input
+                    type="text"
+                    value={addTableForm.section || 'Main Dining'}
+                    onChange={(e) => setAddTableForm({ ...addTableForm, section: e.target.value })}
+                    placeholder="Main Dining"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '14px',
+                      outline: 'none',
+                      color: '#0f172a',
+                      backgroundColor: '#ffffff'
+                    }}
+                  />
                 </div>
-              </form>
-            </div>
+              </div>
+
+              {addTableForm.isEdit && (
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Status</label>
+                  <select
+                    value={addTableForm.status || 'Free'}
+                    onChange={(e) => setAddTableForm({ ...addTableForm, status: e.target.value })}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', fontSize: '14px', color: '#0f172a' }}
+                  >
+                    <option value="Free">Free</option>
+                    <option value="Occupied">Occupied</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActivePage(null)}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    color: '#0f172a',
+                    fontWeight: 700,
+                    borderRadius: '8px',
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    background: '#0f0f0f',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    borderRadius: '8px',
+                    padding: '10px 24px',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {addTableForm.isEdit ? 'Update Table' : 'Create Table'}
+                </button>
+              </div>
+            </form>
           </div>
         </section>
+      ) : activePage === 'waiter-list' ? (
+        <WaiterListPanel
+          staff={staff}
+          tables={tables}
+          orders={orders}
+          activeRestaurant={activeRestaurant}
+          updateStaff={updateStaff}
+          deleteStaff={deleteStaff}
+          handleOpenAssignTablesModal={handleOpenAssignTablesModal}
+          setActivePage={setActivePage}
+        />
       ) : (
         <TablesPanel
           tables={tables}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import GenerateQRModal from './GenerateQRModal';
 
 const PrintIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -44,6 +45,7 @@ export default function QRManagementPanel({
 }) {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [localStatuses, setLocalStatuses] = useState({});
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const rawQrCodes = activeRestaurant.qrCodes || [];
   const tables = activeRestaurant.tables || [];
@@ -68,6 +70,15 @@ export default function QRManagementPanel({
 
   return (
     <section className="panel-view active" style={{ padding: '0 16px 24px 16px' }}>
+      <GenerateQRModal
+        isOpen={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        defaultTableId="T-07"
+        onGenerate={(data) => {
+          if (generateQrCode) generateQrCode(activeRestaurant.id, data.tableId);
+        }}
+      />
+
       {/* Top Header Action Buttons */}
       <div style={{
         display: 'flex',
@@ -106,10 +117,7 @@ export default function QRManagementPanel({
              Go to Table Setup
           </button>
           <button 
-            onClick={() => {
-              if (generateQrCode) generateQrCode(activeRestaurant.id);
-              ShowNotifications.showAlertNotification("Generated new QR code successfully!", true);
-            }}
+            onClick={() => setShowGenerateModal(true)}
             style={{
               background: '#ff5a1f',
               border: 'none',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
+import CategoryListPanel from './CategoryListPanel';
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -51,10 +52,13 @@ export default function MenuPanel({
   openAddMenuModal,
   openEditMenuModal,
   handleDeleteMenu,
+  onOpenCategoriesPage,
+  onOpenCategoryPanel,
   currency = '₹'
 }) {
   const { activeRestaurant, updateMenuCategories } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
 
   const defaultCategories = ['Starters', 'Rice Meals', 'Tiffin', 'Rotis', 'Desserts', 'Drinks'];
@@ -67,9 +71,29 @@ export default function MenuPanel({
   const [editableCategories, setEditableCategories] = useState(combinedCategories);
 
   const handleOpenCategoriesModal = () => {
-    setEditableCategories(combinedCategories);
-    setIsCategoryModalOpen(true);
+    if (onOpenCategoriesPage) {
+      onOpenCategoriesPage();
+    } else if (onOpenCategoryPanel) {
+      onOpenCategoryPanel();
+    } else {
+      setShowCategoryPanel(true);
+    }
   };
+
+  if (showCategoryPanel) {
+    return (
+      <CategoryListPanel
+        categories={storedCategories}
+        onBack={() => setShowCategoryPanel(false)}
+        onUpdateCategories={(newCats) => {
+          if (updateMenuCategories && activeRestaurant) {
+            updateMenuCategories(activeRestaurant.id, newCats);
+          }
+        }}
+        activeRestaurant={activeRestaurant}
+      />
+    );
+  }
 
   const handleSaveCategories = () => {
     if (activeRestaurant) {

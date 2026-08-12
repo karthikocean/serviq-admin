@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
-const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
+const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
   </svg>
 );
 
@@ -24,12 +24,11 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <line x1="19" y1="12" x2="5" y2="12" />
-    <polyline points="12 19 5 12 12 5" />
-  </svg>
-);
+const defaultUsersData = [
+  { id: 'ADM-01', name: 'Rajesh Kumar', email: 'rajesh@serviq.com', phone: '+91 98765 43210', role: 'BRANCH ADMIN', status: 'Active', lastLogin: '2026-06-02 12:45 PM' },
+  { id: 'ADM-02', name: 'Amit Patel', email: 'amit@serviq.com', phone: '+91 98765 11111', role: 'BRANCH MANAGER', status: 'Active', lastLogin: '2026-06-02 11:30 AM' },
+  { id: 'ADM-03', name: 'Vikram Singh', email: 'vikram@serviq.com', phone: '+91 98765 22222', role: 'BRANCH ADMIN', status: 'Disabled', lastLogin: '2026-05-30 09:15 PM' }
+];
 
 export default function UserListPanel({
   activeRestaurant = {},
@@ -43,8 +42,8 @@ export default function UserListPanel({
   const [userToDelete, setUserToDelete] = useState(null);
   const [userForm, setUserForm] = useState({
     name: '',
-    role: 'Waiter',
-    status: 'On Duty',
+    role: 'BRANCH ADMIN',
+    status: 'Active',
     phone: '',
     email: '',
     password: ''
@@ -54,11 +53,11 @@ export default function UserListPanel({
     setEditingUser(null);
     setUserForm({
       name: '',
-      role: 'Waiter',
-      status: 'On Duty',
+      role: 'BRANCH ADMIN',
+      status: 'Active',
       phone: '',
       email: '',
-      password: 'staff' + Math.floor(100 + Math.random() * 900)
+      password: 'user' + Math.floor(100 + Math.random() * 900)
     });
     setViewState('form');
   };
@@ -67,11 +66,11 @@ export default function UserListPanel({
     setEditingUser(user);
     setUserForm({
       name: user.name || '',
-      role: user.role || 'Waiter',
-      status: user.status || 'On Duty',
+      role: user.role || 'BRANCH ADMIN',
+      status: user.status === 'Off Duty' || user.status === 'Disabled' ? 'Disabled' : 'Active',
       phone: user.phone || '',
       email: user.email || '',
-      password: user.password || 'waiter123'
+      password: user.password || 'user123'
     });
     setViewState('form');
   };
@@ -79,21 +78,12 @@ export default function UserListPanel({
   const handleUserSubmit = (e) => {
     e.preventDefault();
 
-    // 1. Name validation (letters and spaces only)
     const nameRegex = /^[a-zA-Z\s]+$/;
     if (!nameRegex.test((userForm.name || '').trim())) {
-      ShowNotifications.showAlertNotification("Name should contain letters only (no numbers or special characters).", false);
+      ShowNotifications.showAlertNotification("Name should contain letters only.", false);
       return;
     }
 
-    // 2. Mobile validation (exactly 10 digits)
-    const phoneDigits = (userForm.phone || '').replace(/\D/g, '');
-    if (phoneDigits.length !== 10) {
-      ShowNotifications.showAlertNotification("Mobile number must be exactly 10 digits.", false);
-      return;
-    }
-
-    // 3. Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test((userForm.email || '').trim())) {
       ShowNotifications.showAlertNotification("Please enter a valid email address.", false);
@@ -101,34 +91,42 @@ export default function UserListPanel({
     }
 
     const sanitizedForm = {
-      ...userForm,
       name: userForm.name.trim(),
-      phone: phoneDigits,
-      email: userForm.email.trim()
+      role: userForm.role,
+      status: userForm.status === 'Active' ? 'On Duty' : 'Off Duty',
+      phone: userForm.phone.trim(),
+      email: userForm.email.trim(),
+      password: userForm.password
     };
 
-    if (editingUser) {
+    if (editingUser && updateStaff && activeRestaurant?.id) {
       updateStaff(activeRestaurant.id, {
-        ...editingUser,
+        ...editingUser.raw,
         ...sanitizedForm
       });
-      ShowNotifications.showAlertNotification("User updated successfully!", true);
-    } else {
-      addStaff(activeRestaurant.id, {
-        id: 'S-' + Math.floor(100 + Math.random() * 900),
-        userId: 'USR-' + String(staff.length + 1).padStart(2, '0'),
-        ...sanitizedForm
-      });
-      ShowNotifications.showAlertNotification("New user registered successfully!", true);
+      ShowNotifications.showAlertNotification("User account updated successfully!", true);
+    } else if (addStaff && activeRestaurant?.id) {
+      addStaff(activeRestaurant.id, sanitizedForm);
+      ShowNotifications.showAlertNotification("New user created successfully!", true);
     }
     setViewState('list');
   };
 
-  const handleDeleteUser = (user) => {
-    setUserToDelete(user);
-  };
+  // Map real staff or fallback to reference image data
+  const displayUsers = staff.length > 0
+    ? staff.map((u, idx) => ({
+        raw: u,
+        sno: idx + 1,
+        id: u.userId || `ADM-${String(idx + 1).padStart(2, '0')}`,
+        name: u.name,
+        email: u.email || `${u.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
+        phone: u.phone ? (u.phone.startsWith('+91') ? u.phone : `+91 ${u.phone}`) : '+91 98765 43210',
+        role: u.role ? u.role.toUpperCase() : 'BRANCH ADMIN',
+        status: u.status === 'Off Duty' || u.status === 'Disabled' ? 'Disabled' : 'Active',
+        lastLogin: '2026-06-02 12:45 PM'
+      }))
+    : defaultUsersData.map((d, idx) => ({ ...d, sno: idx + 1 }));
 
-  // Render PAGE STYLE Form when adding or editing a user
   if (viewState === 'form') {
     return (
       <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
@@ -148,23 +146,20 @@ export default function UserListPanel({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              transition: 'all 0.15s ease'
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
             }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#334155'; }}
           >
-            <ArrowLeftIcon size={16} /> Back to User Registry
+            <ArrowLeftIcon size={16} /> Back to Users List
           </button>
         </div>
 
-        <div className="settings-card" style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', width: '100%' }}>
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', width: '100%' }}>
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 24px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUser ? "Edit User Account" : "Add New User Account"}
+            {editingUser ? "Edit User Account" : "Create New User"}
           </h2>
 
           <form onSubmit={handleUserSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div className="form-group">
+            <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                 Full Name * 
               </label>
@@ -172,65 +167,62 @@ export default function UserListPanel({
                 type="text"
                 required
                 value={userForm.name}
-                onChange={e => {
-                  const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                  setUserForm({ ...userForm, name: val });
-                }}
-                placeholder="e.g. Rahul Sharma"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                onChange={e => setUserForm({ ...userForm, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
+                placeholder="e.g. Rajesh Kumar"
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
+              <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Role *
+                  Access Role *
                 </label>
                 <select
                   value={userForm.role}
                   onChange={e => setUserForm({ ...userForm, role: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
-                  <option value="Waiter">Waiter</option>
-                  <option value="Kitchen">Kitchen Staff</option>
-                  <option value="Manager">Manager</option>
-                  <option value="Admin">Administrator</option>
+                  <option value="BRANCH ADMIN">BRANCH ADMIN</option>
+                  <option value="BRANCH MANAGER">BRANCH MANAGER</option>
+                  <option value="SUPER ADMIN">SUPER ADMIN</option>
+                  <option value="CASHIER">CASHIER</option>
+                  <option value="WAITER">WAITER</option>
+                  <option value="KITCHEN STAFF">KITCHEN STAFF</option>
                 </select>
               </div>
-              <div className="form-group">
+
+              <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Status *
+                  Account Status *
                 </label>
                 <select
                   value={userForm.status}
                   onChange={e => setUserForm({ ...userForm, status: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
-                  <option value="On Duty">On Duty</option>
-                  <option value="Off Duty">Off Duty</option>
+                  <option value="Active">Active</option>
+                  <option value="Disabled">Disabled</option>
                 </select>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group">
+              <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Phone Number * 
                 </label>
                 <input
                   type="text"
                   required
-                  maxLength="10"
                   value={userForm.phone}
-                  onChange={e => {
-                    const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
-                    setUserForm({ ...userForm, phone: digits });
-                  }}
-                  placeholder="e.g. 9876543210"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                  onChange={e => setUserForm({ ...userForm, phone: e.target.value })}
+                  placeholder="e.g. +91 98765 43210"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
                 />
               </div>
-              <div className="form-group">
+
+              <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Email Address *
                 </label>
@@ -239,31 +231,17 @@ export default function UserListPanel({
                   required
                   value={userForm.email}
                   onChange={e => setUserForm({ ...userForm, email: e.target.value })}
-                  placeholder="e.g. rahul@serviq.com"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                  placeholder="e.g. rajesh@serviq.com"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
                 />
               </div>
-            </div>
-
-            <div className="form-group">
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                Login Password *
-              </label>
-              <input
-                type="password"
-                required
-                value={userForm.password}
-                onChange={e => setUserForm({ ...userForm, password: e.target.value })}
-                placeholder="Min 6 characters"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
               <button 
                 type="button" 
-                onClick={() => setViewState('list')}
-                style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, color: '#475569', cursor: 'pointer' }}
+                onClick={() => setViewState('list')} 
+                style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 700, borderRadius: '8px', padding: '10px 24px', fontSize: '14px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -281,137 +259,165 @@ export default function UserListPanel({
   }
 
   return (
-    <section className="panel-view active" style={{ paddingBottom: '60px' }}>
-      <div className="settings-card" style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-            User Registry
-          </h3>
+    <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
+      {/* Main Card Container matching Screenshot 1 */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        padding: '24px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+        overflow: 'hidden'
+      }}>
+        {/* Card Header Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+            Users List
+          </h2>
           <button 
             type="button" 
-            style={{ background: '#ff5a1f', color: '#ffffff', border: 'none', padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             onClick={openAddUser}
+            style={{
+              background: '#000000',
+              color: '#ffffff',
+              border: 'none',
+              padding: '10px 22px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
+            onMouseLeave={e => e.currentTarget.style.background = '#000000'}
           >
-            <PlusIcon size={14} color="#ffffff" /> Add User
+            + Create User
           </button>
         </div>
 
-        {/* Optimized Table Layout */}
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+        {/* Table matching Screenshot 1 */}
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr>
-                <th style={{ width: '12%', padding: '14px 16px' }}>USER ID</th>
-                <th style={{ width: '22%', padding: '14px 16px' }}>USER NAME</th>
-                <th style={{ width: '18%', padding: '14px 16px' }}>NUMBER</th>
-                <th style={{ width: '22%', padding: '14px 16px' }}>EMAIL</th>
-                <th style={{ width: '14%', padding: '14px 16px', textAlign: 'center' }}>ROLE</th>
-                <th style={{ width: '12%', padding: '14px 16px', textAlign: 'right' }}>ACTION</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
+                  S.NO.
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  USER ID
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  FULL NAME
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  EMAIL ADDRESS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  PHONE NUMBER
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ACCESS ROLE
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  ACCOUNT STATUS
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  LAST LOGIN
+                </th>
               </tr>
             </thead>
             <tbody>
-              {staff.length === 0 ? (
-                <tr>
-                  <td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>No users registered.</td>
-                </tr>
-              ) : (
-                staff.map((user, idx) => {
-                  const autoUserId = user.userId || `USR-${String(idx + 1).padStart(2, '0')}`;
-                  return (
-                    <tr key={user.id || idx} style={{ borderBottom: '1px solid #e2e8f0', height: '52px' }}>
-                      <td style={{ padding: '12px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace' }}>
-                        {autoUserId}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                        {user.name}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#334155' }}>
-                        {user.phone || 'N/A'}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#334155' }}>
-                        {user.email || 'N/A'}
-                      </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                        <span style={{ 
-                          display: 'inline-flex', 
-                          padding: '4px 10px', 
-                          borderRadius: '16px', 
-                          fontSize: '11px', 
-                          fontWeight: 800, 
-                          letterSpacing: '0.3px',
-                          background: user.role === 'Admin' ? '#fff3ea' : '#f1f5f9',
-                          color: user.role === 'Admin' ? '#ff5a1f' : '#475569'
-                        }}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                          <button 
-                            type="button" 
-                            style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                            onClick={() => openEditUser(user)}
-                            title="Edit User"
-                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          >
-                            <PencilIcon size={16} />
-                          </button>
-                          <button 
-                            type="button" 
-                            style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                            onClick={() => handleDeleteUser(user)}
-                            title="Delete User"
-                            onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
-                          >
-                            <TrashIcon size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              {displayUsers.map((u, index) => {
+                const isActive = u.status === 'Active';
+
+                return (
+                  <tr 
+                    key={u.id || index} 
+                    style={{ 
+                      borderBottom: index < displayUsers.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      transition: 'background 0.15s' 
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                  >
+                    {/* S.NO. */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                      {u.sno || index + 1}
+                    </td>
+
+                    {/* USER ID */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '600', color: '#334155' }}>
+                      {u.id}
+                    </td>
+
+                    {/* FULL NAME */}
+                    <td style={{ padding: '16px 18px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                      {u.name}
+                    </td>
+
+                    {/* EMAIL ADDRESS */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '400' }}>
+                      {u.email}
+                    </td>
+
+                    {/* PHONE NUMBER */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
+                      {u.phone}
+                    </td>
+
+                    {/* ACCESS ROLE */}
+                    <td style={{ padding: '16px 18px' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '700',
+                        backgroundColor: '#f1f5f9',
+                        color: '#475569',
+                        letterSpacing: '0.3px',
+                        textTransform: 'uppercase'
+                      }}>
+                        {u.role}
+                      </span>
+                    </td>
+
+                    {/* ACCOUNT STATUS */}
+                    <td style={{ padding: '16px 18px' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '4px 14px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        backgroundColor: isActive ? '#e6f4ea' : '#fef2f2',
+                        border: isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+                        color: isActive ? '#16a34a' : '#dc2626'
+                      }}>
+                        {isActive ? 'Active' : 'Disabled'}
+                      </span>
+                    </td>
+
+                    {/* LAST LOGIN */}
+                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '400' }}>
+                      {u.lastLogin}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Delete User Modal */}
-      <Modal 
-        isOpen={!!userToDelete} 
-        onClose={() => setUserToDelete(null)} 
-        title="Confirm Deletion"
-        maxWidth="400px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
-            Are you sure you want to delete user account <strong>{userToDelete?.name}</strong>? This action cannot be undone.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button 
-              type="button" 
-              style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-              onClick={() => setUserToDelete(null)}
-            >
-              Cancel
-            </button>
-            <button 
-              type="button" 
-              style={{ background: '#dc2626', border: 'none', color: '#ffffff', padding: '8px 16px', borderRadius: '6px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-              onClick={() => {
-                if (userToDelete && deleteStaff) {
-                  deleteStaff(activeRestaurant.id, userToDelete.id);
-                  setUserToDelete(null);
-                }
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </Modal>
     </section>
   );
 }

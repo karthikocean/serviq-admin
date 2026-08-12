@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
+import CategoryListPanel from '../../components/CategoryListPanel';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import './MenuManagement.css';
@@ -244,6 +245,15 @@ export default function MenuManagement() {
             </div>
           </div>
         </section>
+      ) : activePage === 'categories' ? (
+        <CategoryListPanel
+          categories={activeRestaurant.categories}
+          onBack={() => setActivePage(null)}
+          onUpdateCategories={(newCats) => {
+            if (updateMenuCategories) updateMenuCategories(activeRestaurant.id, newCats);
+          }}
+          activeRestaurant={activeRestaurant}
+        />
       ) : (
         <MenuPanel
           menu={menu}
@@ -252,6 +262,7 @@ export default function MenuManagement() {
           openEditMenuModal={openEditMenuModal}
           handleDeleteMenu={handleDeleteMenu}
           hasPermission={hasPermission}
+          onOpenCategoriesPage={() => setActivePage('categories')}
         />
       )}
 
