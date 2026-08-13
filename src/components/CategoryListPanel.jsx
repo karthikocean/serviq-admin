@@ -137,9 +137,7 @@ export default function CategoryListPanel({
           <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Menu Categories
           </h2>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '4px 0 0 0' }}>
-            Manage the categories that organize your menu items.
-          </p>
+        
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>

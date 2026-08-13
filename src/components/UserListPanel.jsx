@@ -67,7 +67,7 @@ export default function UserListPanel({
     setUserForm({
       name: user.name || '',
       role: user.role || 'BRANCH ADMIN',
-      status: user.status === 'Off Duty' || user.status === 'Disabled' ? 'Disabled' : 'Active',
+      status: user.status === 'Off Duty' || user.status === 'Inactive' ? 'Inactive' : 'Active',
       phone: user.phone || '',
       email: user.email || '',
       password: user.password || 'user123'
@@ -149,7 +149,7 @@ export default function UserListPanel({
               boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
             }}
           >
-            <ArrowLeftIcon size={16} /> Back to Users List
+            <ArrowLeftIcon size={16} /> Back to Users
           </button>
         </div>
 
@@ -202,7 +202,7 @@ export default function UserListPanel({
                   style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
                   <option value="Active">Active</option>
-                  <option value="Disabled">Disabled</option>
+                  <option value="Inactive">Inactive</option>
                 </select>
               </div>
             </div>
@@ -277,7 +277,7 @@ export default function UserListPanel({
           marginBottom: '20px'
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-            Users List
+            Users
           </h2>
           <button 
             type="button" 
@@ -403,7 +403,7 @@ export default function UserListPanel({
                         border: isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
                         color: isActive ? '#16a34a' : '#dc2626'
                       }}>
-                        {isActive ? 'Active' : 'Disabled'}
+                        {isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
 
