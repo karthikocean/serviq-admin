@@ -19,6 +19,8 @@ import QRManagementPanel from '../components/QRManagementPanel';
 import UserListPanel from '../components/UserListPanel';
 import RolesPermissionsPanel from '../components/RolesPermissionsPanel';
 import CategoryListPanel from '../components/CategoryListPanel';
+import BranchManagementPanel from '../components/BranchManagementPanel';
+import BranchSearchDropdown from '../components/BranchSearchDropdown';
 
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -200,13 +202,15 @@ export default function Admin() {
     setQrCustomizer,
     updateRolePermissions,
     addNewRole,
-    updateMenuCategories
+    updateMenuCategories,
+    selectedBranchId
   } = useAppState();
 
   const [activeTab, setActiveTab] = useState('overview');
 
   const tabTitles = {
     'overview': 'Dashboard',
+    'branch-management': 'Branch Management',
     'orders': 'Order management',
     'menu': 'Menu Management',
     'billing': 'Billing & Settlement',
@@ -395,6 +399,23 @@ export default function Admin() {
 
   const { name, plan, tables = [], orders = [], menu = [], staff = [], billingData = [], kitchenLogin = { email: '', password: '' } } = activeRestaurant;
 
+  // Branch-filtered data sets
+  const filteredOrders = selectedBranchId
+    ? orders.filter(o => o.branchId === selectedBranchId)
+    : orders;
+
+  const filteredStaff = selectedBranchId
+    ? staff.filter(s => s.branchId === selectedBranchId)
+    : staff;
+
+  const filteredBillingData = selectedBranchId
+    ? billingData.filter(b => b.branchId === selectedBranchId)
+    : billingData;
+
+  const filteredTables = selectedBranchId
+    ? tables.filter(t => t.branchId === selectedBranchId)
+    : tables;
+
   // Filter sidebar based on role
   const role = currentUser?.role || 'Waiter';
   const hasPermission = (moduleName, action = 'view') => {
@@ -426,6 +447,7 @@ export default function Admin() {
     if (!isTabAllowed(activeTab)) {
       const tabsOrder = [
         'overview',
+        'branch-management',
         'orders',
         'menu',
         'billing',
@@ -600,14 +622,14 @@ export default function Admin() {
     );
   };
 
-  // KPIs
-  const todayRevenue = orders
+  // KPIs (filtered by active branch selection)
+  const todayRevenue = filteredOrders
     .filter(o => o.billingStatus === 'paid')
     .reduce((sum, o) => sum + o.total, 0);
 
-  const pendingOrdersCount = orders.filter(o => o.status === 'new').length;
-  const preparingOrdersCount = orders.filter(o => o.status === 'preparing').length;
-  const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
+  const pendingOrdersCount = filteredOrders.filter(o => o.status === 'new').length;
+  const preparingOrdersCount = filteredOrders.filter(o => o.status === 'preparing').length;
+  const occupiedTablesCount = filteredTables.filter(t => t.status === 'Occupied').length;
 
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
@@ -1572,6 +1594,15 @@ export default function Admin() {
               </a>
             </li>
           )}
+          {/* 2. Branch Management */}
+          {isTabAllowed('branch-management') && (
+            <li className={`sidebar-item ${activeTab === 'branch-management' ? 'active' : ''}`} onClick={() => { setActiveTab('branch-management'); setActivePage(null); }}>
+              <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '12px'}}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><path d="M9 22v-4h6v4"></path></svg>
+                Branch Management
+              </a>
+            </li>
+          )}
           {/* 2. Table Management */}
           {isTabAllowed('tables') && (
             <li className={`sidebar-item ${activeTab === 'tables' ? 'active' : ''}`} onClick={() => { setActiveTab('tables'); setActivePage(null); }}>
@@ -1747,6 +1778,7 @@ export default function Admin() {
               <span className="header-subtitle-date">{dateTimeStr}</span>
             </div>
             <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <BranchSearchDropdown />
               <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
                 {pendingOrdersCount > 0 && (
@@ -1894,15 +1926,22 @@ export default function Admin() {
             <>
               {activeTab === 'overview' && (
                 <OverviewPanel
-                  orders={orders}
-                  tables={tables}
+                  activeRestaurant={activeRestaurant}
+                  orders={filteredOrders}
+                  tables={filteredTables}
                   todayRevenue={todayRevenue}
+                  pendingOrdersCount={pendingOrdersCount}
+                  occupiedTablesCount={occupiedTablesCount}
+                  setActiveTab={setActiveTab}
                 />
+              )}
+              {activeTab === 'branch-management' && (
+                <BranchManagementPanel />
               )}
               {activeTab === 'orders' && (
                 <OrdersPanel
-                  orders={orders}
-                  staff={staff}
+                  orders={filteredOrders}
+                  staff={filteredStaff}
                   orderFilter={orderFilter}
                   setOrderFilter={setOrderFilter}
                   selectedWaiterFilter={selectedWaiterFilter}
@@ -1931,9 +1970,9 @@ export default function Admin() {
               )}
               {activeTab === 'billing' && (
                 <BillingPanel
-                  billingData={billingData}
-                  orders={orders}
-                  tables={tables}
+                  billingData={filteredBillingData}
+                  orders={filteredOrders}
+                  tables={filteredTables}
                   activeRestaurant={activeRestaurant}
                   updateOrder={updateOrder}
                   selectedBillingTable={selectedBillingTable}
@@ -1946,9 +1985,9 @@ export default function Admin() {
               )}
               {activeTab === 'tables' && (
                 <TablesPanel
-                  tables={tables}
-                  staff={staff}
-                  orders={orders}
+                  tables={filteredTables}
+                  staff={filteredStaff}
+                  orders={filteredOrders}
                   activeRestaurant={activeRestaurant}
                   updateDiningTable={updateDiningTable}
                   deleteDiningTable={deleteDiningTable}
@@ -1971,9 +2010,9 @@ export default function Admin() {
               )}
               {activeTab === 'waiter-list' && (
                 <WaiterListPanel
-                  staff={staff}
-                  tables={tables}
-                  orders={orders}
+                  staff={filteredStaff}
+                  tables={filteredTables}
+                  orders={filteredOrders}
                   activeRestaurant={activeRestaurant}
                   updateStaff={updateStaff}
                   deleteStaff={deleteStaff}
@@ -1984,8 +2023,8 @@ export default function Admin() {
               )}
               {activeTab === 'waiter-reports' && (
                 <WaiterReportsPanel
-                  orders={orders}
-                  staff={staff}
+                  orders={filteredOrders}
+                  staff={filteredStaff}
                   updateOrder={updateOrder}
                   activeRestaurant={activeRestaurant}
                 />
@@ -1993,8 +2032,8 @@ export default function Admin() {
               {activeTab === 'kitchen-list' && (
                 <KitchenListPanel
                   plan={plan}
-                  orders={orders}
-                  staff={staff}
+                  orders={filteredOrders}
+                  staff={filteredStaff}
                   activeRestaurant={activeRestaurant}
                   upgradeRestaurantPlan={upgradeRestaurantPlan}
                   updateOrderItemStatus={updateOrderItemStatus}
@@ -2007,14 +2046,14 @@ export default function Admin() {
               )}
               {activeTab === 'kitchen-reports' && (
                 <KitchenReportsPanel
-                  orders={orders}
-                  staff={staff}
+                  orders={filteredOrders}
+                  staff={filteredStaff}
                   menu={menu}
                 />
               )}
               {activeTab === 'Reports' && (
                 <ReportsPanel
-                  orders={orders}
+                  orders={filteredOrders}
                   menu={menu}
                   activeRestaurant={activeRestaurant}
                 />
@@ -2032,13 +2071,14 @@ export default function Admin() {
               {activeTab === 'users' && (
                 <UserListPanel
                   activeRestaurant={activeRestaurant}
-                  staff={staff}
+                  staff={filteredStaff}
                   addStaff={addStaff}
                   updateStaff={updateStaff}
                   deleteStaff={deleteStaff}
                   hasPermission={hasPermission}
                 />
               )}
+
               {activeTab === 'roles-permissions' && (
                 <RolesPermissionsPanel />
               )}

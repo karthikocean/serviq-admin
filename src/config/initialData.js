@@ -39,12 +39,12 @@ export const initialRestaurantsData = {
       { id: "menu-8", name: "Lassi", category: "Drinks", price: 60, desc: "Chilled yogurt beverage blended sweet with cardamom and rose water.", image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false }
     ],
     orders: [
-      { id: "847", table: "03", time: "1:28 PM", timeAgo: "2 min ago", items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "Less spicy please", subtotal: 400, tax: 10, charge: 0, total: 420, status: "new", billingStatus: "unpaid", waiter: "Unassigned" },
-      { id: "846", table: "07", time: "1:22 PM", timeAgo: "8 min ago", items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 2020, tax: 101, charge: 0, total: 2121, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." },
-      { id: "845", table: "01", time: "1:15 PM", timeAgo: "15 min ago", items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }], notes: "Allergy: peanuts", subtotal: 720, tax: 36, charge: 0, total: 756, status: "preparing", billingStatus: "unpaid", waiter: "Rahul S." },
-      { id: "844", table: "05", time: "1:08 PM", timeAgo: "22 min ago", items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 880, tax: 44, charge: 0, total: 924, status: "ready", billingStatus: "unpaid", waiter: "Arjun K." },
-      { id: "843", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
-      { id: "842", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
+      { id: "847", branchId: "BR-001", table: "03", time: "1:28 PM", timeAgo: "2 min ago", items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "Less spicy please", subtotal: 400, tax: 10, charge: 0, total: 420, status: "new", billingStatus: "unpaid", waiter: "Unassigned" },
+      { id: "846", branchId: "BR-001", table: "07", time: "1:22 PM", timeAgo: "8 min ago", items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 2020, tax: 101, charge: 0, total: 2121, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." },
+      { id: "845", branchId: "BR-002", table: "01", time: "1:15 PM", timeAgo: "15 min ago", items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }], notes: "Allergy: peanuts", subtotal: 720, tax: 36, charge: 0, total: 756, status: "preparing", billingStatus: "unpaid", waiter: "Rahul S." },
+      { id: "844", branchId: "BR-002", table: "05", time: "1:08 PM", timeAgo: "22 min ago", items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 880, tax: 44, charge: 0, total: 924, status: "ready", billingStatus: "unpaid", waiter: "Arjun K." },
+      { id: "843", branchId: "BR-003", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
+      { id: "842", branchId: "BR-001", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
     ],
     tables: [],
     qrCodes: [
@@ -56,22 +56,105 @@ export const initialRestaurantsData = {
       { id: "QR-106", status: "Unassigned", tableId: null, scansCount: 0, createdAt: "2026-06-05" },
       { id: "QR-107", status: "Unassigned", tableId: null, scansCount: 0, createdAt: "2026-06-05" }
     ],
+    branches: [
+      {
+        id: "BR-001",
+        branchCode: "BR-CHE-01",
+        branchName: "Serviq Chennai Main Branch",
+        branchManager: "Saravana Kumaran",
+        mobileNumber: "9876543210",
+        email: "chennai@serviq.com",
+        address: "12 Connaught Place, T. Nagar",
+        country: "India",
+        state: "Tamil Nadu",
+        city: "Chennai",
+        pincode: "600017",
+        openingDate: "2026-01-15",
+        status: "Active",
+        totalTables: 15,
+        username: "branch_chennai",
+        password: "branchpassword123",
+        gstNumber: "33AAACS1234A1ZX",
+        fssaiNumber: "12421008000123",
+        operationalData: {
+          tablesCount: 15,
+          activeOrders: 12,
+          staffCount: 14,
+          kitchenStations: 3,
+          todayRevenue: "₹24,500"
+        }
+      },
+      {
+        id: "BR-002",
+        branchCode: "BR-CBE-02",
+        branchName: "Serviq Coimbatore Outlet",
+        branchManager: "Karthik Raja",
+        mobileNumber: "9876543220",
+        email: "coimbatore@serviq.com",
+        address: "45 Avinashi Road, Peelamedu",
+        country: "India",
+        state: "Tamil Nadu",
+        city: "Coimbatore",
+        pincode: "641004",
+        openingDate: "2026-03-10",
+        status: "Active",
+        totalTables: 12,
+        username: "branch_coimbatore",
+        password: "branchpassword123",
+        gstNumber: "33AAACS1234A2ZY",
+        fssaiNumber: "12421008000456",
+        operationalData: {
+          tablesCount: 12,
+          activeOrders: 8,
+          staffCount: 10,
+          kitchenStations: 2,
+          todayRevenue: "₹18,200"
+        }
+      },
+      {
+        id: "BR-003",
+        branchCode: "BR-MDU-03",
+        branchName: "Serviq Madurai Branch",
+        branchManager: "Ramesh V.",
+        mobileNumber: "9876543230",
+        email: "madurai@serviq.com",
+        address: "88 KK Nagar Main Road",
+        country: "India",
+        state: "Tamil Nadu",
+        city: "Madurai",
+        pincode: "625020",
+        openingDate: "2026-05-01",
+        status: "Active",
+        totalTables: 10,
+        username: "branch_madurai",
+        password: "branchpassword123",
+        gstNumber: "33AAACS1234A3ZZ",
+        fssaiNumber: "12421008000789",
+        operationalData: {
+          tablesCount: 10,
+          activeOrders: 6,
+          staffCount: 8,
+          kitchenStations: 2,
+          todayRevenue: "₹12,800"
+        }
+      }
+    ],
     billingData: [
-      { table: "Table 01", orders: 2, total: 756, status: "Unpaid" },
-      { table: "Table 02", orders: 3, total: 1239, status: "Unpaid" },
-      { table: "Table 03", orders: 1, total: 320, status: "Paid" },
-      { table: "Table 05", orders: 2, total: 924, status: "Unpaid" },
-      { table: "Table 07", orders: 4, total: 2121, status: "Partial" }
+      { table: "Table 01", branchId: "BR-002", orders: 2, total: 756, status: "Unpaid" },
+      { table: "Table 02", branchId: "BR-001", orders: 3, total: 1239, status: "Unpaid" },
+      { table: "Table 03", branchId: "BR-001", orders: 1, total: 320, status: "Paid" },
+      { table: "Table 05", branchId: "BR-002", orders: 2, total: 924, status: "Unpaid" },
+      { table: "Table 07", branchId: "BR-001", orders: 4, total: 2121, status: "Partial" }
     ],
     staff: [
-      { id: "S-01", name: "Ramesh Kumar", role: "Waiter", phone: "9876543210", email: "ramesh@serviq.com", status: "On Duty", password: "manager123" },
-      { id: "S-02", name: "Suresh Pillai", role: "Kitchen", phone: "9876543211", email: "suresh@serviq.com", status: "On Duty", password: "chef123" },
-      { id: "S-03", name: "Anitha Selvam", role: "Waiter", phone: "9876543212", email: "anitha@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-04", name: "Vikram Rathore", role: "Waiter", phone: "9876543213", email: "vikram@serviq.com", status: "Off Duty", password: "waiter456" },
-      { id: "S-05", name: "Priya Patel", role: "Kitchen", phone: "9876543214", email: "priya@serviq.com", status: "On Duty", password: "chef456" },
-      { id: "S-06", name: "Ravi M.", role: "Waiter", phone: "9876543215", email: "ravi@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-07", name: "Rahul S.", role: "Waiter", phone: "9876543216", email: "rahul@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-08", name: "Arjun K.", role: "Waiter", phone: "9876543217", email: "arjun@serviq.com", status: "On Duty", password: "waiter123" }
+      { id: "S-01", branchId: "BR-001", name: "Ramesh Kumar", role: "Waiter", phone: "9876543210", email: "ramesh@serviq.com", status: "On Duty", password: "manager123" },
+      { id: "S-02", branchId: "BR-001", name: "Suresh Pillai", role: "Kitchen", phone: "9876543211", email: "suresh@serviq.com", status: "On Duty", password: "chef123" },
+      { id: "S-03", branchId: "BR-002", name: "Anitha Selvam", role: "Waiter", phone: "9876543212", email: "anitha@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-04", branchId: "BR-003", name: "Vikram Rathore", role: "Waiter", phone: "9876543213", email: "vikram@serviq.com", status: "Off Duty", password: "waiter456" },
+      { id: "S-05", branchId: "BR-002", name: "Priya Patel", role: "Kitchen", phone: "9876543214", email: "priya@serviq.com", status: "On Duty", password: "chef456" },
+      { id: "S-06", branchId: "BR-001", name: "Ravi M.", role: "Waiter", phone: "9876543215", email: "ravi@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-07", branchId: "BR-002", name: "Rahul S.", role: "Waiter", phone: "9876543216", email: "rahul@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-08", branchId: "BR-003", name: "Arjun K.", role: "Waiter", phone: "9876543217", email: "arjun@serviq.com", status: "On Duty", password: "waiter123" }
     ],
     kitchenLogin: {
       email: "kitchen@saravana.com",

@@ -11,6 +11,7 @@ export const DEFAULT_ROLES = {
   Admin: {
     permissions: {
       overview: { view: true, add: true, edit: true, delete: true },
+      'branch-management': { view: true, add: true, edit: true, delete: true },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
@@ -26,6 +27,7 @@ export const DEFAULT_ROLES = {
   Manager: {
     permissions: {
       overview: { view: true, add: false, edit: false, delete: false },
+      'branch-management': { view: true, add: true, edit: true, delete: false },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: false },
       tables: { view: true, add: true, edit: true, delete: false },
@@ -79,6 +81,8 @@ export const AppProvider = ({ children }) => {
   const [darkMode, setDarkMode] = useState(false);
   const [accentColor, setAccentColor] = useState('#ff7a00');
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
+  // Branch filter state (null = All Branches)
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
 
 
 
@@ -302,6 +306,7 @@ export const AppProvider = ({ children }) => {
   const logout = () => {
     setCurrentUser(null);
     setCurrentRestaurantId(null);
+    setSelectedBranchId(null);
   };
 
 
@@ -855,6 +860,92 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const addBranch = (restaurantId, branchData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[restaurantId];
+      if (!rest) return prev;
+      const currentBranches = rest.branches || [];
+      const newBranch = {
+        id: branchData.id || `BR-${Date.now()}`,
+        branchCode: branchData.branchCode || `BR-${Math.floor(100 + Math.random() * 900)}`,
+        branchName: branchData.branchName || 'New Branch',
+        branchManager: branchData.branchManager || 'Unassigned',
+        mobileNumber: branchData.mobileNumber || '',
+        email: branchData.email || '',
+        address: branchData.address || '',
+        country: branchData.country || 'India',
+        state: branchData.state || 'Tamil Nadu',
+        city: branchData.city || '',
+        pincode: branchData.pincode || '',
+        openingDate: branchData.openingDate || new Date().toISOString().split('T')[0],
+        status: branchData.status || 'Active',
+        totalTables: parseInt(branchData.totalTables) || 10,
+        username: branchData.username || '',
+        password: branchData.password || '',
+        gstNumber: branchData.gstNumber || '',
+        fssaiNumber: branchData.fssaiNumber || '',
+        operationalData: branchData.operationalData || {
+          tablesCount: parseInt(branchData.totalTables) || 10,
+          activeOrders: 0,
+          staffCount: 5,
+          kitchenStations: 1,
+          todayRevenue: "₹0"
+        }
+      };
+      return {
+        ...prev,
+        [restaurantId]: {
+          ...rest,
+          branches: [...currentBranches, newBranch]
+        }
+      };
+    });
+  };
+
+  const updateBranch = (restaurantId, branchId, updatedData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[restaurantId];
+      if (!rest) return prev;
+      const currentBranches = rest.branches || [];
+      const updatedBranches = currentBranches.map(b => {
+        if (b.id === branchId) {
+          return {
+            ...b,
+            ...updatedData,
+            totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
+            operationalData: {
+              ...b.operationalData,
+              tablesCount: updatedData.totalTables ? parseInt(updatedData.totalTables) : (b.operationalData?.tablesCount || b.totalTables)
+            }
+          };
+        }
+        return b;
+      });
+      return {
+        ...prev,
+        [restaurantId]: {
+          ...rest,
+          branches: updatedBranches
+        }
+      };
+    });
+  };
+
+  const deleteBranch = (restaurantId, branchId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[restaurantId];
+      if (!rest) return prev;
+      const currentBranches = rest.branches || [];
+      return {
+        ...prev,
+        [restaurantId]: {
+          ...rest,
+          branches: currentBranches.filter(b => b.id !== branchId)
+        }
+      };
+    });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -898,7 +989,12 @@ export const AppProvider = ({ children }) => {
         updateRolePermissions,
         addNewRole,
         deleteRole,
-        updateMenuCategories
+        updateMenuCategories,
+        addBranch,
+        updateBranch,
+        deleteBranch,
+        selectedBranchId,
+        setSelectedBranchId
       }}
     >
       {children}
