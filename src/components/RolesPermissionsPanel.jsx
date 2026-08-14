@@ -36,6 +36,8 @@ const defaultRolesList = [
 
 const MODULES_LIST = [
   { id: 'overview', name: 'Dashboard / Overview' },
+  { id: 'branch-management', name: 'Branch Management' },
+  { id: 'plans-management', name: 'Plans & Subscription' },
   { id: 'orders', name: 'Orders Management' },
   { id: 'menu', name: 'Menu Management' },
   { id: 'tables', name: 'Tables Management' },

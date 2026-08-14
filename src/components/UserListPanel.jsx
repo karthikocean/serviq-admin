@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -24,25 +25,34 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const defaultUsersData = [
-  { id: 'ADM-01', name: 'Rajesh Kumar', email: 'rajesh@serviq.com', phone: '+91 98765 43210', role: 'BRANCH ADMIN', status: 'Active', lastLogin: '2026-06-02 12:45 PM' },
-  { id: 'ADM-02', name: 'Amit Patel', email: 'amit@serviq.com', phone: '+91 98765 11111', role: 'BRANCH MANAGER', status: 'Active', lastLogin: '2026-06-02 11:30 AM' },
-  { id: 'ADM-03', name: 'Vikram Singh', email: 'vikram@serviq.com', phone: '+91 98765 22222', role: 'BRANCH ADMIN', status: 'Disabled', lastLogin: '2026-05-30 09:15 PM' }
-];
+const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="7 10 12 15 17 10" />
+    <line x1="12" y1="15" x2="12" y2="3" />
+  </svg>
+);
 
 export default function UserListPanel({
   activeRestaurant = {},
   staff = [],
-  addStaff,
-  updateStaff,
-  deleteStaff
+  addUser,
+  updateUser,
+  deleteUser
 }) {
+  const { selectedBranchId, branches: contextBranches } = useAppState();
+  const branches = activeRestaurant?.branches || contextBranches || [];
+
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUser, setEditingUser] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All');
+
   const [userForm, setUserForm] = useState({
     name: '',
-    role: 'BRANCH ADMIN',
+    branchId: 'ALL',
+    role: 'Branch Admin',
     status: 'Active',
     phone: '',
     email: '',
@@ -53,7 +63,8 @@ export default function UserListPanel({
     setEditingUser(null);
     setUserForm({
       name: '',
-      role: 'BRANCH ADMIN',
+      branchId: selectedBranchId || 'ALL',
+      role: 'Branch Admin',
       status: 'Active',
       phone: '',
       email: '',
@@ -66,8 +77,9 @@ export default function UserListPanel({
     setEditingUser(user);
     setUserForm({
       name: user.name || '',
-      role: user.role || 'BRANCH ADMIN',
-      status: user.status === 'Off Duty' || user.status === 'Inactive' ? 'Inactive' : 'Active',
+      branchId: user.branchId || 'ALL',
+      role: user.role || 'Branch Admin',
+      status: user.status === 'Off Duty' || user.status === 'Inactive' || user.status === 'Disabled' ? 'Inactive' : 'Active',
       phone: user.phone || '',
       email: user.email || '',
       password: user.password || 'user123'
@@ -92,40 +104,84 @@ export default function UserListPanel({
 
     const sanitizedForm = {
       name: userForm.name.trim(),
+      branchId: userForm.branchId || 'ALL',
       role: userForm.role,
-      status: userForm.status === 'Active' ? 'On Duty' : 'Off Duty',
+      status: userForm.status === 'Active' ? 'Active' : 'Inactive',
       phone: userForm.phone.trim(),
       email: userForm.email.trim(),
       password: userForm.password
     };
 
-    if (editingUser && updateStaff && activeRestaurant?.id) {
-      updateStaff(activeRestaurant.id, {
-        ...editingUser.raw,
-        ...sanitizedForm
-      });
+    if (editingUser && updateUser && activeRestaurant?.id) {
+      updateUser(activeRestaurant.id, editingUser.id, sanitizedForm);
       ShowNotifications.showAlertNotification("User account updated successfully!", true);
-    } else if (addStaff && activeRestaurant?.id) {
-      addStaff(activeRestaurant.id, sanitizedForm);
+    } else if (addUser && activeRestaurant?.id) {
+      addUser(activeRestaurant.id, sanitizedForm);
       ShowNotifications.showAlertNotification("New user created successfully!", true);
     }
     setViewState('list');
   };
 
-  // Map real staff or fallback to reference image data
-  const displayUsers = staff.length > 0
-    ? staff.map((u, idx) => ({
-        raw: u,
-        sno: idx + 1,
-        id: u.userId || `ADM-${String(idx + 1).padStart(2, '0')}`,
-        name: u.name,
-        email: u.email || `${u.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
-        phone: u.phone ? (u.phone.startsWith('+91') ? u.phone : `+91 ${u.phone}`) : '+91 98765 43210',
-        role: u.role ? u.role.toUpperCase() : 'BRANCH ADMIN',
-        status: u.status === 'Off Duty' || u.status === 'Disabled' ? 'Disabled' : 'Active',
-        lastLogin: '2026-06-02 12:45 PM'
-      }))
-    : defaultUsersData.map((d, idx) => ({ ...d, sno: idx + 1 }));
+  const handleDeleteConfirm = () => {
+    if (!userToDelete) return;
+    if (deleteUser && activeRestaurant?.id) {
+      deleteUser(activeRestaurant.id, userToDelete.id);
+      ShowNotifications.showAlertNotification("User account deleted successfully.", true);
+    }
+    setUserToDelete(null);
+  };
+
+  // Get users from activeRestaurant
+  const rawUsers = activeRestaurant?.users || [];
+  
+  // Filter by selected branch & search query & role
+  const filteredUsers = rawUsers.filter(u => {
+    if (selectedBranchId && u.branchId !== 'ALL' && u.branchId !== selectedBranchId) {
+      return false;
+    }
+    if (roleFilter !== 'All' && u.role !== roleFilter) {
+      return false;
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (u.name || '').toLowerCase().includes(q);
+      const matchEmail = (u.email || '').toLowerCase().includes(q);
+      const matchPhone = (u.phone || '').toLowerCase().includes(q);
+      const matchRole = (u.role || '').toLowerCase().includes(q);
+      const matchBranch = (u.branchId || '').toLowerCase().includes(q);
+      return matchName || matchEmail || matchPhone || matchRole || matchBranch;
+    }
+    return true;
+  });
+
+  // Export CSV
+  const handleExportCSV = () => {
+    if (filteredUsers.length === 0) {
+      ShowNotifications.showAlertNotification('No user records to export.', false);
+      return;
+    }
+    const headers = ['User ID', 'Full Name', 'Branch', 'Role', 'Email', 'Phone', 'Status', 'Last Login'];
+    const rows = filteredUsers.map(u => [
+      u.id,
+      `"${u.name}"`,
+      `"${u.branchId === 'ALL' ? 'All Branches' : u.branchId}"`,
+      `"${u.role}"`,
+      `"${u.email}"`,
+      `"${u.phone}"`,
+      `"${u.status}"`,
+      `"${u.lastLogin || 'N/A'}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `serviq_users_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    ShowNotifications.showAlertNotification('Users list exported successfully!', true);
+  };
 
   if (viewState === 'form') {
     return (
@@ -139,38 +195,67 @@ export default function UserListPanel({
               border: '1px solid #cbd5e1',
               padding: '8px 16px',
               borderRadius: '8px',
+              fontWeight: 600,
               fontSize: '13px',
-              fontWeight: '700',
-              color: '#334155',
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              gap: '6px',
+              color: '#0f172a'
             }}
           >
-            <ArrowLeftIcon size={16} /> Back to Users
+            <ArrowLeftIcon size={14} /> Back to Users List
           </button>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', width: '100%' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 24px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUser ? "Edit User Account" : "Create New User"}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #e2e8f0',
+          padding: '32px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+          maxWidth: '720px'
+        }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
+            {editingUser ? 'Edit User Account' : 'Create User Account'}
           </h2>
+          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px 0' }}>
+            {editingUser ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
+          </p>
 
           <form onSubmit={handleUserSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                Full Name * 
-              </label>
-              <input
-                type="text"
-                required
-                value={userForm.name}
-                onChange={e => setUserForm({ ...userForm, name: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
-                placeholder="e.g. Rajesh Kumar"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
-              />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={userForm.name}
+                  onChange={e => setUserForm({ ...userForm, name: e.target.value })}
+                  placeholder="e.g. Rajesh Kumar"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                  Branch Assignment *
+                </label>
+                <select
+                  value={userForm.branchId}
+                  onChange={e => setUserForm({ ...userForm, branchId: e.target.value })}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
+                >
+                  <option value="ALL">All Branches (Global Admin)</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.branchName} ({b.branchCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -183,12 +268,11 @@ export default function UserListPanel({
                   onChange={e => setUserForm({ ...userForm, role: e.target.value })}
                   style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
-                  <option value="BRANCH ADMIN">BRANCH ADMIN</option>
-                  <option value="BRANCH MANAGER">BRANCH MANAGER</option>
-                  <option value="SUPER ADMIN">SUPER ADMIN</option>
-                  <option value="CASHIER">CASHIER</option>
-                  <option value="WAITER">WAITER</option>
-                  <option value="KITCHEN STAFF">KITCHEN STAFF</option>
+                  <option value="Super Admin">Super Admin</option>
+                  <option value="Branch Admin">Branch Admin</option>
+                  <option value="Manager">Branch Manager</option>
+                  <option value="Waiter">Waiter</option>
+                  <option value="Kitchen">Kitchen Staff</option>
                 </select>
               </div>
 
@@ -237,6 +321,20 @@ export default function UserListPanel({
               </div>
             </div>
 
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                Password *
+              </label>
+              <input
+                type="text"
+                required
+                value={userForm.password}
+                onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                placeholder="e.g. securepass123"
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+              />
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
               <button 
                 type="button" 
@@ -260,7 +358,7 @@ export default function UserListPanel({
 
   return (
     <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
-      {/* Main Card Container matching Screenshot 1 */}
+      {/* Main Card Container */}
       <div style={{
         background: '#ffffff',
         borderRadius: '16px',
@@ -274,42 +372,96 @@ export default function UserListPanel({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '20px'
+          marginBottom: '20px',
+          flexWrap: 'wrap',
+          gap: '12px'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-            Users
-          </h2>
-          <button 
-            type="button" 
-            onClick={openAddUser}
-            style={{
-              background: '#000000',
-              color: '#ffffff',
-              border: 'none',
-              padding: '10px 22px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-              transition: 'all 0.15s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
-            onMouseLeave={e => e.currentTarget.style.background = '#000000'}
-          >
-            + Create User
-          </button>
+          <div>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+              User Accounts
+            </h2>
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
+              Showing {filteredUsers.length} user accounts {selectedBranchId ? `for branch ${selectedBranchId}` : 'across all branches'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleExportCSV}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600 }}
+            >
+              <DownloadIcon size={14} /> Export CSV
+            </button>
+            <button 
+              type="button" 
+              onClick={openAddUser}
+              style={{
+                background: '#000000',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px 22px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
+              onMouseLeave={e => e.currentTarget.style.background = '#000000'}
+            >
+              + Create User
+            </button>
+          </div>
         </div>
 
-        {/* Table matching Screenshot 1 */}
+        {/* Filter Controls Row */}
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder="Search by name, email, phone or role..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{
+              padding: '9px 14px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '13px',
+              minWidth: '260px',
+              outline: 'none'
+            }}
+          />
+          <select
+            value={roleFilter}
+            onChange={e => setRoleFilter(e.target.value)}
+            style={{
+              padding: '9px 14px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              fontSize: '13px',
+              background: '#ffffff',
+              outline: 'none'
+            }}
+          >
+            <option value="All">All Roles</option>
+            <option value="Super Admin">Super Admin</option>
+            <option value="Branch Admin">Branch Admin</option>
+            <option value="Manager">Manager</option>
+            <option value="Waiter">Waiter</option>
+            <option value="Kitchen">Kitchen Staff</option>
+          </select>
+        </div>
+
+        {/* Users Table */}
         <div style={{ width: '100%', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO.
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -317,6 +469,9 @@ export default function UserListPanel({
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   FULL NAME
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  BRANCH ASSIGNMENT
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   EMAIL ADDRESS
@@ -330,20 +485,21 @@ export default function UserListPanel({
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ACCOUNT STATUS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  LAST LOGIN
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                  ACTIONS
                 </th>
               </tr>
             </thead>
             <tbody>
-              {displayUsers.map((u, index) => {
-                const isActive = u.status === 'Active';
+              {filteredUsers.map((u, index) => {
+                const isActive = u.status === 'Active' || u.status === 'On Duty';
+                const branchObj = branches.find(b => b.id === u.branchId);
 
                 return (
                   <tr 
                     key={u.id || index} 
                     style={{ 
-                      borderBottom: index < displayUsers.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      borderBottom: '1px solid #f1f5f9',
                       transition: 'background 0.15s' 
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -351,7 +507,7 @@ export default function UserListPanel({
                   >
                     {/* S.NO. */}
                     <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                      {u.sno || index + 1}
+                      {index + 1}
                     </td>
 
                     {/* USER ID */}
@@ -362,6 +518,19 @@ export default function UserListPanel({
                     {/* FULL NAME */}
                     <td style={{ padding: '16px 18px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
                       {u.name}
+                    </td>
+
+                    {/* BRANCH ASSIGNMENT */}
+                    <td style={{ padding: '16px 18px' }}>
+                      {u.branchId === 'ALL' ? (
+                        <span style={{ fontSize: '11px', background: '#eff6ff', color: '#2563eb', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                          All Branches (HQ)
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '11px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                          {branchObj ? `${branchObj.branchCode}` : u.branchId}
+                        </span>
+                      )}
                     </td>
 
                     {/* EMAIL ADDRESS */}
@@ -407,17 +576,94 @@ export default function UserListPanel({
                       </span>
                     </td>
 
-                    {/* LAST LOGIN */}
-                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '400' }}>
-                      {u.lastLogin}
+                    {/* ACTIONS */}
+                    <td style={{ padding: '16px 18px', textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => openEditUser(u)}
+                          title="Edit User"
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: '#475569'
+                          }}
+                        >
+                          <PencilIcon size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setUserToDelete(u)}
+                          title="Delete User"
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #fee2e2',
+                            borderRadius: '6px',
+                            padding: '6px',
+                            cursor: 'pointer',
+                            color: '#dc2626'
+                          }}
+                        >
+                          <TrashIcon size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
               })}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: '13px' }}>
+                    No users found matching your criteria.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* DELETE CONFIRMATION MODAL */}
+      <Modal
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        title="Delete User Account"
+        maxWidth="440px"
+      >
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ fontSize: '14px', color: '#334155', margin: '0 0 20px 0' }}>
+            Are you sure you want to delete user <strong>"{userToDelete?.name}"</strong> ({userToDelete?.email})? This action cannot be undone.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setUserToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontWeight: 700,
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+              onClick={handleDeleteConfirm}
+            >
+              Delete User
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

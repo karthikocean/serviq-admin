@@ -10,7 +10,8 @@ export default function OrderManagement() {
     activeRestaurant,
     updateOrder,
     deleteOrder,
-    updateOrderStatus
+    updateOrderStatus,
+    selectedBranchId
   } = useAppState();
 
   const [orderFilter, setOrderFilter] = useState('All');
@@ -24,7 +25,12 @@ export default function OrderManagement() {
 
   if (!activeRestaurant) return null;
 
-  const { orders = [], staff = [], plan = 'Standard' } = activeRestaurant;
+  const rawOrders = activeRestaurant.orders || [];
+  const rawStaff = activeRestaurant.staff || [];
+  const plan = activeRestaurant.plan || 'Standard';
+
+  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
 
   const getWaiterLabel = (s) => {
     const activeOrdersForWaiters = orders.filter(o => o.status !== 'done');

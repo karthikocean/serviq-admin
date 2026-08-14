@@ -1,22 +1,38 @@
 import React, { useState } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 
 export default function Login() {
-  const { login } = useAppState();
-  const [role] = useState('admin'); // Only 'admin' role is exposed now
-  const [email, setEmail] = useState('admin@saravana.com');
+  const { login, currentUser } = useAppState();
+  const navigate = useNavigate();
+  const [role] = useState('admin');
+  const [email, setEmail] = useState('arjun.kumar@royalspice.test');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  if (currentUser) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
+    setIsLoading(true);
 
-    const res = login(email, password, role);
-    if (!res.success) {
-      setErrorMsg(res.error || 'Invalid credentials');
+    try {
+      const res = await login(email, password, role);
+      if (res && res.success) {
+        navigate('/dashboard', { replace: true });
+      } else {
+        setErrorMsg(res?.error || 'Invalid email or password. Please try again.');
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Login failed. Please check network connection.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -29,12 +45,12 @@ export default function Login() {
         </div>
         
         <h1 className="login-title">Serviq Admin Panel</h1>
-        <p className="login-subtitle">Sign in to your restaurant dashboard</p>
+        <p className="login-subtitle">Sign in to your restaurant management dashboard</p>
         
         <form id="login-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="login-email" style={{textAlign:'left'}}>
-              Admin Email
+              Email Address
             </label>
             <div className="input-icon-wrapper">
               <span className="input-icon">
@@ -46,15 +62,15 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required 
-                placeholder="admin@restaurant.com" 
+                placeholder="Enter your email" 
               />
             </div>
           </div>
           
           <div className="form-group" style={{ position: 'relative' }}>
-            <div style={{ display: 'flex',  alignItems: 'center', marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
               <label htmlFor="login-password" style={{ marginBottom: 0 }}>
-                Admin Password
+                Password
               </label>
             </div>
             <div className="input-icon-wrapper" style={{ position: 'relative' }}>
@@ -67,13 +83,13 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required 
-                placeholder="Enter admin password" 
+                placeholder="Enter your password" 
                 style={{ paddingRight: '40px' }} 
               />
               <span 
                 id="toggle-password-btn" 
                 onClick={() => setShowPassword(!showPassword)}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', userSelect: 'none', fontSize: '14px' }}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', userSelect: 'none', fontSize: '13px', fontWeight: 600, color: 'var(--primary)' }}
               >
                 {showPassword ? 'Hide' : 'Show'}
               </span>
@@ -94,13 +110,18 @@ export default function Login() {
           </div>
           
           {errorMsg && (
-            <div id="login-error" style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '15px', display: 'block', textAlign: 'left' }}>
+            <div id="login-error" style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '15px', display: 'block', textAlign: 'left', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
               {errorMsg}
             </div>
           )}
           
-          <button type="submit" className="btn btn-black" style={{ width: '100%', marginTop: '10px' }}>
-            Login 
+          <button 
+            type="submit" 
+            className="btn btn-black" 
+            disabled={isLoading}
+            style={{ width: '100%', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          >
+            {isLoading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
 

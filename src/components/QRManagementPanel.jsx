@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import GenerateQRModal from './GenerateQRModal';
 
@@ -41,20 +42,25 @@ export default function QRManagementPanel({
   revokeQrCode,
   deleteQrCode,
   updateDiningTable,
-  setActiveTab
+  setActiveTab,
+  setActiveSubTab
 }) {
+  const { selectedBranchId } = useAppState();
   const [openDropdown, setOpenDropdown] = useState(null);
   const [localStatuses, setLocalStatuses] = useState({});
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const rawQrCodes = activeRestaurant.qrCodes || [];
+  const scopedQrCodes = selectedBranchId
+    ? rawQrCodes.filter(q => q.branchId === selectedBranchId)
+    : rawQrCodes;
   const tables = activeRestaurant.tables || [];
 
-  // Default display items matching Table T-01, Table T-02, Table T-03 from screenshot
-  const displayQrs = rawQrCodes.length > 0 ? rawQrCodes : [
-    { id: "QR-101", tableId: "T-01", createdAt: "2024-10-24" },
-    { id: "QR-102", tableId: "T-02", createdAt: "2024-10-24" },
-    { id: "QR-103", tableId: "T-03", createdAt: "2024-10-24" }
+  // Default display items
+  const displayQrs = scopedQrCodes.length > 0 ? scopedQrCodes : [
+    { id: "QR-101", tableId: "T-01", branchId: "BR-001", createdAt: "2024-10-24" },
+    { id: "QR-102", tableId: "T-02", branchId: "BR-001", createdAt: "2024-10-24" },
+    { id: "QR-103", tableId: "T-03", branchId: "BR-002", createdAt: "2024-10-24" }
   ];
 
   const formatDate = (dateStr) => {
@@ -93,7 +99,8 @@ export default function QRManagementPanel({
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 
             onClick={() => {
-              if (setActiveTab) setActiveTab('tables');
+              if (setActiveSubTab) setActiveSubTab('tables');
+              else if (setActiveTab) setActiveTab('tables');
               else ShowNotifications.showAlertNotification("Navigating to Table Setup", true);
             }}
             style={{

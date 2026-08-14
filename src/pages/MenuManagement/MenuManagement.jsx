@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
-import CategoryListPanel from '../../components/CategoryListPanel';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import './MenuManagement.css';
@@ -15,6 +15,7 @@ export default function MenuManagement() {
     deleteMenuItem
   } = useAppState();
 
+  const navigate = useNavigate();
   const [activePage, setActivePage] = useState(null); // null | 'menu-form'
   const [menuForm, setMenuForm] = useState({ _id: '', name: '', desc: '', price: '', category: 'Starters', image: '', veg: true, available: true, bestseller: false });
   const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
@@ -23,7 +24,7 @@ export default function MenuManagement() {
 
   if (!activeRestaurant) return null;
 
-  const { plan = 'Standard', menu = [] } = activeRestaurant;
+  const { menu = [] } = activeRestaurant;
 
   // Permission checks
   const role = currentUser?.role || 'Waiter';
@@ -101,12 +102,12 @@ export default function MenuManagement() {
     formGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' },
   };
 
-  const PageHeader = ({ title, subtitle }) => (
+  const PageHeader = ({ title = 'Menu Item', subtitle = 'Fill out details for this item' }) => (
     <div style={sty.pageInlineHeader}>
       <button style={sty.pageBackBtn} onClick={() => setActivePage(null)}
         onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'inherit'; }}
-      >→</button>
+      >←</button>
       <div>
         <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>{title}</h2>
         {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
@@ -119,7 +120,7 @@ export default function MenuManagement() {
       {activePage === 'menu-form' ? (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader />
+            <PageHeader title={menuForm._id ? 'Edit Menu Item' : 'Add Menu Item'} />
             <div style={sty.pageCard}>
               <form onSubmit={handleMenuSubmit} style={{ width: '100%' }}>
                 <div
@@ -245,15 +246,6 @@ export default function MenuManagement() {
             </div>
           </div>
         </section>
-      ) : activePage === 'categories' ? (
-        <CategoryListPanel
-          categories={activeRestaurant.categories}
-          onBack={() => setActivePage(null)}
-          onUpdateCategories={(newCats) => {
-            if (updateMenuCategories) updateMenuCategories(activeRestaurant.id, newCats);
-          }}
-          activeRestaurant={activeRestaurant}
-        />
       ) : (
         <MenuPanel
           menu={menu}
@@ -262,7 +254,7 @@ export default function MenuManagement() {
           openEditMenuModal={openEditMenuModal}
           handleDeleteMenu={handleDeleteMenu}
           hasPermission={hasPermission}
-          onOpenCategoriesPage={() => setActivePage('categories')}
+          onOpenCategoriesPage={() => navigate('/menu/categories')}
         />
       )}
 

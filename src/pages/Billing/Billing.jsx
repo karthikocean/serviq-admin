@@ -8,21 +8,28 @@ export default function Billing() {
     currentUser,
     activeRestaurant,
     updateOrder,
-    markBillAsPaid
+    markBillAsPaid,
+    selectedBranchId
   } = useAppState();
 
   const [selectedBillingTable, setSelectedBillingTable] = useState('');
   const [billingPaymentMethod, setBillingPaymentMethod] = useState('UPI');
 
-  useEffect(() => {
-    if (activeRestaurant?.billingData?.length > 0 && !selectedBillingTable) {
-      setSelectedBillingTable(activeRestaurant.billingData[0].table);
-    }
-  }, [activeRestaurant]);
-
   if (!activeRestaurant) return null;
 
-  const { billingData = [], orders = [], tables = [] } = activeRestaurant;
+  const rawBillingData = activeRestaurant.billingData || [];
+  const rawOrders = activeRestaurant.orders || [];
+  const rawTables = activeRestaurant.tables || [];
+
+  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
+  const billingData = rawBillingData;
+
+  useEffect(() => {
+    if (billingData.length > 0 && !selectedBillingTable) {
+      setSelectedBillingTable(billingData[0].table);
+    }
+  }, [billingData, selectedBillingTable]);
 
   // Permission checks
   const role = currentUser?.role || 'Waiter';

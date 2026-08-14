@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import WaiterListPanel from '../../components/WaiterListPanel';
 import WaiterReportsPanel from '../../components/WaiterReportsPanel';
 import { Modal } from '../../components/Modal';
-import ShowNotifications from '../../helper/ShowNotifications.js';
 
-export default function WaiterManagement({ activeSubTab }) {
+export default function WaiterManagement({ isReports = false }) {
   const {
     activeRestaurant,
     updateStaff,
     deleteStaff,
-    addStaff,
-    assignTablesToWaiter
+    assignTablesToWaiter,
+    selectedBranchId
   } = useAppState();
 
-  const [activePage, setActivePage] = useState(null); // null | 'staff-form'
-  const [staffForm, setStaffForm] = useState({ id: '', name: '', role: 'Waiter', phone: '', email: '', password: '', status: 'On Duty' });
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Waiter assignment modal states
   const [showAssignTablesModal, setShowAssignTablesModal] = useState(false);
@@ -25,7 +25,13 @@ export default function WaiterManagement({ activeSubTab }) {
 
   if (!activeRestaurant) return null;
 
-  const { staff = [], tables = [], orders = [] } = activeRestaurant;
+  const rawStaff = activeRestaurant.staff || [];
+  const rawTables = activeRestaurant.tables || [];
+  const rawOrders = activeRestaurant.orders || [];
+
+  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
+  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
+  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
 
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
@@ -53,177 +59,27 @@ export default function WaiterManagement({ activeSubTab }) {
     setShowAssignTablesModal(false);
   };
 
-  const openAddStaffModal = (defaultRole = 'Waiter') => {
-    setStaffForm({
-      id: '',
-      name: '',
-      role: defaultRole,
-      phone: '',
-      email: '',
-      password: '',
-      status: 'On Duty'
-    });
-    setActivePage('staff-form');
-  };
-
-  const openEditStaffModal = (staffMember) => {
-    setStaffForm({
-      id: staffMember.id,
-      name: staffMember.name,
-      role: staffMember.role,
-      phone: staffMember.phone || '',
-      email: staffMember.email,
-      password: staffMember.password,
-      status: staffMember.status || 'On Duty'
-    });
-    setActivePage('staff-form');
-  };
-
-  const handleStaffSubmit = (e) => {
-    e.preventDefault();
-
-    // 1. Name validation (letters and spaces only)
-    const nameRegex = /^[a-zA-Z\s]+$/;
-    if (!nameRegex.test((staffForm.name || '').trim())) {
-      ShowNotifications.showAlertNotification("Name should contain letters only (no numbers or special characters).", false);
-      return;
-    }
-
-    // 2. Mobile validation (exactly 10 digits)
-    const phoneDigits = (staffForm.phone || '').replace(/\D/g, '');
-    if (phoneDigits.length !== 10) {
-      ShowNotifications.showAlertNotification("Mobile number must be exactly 10 digits.", false);
-      return;
-    }
-
-    // 3. Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test((staffForm.email || '').trim())) {
-      ShowNotifications.showAlertNotification("Please enter a valid email address.", false);
-      return;
-    }
-
-    const staffData = {
-      name: staffForm.name.trim(),
-      role: staffForm.role,
-      phone: phoneDigits,
-      email: staffForm.email.trim(),
-      password: staffForm.password,
-      status: staffForm.status
-    };
-
-    if (staffForm.id) {
-      updateStaff(activeRestaurant.id, {
-        ...staffData,
-        id: staffForm.id
-      });
-      ShowNotifications.showAlertNotification('Staff details updated successfully!', true);
-    } else {
-      const newId = 'S-' + Math.floor(1000 + Math.random() * 9000);
-      addStaff(activeRestaurant.id, {
-        ...staffData,
-        id: newId
-      });
-      ShowNotifications.showAlertNotification('New staff registered successfully!', true);
-    }
-    setActivePage(null);
-  };
-
-  const sty = {
-    pageInlineHeader: { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid var(--primary-light)' },
-    pageBackBtn: { background: '#fff', border: '1.5px solid var(--border)', borderRadius: '10px', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s', flexShrink: 0 },
-    pageCard: { background: '#fff', borderRadius: '16px', padding: '32px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' },
-    formGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' },
-  };
-
-  const PageHeader = ({ title, subtitle }) => (
-    <div style={sty.pageInlineHeader}>
-      <button style={sty.pageBackBtn} onClick={() => setActivePage(null)}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'inherit'; }}
-      >→</button>
-      <div>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>{title}</h2>
-        {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
-      </div>
-    </div>
-  );
+  const showReports = isReports || location.pathname.includes('/reports');
 
   return (
-    <div style={{ width: '100%' }}>
-      {activePage === 'staff-form' ? (
-        <section>
-          <div style={{ width: '100%' }}>
-            <PageHeader
-              title={staffForm.id ? 'Edit Staff Details' : 'Register New Staff'}
-              subtitle={staffForm.id ? 'Update employee profile' : 'Add a new member to the restaurant staff'}
-            />
-            <div style={sty.pageCard}>
-              <form onSubmit={handleStaffSubmit} style={{ width: '100%' }}>
-                <div style={sty.formGrid2}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Full Name</label>
-                    <input type="text" value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} required placeholder="e.g. Ramesh Kumar" />
-                  </div>
-
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Role</label>
-                    <select value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })} required>
-                      <option value="Waiter">Waiter</option>
-                      <option value="Kitchen">Kitchen</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
-                  <label>Phone Number</label>
-                  <input type="tel" value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} required placeholder="e.g. 9876543210" />
-                </div>
-
-                <div style={sty.formGrid2}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Email Address</label>
-                    <input type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} required placeholder="e.g. ramesh@serviq.com" />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Password</label>
-                    <input type="text" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} required placeholder="e.g. waiter123" />
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '20px', marginTop: '16px' }}>
-                  <label>Duty Status</label>
-                  <select value={staffForm.status} onChange={(e) => setStaffForm({ ...staffForm, status: e.target.value })} required>
-                    <option value="On Duty">On Duty</option>
-                    <option value="Off Duty">Off Duty</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-                  <button type="button" className="btn btn-outline" style={{ padding: '10px 24px' }} onClick={() => setActivePage(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>Save Changes</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </section>
-      ) : activeSubTab === 'waiter-reports' ? (
+    <>
+      {showReports ? (
         <WaiterReportsPanel
           orders={orders}
           staff={staff}
-          updateOrder={updateOrder}
-          activeRestaurant={activeRestaurant}
+          tables={tables}
         />
       ) : (
         <WaiterListPanel
           staff={staff}
           tables={tables}
+          orders={orders}
           activeRestaurant={activeRestaurant}
           updateStaff={updateStaff}
           deleteStaff={deleteStaff}
-          openAddStaffModal={openAddStaffModal}
-          openEditStaffModal={openEditStaffModal}
           handleOpenAssignTablesModal={handleOpenAssignTablesModal}
+          openAddStaffModal={() => navigate('/waiter/add')}
+          openEditStaffModal={(staffMember) => navigate(`/waiter/edit/${staffMember.id}`)}
         />
       )}
 
@@ -254,7 +110,7 @@ export default function WaiterManagement({ activeSubTab }) {
             >
               <option value="" disabled>Select a Waiter</option>
               {staff.filter(s => s.role === 'Waiter').map(s => (
-                <option key={s.id} value={s.name}>
+                <option key={s.id} value={s.id}>
                   {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
                 </option>
               ))}
@@ -354,11 +210,10 @@ export default function WaiterManagement({ activeSubTab }) {
             </select>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1.5px solid var(--border)', paddingTop: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
             <button
               type="button"
               className="btn btn-outline"
-              style={{ padding: '10px 20px' }}
               onClick={() => setShowAssignTablesModal(false)}
             >
               Cancel
@@ -366,7 +221,6 @@ export default function WaiterManagement({ activeSubTab }) {
             <button
               type="button"
               className="btn btn-black"
-              style={{ padding: '10px 24px' }}
               onClick={handleSaveAssignments}
             >
               Save Assignments
@@ -374,6 +228,6 @@ export default function WaiterManagement({ activeSubTab }) {
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

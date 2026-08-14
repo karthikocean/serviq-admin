@@ -116,7 +116,6 @@ export default function KitchenListPanel({
                 <th style={{ padding: '16px 14px' }}>KITCHEN STAFF NAME</th>
                 <th style={{ padding: '16px 14px' }}>PHONE NUMBER</th>
                 <th style={{ padding: '16px 14px' }}>EMAIL ADDRESS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ASSIGNED TABLES</th>
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIVE ORDERS</th>
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>COMPLETED ORDERS</th>
                 <th style={{ padding: '16px 14px', textAlign: 'center' }}>STATUS</th>
@@ -138,9 +137,6 @@ export default function KitchenListPanel({
                     </td>
                     <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
                     <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
-                      <span style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic', fontWeight: 500 }}>None</span>
-                    </td>
                     <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
                       {activeOrdersCount}
                     </td>
@@ -173,7 +169,7 @@ export default function KitchenListPanel({
               })}
               {kitchenStaff.length === 0 && (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No kitchen staff registered. Click "Add Kitchen Staff" to start.
                   </td>
                 </tr>

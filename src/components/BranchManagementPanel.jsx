@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAppState } from '../config/AppContext';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -17,6 +18,15 @@ const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
     <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
   </svg>
 );
 
@@ -56,6 +66,8 @@ const initialBranchState = {
   branchManager: '',
   mobileNumber: '',
   email: '',
+  password: '',
+  confirmPassword: '',
   address: '',
   country: 'India',
   state: 'Tamil Nadu',
@@ -65,7 +77,6 @@ const initialBranchState = {
   status: 'Active',
   totalTables: 10,
   username: '',
-  password: '1234',
   gstNumber: '',
   fssaiNumber: ''
 };
@@ -100,47 +111,45 @@ const branchMockData = {
     staff: [
       { name: 'Karthik Raja', role: 'Branch Manager', status: 'Active', email: 'karthik@serviq.com', initial: 'K' },
       { name: 'Chef Sundaram', role: 'Head Chef', status: 'Active', email: 'sundaram@serviq.com', initial: 'S' },
-      { name: 'Anjali Devi', role: 'Waiter', status: 'Active', email: 'anjali@serviq.com', initial: 'A' },
-      { name: 'Ganesh S.', role: 'Waiter', status: 'On Break', email: 'ganesh@serviq.com', initial: 'G' }
+      { name: 'Anitha S.', role: 'Senior Waiter', status: 'Active', email: 'anitha@serviq.com', initial: 'A' },
+      { name: 'Chef Venkatesh', role: 'Sous Chef', status: 'Active', email: 'venkatesh@serviq.com', initial: 'V' }
     ],
     kitchen: [
-      { name: 'Dosa & Tiffin Counter', items: 'Dosa, Idli, Vada, Chutney', load: 'Medium', loadPercent: 60, status: 'Active' },
-      { name: 'Meals & Gravies', items: 'Thali, Rice, Poriyal, Sambar', load: 'Low', loadPercent: 30, status: 'Active' }
+      { name: 'South Traditional Section', items: 'Dosa, Idli, Vada, Meals', load: 'Medium', loadPercent: 60, status: 'Active' },
+      { name: 'Biryani & Tiffin Station', items: 'Biryani, Parotta, Gravies', load: 'High', loadPercent: 85, status: 'Active' }
     ]
   },
-  'BR-MDU-03': {
+  'BR-MD-03': {
     orders: [
-      { id: '#ORD-3012', table: 'T-04', items: 'Jigarthanda x3, Bun Parotta x4', total: '₹510', status: 'preparing', time: '4 mins ago' },
-      { id: '#ORD-3011', table: 'T-01', items: 'Madurai Mutton Curry x1, Idiyappam x6', total: '₹580', status: 'ready', time: '11 mins ago' }
+      { id: '#ORD-3011', table: 'T-04', items: 'Kari Dosa x2, Jigarthanda x2', total: '₹580', status: 'preparing', time: '4 mins ago' },
+      { id: '#ORD-3010', table: 'T-01', items: 'Bun Parotta x4, Mutton Chukka x1', total: '₹720', status: 'served', time: '16 mins ago' }
     ],
     staff: [
-      { name: 'Ramesh V.', role: 'Branch Manager', status: 'Active', email: 'ramesh.v@serviq.com', initial: 'R' },
-      { name: 'Chef Muthu', role: 'Head Chef', status: 'Active', email: 'muthu@serviq.com', initial: 'M' },
-      { name: 'Selvam A.', role: 'Waiter', status: 'Active', email: 'selvam@serviq.com', initial: 'S' },
-      { name: 'Meena K.', role: 'Waiter', status: 'Active', email: 'meena@serviq.com', initial: 'M' }
+      { name: 'Meenakshi Sundaram', role: 'Branch Manager', status: 'Active', email: 'meenakshi@serviq.com', initial: 'M' },
+      { name: 'Chef Marimuthu', role: 'Master Chef', status: 'Active', email: 'marimuthu@serviq.com', initial: 'M' },
+      { name: 'Vikram R.', role: 'Waiter', status: 'Active', email: 'vikram@serviq.com', initial: 'V' }
     ],
     kitchen: [
-      { name: 'Parotta & Main Station', items: 'Bun Parotta, Curry, Gravy', load: 'High', loadPercent: 75, status: 'Active' },
-      { name: 'Jigarthanda & Beverage Station', items: 'Jigarthanda, Shakes, Soda', load: 'Medium', loadPercent: 45, status: 'Active' }
+      { name: 'Madurai Speciality Section', items: 'Kari Dosa, Bun Parotta, Chukka', load: 'High', loadPercent: 90, status: 'Active' },
+      { name: 'Cold Beverages & Dessert', items: 'Jigarthanda, Falooda, Ice Creams', load: 'Low', loadPercent: 25, status: 'Active' }
     ]
   }
 };
 
 const getBranchOperationalData = (branch) => {
-  if (!branch) return { orders: [], staff: [], kitchen: [] };
-  if (branchMockData[branch.branchCode]) {
-    return branchMockData[branch.branchCode];
+  if (!branch) return null;
+  const mockKey = Object.keys(branchMockData).find(k => k === branch.branchCode || branch.branchCode?.includes(k));
+  if (mockKey && branchMockData[mockKey]) {
+    return branchMockData[mockKey];
   }
-  const managerName = branch.branchManager || 'Branch Manager';
   return {
     orders: [
-      { id: '#ORD-101', table: 'T-02', items: 'Steamed Rice x1, Dal Tadka x1', total: '₹220', status: 'preparing', time: '3 mins ago' },
-      { id: '#ORD-102', table: 'T-05', items: 'Veg Fried Rice x2, Manchurian x1', total: '₹480', status: 'ready', time: '9 mins ago' }
+      { id: '#ORD-001', table: 'T-01', items: 'Sample Items x2', total: '₹450', status: 'preparing', time: '10 mins ago' },
+      { id: '#ORD-002', table: 'T-05', items: 'Special Dish x1', total: '₹320', status: 'ready', time: '15 mins ago' }
     ],
     staff: [
-      { name: managerName, role: 'Branch Manager', status: 'Active', email: branch.email || 'manager@serviq.com', initial: managerName.charAt(0).toUpperCase() },
-      { name: 'Chef Swamy', role: 'Chef', status: 'Active', email: 'swamy@serviq.com', initial: 'S' },
-      { name: 'Kumar S.', role: 'Waiter', status: 'Active', email: 'kumar@serviq.com', initial: 'K' }
+      { name: branch.branchManager || 'Branch In-Charge', role: 'Branch Manager', status: 'Active', email: branch.email || 'manager@serviq.com', initial: (branch.branchManager || 'M').charAt(0).toUpperCase() },
+      { name: 'Senior Staff', role: 'Operations', status: 'Active', email: 'ops@serviq.com', initial: 'O' }
     ],
     kitchen: [
       { name: 'Main Kitchen Section', items: 'All food categories', load: 'Medium', loadPercent: 50, status: 'Active' }
@@ -148,8 +157,18 @@ const getBranchOperationalData = (branch) => {
   };
 };
 
-export default function BranchManagementPanel() {
-  const { activeRestaurant, addBranch, updateBranch, deleteBranch } = useAppState();
+export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
+  const navigate = useNavigate();
+  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots } = useAppState();
+
+  const role = currentUser?.role || 'Admin';
+  const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
+    if (role === 'Admin') return true;
+    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
+    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
+    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
+    return !!modulePermissions[action];
+  });
 
   const [activeView, setActiveView] = useState('list'); // 'list' | 'form' | 'hierarchy'
   const [searchTerm, setSearchTerm] = useState('');
@@ -159,6 +178,12 @@ export default function BranchManagementPanel() {
   const [branchForm, setBranchForm] = useState(initialBranchState);
   const [formErrors, setFormErrors] = useState({});
   const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Subscription Quota & Plan Limit Modal state
+  const [isPlanLimitModalOpen, setIsPlanLimitModalOpen] = useState(false);
+  const [isProcessingSlotPayment, setIsProcessingSlotPayment] = useState(false);
 
   // View page operational sub-tab state
   const [selectedBranchForTree, setSelectedBranchForTree] = useState(null);
@@ -168,6 +193,20 @@ export default function BranchManagementPanel() {
   const [branchToDelete, setBranchToDelete] = useState(null);
 
   const branches = activeRestaurant?.branches || [];
+
+  // Subscription Plan details & calculations
+  const sub = activeRestaurant?.subscription || {
+    planName: activeRestaurant?.plan || 'Standard',
+    baseBranchLimit: 3,
+    extraBranchSlots: 0,
+    extraBranchPrice: 699
+  };
+  const baseBranchLimit = sub.baseBranchLimit || 3;
+  const extraBranchSlots = sub.extraBranchSlots || 0;
+  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
+  const remainingBranchSlots = Math.max(0, totalAllowedBranches - branches.length);
+  const extraBranchUnitPrice = sub.extraBranchPrice || 699;
+  const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
   // Filtered branches
   const filteredBranches = branches.filter(b => {
@@ -188,20 +227,53 @@ export default function BranchManagementPanel() {
   const totalTablesCount = branches.reduce((sum, b) => sum + (parseInt(b.totalTables) || 0), 0);
   const totalManagersCount = new Set(branches.map(b => b.branchManager).filter(Boolean)).size;
 
-  const handleOpenAddForm = () => {
+  const openAddBranchFormDirectly = () => {
     const autoCode = `BR-${Math.floor(100 + Math.random() * 900)}`;
     setBranchForm({
       ...initialBranchState,
       branchCode: autoCode,
       username: `branch_${autoCode.toLowerCase().replace('-', '_')}`,
-      password: '1234'
+      password: '',
+      confirmPassword: ''
     });
     setFormErrors({});
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setIsEditing(false);
     setActiveView('form');
   };
 
+  const handleOpenAddForm = () => {
+    if (!hasPermission('branch-management', 'add')) {
+      ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
+      return;
+    }
+
+    // Check Plan Limits
+    if (branches.length >= totalAllowedBranches) {
+      setIsPlanLimitModalOpen(true);
+      return;
+    }
+
+    openAddBranchFormDirectly();
+  };
+
+  const handlePayAndUnlockBranchSlot = () => {
+    setIsProcessingSlotPayment(true);
+    setTimeout(() => {
+      purchaseExtraBranchSlots(activeRestaurant.id, 1, 'Credit Card (•••• 4242)');
+      setIsProcessingSlotPayment(false);
+      setIsPlanLimitModalOpen(false);
+      ShowNotifications.showAlertNotification("Additional branch slot purchased and activated successfully!", true);
+      openAddBranchFormDirectly();
+    }, 900);
+  };
+
   const handleOpenEditForm = (branch) => {
+    if (!hasPermission('branch-management', 'edit')) {
+      ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
+      return;
+    }
     setBranchForm({
       id: branch.id,
       branchName: branch.branchName || '',
@@ -209,6 +281,8 @@ export default function BranchManagementPanel() {
       branchManager: branch.branchManager || '',
       mobileNumber: branch.mobileNumber || '',
       email: branch.email || '',
+      password: branch.password || '',
+      confirmPassword: branch.password || '',
       address: branch.address || '',
       country: branch.country || 'India',
       state: branch.state || 'Tamil Nadu',
@@ -218,11 +292,12 @@ export default function BranchManagementPanel() {
       status: branch.status || 'Active',
       totalTables: branch.totalTables || 10,
       username: branch.username || '',
-      password: branch.password || '1234',
       gstNumber: branch.gstNumber || '',
       fssaiNumber: branch.fssaiNumber || ''
     });
     setFormErrors({});
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setIsEditing(true);
     setActiveView('form');
   };
@@ -232,6 +307,14 @@ export default function BranchManagementPanel() {
     setSelectedBranchForTree(targetBranch);
     setOpSubTab('tables');
     setActiveView('hierarchy');
+  };
+
+  const handleDeleteBranchClick = (branch) => {
+    if (!hasPermission('branch-management', 'delete')) {
+      ShowNotifications.showAlertNotification("You do not have permission to delete branches.", false);
+      return;
+    }
+    setBranchToDelete(branch);
   };
 
   // Form Validation logic
@@ -260,17 +343,26 @@ export default function BranchManagementPanel() {
     const emailErr = validateEmail(branchForm.email);
     if (emailErr) errors.email = emailErr;
 
+    // Password validation (required, at least 4 characters)
+    if (!branchForm.password || !branchForm.password.trim()) {
+      errors.password = 'Password is required';
+    } else if (branchForm.password.length < 4) {
+      errors.password = 'Password must be at least 4 characters';
+    }
+
+    // Confirm Password validation
+    if (!branchForm.confirmPassword || !branchForm.confirmPassword.trim()) {
+      errors.confirmPassword = 'Confirm password is required';
+    } else if (branchForm.password !== branchForm.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
     // City & State (characters only if provided)
     if (branchForm.city && !/^[a-zA-Z\s]+$/.test(branchForm.city.trim())) {
       errors.city = 'City must contain letters only';
     }
     if (branchForm.state && !/^[a-zA-Z\s]+$/.test(branchForm.state.trim())) {
       errors.state = 'State must contain letters only';
-    }
-
-    // Password validation (4 digits/chars required)
-    if (!branchForm.password || branchForm.password.length < 4) {
-      errors.password = 'Branch password must be 4 digits/characters';
     }
 
     setFormErrors(errors);
@@ -286,9 +378,17 @@ export default function BranchManagementPanel() {
     }
 
     if (isEditing) {
+      if (!hasPermission('branch-management', 'edit')) {
+        ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
+        return;
+      }
       updateBranch(activeRestaurant.id, branchForm.id, branchForm);
       ShowNotifications.showAlertNotification(`Branch "${branchForm.branchName}" updated successfully!`, true);
     } else {
+      if (!hasPermission('branch-management', 'add')) {
+        ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
+        return;
+      }
       addBranch(activeRestaurant.id, branchForm);
       ShowNotifications.showAlertNotification(`New branch "${branchForm.branchName}" created successfully!`, true);
     }
@@ -298,6 +398,11 @@ export default function BranchManagementPanel() {
 
   const handleDeleteConfirm = () => {
     if (branchToDelete) {
+      if (!hasPermission('branch-management', 'delete')) {
+        ShowNotifications.showAlertNotification("You do not have permission to delete branches.", false);
+        setBranchToDelete(null);
+        return;
+      }
       deleteBranch(activeRestaurant.id, branchToDelete.id);
       ShowNotifications.showAlertNotification(`Branch "${branchToDelete.branchName}" deleted successfully.`, true);
       setBranchToDelete(null);
@@ -354,23 +459,6 @@ export default function BranchManagementPanel() {
                 Location: {currentViewBranch?.address || 'Main Road'}, {currentViewBranch?.city || 'Chennai'}, {currentViewBranch?.state || 'Tamil Nadu'}
               </p>
             </div>
-          </div>
-
-          {/* Branch Switcher Dropdown */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>Switch Outlet:</span>
-            <select
-              value={currentViewBranch?.id || ''}
-              onChange={e => {
-                const b = branches.find(item => item.id === e.target.value);
-                if (b) setSelectedBranchForTree(b);
-              }}
-              style={{ padding: '10px 16px', borderRadius: '10px', border: '1.5px solid var(--primary)', fontSize: '13px', fontWeight: 700, backgroundColor: '#fff', color: '#0f172a', cursor: 'pointer', outline: 'none' }}
-            >
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.branchName} ({b.city || 'Branch'})</option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -849,7 +937,8 @@ export default function BranchManagementPanel() {
                         padding: '12px 16px',
                         borderRadius: '8px',
                         border: formErrors.branchManager ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                        fontSize: '14px'
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
                       }}
                     />
                     {formErrors.branchManager && (
@@ -879,7 +968,8 @@ export default function BranchManagementPanel() {
                         padding: '12px 16px',
                         borderRadius: '8px',
                         border: formErrors.mobileNumber ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                        fontSize: '14px'
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
                       }}
                     />
                     {formErrors.mobileNumber && (
@@ -907,7 +997,8 @@ export default function BranchManagementPanel() {
                         padding: '12px 16px',
                         borderRadius: '8px',
                         border: formErrors.email ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                        fontSize: '14px'
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
                       }}
                     />
                     {formErrors.email && (
@@ -916,6 +1007,111 @@ export default function BranchManagementPanel() {
                       </span>
                     )}
                   </div>
+
+                  {/* Field 8: Password */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Password <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter password"
+                        value={branchForm.password}
+                        onChange={e => {
+                          setBranchForm({ ...branchForm, password: e.target.value });
+                          if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px 42px 12px 16px',
+                          borderRadius: '8px',
+                          border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                          fontSize: '14px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#64748b'
+                        }}
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                      </button>
+                    </div>
+                    {formErrors.password && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.password}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Field 9: Confirm Password */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm password"
+                        value={branchForm.confirmPassword}
+                        onChange={e => {
+                          setBranchForm({ ...branchForm, confirmPassword: e.target.value });
+                          if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px 42px 12px 16px',
+                          borderRadius: '8px',
+                          border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                          fontSize: '14px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#64748b'
+                        }}
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                      </button>
+                    </div>
+                    {formErrors.confirmPassword && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.confirmPassword}
+                      </span>
+                    )}
+                  </div>
+
                 </div>
               </div>
 
@@ -1048,27 +1244,57 @@ export default function BranchManagementPanel() {
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', fontFamily: "'Outfit', sans-serif" }}>
             Branch List
           </h2>
-         
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            type="button"
-            className="btn btn-black"
-            onClick={() => handleOpenHierarchy(null)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', background: '#1e293b', color: '#fff', fontSize: '13px', fontWeight: 700 }}
-          >
-            <TreeIcon size={16} />
-            View Operational Hierarchy
-          </button>
+          {hasPermission('branch-management', 'add') && (
+            <button
+              type="button"
+              className="btn btn-black"
+              onClick={handleOpenAddForm}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700 }}
+            >
+              + Add New Branch
+            </button>
+          )}
+        </div>
+      </div>
 
+      {/* 2. Branch Quota & Plan Status Banner */}
+      <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <TreeIcon size={20} color="var(--primary)" />
+          </div>
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+              Subscription Tier: <span style={{ color: 'var(--primary)' }}>{sub.planName || 'Standard'} Plan</span>
+            </div>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+              Branch Capacity: <strong>{branches.length}</strong> of <strong>{totalAllowedBranches}</strong> Outlets Permitted
+              {remainingBranchSlots === 0 ? (
+                <span style={{ color: '#ef4444', fontWeight: 700, marginLeft: '6px' }}>• (0 Slots Remaining)</span>
+              ) : (
+                <span style={{ color: '#10b981', fontWeight: 700, marginLeft: '6px' }}>• ({remainingBranchSlots} Slot{remainingBranchSlots > 1 ? 's' : ''} Available)</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <button
             type="button"
-            className="btn btn-black"
-            onClick={handleOpenAddForm}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700 }}
+            onClick={() => setIsPlanLimitModalOpen(true)}
+            style={{ border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
           >
-            + Add New Branch
+            + Buy Branch Slot (₹{extraBranchUnitPrice}/mo)
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/plans-management')}
+            style={{ border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+          >
+            Manage Plan Quotas →
           </button>
         </div>
       </div>
@@ -1199,21 +1425,25 @@ export default function BranchManagementPanel() {
                           <EyeIcon size={16} />
                         </button>
 
-                        <button
-                          title="Edit Branch"
-                          onClick={() => handleOpenEditForm(b)}
-                          style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                        >
-                          <PencilIcon size={16} />
-                        </button>
+                        {hasPermission('branch-management', 'edit') && (
+                          <button
+                            title="Edit Branch"
+                            onClick={() => handleOpenEditForm(b)}
+                            style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                          >
+                            <PencilIcon size={16} />
+                          </button>
+                        )}
 
-                        <button
-                          title="Delete Branch"
-                          onClick={() => setBranchToDelete(b)}
-                          style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                        >
-                          <TrashIcon size={16} />
-                        </button>
+                        {hasPermission('branch-management', 'delete') && (
+                          <button
+                            title="Delete Branch"
+                            onClick={() => handleDeleteBranchClick(b)}
+                            style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                          >
+                            <TrashIcon size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1258,6 +1488,90 @@ export default function BranchManagementPanel() {
           </div>
         </div>
       </Modal>
+
+      {/* 6. BRANCH LIMIT EXCEEDED / ADD-ON REQUIRED MODAL */}
+      {isPlanLimitModalOpen && (
+        <Modal
+          isOpen={isPlanLimitModalOpen}
+          onClose={() => !isProcessingSlotPayment && setIsPlanLimitModalOpen(false)}
+          title="Branch Subscription Quota Reached"
+          maxWidth="520px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '10px' }}>
+            <div style={{ textAlign: 'center', padding: '18px', background: '#fff7ed', borderRadius: '12px', border: '1px solid #fed7aa' }}>
+              <div style={{ fontSize: '32px', marginBottom: '4px' }}>🏢</div>
+              <h4 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 800, color: '#c2410c' }}>
+                Branch Capacity Reached
+              </h4>
+              <p style={{ margin: 0, fontSize: '13px', color: '#9a3412', lineHeight: 1.4 }}>
+                Your current <strong>{sub.planName} Plan</strong> allows up to <strong>{totalAllowedBranches} branch outlet{totalAllowedBranches > 1 ? 's' : ''}</strong> ({branches.length} currently in use).
+              </p>
+            </div>
+
+            {/* Plan Calculation Breakdown */}
+            <div style={{ background: '#f8fafc', padding: '16px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>Active Branch Count:</span>
+                <strong style={{ color: '#0f172a' }}>{branches.length} Outlets</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>Included in Plan:</span>
+                <strong style={{ color: '#0f172a' }}>{baseBranchLimit} Outlets</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>Additional Branch Charge:</span>
+                <strong style={{ color: '#0f172a' }}>₹{extraBranchUnitPrice} / month</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>GST (18%):</span>
+                <strong style={{ color: '#0f172a' }}>₹{Math.round(extraBranchUnitPrice * 0.18)}</strong>
+              </div>
+              <div style={{ marginTop: '6px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>Total to Activate 1 Branch Slot:</span>
+                <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif" }}>
+                  ₹{extraBranchTotalWithGst.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+              To add branch #{branches.length + 1}, purchase an additional branch add-on slot or upgrade your subscription plan.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsPlanLimitModalOpen(false)}
+                disabled={isProcessingSlotPayment}
+                style={{ padding: '9px 16px', borderRadius: '8px', fontWeight: 600, fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPlanLimitModalOpen(false);
+                  navigate('/plans-management');
+                }}
+                disabled={isProcessingSlotPayment}
+                style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              >
+                View Plans
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handlePayAndUnlockBranchSlot}
+                disabled={isProcessingSlotPayment}
+                style={{ padding: '9px 20px', borderRadius: '8px', background: 'var(--primary)', color: '#fff', fontWeight: 700, fontSize: '13px' }}
+              >
+                {isProcessingSlotPayment ? 'Processing...' : `Pay ₹${extraBranchTotalWithGst} & Add Branch`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
     </div>
   );

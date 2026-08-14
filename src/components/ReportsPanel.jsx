@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 
 export default function ReportsPanel({
   orders = [],
+  allOrders = [],
   menu = [],
+  branches = [],
+  selectedBranchId = null,
   activeRestaurant = {}
 }) {
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
-  const [activeReportTab, setActiveReportTab] = useState('sales'); // 'sales', 'item', 'table'
+  const [activeReportTab, setActiveReportTab] = useState('sales'); // 'sales', 'branch', 'item', 'table'
 
   const currency = activeRestaurant?.settings?.currency || '₹';
 
@@ -49,11 +52,46 @@ export default function ReportsPanel({
     }));
   };
 
+  // Calculate Branch Performance Report Data
+  const getBranchReportData = () => {
+    const totalOrgRev = branches.reduce((sum, b) => {
+      const bOrders = (allOrders.length > 0 ? allOrders : filteredOrders).filter(o => o.branchId === b.id);
+      return sum + bOrders.reduce((bSum, o) => bSum + (o.total || 0), 0);
+    }, 0) || 1;
+
+    return branches.map(branch => {
+      const bOrders = (allOrders.length > 0 ? allOrders : filteredOrders).filter(o => {
+        if (o.branchId !== branch.id) return false;
+        const date = getOrderDate(o);
+        if (dateStart && date < dateStart) return false;
+        if (dateEnd && date > dateEnd) return false;
+        return true;
+      });
+
+      const bRevenue = bOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+      const avgValue = bOrders.length > 0 ? parseFloat((bRevenue / bOrders.length).toFixed(2)) : 0;
+      const sharePct = Math.round((bRevenue / totalOrgRev) * 100);
+
+      return {
+        branchId: branch.id,
+        branchName: branch.branchName,
+        branchCode: branch.branchCode,
+        city: branch.city || 'Tamil Nadu',
+        manager: branch.branchManager || 'Unassigned',
+        status: branch.status || 'Active',
+        totalOrders: bOrders.length,
+        revenue: bRevenue,
+        averageOrderValue: avgValue,
+        revenueShare: sharePct
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+  };
+
   // Calculate Item Report Data (Grouped by Item Name)
   const getItemReportData = () => {
     const itemsGrouped = {};
     filteredOrders.forEach(ord => {
-      ord.items.forEach(it => {
+      (ord.items || []).forEach(it => {
         if (!itemsGrouped[it.name]) {
           itemsGrouped[it.name] = { itemName: it.name, quantitySold: 0, revenue: 0 };
         }
@@ -81,6 +119,7 @@ export default function ReportsPanel({
   };
 
   const salesData = getSalesReportData();
+  const branchData = getBranchReportData();
   const itemData = getItemReportData();
   const tableData = getTableReportData();
 
@@ -88,7 +127,7 @@ export default function ReportsPanel({
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = filteredOrders.length;
   const totalItemsSold = filteredOrders.reduce((sum, o) => {
-    return sum + o.items.reduce((itemSum, it) => itemSum + (it.qty || 0), 0);
+    return sum + (o.items || []).reduce((itemSum, it) => itemSum + (it.qty || 0), 0);
   }, 0);
 
   const handleResetFilters = () => {
@@ -106,6 +145,10 @@ export default function ReportsPanel({
       headers = ['Date', 'Total Orders', `Revenue (${currency})`, `Average Order Value (${currency})`];
       rows = salesData.map(r => [r.date, r.totalOrders, r.revenue, r.averageOrderValue]);
       filename = 'sales_report.csv';
+    } else if (activeReportTab === 'branch') {
+      headers = ['Branch Name', 'Branch Code', 'City', 'Manager', 'Status', 'Total Orders', `Revenue (${currency})`, `Avg Order (${currency})`, 'Revenue Share %'];
+      rows = branchData.map(r => [r.branchName, r.branchCode, r.city, r.manager, r.status, r.totalOrders, r.revenue, r.averageOrderValue, `${r.revenueShare}%`]);
+      filename = 'branch_performance_report.csv';
     } else if (activeReportTab === 'item') {
       headers = ['Item Name', 'Quantity Sold', `Revenue (${currency})`];
       rows = itemData.map(r => [r.itemName, r.quantitySold, r.revenue]);
@@ -132,7 +175,7 @@ export default function ReportsPanel({
     document.body.removeChild(link);
   };
 
-  // PDF Export (Browser Print Preview Layout)
+  // PDF Export
   const exportToPDF = () => {
     let reportTitle = '';
     let tableHeaders = [];
@@ -147,6 +190,19 @@ export default function ReportsPanel({
           <td>${r.totalOrders}</td>
           <td>${currency}${r.revenue.toLocaleString()}</td>
           <td>${currency}${r.averageOrderValue.toLocaleString()}</td>
+        </tr>
+      `);
+    } else if (activeReportTab === 'branch') {
+      reportTitle = 'Branch Performance Report';
+      tableHeaders = ['Branch Name', 'Code', 'Location', 'Orders', 'Revenue', 'Share %'];
+      tableRows = branchData.map(r => `
+        <tr>
+          <td><strong>${r.branchName}</strong></td>
+          <td>${r.branchCode}</td>
+          <td>${r.city}</td>
+          <td>${r.totalOrders}</td>
+          <td>${currency}${r.revenue.toLocaleString()}</td>
+          <td>${r.revenueShare}%</td>
         </tr>
       `);
     } else if (activeReportTab === 'item') {
@@ -200,7 +256,7 @@ export default function ReportsPanel({
           <div class="header-row">
             <div>
               <h1>${reportTitle}</h1>
-              <p>${activeRestaurant.name} - Store Insights</p>
+              <p>${activeRestaurant.name} - Multi-Branch Operations Analytics</p>
             </div>
             <div class="meta-block">
               <strong>Generated on:</strong> ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}<br>
@@ -246,9 +302,7 @@ export default function ReportsPanel({
   };
 
   return (
-    <section className="panel-view active">
-      {/* Upper Overview Metrics summaries */}
-      
+    <section className="panel-view active" style={{ width: '100%' }}>
       {/* Filter Options & Export Buttons */}
       <div className="premium-filter-card">
         <div className="premium-filter-title">
@@ -298,174 +352,256 @@ export default function ReportsPanel({
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
-            Reset Date Filters
+            Reset Dates
           </button>
         </div>
       </div>
 
-      {/* Reports Navigation Sub-Tabs & Tabular Grids */}
-      <div style={{ 
-        backgroundColor: 'var(--bg-secondary)', 
-        border: '1px solid var(--border)', 
-        borderRadius: 'var(--border-radius-sm)', 
-        padding: '24px', 
-        boxShadow: 'var(--card-shadow)' 
-      }}>
-        {/* Navigation row */}
-        <div style={{ display: 'flex', gap: '6px', borderBottom: '1.5px solid var(--border)', paddingBottom: '16px', marginBottom: '20px' }}>
-          <button 
-            className={`btn ${activeReportTab === 'sales' ? 'btn-black' : 'btn-outline'}`}
-            style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '8px', fontWeight: 600 }}
-            onClick={() => setActiveReportTab('sales')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '6px'}}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg> Sales Report
-          </button>
-          <button 
-            className={`btn ${activeReportTab === 'item' ? 'btn-black' : 'btn-outline'}`}
-            style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '8px', fontWeight: 600 }}
-            onClick={() => setActiveReportTab('item')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '6px'}}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg> Item Report
-          </button>
-          <button 
-            className={`btn ${activeReportTab === 'table' ? 'btn-black' : 'btn-outline'}`}
-            style={{ padding: '8px 16px', fontSize: '13px', borderRadius: '8px', fontWeight: 600 }}
-            onClick={() => setActiveReportTab('table')}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '6px'}}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg> Table Report
-          </button>
+      {/* Overview Stat Cards */}
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', margin: '24px 0' }}>
+        <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
+          <div className="stat-label">Filtered Period Revenue</div>
+          <h3 style={{ margin: '8px 0', fontSize: '24px', fontWeight: 800 }}>{currency}{totalRevenue.toLocaleString('en-IN')}</h3>
+          <div className="stat-sub-label" style={{ color: 'var(--success)', fontWeight: 600 }}>Total verified billing</div>
         </div>
 
-        {/* Tabular content wrapper */}
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          {activeReportTab === 'sales' && (
-            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '14px', width: '50px' }}>S.NO</th>
-                  <th style={{ textAlign: 'left', padding: '14px' }}>DATE</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>TOTAL ORDERS</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>REVENUE</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>AVERAGE ORDER VALUE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salesData.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions recorded for the selected range.</td>
-                  </tr>
-                ) : (
-                  salesData.map((row, index) => (
-                    <tr key={row.date} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{index + 1}</td>
-                      <td style={{ padding: '14px', fontWeight: 600, textAlign: 'left', color: 'var(--text-main)' }}>{row.date}</td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
-                          {row.totalOrders} {row.totalOrders === 1 ? 'order' : 'orders'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>{currency}{row.revenue.toLocaleString()}</span>
-                      </td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ color: 'var(--text-main)', fontWeight: 700, fontSize: '14px' }}>{currency}{row.averageOrderValue.toLocaleString()}</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {activeReportTab === 'item' && (
-            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '14px', width: '50px' }}>S.NO</th>
-                  <th style={{ textAlign: 'left', padding: '14px' }}>ITEM NAME</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>QUANTITY SOLD</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>REVENUE GENERATED</th>
-                </tr>
-              </thead>
-              <tbody>
-                {itemData.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No items recorded sold in selected range.</td>
-                  </tr>
-                ) : (
-                  itemData.map((row, index) => (
-                    <tr key={row.itemName} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{index + 1}</td>
-                      <td style={{ padding: '14px', fontWeight: 600, textAlign: 'left', color: 'var(--text-main)' }}>{row.itemName}</td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
-                          {row.quantitySold} {row.quantitySold === 1 ? 'serving' : 'servings'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>{currency}{row.revenue.toLocaleString()}</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-
-          {activeReportTab === 'table' && (
-            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '14px', width: '50px' }}>S.NO</th>
-                  <th style={{ textAlign: 'left', padding: '14px' }}>TABLE NUMBER</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>ORDERS COUNT</th>
-                  <th style={{ textAlign: 'right', padding: '14px' }}>REVENUE GENERATED</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableData.length === 0 ? (
-                  <tr>
-                    <td colSpan="4" style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>No tables recorded transactions in selected range.</td>
-                  </tr>
-                ) : (
-                  tableData.map((row, index) => (
-                    <tr key={row.tableNumber} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{index + 1}</td>
-                      <td style={{ padding: '14px', textAlign: 'left' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--primary-light)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>
-                          {row.tableNumber}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
-                          {row.ordersCount} {row.ordersCount === 1 ? 'session' : 'sessions'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', textAlign: 'right' }}>
-                        <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>{currency}{row.revenueGenerated.toLocaleString()}</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
+        <div className="stat-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+          <div className="stat-label">Total Orders Placed</div>
+          <h3 style={{ margin: '8px 0', fontSize: '24px', fontWeight: 800 }}>{totalOrders}</h3>
+          <div className="stat-sub-label" style={{ color: '#3b82f6', fontWeight: 600 }}>Processed and fulfilled</div>
         </div>
+
+        <div className="stat-card" style={{ borderLeft: '4px solid #10b981' }}>
+          <div className="stat-label">Total Items Sold</div>
+          <h3 style={{ margin: '8px 0', fontSize: '24px', fontWeight: 800 }}>{totalItemsSold}</h3>
+          <div className="stat-sub-label" style={{ color: '#10b981', fontWeight: 600 }}>Across all categories</div>
+        </div>
+      </div>
+
+      {/* REPORT TABS NAVIGATION */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px' }}>
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('sales')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeReportTab === 'sales' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '12px 18px',
+            marginBottom: '-2px',
+            fontSize: '14px',
+            fontWeight: activeReportTab === 'sales' ? 800 : 600,
+            color: activeReportTab === 'sales' ? 'var(--primary)' : '#64748b',
+            cursor: 'pointer'
+          }}
+        >
+          📅 Daily Sales Breakdown
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('branch')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeReportTab === 'branch' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '12px 18px',
+            marginBottom: '-2px',
+            fontSize: '14px',
+            fontWeight: activeReportTab === 'branch' ? 800 : 600,
+            color: activeReportTab === 'branch' ? 'var(--primary)' : '#64748b',
+            cursor: 'pointer'
+          }}
+        >
+          🏬 Branch Performance
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('item')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeReportTab === 'item' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '12px 18px',
+            marginBottom: '-2px',
+            fontSize: '14px',
+            fontWeight: activeReportTab === 'item' ? 800 : 600,
+            color: activeReportTab === 'item' ? 'var(--primary)' : '#64748b',
+            cursor: 'pointer'
+          }}
+        >
+          🍲 Item-wise Analytics
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveReportTab('table')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeReportTab === 'table' ? '3px solid var(--primary)' : '3px solid transparent',
+            padding: '12px 18px',
+            marginBottom: '-2px',
+            fontSize: '14px',
+            fontWeight: activeReportTab === 'table' ? 800 : 600,
+            color: activeReportTab === 'table' ? 'var(--primary)' : '#64748b',
+            cursor: 'pointer'
+          }}
+        >
+          🪑 Table Utilization
+        </button>
+      </div>
+
+      {/* REPORT CONTENT TABLES */}
+      <div className="settings-card" style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+        {/* 1. DAILY SALES REPORT */}
+        {activeReportTab === 'sales' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px' }}>DATE</th>
+                  <th style={{ padding: '12px' }}>TOTAL ORDERS</th>
+                  <th style={{ padding: '12px' }}>REVENUE</th>
+                  <th style={{ padding: '12px' }}>AVERAGE ORDER VALUE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {salesData.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', fontWeight: 600 }}>{row.date}</td>
+                    <td style={{ padding: '12px' }}>{row.totalOrders} orders</td>
+                    <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>{currency}{row.revenue.toLocaleString()}</td>
+                    <td style={{ padding: '12px' }}>{currency}{row.averageOrderValue.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {salesData.length === 0 && (
+                  <tr>
+                    <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No sales data available for this range.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 2. BRANCH PERFORMANCE REPORT */}
+        {activeReportTab === 'branch' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px' }}>BRANCH NAME</th>
+                  <th style={{ padding: '12px' }}>CODE</th>
+                  <th style={{ padding: '12px' }}>LOCATION</th>
+                  <th style={{ padding: '12px' }}>MANAGER</th>
+                  <th style={{ padding: '12px' }}>STATUS</th>
+                  <th style={{ padding: '12px' }}>ORDERS</th>
+                  <th style={{ padding: '12px' }}>TOTAL REVENUE</th>
+                  <th style={{ padding: '12px' }}>AVG ORDER</th>
+                  <th style={{ padding: '12px' }}>REVENUE SHARE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {branchData.map(b => (
+                  <tr key={b.branchId} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', fontWeight: 700, color: '#0f172a' }}>{b.branchName}</td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                        {b.branchCode}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', color: '#64748b' }}>{b.city}</td>
+                    <td style={{ padding: '12px', color: '#334155' }}>{b.manager}</td>
+                    <td style={{ padding: '12px' }}>
+                      <span style={{
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        fontWeight: 700,
+                        backgroundColor: b.status === 'Active' ? '#ecfdf5' : '#fef2f2',
+                        color: b.status === 'Active' ? '#059669' : '#dc2626'
+                      }}>
+                        {b.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', fontWeight: 600 }}>{b.totalOrders}</td>
+                    <td style={{ padding: '12px', fontWeight: 800, color: 'var(--primary)' }}>{currency}{b.revenue.toLocaleString()}</td>
+                    <td style={{ padding: '12px' }}>{currency}{b.averageOrderValue.toLocaleString()}</td>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, background: '#e2e8f0', height: '6px', borderRadius: '3px', overflow: 'hidden', minWidth: '60px' }}>
+                          <div style={{ width: `${b.revenueShare}%`, background: 'var(--primary)', height: '100%' }}></div>
+                        </div>
+                        <span style={{ fontSize: '12px', fontWeight: 700, minWidth: '35px' }}>{b.revenueShare}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 3. ITEM PERFORMANCE REPORT */}
+        {activeReportTab === 'item' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px' }}>ITEM NAME</th>
+                  <th style={{ padding: '12px' }}>QUANTITY SOLD</th>
+                  <th style={{ padding: '12px' }}>REVENUE GENERATED</th>
+                </tr>
+              </thead>
+              <tbody>
+                {itemData.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', fontWeight: 600 }}>{row.itemName}</td>
+                    <td style={{ padding: '12px' }}>{row.quantitySold} units</td>
+                    <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>{currency}{row.revenue.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {itemData.length === 0 && (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No item sales recorded for this period.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 4. TABLE PERFORMANCE REPORT */}
+        {activeReportTab === 'table' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '12px' }}>TABLE</th>
+                  <th style={{ padding: '12px' }}>ORDERS COUNT</th>
+                  <th style={{ padding: '12px' }}>TOTAL REVENUE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableData.map((row, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '12px', fontWeight: 600 }}>{row.tableNumber}</td>
+                    <td style={{ padding: '12px' }}>{row.ordersCount} orders</td>
+                    <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>{currency}{row.revenueGenerated.toLocaleString()}</td>
+                  </tr>
+                ))}
+                {tableData.length === 0 && (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>No table data recorded for this period.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
 }
-
-
-// okay, now need to make these changes
-
-// 1) as i already said manage categories is not working.
-// 2) in table management give edit button, to update status and maybe other things too.
-// 3) for the table with no id or something, you need to put s.no
-// 4) and the table header fields should be in white color clearly visible, but for now some table headers are in grey color. so change that.
-// 5)in the billing add some dummy data for tables, because bills should be billed against table. so show how that ui will be in the billing moduls.
-// 6) in the menubar the scroll is okay, but the side scroll visual design is not needed. remove that.
-// 7) 
-
-
-

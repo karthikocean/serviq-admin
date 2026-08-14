@@ -1,4 +1,4 @@
-﻿        <ul className="sidebar-menu">
+        <ul className="sidebar-menu">
           {isTabAllowed('overview') && (
             <li className={`sidebar-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => { setActiveTab('overview'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>

@@ -1,8 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import GenerateQRModal from './GenerateQRModal';
+import QRManagementPanel from './QRManagementPanel';
 
 // Clean SVG Icons
+const TableIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M4 6h16" />
+    <path d="M5 6v12" />
+    <path d="M19 6v12" />
+    <path d="M10 6v6" />
+    <path d="M14 6v6" />
+  </svg>
+);
+
 const WaiterIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -61,16 +72,30 @@ const QrIcon = ({ size = 16, color = 'currentColor' }) => (
 export default function TablesPanel({
   tables = [],
   staff = [],
+  orders = [],
   activeRestaurant = {},
   updateDiningTable,
   deleteDiningTable,
   handleOpenAssignTablesModal,
   setAddTableForm,
-  setActivePage
+  setActivePage,
+  hasPermission,
+  generateQrCode,
+  assignQrCode,
+  revokeQrCode,
+  deleteQrCode,
+  initialSubTab = 'tables'
 }) {
+  const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
   const [tableToDelete, setTableToDelete] = useState(null);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedQrTableId, setSelectedQrTableId] = useState('T-07');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Default sample tables matching screenshot if tables prop is empty
   const sampleTables = [
@@ -95,11 +120,79 @@ export default function TablesPanel({
 
   return (
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
-      <GenerateQRModal
-        isOpen={showGenerateModal}
-        onClose={() => setShowGenerateModal(false)}
-        defaultTableId={selectedQrTableId}
-      />
+      {/* Module Sub-Tabs Switcher */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '24px',
+        borderBottom: '2px solid #f1f5f9',
+        marginBottom: '20px',
+        paddingTop: '4px'
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('tables')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeSubTab === 'tables' ? '3px solid #ff5a1f' : '3px solid transparent',
+            padding: '12px 6px',
+            marginBottom: '-2px',
+            fontSize: '15px',
+            fontWeight: activeSubTab === 'tables' ? '800' : '600',
+            color: activeSubTab === 'tables' ? '#0f172a' : '#64748b',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s'
+          }}
+        >
+          <TableIcon size={16} color={activeSubTab === 'tables' ? '#ff5a1f' : '#64748b'} />
+          Tables List
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('qr-codes')}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            borderBottom: activeSubTab === 'qr-codes' ? '3px solid #ff5a1f' : '3px solid transparent',
+            padding: '12px 6px',
+            marginBottom: '-2px',
+            fontSize: '15px',
+            fontWeight: activeSubTab === 'qr-codes' ? '800' : '600',
+            color: activeSubTab === 'qr-codes' ? '#0f172a' : '#64748b',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.15s'
+          }}
+        >
+          <QrIcon size={16} color={activeSubTab === 'qr-codes' ? '#ff5a1f' : '#64748b'} />
+          QR Code Management
+        </button>
+      </div>
+
+      {activeSubTab === 'qr-codes' ? (
+        <QRManagementPanel
+          activeRestaurant={activeRestaurant}
+          generateQrCode={generateQrCode}
+          assignQrCode={assignQrCode}
+          revokeQrCode={revokeQrCode}
+          deleteQrCode={deleteQrCode}
+          updateDiningTable={updateDiningTable}
+          setActiveSubTab={setActiveSubTab}
+        />
+      ) : (
+        <>
+          <GenerateQRModal
+            isOpen={showGenerateModal}
+            onClose={() => setShowGenerateModal(false)}
+            defaultTableId={selectedQrTableId}
+          />
 
       {/* Top Header Row */}
       <div style={{
@@ -220,11 +313,18 @@ export default function TablesPanel({
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', lineHeight: '1.2' }}>
-                    {tableIdStr}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', lineHeight: '1.2' }}>
+                      {tableIdStr}
+                    </span>
+                    {table.branchId && (
+                      <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                        {table.branchId}
+                      </span>
+                    )}
+                  </div>
                   <span style={{ fontSize: '13px', fontWeight: '500', color: '#64748b', marginTop: '2px' }}>
-                    Main Dining
+                    {table.section || 'Main Dining'}
                   </span>
                 </div>
               </div>
@@ -422,6 +522,8 @@ export default function TablesPanel({
           </div>
         </div>
       </Modal>
+      </>
+      )}
     </section>
   );
 }

@@ -1,12 +1,14 @@
 import React from 'react';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
-import RolesPermissionsPanel from '../../components/RolesPermissionsPanel';
 import UserListPanel from '../../components/UserListPanel';
 
-export default function Users({ activeSubTab }) {
+export default function Users() {
   const {
     currentUser,
     activeRestaurant,
+    addUser,
+    updateUser,
+    deleteUser,
     addStaff,
     updateStaff,
     deleteStaff
@@ -14,28 +16,18 @@ export default function Users({ activeSubTab }) {
 
   if (!activeRestaurant) return null;
 
-  const { staff = [] } = activeRestaurant;
+  const staff = activeRestaurant.staff || [];
 
-  // Permission checks
-  const role = currentUser?.role || 'Waiter';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
-    const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
-
-  return activeSubTab === 'roles-permissions' ? (
-    <RolesPermissionsPanel />
-  ) : (
+  return (
     <UserListPanel
       activeRestaurant={activeRestaurant}
       staff={staff}
+      addUser={addUser}
+      updateUser={updateUser}
+      deleteUser={deleteUser}
       addStaff={addStaff}
       updateStaff={updateStaff}
       deleteStaff={deleteStaff}
-      hasPermission={hasPermission}
     />
   );
 }

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const APP_ENV = "dev";
+const APP_ENV = "local";
 
 let IMAGE_BASE_URL = "";
 let BASE_URL = "";
@@ -8,9 +8,9 @@ let server = "";
 
 switch (APP_ENV) {
   case "dev":
-    IMAGE_BASE_URL = "http://localhost:5000/public";
-    BASE_URL = "http://localhost:5000/api/admin";
-    server = "http://localhost:5000";
+    IMAGE_BASE_URL = "http://192.168.1.24:5000/public";
+    BASE_URL = "http://192.168.1.24:5000/api/admin";
+    server = "http://192.168.1.24:5000";
     break;
 
   case "production":
@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://localhost:5000/public";
-    BASE_URL = "http://localhost:5000/api/admin";
-    server = "http://localhost:5000";
+    IMAGE_BASE_URL = "http://192.168.1.24:5000/public";
+    BASE_URL = "http://192.168.1.24:5000/api/admin";
+    server = "http://192.168.1.24:5000";
     break;
 }
 
@@ -35,7 +35,7 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   function (config) {
-    const token = localStorage.getItem("userToken");
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
 
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -61,11 +61,13 @@ apiClient.interceptors.response.use(
   function (error) {
     if (
       error.response?.status === 401 &&
-      !error.config.url.includes("/auth/login") &&
-      !window.location.pathname.includes("/sign-in")
+      !error.config?.url?.includes("/login") &&
+      !window.location.pathname.includes("/login")
     ) {
       localStorage.removeItem("userToken");
-      window.location.href = "/sign-in";
+      localStorage.removeItem("token");
+      localStorage.removeItem("serviq_user");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   }

@@ -1612,15 +1612,6 @@ export default function Admin() {
               </a>
             </li>
           )}
-          {/* 3. QR Code Management */}
-          {isTabAllowed('tables') && (
-            <li className={`sidebar-item ${activeTab === 'qr-code-config' ? 'active' : ''}`} onClick={() => { setActiveTab('qr-code-config'); setActivePage(null); }}>
-              <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/><path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/><path d="M7 9H2v5h5zM3 10h3v3H3zm8-6h1v1h-1z"/><path d="M9 2h5v5H9zM10 3h3v3h-3zm8-6h1v1h-1z"/><path d="M9 9h5v5H9zm1 1h3v3h-3z"/></svg>
-                QR Code Management
-              </a>
-            </li>
-          )}
           {/* 4. Menu Management */}
           {isTabAllowed('menu') && (
             <li className={`sidebar-item ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => { setActiveTab('menu'); setActivePage(null); }}>
@@ -1843,38 +1834,7 @@ export default function Admin() {
                       </div>
                     </div>
                     
-                    <div style={{ padding: '12px' }}>
-                      {isTabAllowed('Settings') && (
-                        <button 
-                          style={{ 
-                            width: '100%', 
-                            textAlign: 'left', 
-                            background: 'transparent', 
-                            border: 'none', 
-                            padding: '12px 16px', 
-                            color: '#e4e4e7', 
-                            fontSize: '14px', 
-                            fontWeight: 600, 
-                            cursor: 'pointer',
-                            borderRadius: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px'
-                          }}
-                          onMouseEnter={(e) => e.target.style.background = '#27272a'}
-                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                          onClick={() => {
-                            setActiveTab('Settings');
-                            setActivePage(null);
-                            setIsProfileMenuOpen(false);
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            Settings
-                          </div>
-                        </button>
-                      )}
-                      
+                    <div style={{ padding: '8px' }}>
                       <button 
                         style={{ 
                           width: '100%', 
@@ -1925,7 +1885,7 @@ export default function Admin() {
                 />
               )}
               {activeTab === 'branch-management' && (
-                <BranchManagementPanel />
+                <BranchManagementPanel hasPermission={hasPermission} />
               )}
               {activeTab === 'orders' && (
                 <OrdersPanel
@@ -1972,7 +1932,7 @@ export default function Admin() {
                   hasPermission={hasPermission}
                 />
               )}
-              {activeTab === 'tables' && (
+              {(activeTab === 'tables' || activeTab === 'qr-code-config') && (
                 <TablesPanel
                   tables={filteredTables}
                   staff={filteredStaff}
@@ -1984,17 +1944,11 @@ export default function Admin() {
                   setAddTableForm={setAddTableForm}
                   setActivePage={setActivePage}
                   hasPermission={hasPermission}
-                />
-              )}
-              {activeTab === 'qr-code-config' && (
-                <QRManagementPanel
-                  activeRestaurant={activeRestaurant}
                   generateQrCode={generateQrCode}
                   assignQrCode={assignQrCode}
                   revokeQrCode={revokeQrCode}
                   deleteQrCode={deleteQrCode}
-                  updateDiningTable={updateDiningTable}
-                  setActiveTab={setActiveTab}
+                  initialSubTab={activeTab === 'qr-code-config' ? 'qr-codes' : 'tables'}
                 />
               )}
               {activeTab === 'waiter-list' && (

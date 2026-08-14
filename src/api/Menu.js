@@ -13,7 +13,9 @@ class MenuApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch menu items. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
+      if (error?.response?.status !== 401) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
       return {
         status: false,
         response: error?.response?.data || error,

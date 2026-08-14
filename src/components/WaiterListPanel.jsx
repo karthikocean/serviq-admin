@@ -108,7 +108,7 @@ export default function WaiterListPanel({
         marginBottom: '20px'
       }}>
         <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#000000', fontFamily: "'Outfit', sans-serif" }}>
-          waiters list
+          Waiters List
         </h2>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -176,6 +176,9 @@ export default function WaiterListPanel({
                   WAITER NAME
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  BRANCH
+                </th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   PHONE NUMBER
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -225,6 +228,13 @@ export default function WaiterListPanel({
                           {w.name}
                         </span>
                       </div>
+                    </td>
+
+                    {/* BRANCH */}
+                    <td style={{ padding: '16px 18px' }}>
+                      <span style={{ fontSize: '11px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                        {w.raw?.branchId || 'BR-001'}
+                      </span>
                     </td>
 
                     {/* PHONE NUMBER */}

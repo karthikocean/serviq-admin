@@ -18,6 +18,29 @@ export const initialRestaurantsData = {
     banner: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&auto=format&fit=crop&q=60",
     plan: "Standard",
     status: "Active",
+    subscription: {
+      planId: "plan-standard",
+      planName: "Standard",
+      status: "Active",
+      billingCycle: "monthly",
+      price: 1999,
+      annualPrice: 19999,
+      startDate: "2026-01-15",
+      expiryDate: "2027-01-15",
+      nextBillingDate: "2026-09-15",
+      baseBranchLimit: 3,
+      extraBranchSlots: 0,
+      extraBranchPrice: 699,
+      userLimit: 15,
+      orderLimit: 2000,
+      autoRenew: true,
+      paymentMethod: "Credit Card (•••• 4242)"
+    },
+    subscriptionInvoices: [
+      { id: "INV-PLN-2026-003", planName: "Standard Plan", description: "Standard Plan - Monthly Subscription Renewal", branchesIncluded: 3, amount: 1999, date: "2026-08-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
+      { id: "INV-PLN-2026-002", planName: "Standard Plan", description: "Standard Plan - Monthly Subscription Renewal", branchesIncluded: 3, amount: 1999, date: "2026-07-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
+      { id: "INV-PLN-2026-001", planName: "Standard Plan", description: "Standard Plan - Initial Subscription Activation", branchesIncluded: 3, amount: 1999, date: "2026-06-15", paymentMethod: "Razorpay UPI", status: "Paid" }
+    ],
     settings: {
       name: "Serviq",
       tagline: "High Quality South Indian Vegetarian Food",
@@ -46,15 +69,29 @@ export const initialRestaurantsData = {
       { id: "843", branchId: "BR-003", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
       { id: "842", branchId: "BR-001", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
     ],
-    tables: [],
+    tables: [
+      { id: "T-01", branchId: "BR-001", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-01" },
+      { id: "T-02", branchId: "BR-001", seats: 2, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-06" },
+      { id: "T-03", branchId: "BR-001", seats: 6, section: "Family Section", status: "Free", assignedWaiterId: "S-01" },
+      { id: "T-04", branchId: "BR-001", seats: 4, section: "AC Dining", status: "Free", assignedWaiterId: "S-06" },
+      { id: "T-05", branchId: "BR-002", seats: 4, section: "Outdoor Terrace", status: "Occupied", assignedWaiterId: "S-03" },
+      { id: "T-06", branchId: "BR-002", seats: 4, section: "Main Hall", status: "Free", assignedWaiterId: "S-07" },
+      { id: "T-07", branchId: "BR-002", seats: 6, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-03" },
+      { id: "T-08", branchId: "BR-003", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-08" },
+      { id: "T-09", branchId: "BR-003", seats: 2, section: "Window Section", status: "Free", assignedWaiterId: "S-08" },
+      { id: "T-10", branchId: "BR-003", seats: 8, section: "VIP Lounge", status: "Free", assignedWaiterId: "S-08" }
+    ],
     qrCodes: [
-      { id: "QR-101", status: "Assigned", tableId: "T-01", scansCount: 42, createdAt: "2026-06-01" },
-      { id: "QR-102", status: "Assigned", tableId: "T-02", scansCount: 28, createdAt: "2026-06-01" },
-      { id: "QR-103", status: "Assigned", tableId: "T-03", scansCount: 15, createdAt: "2026-06-02" },
-      { id: "QR-104", status: "Assigned", tableId: "T-04", scansCount: 8, createdAt: "2026-06-03" },
-      { id: "QR-105", status: "Assigned", tableId: "T-05", scansCount: 33, createdAt: "2026-06-03" },
-      { id: "QR-106", status: "Unassigned", tableId: null, scansCount: 0, createdAt: "2026-06-05" },
-      { id: "QR-107", status: "Unassigned", tableId: null, scansCount: 0, createdAt: "2026-06-05" }
+      { id: "QR-101", branchId: "BR-001", status: "Assigned", tableId: "T-01", scansCount: 42, createdAt: "2026-06-01" },
+      { id: "QR-102", branchId: "BR-001", status: "Assigned", tableId: "T-02", scansCount: 28, createdAt: "2026-06-01" },
+      { id: "QR-103", branchId: "BR-001", status: "Assigned", tableId: "T-03", scansCount: 15, createdAt: "2026-06-02" },
+      { id: "QR-104", branchId: "BR-001", status: "Assigned", tableId: "T-04", scansCount: 8, createdAt: "2026-06-03" },
+      { id: "QR-105", branchId: "BR-002", status: "Assigned", tableId: "T-05", scansCount: 33, createdAt: "2026-06-03" },
+      { id: "QR-106", branchId: "BR-002", status: "Assigned", tableId: "T-06", scansCount: 19, createdAt: "2026-06-04" },
+      { id: "QR-107", branchId: "BR-002", status: "Assigned", tableId: "T-07", scansCount: 25, createdAt: "2026-06-04" },
+      { id: "QR-108", branchId: "BR-003", status: "Assigned", tableId: "T-08", scansCount: 12, createdAt: "2026-06-05" },
+      { id: "QR-109", branchId: "BR-003", status: "Assigned", tableId: "T-09", scansCount: 6, createdAt: "2026-06-05" },
+      { id: "QR-110", branchId: "BR-003", status: "Assigned", tableId: "T-10", scansCount: 14, createdAt: "2026-06-05" }
     ],
     branches: [
       {
@@ -156,6 +193,13 @@ export const initialRestaurantsData = {
       { id: "S-07", branchId: "BR-002", name: "Rahul S.", role: "Waiter", phone: "9876543216", email: "rahul@serviq.com", status: "On Duty", password: "waiter123" },
       { id: "S-08", branchId: "BR-003", name: "Arjun K.", role: "Waiter", phone: "9876543217", email: "arjun@serviq.com", status: "On Duty", password: "waiter123" }
     ],
+    users: [
+      { id: "USR-001", branchId: "ALL", name: "Saravana Kumaran", email: "admin@saravana.com", phone: "+91 98765 43210", role: "Super Admin", status: "Active", lastLogin: "2026-06-02 12:45 PM" },
+      { id: "USR-002", branchId: "BR-001", name: "Ramesh Kumar", email: "ramesh.admin@serviq.com", phone: "+91 98765 11111", role: "Branch Admin", status: "Active", lastLogin: "2026-06-02 11:30 AM" },
+      { id: "USR-003", branchId: "BR-002", name: "Karthik Raja", email: "karthik.admin@serviq.com", phone: "+91 98765 22222", role: "Branch Admin", status: "Active", lastLogin: "2026-06-01 09:15 PM" },
+      { id: "USR-004", branchId: "BR-003", name: "Ramesh V.", email: "rameshv.admin@serviq.com", phone: "+91 98765 33333", role: "Branch Admin", status: "Active", lastLogin: "2026-05-30 08:20 AM" },
+      { id: "USR-005", branchId: "BR-001", name: "Suresh Pillai", email: "suresh.mgr@serviq.com", phone: "+91 98765 44444", role: "Manager", status: "Active", lastLogin: "2026-06-02 10:15 AM" }
+    ],
     kitchenLogin: {
       email: "kitchen@saravana.com",
       password: "kitchen123"
@@ -165,13 +209,14 @@ export const initialRestaurantsData = {
       Admin: {
         permissions: {
           overview: { view: true, add: true, edit: true, delete: true },
+          'branch-management': { view: true, add: true, edit: true, delete: true },
           orders: { view: true, add: true, edit: true, delete: true },
           menu: { view: true, add: true, edit: true, delete: true },
           tables: { view: true, add: true, edit: true, delete: true },
           billing: { view: true, add: true, edit: true, delete: true },
           waiter: { view: true, add: true, edit: true, delete: true },
           kitchen: { view: true, add: true, edit: true, delete: true },
-          reports: { view: true, add: true, edit: true, delete: true },
+          Reports: { view: true, add: true, edit: true, delete: true },
           users: { view: true, add: true, edit: true, delete: true },
           'roles-permissions': { view: true, add: true, edit: true, delete: true },
           Settings: { view: true, add: true, edit: true, delete: true }
@@ -180,13 +225,14 @@ export const initialRestaurantsData = {
       Manager: {
         permissions: {
           overview: { view: true, add: false, edit: false, delete: false },
+          'branch-management': { view: true, add: true, edit: true, delete: false },
           orders: { view: true, add: true, edit: true, delete: true },
           menu: { view: true, add: true, edit: true, delete: false },
           tables: { view: true, add: true, edit: true, delete: false },
           billing: { view: true, add: true, edit: true, delete: false },
           waiter: { view: true, add: true, edit: true, delete: false },
           kitchen: { view: true, add: true, edit: true, delete: false },
-          reports: { view: true, add: false, edit: false, delete: false },
+          Reports: { view: true, add: false, edit: false, delete: false },
           users: { view: true, add: true, edit: true, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
           Settings: { view: false, add: false, edit: false, delete: false }
@@ -195,13 +241,14 @@ export const initialRestaurantsData = {
       Waiter: {
         permissions: {
           overview: { view: false, add: false, edit: false, delete: false },
+          'branch-management': { view: false, add: false, edit: false, delete: false },
           orders: { view: true, add: true, edit: true, delete: false },
           menu: { view: false, add: false, edit: false, delete: false },
           tables: { view: true, add: false, edit: true, delete: false },
           billing: { view: false, add: false, edit: false, delete: false },
           waiter: { view: true, add: false, edit: false, delete: false },
           kitchen: { view: false, add: false, edit: false, delete: false },
-          reports: { view: false, add: false, edit: false, delete: false },
+          Reports: { view: false, add: false, edit: false, delete: false },
           users: { view: false, add: false, edit: false, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
           Settings: { view: false, add: false, edit: false, delete: false }
@@ -210,13 +257,14 @@ export const initialRestaurantsData = {
       Kitchen: {
         permissions: {
           overview: { view: false, add: false, edit: false, delete: false },
+          'branch-management': { view: false, add: false, edit: false, delete: false },
           orders: { view: true, add: false, edit: true, delete: false },
           menu: { view: false, add: false, edit: false, delete: false },
           tables: { view: false, add: false, edit: false, delete: false },
           billing: { view: false, add: false, edit: false, delete: false },
           waiter: { view: false, add: false, edit: false, delete: false },
           kitchen: { view: true, add: false, edit: true, delete: false },
-          reports: { view: false, add: false, edit: false, delete: false },
+          Reports: { view: false, add: false, edit: false, delete: false },
           users: { view: false, add: false, edit: false, delete: false },
           'roles-permissions': { view: false, add: false, edit: false, delete: false },
           Settings: { view: false, add: false, edit: false, delete: false }
@@ -451,3 +499,77 @@ export const initialState = {
   ],
   invoiceFilter: "All"
 };
+
+export const AVAILABLE_PLANS = [
+  {
+    id: "plan-basic",
+    name: "Basic Plan",
+    icon: "zap",
+    tagline: "Essential tools for small eateries, QR menu ordering and simple table management.",
+    monthlyPrice: 999,
+    annualPrice: 9999,
+    branchLimit: 1,
+    extraBranchAllowed: true,
+    extraBranchPrice: 799,
+    userLimit: 5,
+    orderLimit: 500,
+    badge: "Active",
+    status: "Active",
+    featuresList: [
+      { name: "QR Ordering", included: true },
+      { name: "Menu Management", included: true },
+      { name: "Table Management", included: true },
+      { name: "Order Management", included: true },
+      { name: "Waiter Management", included: false },
+      { name: "Kitchen Management", included: false }
+    ]
+  },
+  {
+    id: "plan-standard",
+    name: "Standard Plan",
+    icon: "trending-up",
+    tagline: "Includes everything in Basic, plus tableside waiter service and app integrations.",
+    monthlyPrice: 1999,
+    annualPrice: 19999,
+    branchLimit: 3,
+    extraBranchAllowed: true,
+    extraBranchPrice: 699,
+    userLimit: 15,
+    orderLimit: 2000,
+    badge: "Active",
+    status: "Active",
+    popular: true,
+    featuresList: [
+      { name: "QR Ordering", included: true },
+      { name: "Menu Management", included: true },
+      { name: "Table Management", included: true },
+      { name: "Order Management", included: true },
+      { name: "Waiter Management", included: true },
+      { name: "Kitchen Management", included: false }
+    ]
+  },
+  {
+    id: "plan-premium",
+    name: "Premium Plan",
+    icon: "sparkles",
+    tagline: "Advanced operations with integrated Kitchen KDS displays and advanced billing.",
+    monthlyPrice: 4999,
+    annualPrice: 49999,
+    branchLimit: 10,
+    extraBranchAllowed: true,
+    extraBranchPrice: 499,
+    userLimit: 50,
+    orderLimit: 10000,
+    badge: "Active",
+    status: "Active",
+    featuresList: [
+      { name: "QR Ordering", included: true },
+      { name: "Menu Management", included: true },
+      { name: "Table Management", included: true },
+      { name: "Order Management", included: true },
+      { name: "Waiter Management", included: true },
+      { name: "Kitchen Management", included: true }
+    ]
+  }
+];
+

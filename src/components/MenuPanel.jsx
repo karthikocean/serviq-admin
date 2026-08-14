@@ -171,51 +171,56 @@ export default function MenuPanel({
         </div>
       </div>
 
-      {/* FILTER PILLS AND SORT BY ROW */}
+      {/* FILTER DROPDOWN AND SORT BY ROW */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        {/* Rounded Category pills */}
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {categoriesList.map(cat => {
-            const isSelected = menuCategory === cat;
-            const displayLabel = cat === 'All Items' ? 'All' : cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setMenuCategory(cat)}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '20px',
-                  border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                  backgroundColor: isSelected ? 'var(--primary)' : 'var(--bg-secondary)',
-                  color: isSelected ? '#ffffff' : 'var(--text-main)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isSelected ? '0 4px 12px rgba(255, 122, 0, 0.2)' : 'none'
-                }}
-              >
-                {displayLabel}
-              </button>
-            );
-          })}
+        {/* Category Filter Dropdown */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Category:</label>
+          <select
+            value={menuCategory}
+            onChange={(e) => setMenuCategory(e.target.value)}
+            style={{
+              padding: '8px 14px',
+              fontSize: '13px',
+              borderRadius: '8px',
+              border: '1.5px solid var(--border)',
+              backgroundColor: 'var(--bg-secondary)',
+              color: 'var(--text-main)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              minWidth: '180px',
+              outline: 'none',
+              transition: 'border-color 0.2s ease'
+            }}
+          >
+            <option value="All Items">All Categories ({menu.length})</option>
+            {combinedCategories.map(cat => {
+              const count = menu.filter(item => item.category === cat).length;
+              return (
+                <option key={cat} value={cat}>
+                  {cat} ({count})
+                </option>
+              );
+            })}
+          </select>
         </div>
 
         {/* Sort Select */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>Sort by</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Sort by:</label>
           <select
             value={menuSort}
             onChange={(e) => setMenuSort(e.target.value)}
             style={{ 
-              padding: '6px 12px', 
-              fontSize: '12px', 
+              padding: '8px 14px', 
+              fontSize: '13px', 
               borderRadius: '8px', 
               border: '1.5px solid var(--border)', 
-              background: 'var(--bg-secondary)',
+              backgroundColor: 'var(--bg-secondary)',
               fontWeight: 600,
-              color: 'var(--text-main)'
+              color: 'var(--text-main)',
+              cursor: 'pointer',
+              outline: 'none'
             }}
           >
             <option value="name">Name</option>

@@ -13,7 +13,9 @@ class MemberApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Fetch Tables. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
+      if (error?.response?.status !== 401) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
       return {
         status: false,
         response: error?.response?.data || error,
