@@ -60,12 +60,14 @@ export default function CategoryListPanel({
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formStatus, setFormStatus] = useState('AVAILABLE');
+  const [formErrors, setFormErrors] = useState({});
 
   const handleOpenAdd = () => {
     setEditingItem(null);
     setFormName('');
     setFormDesc('');
     setFormStatus('AVAILABLE');
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
@@ -74,13 +76,14 @@ export default function CategoryListPanel({
     setFormName(item.name);
     setFormDesc(item.description);
     setFormStatus(item.status || 'AVAILABLE');
+    setFormErrors({});
     setIsModalOpen(true);
   };
 
   const handleSave = (e) => {
     e?.preventDefault();
     if (!formName.trim()) {
-      ShowNotifications.showAlertNotification('Please enter a category name', false);
+      setFormErrors({ name: 'Category Name is required.' });
       return;
     }
 
@@ -329,28 +332,35 @@ export default function CategoryListPanel({
         title={editingItem ? 'Edit Category' : 'Add Category'}
         maxWidth="440px"
       >
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
+        <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              Category Name
+              Category Name <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input 
               type="text" 
               value={formName}
-              onChange={e => setFormName(e.target.value)}
+              onChange={e => {
+                setFormName(e.target.value);
+                if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+              }}
               placeholder="e.g. Starters"
-              required
               style={{
                 width: '100%',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
                 fontSize: '14px',
                 color: '#0f172a',
                 outline: 'none',
                 boxSizing: 'border-box'
               }}
             />
+            {formErrors.name && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {formErrors.name}
+              </span>
+            )}
           </div>
 
           <div>

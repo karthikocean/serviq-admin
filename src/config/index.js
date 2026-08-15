@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.24:5000/public";
-    BASE_URL = "http://192.168.1.24:5000/api/admin";
-    server = "http://192.168.1.24:5000";
+    IMAGE_BASE_URL = "http://192.168.1.17:5000/public";
+    BASE_URL = "http://192.168.1.17:5000/api/admin";
+    server = "http://192.168.1.17:5000";
     break;
 }
 
@@ -59,15 +59,21 @@ apiClient.interceptors.response.use(
     return response;
   },
   function (error) {
+    // Only redirect if explicitly unauthorized on critical authentication routes,
+    // avoiding session disruption during frontend operations
     if (
       error.response?.status === 401 &&
       !error.config?.url?.includes("/login") &&
       !window.location.pathname.includes("/login")
     ) {
-      localStorage.removeItem("userToken");
-      localStorage.removeItem("token");
-      localStorage.removeItem("serviq_user");
-      window.location.href = "/login";
+      const isLocalUser = localStorage.getItem("serviq_user");
+      const hasToken = localStorage.getItem("userToken") || localStorage.getItem("token");
+      if (!isLocalUser && !hasToken) {
+        localStorage.removeItem("userToken");
+        localStorage.removeItem("token");
+        localStorage.removeItem("serviq_user");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

@@ -34,17 +34,22 @@ const defaultRolesList = [
   { id: 6, name: 'Kitchen Staff', status: 'Active' }
 ];
 
+const isAdminRole = (roleName = '') => {
+  const lower = (roleName || '').trim().toLowerCase();
+  return lower === 'admin' || lower === 'super admin' || lower === 'restaurant_owner' || lower === 'owner';
+};
+
 const MODULES_LIST = [
   { id: 'overview', name: 'Dashboard / Overview' },
-  { id: 'branch-management', name: 'Branch Management' },
+  { id: 'branch-management', name: 'Branch Management', adminOnly: true },
   { id: 'plans-management', name: 'Plans & Subscription' },
+  { id: 'inventory', name: 'Inventory Management (Premium)' },
   { id: 'orders', name: 'Orders Management' },
   { id: 'menu', name: 'Menu Management' },
   { id: 'tables', name: 'Tables Management' },
   { id: 'billing', name: 'Billing & Payments' },
-  { id: 'waiter', name: 'Waiter List & Reports' },
-  { id: 'kitchen', name: 'Kitchen Screen & Reports' },
-  { id: 'Reports', name: 'Overall Reports' },
+  { id: 'staff', name: 'Staff Management (Waiters & Kitchen)' },
+  { id: 'Reports', name: 'Reports & Analytics' },
   { id: 'users', name: 'User Accounts' },
   { id: 'roles-permissions', name: 'Roles & Permissions' },
   { id: 'Settings', name: 'Settings' }
@@ -54,6 +59,7 @@ export default function RolesPermissionsPanel() {
   const { activeRestaurant, updateRolePermissions, addNewRole, deleteRole } = useAppState();
   const [viewState, setViewState] = useState('list'); // 'list' | 'edit' | 'add'
   const [editingRoleName, setEditingRoleName] = useState('');
+  const [roleNameError, setRoleNameError] = useState('');
   const [permissionsState, setPermissionsState] = useState({});
   const [roleToDelete, setRoleToDelete] = useState(null);
 
@@ -61,10 +67,10 @@ export default function RolesPermissionsPanel() {
 
   const rolesList = Object.keys(rolesConfig).length > 0
     ? Object.keys(rolesConfig).map((role, idx) => ({
-        id: idx + 1,
-        name: role,
-        status: 'Active'
-      }))
+      id: idx + 1,
+      name: role,
+      status: 'Active'
+    }))
     : defaultRolesList;
 
   const handleDeleteRole = (roleName) => {
@@ -85,10 +91,17 @@ export default function RolesPermissionsPanel() {
 
   const handleEditRole = (roleName) => {
     setEditingRoleName(roleName);
+    setRoleNameError('');
     const existingPerms = rolesConfig[roleName]?.permissions || {};
     const basePermissions = {};
+    const isTargetAdmin = isAdminRole(roleName);
+
     MODULES_LIST.forEach(m => {
-      basePermissions[m.id] = existingPerms[m.id] || { view: false, add: false, edit: false, delete: false };
+      if (m.adminOnly && !isTargetAdmin) {
+        basePermissions[m.id] = { view: false, add: false, edit: false, delete: false };
+      } else {
+        basePermissions[m.id] = existingPerms[m.id] || { view: false, add: false, edit: false, delete: false };
+      }
     });
     setPermissionsState(basePermissions);
     setViewState('edit');
@@ -96,6 +109,7 @@ export default function RolesPermissionsPanel() {
 
   const handleAddRole = () => {
     setEditingRoleName('');
+    setRoleNameError('');
     const basePermissions = {};
     MODULES_LIST.forEach(m => {
       basePermissions[m.id] = { view: false, add: false, edit: false, delete: false };
@@ -105,27 +119,41 @@ export default function RolesPermissionsPanel() {
   };
 
   const handleSaveRole = () => {
-    if (!editingRoleName.trim()) {
-      ShowNotifications.showAlertNotification("Role Name is required.", false);
+    const trimmedRoleName = editingRoleName.trim();
+    if (!trimmedRoleName) {
+      setRoleNameError("Role Name is required.");
       return;
     }
-    
+
     if (viewState === 'add' && addNewRole && activeRestaurant?.id) {
-      if (rolesConfig[editingRoleName]) {
-        ShowNotifications.showAlertNotification("A role with this name already exists.", false);
+      if (rolesConfig[trimmedRoleName]) {
+        setRoleNameError("A role with this name already exists.");
         return;
       }
-      addNewRole(activeRestaurant.id, editingRoleName.trim());
+      addNewRole(activeRestaurant.id, trimmedRoleName);
     }
-    
+
+    // Strict enforcement: Non-admin roles NEVER get branch-management permissions
+    const isTargetAdmin = isAdminRole(trimmedRoleName);
+    const finalPermissions = { ...permissionsState };
+    if (!isTargetAdmin) {
+      finalPermissions['branch-management'] = { view: false, add: false, edit: false, delete: false };
+    }
+
     if (updateRolePermissions && activeRestaurant?.id) {
-      updateRolePermissions(activeRestaurant.id, editingRoleName.trim(), permissionsState);
+      updateRolePermissions(activeRestaurant.id, trimmedRoleName, finalPermissions);
     }
-    ShowNotifications.showAlertNotification(`Role ${editingRoleName.trim()} saved successfully!`, true);
+    ShowNotifications.showAlertNotification(`Role ${trimmedRoleName} saved successfully!`, true);
     setViewState('list');
   };
 
   const togglePermission = (moduleId, action) => {
+    const isTargetAdmin = isAdminRole(editingRoleName);
+    if (moduleId === 'branch-management' && !isTargetAdmin) {
+      ShowNotifications.showAlertNotification("Branch Management is restricted to Admin role only.", false);
+      return;
+    }
+
     setPermissionsState(prev => ({
       ...prev,
       [moduleId]: {
@@ -136,10 +164,13 @@ export default function RolesPermissionsPanel() {
   };
 
   const toggleColumn = (action) => {
-    const allSelected = MODULES_LIST.every(m => permissionsState[m.id]?.[action]);
+    const isTargetAdmin = isAdminRole(editingRoleName);
+    const activeModules = isTargetAdmin ? MODULES_LIST : MODULES_LIST.filter(m => !m.adminOnly);
+    const allSelected = activeModules.every(m => permissionsState[m.id]?.[action]);
+
     setPermissionsState(prev => {
       const next = { ...prev };
-      MODULES_LIST.forEach(m => {
+      activeModules.forEach(m => {
         if (!next[m.id]) next[m.id] = { view: false, add: false, edit: false, delete: false };
         next[m.id][action] = !allSelected;
       });
@@ -148,10 +179,12 @@ export default function RolesPermissionsPanel() {
   };
 
   if (viewState === 'edit' || viewState === 'add') {
+    const isCurrentRoleAdmin = isAdminRole(editingRoleName);
+
     return (
       <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
         <div style={{ marginBottom: '20px' }}>
-          <button 
+          <button
             type="button"
             style={{
               background: '#ffffff',
@@ -159,36 +192,51 @@ export default function RolesPermissionsPanel() {
               padding: '8px 16px',
               borderRadius: '8px',
               fontSize: '13px',
-              fontWeight: '700',
-              color: '#334155',
+              fontWeight: 700,
+              color: '#0f172a',
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+              gap: '6px'
             }}
             onClick={() => setViewState('list')}
           >
-            <ArrowLeftIcon size={16} /> Back to Roles & Permissions
+            ← Back to Roles
           </button>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
           <div style={{ padding: '24px', borderBottom: '1px solid #e2e8f0' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 20px 0', fontFamily: "'Outfit', sans-serif" }}>
-              {viewState === 'add' ? 'Add New Role' : 'Edit Role Permissions'}
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 16px 0', fontFamily: "'Outfit', sans-serif" }}>
+              {viewState === 'edit' ? `Edit Role Permissions: ${editingRoleName}` : 'Add New Role'}
             </h2>
             <div style={{ maxWidth: '400px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                Role Name *
+                Role Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={editingRoleName}
-                onChange={(e) => setEditingRoleName(e.target.value)}
+                onChange={(e) => {
+                  setEditingRoleName(e.target.value);
+                  if (roleNameError) setRoleNameError('');
+                }}
                 disabled={viewState === 'edit'}
                 placeholder="e.g. Branch Manager"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: roleNameError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
               />
+              {roleNameError && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {roleNameError}
+                </span>
+              )}
             </div>
           </div>
 
@@ -201,9 +249,9 @@ export default function RolesPermissionsPanel() {
                     <th key={action} style={{ padding: '16px', fontWeight: 800, fontSize: '12px', textTransform: 'uppercase' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                         <span>{action}</span>
-                        <input 
-                          type="checkbox" 
-                          checked={MODULES_LIST.every(m => permissionsState[m.id]?.[action])}
+                        <input
+                          type="checkbox"
+                          checked={MODULES_LIST.filter(m => isCurrentRoleAdmin || !m.adminOnly).every(m => permissionsState[m.id]?.[action])}
                           onChange={() => toggleColumn(action)}
                           style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#ff5a1f' }}
                         />
@@ -213,23 +261,50 @@ export default function RolesPermissionsPanel() {
                 </tr>
               </thead>
               <tbody>
-                {MODULES_LIST.map((module, idx) => (
-                  <tr key={module.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '14px 24px', textAlign: 'left', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #f1f5f9', fontSize: '13px' }}>
-                      {module.name}
-                    </td>
-                    {['view', 'add', 'edit', 'delete'].map(action => (
-                      <td key={action} style={{ padding: '14px', borderRight: '1px solid #f1f5f9' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={permissionsState[module.id]?.[action] || false}
-                          onChange={() => togglePermission(module.id, action)}
-                          style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#ff5a1f' }}
-                        />
+                {MODULES_LIST.map((module, idx) => {
+                  const isLockedAdminOnly = module.adminOnly && !isCurrentRoleAdmin;
+
+                  return (
+                    <tr key={module.id} style={{ borderBottom: '1px solid #f1f5f9', background: isLockedAdminOnly ? '#fafafa' : '#ffffff' }}>
+                      <td style={{ padding: '14px 24px', textAlign: 'left', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #f1f5f9', fontSize: '13px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>{module.name}</span>
+                          {module.adminOnly && (
+                            <span style={{
+                              fontSize: '11px',
+                              background: '#fee2e2',
+                              color: '#dc2626',
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #fecaca'
+                            }}>
+                              🔒 Admin Only
+                            </span>
+                          )}
+                        </div>
                       </td>
-                    ))}
-                  </tr>
-                ))}
+                      {['view', 'add', 'edit', 'delete'].map(action => (
+                        <td key={action} style={{ padding: '14px', borderRight: '1px solid #f1f5f9' }}>
+                          <input
+                            type="checkbox"
+                            disabled={isLockedAdminOnly}
+                            checked={isLockedAdminOnly ? false : (permissionsState[module.id]?.[action] || false)}
+                            onChange={() => togglePermission(module.id, action)}
+                            title={isLockedAdminOnly ? "Restricted to Admin role only" : `${action} permission`}
+                            style={{
+                              width: '16px',
+                              height: '16px',
+                              cursor: isLockedAdminOnly ? 'not-allowed' : 'pointer',
+                              accentColor: '#ff5a1f',
+                              opacity: isLockedAdminOnly ? 0.35 : 1
+                            }}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -268,8 +343,8 @@ export default function RolesPermissionsPanel() {
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Roles & Permissions
           </h2>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleAddRole}
             style={{
               background: '#000000',
@@ -314,7 +389,7 @@ export default function RolesPermissionsPanel() {
             </thead>
             <tbody>
               {rolesList.map((role, index) => (
-                <tr 
+                <tr
                   key={role.name || index}
                   style={{
                     borderBottom: index < rolesList.length - 1 ? '1px solid #f1f5f9' : 'none',
@@ -352,8 +427,8 @@ export default function RolesPermissionsPanel() {
                   {/* ACTIONS */}
                   <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleEditRole(role.name)}
                         style={{
                           background: 'transparent',
@@ -373,8 +448,8 @@ export default function RolesPermissionsPanel() {
                       >
                         <PencilIcon size={16} />
                       </button>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleDeleteRole(role.name)}
                         style={{
                           background: 'transparent',
@@ -415,14 +490,14 @@ export default function RolesPermissionsPanel() {
             Are you sure you want to delete role <strong>"{roleToDelete}"</strong>?
           </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button 
+            <button
               type="button"
               onClick={() => setRoleToDelete(null)}
               style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 700, borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}
             >
               Cancel
             </button>
-            <button 
+            <button
               type="button"
               onClick={handleConfirmDelete}
               style={{ background: '#dc2626', border: 'none', color: '#ffffff', fontWeight: 700, borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}

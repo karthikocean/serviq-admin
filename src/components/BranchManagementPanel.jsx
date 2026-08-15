@@ -161,14 +161,37 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const navigate = useNavigate();
   const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots } = useAppState();
 
+  const userType = (currentUser?.userType || currentUser?.role || '').toUpperCase();
+  const userRoleLower = (currentUser?.role || '').toLowerCase();
+  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+
   const role = currentUser?.role || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
+    if (isAdmin) return true;
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
   });
+
+  if (!isAdmin) {
+    return (
+      <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
+          🔒
+        </div>
+        <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
+          Access Denied
+        </h2>
+        <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+          Branch Management is strictly restricted to the <strong>Admin</strong> role. Non-admin roles (Manager, Staff, Kitchen, Waiter, Viewer) do not have permission to view or manage branches.
+        </p>
+        <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   const [activeView, setActiveView] = useState('list'); // 'list' | 'form' | 'hierarchy'
   const [searchTerm, setSearchTerm] = useState('');

@@ -58,6 +58,7 @@ export default function UserListPanel({
     email: '',
     password: ''
   });
+  const [formErrors, setFormErrors] = useState({});
 
   const openAddUser = () => {
     setEditingUser(null);
@@ -70,6 +71,7 @@ export default function UserListPanel({
       email: '',
       password: 'user' + Math.floor(100 + Math.random() * 900)
     });
+    setFormErrors({});
     setViewState('form');
   };
 
@@ -84,21 +86,47 @@ export default function UserListPanel({
       email: user.email || '',
       password: user.password || 'user123'
     });
+    setFormErrors({});
     setViewState('form');
+  };
+
+  const validate = () => {
+    const errors = {};
+    const nameTrimmed = (userForm.name || '').trim();
+    if (!nameTrimmed) {
+      errors.name = 'Full Name is required.';
+    } else if (!/^[a-zA-Z\s.]+$/.test(nameTrimmed)) {
+      errors.name = 'Full Name should contain letters only.';
+    }
+
+    const phoneTrimmed = (userForm.phone || '').trim();
+    if (!phoneTrimmed) {
+      errors.phone = 'Phone Number is required.';
+    } else if (!/^[0-9+\s\-()]{7,15}$/.test(phoneTrimmed)) {
+      errors.phone = 'Please enter a valid phone number.';
+    }
+
+    const emailTrimmed = (userForm.email || '').trim();
+    if (!emailTrimmed) {
+      errors.email = 'Email Address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      errors.email = 'Please enter a valid email address.';
+    }
+
+    if (!userForm.password || !userForm.password.trim()) {
+      errors.password = 'Password is required.';
+    } else if (userForm.password.length < 4) {
+      errors.password = 'Password must be at least 4 characters.';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleUserSubmit = (e) => {
     e.preventDefault();
 
-    const nameRegex = /^[a-zA-Z\s]+$/;
-    if (!nameRegex.test((userForm.name || '').trim())) {
-      ShowNotifications.showAlertNotification("Name should contain letters only.", false);
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test((userForm.email || '').trim())) {
-      ShowNotifications.showAlertNotification("Please enter a valid email address.", false);
+    if (!validate()) {
       return;
     }
 
@@ -214,7 +242,8 @@ export default function UserListPanel({
           border: '1px solid #e2e8f0',
           padding: '32px',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
-          maxWidth: '720px'
+          width: '100%',
+          boxSizing: 'border-box'
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
             {editingUser ? 'Edit User Account' : 'Create User Account'}
@@ -223,25 +252,39 @@ export default function UserListPanel({
             {editingUser ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
           </p>
 
-          <form onSubmit={handleUserSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Full Name *
+                  Full Name <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={userForm.name}
-                  onChange={e => setUserForm({ ...userForm, name: e.target.value })}
+                  onChange={e => {
+                    setUserForm({ ...userForm, name: e.target.value });
+                    if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                  }}
                   placeholder="e.g. Rajesh Kumar"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
                 />
+                {formErrors.name && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.name}
+                  </span>
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Branch Assignment *
+                  Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
                   value={userForm.branchId}
@@ -261,7 +304,7 @@ export default function UserListPanel({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Access Role *
+                  Access Role <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
                   value={userForm.role}
@@ -278,7 +321,7 @@ export default function UserListPanel({
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Account Status *
+                  Account Status <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
                   value={userForm.status}
@@ -294,45 +337,87 @@ export default function UserListPanel({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Phone Number * 
+                  Phone Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={userForm.phone}
-                  onChange={e => setUserForm({ ...userForm, phone: e.target.value })}
+                  onChange={e => {
+                    setUserForm({ ...userForm, phone: e.target.value });
+                    if (formErrors.phone) setFormErrors({ ...formErrors, phone: '' });
+                  }}
                   placeholder="e.g. +91 98765 43210"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: formErrors.phone ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
                 />
+                {formErrors.phone && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.phone}
+                  </span>
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Email Address *
+                  Email Address <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="email"
-                  required
+                  type="text"
                   value={userForm.email}
-                  onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                  onChange={e => {
+                    setUserForm({ ...userForm, email: e.target.value });
+                    if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                  }}
                   placeholder="e.g. rajesh@serviq.com"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: formErrors.email ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
                 />
+                {formErrors.email && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.email}
+                  </span>
+                )}
               </div>
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                Password *
+                Password <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
-                required
                 value={userForm.password}
-                onChange={e => setUserForm({ ...userForm, password: e.target.value })}
+                onChange={e => {
+                  setUserForm({ ...userForm, password: e.target.value });
+                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                }}
                 placeholder="e.g. securepass123"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
               />
+              {formErrors.password && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.password}
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
@@ -380,9 +465,7 @@ export default function UserListPanel({
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               User Accounts
             </h2>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>
-              Showing {filteredUsers.length} user accounts {selectedBranchId ? `for branch ${selectedBranchId}` : 'across all branches'}
-            </p>
+            
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button

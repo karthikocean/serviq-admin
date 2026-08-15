@@ -4,51 +4,7 @@ import { AVAILABLE_PLANS } from '../config/initialData';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
-// Icons matching screenshot & modern UI
-const ZapIcon = ({ size = 18, color = '#10b981' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-  </svg>
-);
-
-const TrendingUpIcon = ({ size = 18, color = '#3b82f6' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-    <polyline points="17 6 23 6 23 12"></polyline>
-  </svg>
-);
-
-const SparklesIcon = ({ size = 18, color = '#8b5cf6' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/>
-  </svg>
-);
-
-const CrownIcon = ({ size = 18, color = '#f59e0b' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14v2H5v-2z"/>
-  </svg>
-);
-
-const PencilIcon = ({ size = 15, color = '#94a3b8' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-  </svg>
-);
-
-const CheckIcon = ({ size = 15, color = '#10b981' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"></polyline>
-  </svg>
-);
-
-const CrossIcon = ({ size = 15, color = '#cbd5e1' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>
-);
-
+// Icons matching modern UI
 const BuildingIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -80,13 +36,6 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
-const CreditCardIcon = ({ size = 18, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-    <line x1="2" y1="10" x2="22" y2="10"></line>
-  </svg>
-);
-
 export default function PlansManagementPanel({ hasPermission: hasPermissionProp }) {
   const {
     activeRestaurant,
@@ -104,23 +53,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     return !!userRoleConfig.permissions?.[moduleName]?.[action];
   });
 
-  const [plansList, setPlansList] = useState(AVAILABLE_PLANS);
   const [extraSlotsToAdd, setExtraSlotsToAdd] = useState(1);
-  const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState(null);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [isExtraBranchModalOpen, setIsExtraBranchModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeBillingCycle, setUpgradeBillingCycle] = useState('monthly'); // 'monthly' | 'annual'
+  const [upgradePaymentMethod, setUpgradePaymentMethod] = useState('card');
+  const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false);
+  const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState(null);
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'plan' | 'addon'
+  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'addon'
   const [historySearch, setHistorySearch] = useState('');
-
-  // Edit Plan Configuration Modal (Super Admin / Admin)
-  const [editingPlan, setEditingPlan] = useState(null);
-  const [editMonthlyPrice, setEditMonthlyPrice] = useState(0);
-  const [editAnnualPrice, setEditAnnualPrice] = useState(0);
-  const [editBranchLimit, setEditBranchLimit] = useState(1);
-  const [editExtraBranchPrice, setEditExtraBranchPrice] = useState(799);
 
   // Active Subscription extraction with fallbacks
   const sub = activeRestaurant?.subscription || {
@@ -139,7 +83,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     userLimit: 15,
     orderLimit: 2000,
     autoRenew: true,
-    
   };
 
   const branches = activeRestaurant?.branches || [];
@@ -150,7 +93,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const remainingSlots = Math.max(0, totalAllowedBranches - activeBranchesCount);
   const branchUsagePercent = Math.min(100, Math.round((activeBranchesCount / (totalAllowedBranches || 1)) * 100));
 
-  const matchedActivePlan = plansList.find(p => 
+  const matchedActivePlan = AVAILABLE_PLANS.find(p => 
     p.id === sub.planId || 
     p.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
     (sub.planName || '').toLowerCase().includes(p.name.toLowerCase().replace(' plan', ''))
@@ -172,7 +115,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     description: `${sub.planName} - Monthly Subscription Renewal`,
     amount: sub.price || 1999,
     date: "2026-08-15",
-    paymentMethod: sub.paymentMethod ,
+    paymentMethod: sub.paymentMethod,
     status: "Paid"
   };
 
@@ -199,32 +142,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   });
 
   // Handlers
-  const handleOpenUpgradeModal = (plan) => {
-    if (!hasPermission('plans-management', 'edit')) {
-      ShowNotifications.showAlertNotification("You do not have permission to change subscription plans.", false);
-      return;
-    }
-    setSelectedPlanForUpgrade(plan);
-    setIsUpgradeModalOpen(true);
-  };
-
-  const handleConfirmUpgrade = () => {
-    if (!selectedPlanForUpgrade) return;
-    setIsProcessingPayment(true);
-
-    setTimeout(() => {
-      upgradeSubscriptionPlan(
-        activeRestaurant.id,
-        selectedPlanForUpgrade.id,
-        'monthly',
-        paymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : paymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)'
-      );
-      setIsProcessingPayment(false);
-      setIsUpgradeModalOpen(false);
-      ShowNotifications.showAlertNotification(`Successfully switched to ${selectedPlanForUpgrade.name}!`, true);
-    }, 900);
-  };
-
   const handleConfirmExtraBranchPurchase = () => {
     setIsProcessingPayment(true);
 
@@ -240,47 +157,27 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }, 900);
   };
 
+  const handleConfirmPlanUpgrade = (targetPlan) => {
+    setIsProcessingUpgrade(true);
+    const methodStr = upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)';
+
+    setTimeout(() => {
+      if (upgradeSubscriptionPlan) {
+        upgradeSubscriptionPlan(activeRestaurant.id, targetPlan.id, upgradeBillingCycle, methodStr);
+      }
+      setIsProcessingUpgrade(false);
+      setIsUpgradeModalOpen(false);
+      setSelectedPlanForUpgrade(null);
+      ShowNotifications.showAlertNotification(`Successfully updated subscription to ${targetPlan.name}!`, true);
+    }, 900);
+  };
+
   const handleToggleAutoRenew = () => {
     toggleSubscriptionAutoRenew(activeRestaurant.id);
     ShowNotifications.showAlertNotification(
       `Auto-renewal has been ${!sub.autoRenew ? 'enabled' : 'disabled'}.`,
       true
     );
-  };
-
-  const handleOpenEditPlanModal = (plan) => {
-    setEditingPlan(plan);
-    setEditMonthlyPrice(plan.monthlyPrice);
-    setEditAnnualPrice(plan.annualPrice);
-    setEditBranchLimit(plan.branchLimit);
-    setEditExtraBranchPrice(plan.extraBranchPrice);
-  };
-
-  const handleSavePlanEdit = () => {
-    if (!editingPlan) return;
-    setPlansList(prev => prev.map(p => {
-      if (p.id === editingPlan.id) {
-        return {
-          ...p,
-          monthlyPrice: Number(editMonthlyPrice),
-          annualPrice: Number(editAnnualPrice),
-          branchLimit: Number(editBranchLimit),
-          extraBranchPrice: Number(editExtraBranchPrice)
-        };
-      }
-      return p;
-    }));
-    setEditingPlan(null);
-    ShowNotifications.showAlertNotification(`Plan settings for "${editingPlan.name}" updated successfully!`, true);
-  };
-
-  const getPlanIcon = (iconName) => {
-    switch (iconName) {
-      case 'zap': return <ZapIcon size={20} color="#10b981" />;
-      case 'trending-up': return <TrendingUpIcon size={20} color="#3b82f6" />;
-      case 'sparkles': return <SparklesIcon size={20} color="#8b5cf6" />;
-      case 'crown': default: return <CrownIcon size={20} color="#f59e0b" />;
-    }
   };
 
   return (
@@ -292,7 +189,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
             Plans Management
           </h2>
-        
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -303,6 +199,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a' }}
           >
             <BuildingIcon size={16} /> + Buy Addons
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setUpgradeBillingCycle(sub.billingCycle || 'monthly');
+              setIsUpgradeModalOpen(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 20px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: 800,
+              background: 'var(--primary)',
+              color: '#ffffff',
+              boxShadow: '0 4px 14px rgba(255, 122, 0, 0.3)'
+            }}
+          >
+            ⚡ Upgrade / Change Plan
           </button>
         </div>
       </div>
@@ -327,9 +246,36 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             </div>
           </div>
 
-          <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
-            <span>Next: <strong style={{ color: '#0f172a' }}>{sub.nextBillingDate || '2026-09-15'}</strong></span>
-            <span>Valid: <strong style={{ color: '#0f172a' }}>{sub.expiryDate || '2027-01-15'}</strong></span>
+          <div>
+            <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
+              <span>Next: <strong style={{ color: '#0f172a' }}>{sub.nextBillingDate || '2026-09-15'}</strong></span>
+              <span>Valid: <strong style={{ color: '#0f172a' }}>{sub.expiryDate || '2027-01-15'}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setUpgradeBillingCycle(sub.billingCycle || 'monthly');
+                setIsUpgradeModalOpen(true);
+              }}
+              style={{
+                width: '100%',
+                marginTop: '10px',
+                padding: '7px 10px',
+                borderRadius: '8px',
+                border: '1.5px solid var(--primary)',
+                background: 'var(--primary-light)',
+                color: 'var(--primary)',
+                fontSize: '11px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '5px'
+              }}
+            >
+              ⚡ Renew / Upgrade Plan
+            </button>
           </div>
         </div>
 
@@ -451,146 +397,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
       </div>
 
-      {/* 2. PLANS CARDS GRID (EXACT SCREENSHOT STYLE - 3 CARDS IN SINGLE ROW) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '20px', alignItems: 'stretch' }}>
-        {plansList.map((plan) => {
-          const isCurrent = sub.planName.toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
-
-          return (
-            <div
-              key={plan.id}
-              style={{
-                background: '#ffffff',
-                borderRadius: '16px',
-                border: isCurrent ? '2px solid var(--primary)' : '1px solid #e2e8f0',
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                boxShadow: isCurrent ? '0 8px 30px rgba(249, 115, 22, 0.08)' : '0 2px 10px rgba(0,0,0,0.02)',
-                position: 'relative'
-              }}
-            >
-              <div>
-                {/* Header: Icon + Title + Edit Pencil */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {getPlanIcon(plan.icon)}
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      {plan.name}
-                    </h3>
-                  </div>
-
-                  {/* Super Admin Edit Pen */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEditPlanModal(plan)}
-                    title="Edit Plan Configuration"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <PencilIcon size={16} />
-                  </button>
-                </div>
-
-                {/* Status Badge */}
-                <div style={{ marginBottom: '12px' }}>
-                  <span style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0', fontSize: '11px', fontWeight: 800, padding: '3px 10px', borderRadius: '20px' }}>
-                    ● {plan.status || 'Active'}
-                  </span>
-                </div>
-
-                {/* Tagline */}
-                <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#64748b', lineHeight: 1.5, minHeight: '40px' }}>
-                  {plan.tagline}
-                </p>
-
-                {/* Pricing Block */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      MONTHLY RATE
-                    </span>
-                    <strong style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      ₹{plan.monthlyPrice.toLocaleString()}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/mo</span>
-                    </strong>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ANNUAL RATE
-                    </span>
-                    <strong style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      ₹{plan.annualPrice.toLocaleString()}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/yr</span>
-                    </strong>
-                  </div>
-                </div>
-
-                {/* INCLUDES FEATURES */}
-                <div style={{ marginBottom: '24px' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
-                    INCLUDES FEATURES:
-                  </div>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {plan.featuresList.map((feat, idx) => (
-                      <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: feat.included ? '#1e293b' : '#94a3b8' }}>
-                        {feat.included ? <CheckIcon size={15} color="#10b981" /> : <CrossIcon size={15} color="#cbd5e1" />}
-                        <span style={{ fontWeight: feat.included ? 600 : 400 }}>{feat.name}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <div>
-                {isCurrent ? (
-                  <button
-                    type="button"
-                    style={{
-                      width: '100%',
-                      padding: '11px',
-                      borderRadius: '10px',
-                      border: '1.5px solid var(--primary)',
-                      background: 'var(--primary-light)',
-                      color: 'var(--primary)',
-                      fontWeight: 800,
-                      fontSize: '13px',
-                      cursor: 'default'
-                    }}
-                  >
-                    ✓ Current Active Plan
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleOpenUpgradeModal(plan)}
-                    style={{
-                      width: '100%',
-                      padding: '11px',
-                      borderRadius: '10px',
-                      border: '1px solid #fee2e2',
-                      background: '#fff1f2',
-                      color: '#e11d48',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <span>🛡 Deactivate Plan / Switch</span>
-                  </button>
-                )}
-              </div>
-
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 4. PLANS RECHARGE HISTORY & INVOICES LOG */}
+      {/* 2. PLANS RECHARGE HISTORY & INVOICES LOG */}
       <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '28px', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
         
         {/* Header & Meta Summary Row */}
@@ -624,7 +431,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             {[
               { id: 'all', label: `All History (${invoices.length})` },
-             
               { id: 'addon', label: 'Branch Add-ons' }
             ].map(tab => (
               <button
@@ -761,169 +567,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
       </div>
 
-      {/* MODAL 1: EDIT PLAN CONFIGURATION MODAL (SUPER ADMIN / ADMIN PENCIL) */}
-      {editingPlan && (
-        <Modal
-          isOpen={!!editingPlan}
-          onClose={() => setEditingPlan(null)}
-          title={`Edit ${editingPlan.name} Settings`}
-          maxWidth="500px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Monthly Rate (₹):
-              </label>
-              <input
-                type="number"
-                value={editMonthlyPrice}
-                onChange={e => setEditMonthlyPrice(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Annual Rate (₹):
-              </label>
-              <input
-                type="number"
-                value={editAnnualPrice}
-                onChange={e => setEditAnnualPrice(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Included Branches Limit:
-              </label>
-              <input
-                type="number"
-                value={editBranchLimit}
-                onChange={e => setEditBranchLimit(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Extra Branch Add-on Rate (₹/month):
-              </label>
-              <input
-                type="number"
-                value={editExtraBranchPrice}
-                onChange={e => setEditExtraBranchPrice(e.target.value)}
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setEditingPlan(null)}
-                style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleSavePlanEdit}
-                style={{ padding: '8px 20px', borderRadius: '8px', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700 }}
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* MODAL 2: PLAN UPGRADE CONFIRMATION MODAL */}
-      {isUpgradeModalOpen && selectedPlanForUpgrade && (
-        <Modal
-          isOpen={isUpgradeModalOpen}
-          onClose={() => !isProcessingPayment && setIsUpgradeModalOpen(false)}
-          title={`Switch to ${selectedPlanForUpgrade.name}`}
-          maxWidth="520px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '10px' }}>
-            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Target Tier:</span>
-                <strong style={{ fontSize: '14px', color: 'var(--primary)' }}>{selectedPlanForUpgrade.name}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Included Outlets:</span>
-                <strong style={{ fontSize: '14px', color: '#0f172a' }}>{selectedPlanForUpgrade.branchLimit} Branch Outlets</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Extra Branch Rate:</span>
-                <strong style={{ fontSize: '14px', color: '#0f172a' }}>₹{selectedPlanForUpgrade.extraBranchPrice}/mo</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #cbd5e1' }}>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>Monthly Payable:</span>
-                <strong style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)' }}>
-                  ₹{selectedPlanForUpgrade.monthlyPrice.toLocaleString()}
-                </strong>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
-                Select Payment Method:
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                {[
-                  { id: 'card', label: 'Credit Card', sub: '•••• 4242' },
-                  { id: 'upi', label: 'UPI / QR', sub: 'GPay, PhonePe' },
-                  { id: 'netbanking', label: 'NetBanking', sub: 'Instant Bank' }
-                ].map(pm => (
-                  <div
-                    key={pm.id}
-                    onClick={() => setPaymentMethod(pm.id)}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '10px',
-                      border: paymentMethod === pm.id ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
-                      background: paymentMethod === pm.id ? 'var(--primary-light)' : '#ffffff',
-                      cursor: 'pointer',
-                      textAlign: 'center'
-                    }}
-                  >
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: paymentMethod === pm.id ? 'var(--primary)' : '#0f172a' }}>{pm.label}</div>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>{pm.sub}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setIsUpgradeModalOpen(false)}
-                disabled={isProcessingPayment}
-                style={{ padding: '10px 20px', borderRadius: '8px', fontWeight: 600 }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleConfirmUpgrade}
-                disabled={isProcessingPayment}
-                style={{ padding: '10px 24px', borderRadius: '8px', background: 'var(--primary)', color: '#fff', fontWeight: 700 }}
-              >
-                {isProcessingPayment ? 'Processing...' : `Confirm & Switch Plan`}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* MODAL 3: BRANCH-BASED PLAN CALCULATION & ADD-ON CALCULATOR POPUP (TRIGGERED BY + BUY ADDONS) */}
+      {/* MODAL: BRANCH-BASED PLAN CALCULATION & ADD-ON CALCULATOR POPUP (TRIGGERED BY + BUY ADDONS) */}
       {isExtraBranchModalOpen && (
         <Modal
           isOpen={isExtraBranchModalOpen}
@@ -1068,7 +712,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </Modal>
       )}
 
-      {/* MODAL 4: INVOICE RECEIPT MODAL */}
+      {/* MODAL: INVOICE RECEIPT MODAL */}
       {selectedInvoiceForView && (
         <Modal
           isOpen={!!selectedInvoiceForView}
@@ -1142,6 +786,282 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </Modal>
       )}
 
+      {/* MODAL: SUBSCRIPTION UPGRADE & RENEW PLANS MODAL */}
+      {isUpgradeModalOpen && (
+        <Modal
+          isOpen={isUpgradeModalOpen}
+          onClose={() => !isProcessingUpgrade && setIsUpgradeModalOpen(false)}
+          title="Subscription Plans & Upgrade"
+          maxWidth="1050px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '4px' }}>
+            
+            {/* Top Cycle Toggle & Current Status Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: '#f8fafc', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <div>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Active Plan: </span>
+                <strong style={{ color: '#0f172a', fontSize: '14px' }}>{sub.planName}</strong>
+                <span style={{ marginLeft: '8px', fontSize: '11px', background: '#dcfce7', color: '#166534', fontWeight: 800, padding: '2px 8px', borderRadius: '12px' }}>
+                  ● Active
+                </span>
+                <span style={{ marginLeft: '8px', fontSize: '11px', color: '#64748b' }}>
+                  (Valid until {sub.expiryDate || '2027-01-15'})
+                </span>
+              </div>
+
+              {/* Monthly / Annual Billing Switcher */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', padding: '4px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+                <button
+                  type="button"
+                  onClick={() => setUpgradeBillingCycle('monthly')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: upgradeBillingCycle === 'monthly' ? 'var(--primary)' : 'transparent',
+                    color: upgradeBillingCycle === 'monthly' ? '#ffffff' : '#475569',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  Monthly Billing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUpgradeBillingCycle('annual')}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: upgradeBillingCycle === 'annual' ? 'var(--primary)' : 'transparent',
+                    color: upgradeBillingCycle === 'annual' ? '#ffffff' : '#475569',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  Annual Billing
+                  <span style={{ fontSize: '10px', background: '#ffedd5', color: '#c2410c', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>Save 17%</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3 PLAN COMPARISON CARDS (EXACT MATCH WITH SCREENSHOT) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'stretch' }}>
+              {AVAILABLE_PLANS.map(plan => {
+                const isBasic = plan.id === 'plan-basic' || plan.name.toLowerCase().includes('basic');
+                const isStandard = plan.id === 'plan-standard' || plan.name.toLowerCase().includes('standard');
+                const isPremium = plan.id === 'plan-premium' || plan.name.toLowerCase().includes('premium');
+
+                const isCurrentActive = 
+                  plan.id === sub.planId || 
+                  plan.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
+                  (sub.planName || '').toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
+
+                return (
+                  <div
+                    key={plan.id}
+                    style={{
+                      background: '#ffffff',
+                      borderRadius: '20px',
+                      border: '1.5px solid #eef2f6',
+                      padding: '28px 24px 22px 24px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      position: 'relative',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+                      transition: 'transform 0.15s, box-shadow 0.15s'
+                    }}
+                  >
+                    <div>
+                      {/* Top Row: Icon + Title + Edit Pencil */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {isBasic && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                          )}
+                          {isStandard && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                              <polyline points="17 6 23 6 23 12"></polyline>
+                            </svg>
+                          )}
+                          {isPremium && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+                            </svg>
+                          )}
+                          <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                            {plan.name}
+                          </h3>
+                        </div>
+
+                        {/* Edit Pencil Icon */}
+                        <div style={{ color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                            <path d="m15 5 4 4"/>
+                          </svg>
+                        </div>
+                      </div>
+
+                      {/* Active Status Badge */}
+                      <div style={{ marginTop: '8px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '3px 9px',
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          backgroundColor: '#e6f9f0',
+                          color: '#10b981'
+                        }}>
+                          Active
+                        </span>
+                      </div>
+
+                      {/* Tagline Description */}
+                      <p style={{ fontSize: '13px', color: '#64748b', margin: '14px 0 20px 0', lineHeight: 1.5, minHeight: '40px' }}>
+                        {plan.tagline}
+                      </p>
+
+                      {/* Rates Section (Left Label - Right Price) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '18px', borderBottom: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
+                            MONTHLY RATE
+                          </span>
+                          <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                            ₹{plan.monthlyPrice ? plan.monthlyPrice.toLocaleString() : '999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/mo</span>
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
+                            ANNUAL RATE
+                          </span>
+                          <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                            ₹{plan.annualPrice ? plan.annualPrice.toLocaleString() : '9,999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/yr</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Includes Features Section */}
+                      <div style={{ marginTop: '18px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '14px' }}>
+                          INCLUDES FEATURES:
+                        </div>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {plan.featuresList.map((feat, fIdx) => (
+                            <li key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                              {feat.included ? (
+                                <>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <polyline points="20 6 9 17 4 12"></polyline>
+                                  </svg>
+                                  <span style={{ color: '#1e293b', fontWeight: 700 }}>{feat.name}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  </svg>
+                                  <span style={{ color: '#cbd5e1', fontWeight: 500 }}>{feat.name}</span>
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Bottom Button: Deactivate Plan */}
+                    <div style={{ marginTop: '26px' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmPlanUpgrade(plan)}
+                        disabled={isProcessingUpgrade}
+                        style={{
+                          width: '100%',
+                          padding: '11px 16px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: '#fff1f2',
+                          color: '#ef4444',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = '#ffe4e6';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = '#fff1f2';
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                        Deactivate Plan
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Payment Mode Selector & Modal Footer */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', background: '#f8fafc', padding: '14px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Method:</span>
+                {[
+                  { id: 'card', label: 'Credit Card (•••• 4242)' },
+                  { id: 'upi', label: 'UPI / QR Code' },
+                  { id: 'netbanking', label: 'NetBanking' }
+                ].map(pm => (
+                  <label key={pm.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>
+                    <input
+                      type="radio"
+                      name="upgradePaymentMethod"
+                      checked={upgradePaymentMethod === pm.id}
+                      onChange={() => setUpgradePaymentMethod(pm.id)}
+                    />
+                    {pm.label}
+                  </label>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsUpgradeModalOpen(false)}
+                disabled={isProcessingUpgrade}
+                style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
+              >
+                Close
+              </button>
+            </div>
+
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 }
+

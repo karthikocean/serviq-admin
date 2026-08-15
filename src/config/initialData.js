@@ -50,16 +50,16 @@ export const initialRestaurantsData = {
       serviceChargeRate: 0.00
     },
     menu: [
-      { id: "menu-1", name: "Paneer Tikka", category: "Starters", price: 180, desc: "Marinated cottage cheese cubes grilled in charcoal tandoor with onions and bell peppers.", image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-2", name: "Chicken Biryani", category: "Rice Meals", price: 320, desc: "Fragrant basmati rice layered with juicy spiced chicken, saffron, and fresh mint.", image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500&auto=format&fit=crop&q=60", available: true, veg: false, bestseller: true },
-      { id: "menu-3", name: "Masala Dosa", category: "Tiffin", price: 120, desc: "Thin crispy rice crepe filled with spiced potato mash. Served with sambar and coconut chutney.", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: true },
-      { id: "menu-4", name: "Dal Makhani", category: "Rice Meals", price: 160, desc: "Creamy slow-cooked black lentils simmered overnight with butter, cream, and tomatoes.", image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-full-meals", name: "Full Meals", category: "Rice Meals", price: 120, desc: "Rice, sambar, rasam, 3 curries, papad, pickle & payasam", image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: true },
-      { id: "menu-mini-meals", name: "Mini Meals", category: "Rice Meals", price: 90, desc: "Rice, sambar, 1 curry, papad & pickle", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-5", name: "Gulab Jamun", category: "Desserts", price: 80, desc: "Golden fried milk-solid dumplings dipped in warm cardamom-scented sugar syrup.", image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-6", name: "Masala Chai", category: "Drinks", price: 40, desc: "Traditional brewed black tea infused with cardamom, ginger, cloves, and milk.", image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-7", name: "Butter Naan", category: "Rotis", price: 40, desc: "Soft leavened tandoori flatbread brushed with generous butter.", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
-      { id: "menu-8", name: "Lassi", category: "Drinks", price: 60, desc: "Chilled yogurt beverage blended sweet with cardamom and rose water.", image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false }
+      { id: "menu-1", name: "Paneer Tikka", category: "Starters", price: 180, gst: 5, desc: "Marinated cottage cheese cubes grilled in charcoal tandoor with onions and bell peppers.", image: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-2", name: "Chicken Biryani", category: "Rice Meals", price: 320, gst: 5, desc: "Fragrant basmati rice layered with juicy spiced chicken, saffron, and fresh mint.", image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=500&auto=format&fit=crop&q=60", available: true, veg: false, bestseller: true },
+      { id: "menu-3", name: "Masala Dosa", category: "Tiffin", price: 120, gst: 5, desc: "Thin crispy rice crepe filled with spiced potato mash. Served with sambar and coconut chutney.", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: true },
+      { id: "menu-4", name: "Dal Makhani", category: "Rice Meals", price: 160, gst: 5, desc: "Creamy slow-cooked black lentils simmered overnight with butter, cream, and tomatoes.", image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-full-meals", name: "Full Meals", category: "Rice Meals", price: 120, gst: 5, desc: "Rice, sambar, rasam, 3 curries, papad, pickle & payasam", image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: true },
+      { id: "menu-mini-meals", name: "Mini Meals", category: "Rice Meals", price: 90, gst: 5, desc: "Rice, sambar, 1 curry, papad & pickle", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-5", name: "Gulab Jamun", category: "Desserts", price: 80, gst: 5, desc: "Golden fried milk-solid dumplings dipped in warm cardamom-scented sugar syrup.", image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-6", name: "Masala Chai", category: "Drinks", price: 40, gst: 5, desc: "Traditional brewed black tea infused with cardamom, ginger, cloves, and milk.", image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-7", name: "Butter Naan", category: "Rotis", price: 40, gst: 5, desc: "Soft leavened tandoori flatbread brushed with generous butter.", image: "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false },
+      { id: "menu-8", name: "Lassi", category: "Drinks", price: 60, gst: 5, desc: "Chilled yogurt beverage blended sweet with cardamom and rose water.", image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false }
     ],
     orders: [
       { id: "847", branchId: "BR-001", table: "03", time: "1:28 PM", timeAgo: "2 min ago", items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "Less spicy please", subtotal: 400, tax: 10, charge: 0, total: 420, status: "new", billingStatus: "unpaid", waiter: "Unassigned" },
@@ -204,6 +204,24 @@ export const initialRestaurantsData = {
       email: "kitchen@saravana.com",
       password: "kitchen123"
     },
+    inventory: [
+      { id: "INV-001", sku: "ING-PNR-01", name: "Fresh Paneer (Cottage Cheese)", category: "Dairy", branchId: "BR-001", currentStock: 12.5, minStockLevel: 5.0, unit: "kg", costPerUnit: 320, supplierName: "Nandini Dairy Supplies", supplierPhone: "+91 98450 12345", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-002", sku: "ING-RCE-01", name: "Basmati Rice (Classic Grade A)", category: "Grains & Rice", branchId: "BR-001", currentStock: 4.0, minStockLevel: 15.0, unit: "kg", costPerUnit: 110, supplierName: "Royal Grain Traders", supplierPhone: "+91 98765 43210", lastRestocked: "2026-08-10", status: "Low Stock" },
+      { id: "INV-003", sku: "ING-OIL-01", name: "Refined Sunflower Cooking Oil", category: "Oils & Ghee", branchId: "BR-001", currentStock: 28.0, minStockLevel: 10.0, unit: "L", costPerUnit: 145, supplierName: "Fortune Wholesale Agency", supplierPhone: "+91 98200 98765", lastRestocked: "2026-08-12", status: "In Stock" },
+      { id: "INV-004", sku: "ING-CHK-01", name: "Fresh Chicken (Curry Cut)", category: "Meat & Poultry", branchId: "BR-001", currentStock: 2.0, minStockLevel: 8.0, unit: "kg", costPerUnit: 220, supplierName: "Fresh Farms Hatchery", supplierPhone: "+91 99001 22334", lastRestocked: "2026-08-15", status: "Low Stock" },
+      { id: "INV-005", sku: "ING-TOM-01", name: "Fresh Hybrid Tomatoes", category: "Vegetables", branchId: "BR-001", currentStock: 22.0, minStockLevel: 10.0, unit: "kg", costPerUnit: 35, supplierName: "Mandi Fresh Produce", supplierPhone: "+91 94432 11223", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-006", sku: "ING-TEA-01", name: "Premium Assam CTC Tea Leaves", category: "Beverages", branchId: "BR-001", currentStock: 0.0, minStockLevel: 3.0, unit: "kg", costPerUnit: 420, supplierName: "Assam Valley Tea Co.", supplierPhone: "+91 97890 55443", lastRestocked: "2026-08-01", status: "Out of Stock" },
+      { id: "INV-007", sku: "PKG-BOX-01", name: "Eco Meal Delivery Containers (3-CP)", category: "Packaging", branchId: "BR-001", currentStock: 450, minStockLevel: 100, unit: "pcs", costPerUnit: 8.5, supplierName: "GreenPack Solutions", supplierPhone: "+91 98401 77665", lastRestocked: "2026-08-11", status: "In Stock" },
+      { id: "INV-008", sku: "ING-BUT-01", name: "Pasteurized Salted Cooking Butter", category: "Dairy", branchId: "BR-002", currentStock: 3.5, minStockLevel: 6.0, unit: "kg", costPerUnit: 480, supplierName: "Amul Distribution Hub", supplierPhone: "+91 98111 22334", lastRestocked: "2026-08-13", status: "Low Stock" },
+      { id: "INV-009", sku: "ING-GAR-01", name: "Peeled Garlic Cloves", category: "Spices & Condiments", branchId: "BR-002", currentStock: 14.0, minStockLevel: 5.0, unit: "kg", costPerUnit: 160, supplierName: "City Spice Mart", supplierPhone: "+91 98333 44556", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-010", sku: "ING-MILK-01", name: "Full Cream Dairy Milk", category: "Dairy", branchId: "BR-003", currentStock: 35.0, minStockLevel: 15.0, unit: "L", costPerUnit: 62, supplierName: "Aavin Dairy Milk", supplierPhone: "+91 98555 66778", lastRestocked: "2026-08-15", status: "In Stock" }
+    ],
+    inventoryLogs: [
+      { id: "LOG-101", itemId: "INV-001", itemName: "Fresh Paneer (Cottage Cheese)", type: "Stock In", quantity: 10, unit: "kg", date: "2026-08-14 10:30 AM", reason: "Supplier Purchase", user: "Saravana Kumaran", notes: "Invoice #NDS-8834" },
+      { id: "LOG-102", itemId: "INV-004", itemName: "Fresh Chicken (Curry Cut)", type: "Stock Out", quantity: 6, unit: "kg", date: "2026-08-15 11:45 AM", reason: "Kitchen Issue", user: "Suresh Pillai", notes: "Lunch prep biryani batch" },
+      { id: "LOG-103", itemId: "INV-006", itemName: "Premium Assam CTC Tea Leaves", type: "Stock Out", quantity: 2, unit: "kg", date: "2026-08-14 06:00 PM", reason: "Kitchen Issue", user: "Ravi M.", notes: "Daily tea service" },
+      { id: "LOG-104", itemId: "INV-003", itemName: "Refined Sunflower Cooking Oil", type: "Stock In", quantity: 20, unit: "L", date: "2026-08-12 02:15 PM", reason: "Supplier Purchase", user: "Saravana Kumaran", notes: "Invoice #FW-9021" }
+    ],
     categories: ['Starters', 'Rice Meals', 'Tiffin', 'Rotis', 'Desserts', 'Drinks'],
     roles: {
       Admin: {
@@ -521,7 +539,8 @@ export const AVAILABLE_PLANS = [
       { name: "Table Management", included: true },
       { name: "Order Management", included: true },
       { name: "Waiter Management", included: false },
-      { name: "Kitchen Management", included: false }
+      { name: "Kitchen Management", included: false },
+      { name: "Inventory Management", included: false }
     ]
   },
   {
@@ -545,14 +564,15 @@ export const AVAILABLE_PLANS = [
       { name: "Table Management", included: true },
       { name: "Order Management", included: true },
       { name: "Waiter Management", included: true },
-      { name: "Kitchen Management", included: false }
+      { name: "Kitchen Management", included: false },
+      { name: "Inventory Management", included: false }
     ]
   },
   {
     id: "plan-premium",
     name: "Premium Plan",
     icon: "sparkles",
-    tagline: "Advanced operations with integrated Kitchen KDS displays and advanced billing.",
+    tagline: "Advanced operations with integrated Kitchen KDS displays, Inventory, and advanced billing.",
     monthlyPrice: 4999,
     annualPrice: 49999,
     branchLimit: 10,
@@ -568,7 +588,8 @@ export const AVAILABLE_PLANS = [
       { name: "Table Management", included: true },
       { name: "Order Management", included: true },
       { name: "Waiter Management", included: true },
-      { name: "Kitchen Management", included: true }
+      { name: "Kitchen Management", included: true },
+      { name: "Inventory Management", included: true }
     ]
   }
 ];

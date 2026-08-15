@@ -25,12 +25,6 @@ export default function AdminLayout() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
 
-  // Sync submenu accordion with active routes
-  useEffect(() => {
-    if (location.pathname.startsWith('/waiter')) setSidebarWaiterOpen(true);
-    if (location.pathname.startsWith('/kitchen')) setSidebarKitchenOpen(true);
-  }, [location.pathname]);
-
   // Live Clock
   useEffect(() => {
     const updateTime = () => {
@@ -55,16 +49,17 @@ export default function AdminLayout() {
   const restaurantName = activeRestaurant?.name || 'Serviq';
   const role = currentUser?.role || 'Admin';
   const userType = (currentUser?.userType || currentUser?.role || '').toUpperCase();
-  const isRestaurantOwner = userType === 'RESTAURANT_OWNER' || userType === 'SUPER ADMIN' || userType === 'ADMIN' || userType === 'OWNER';
+  const userRoleLower = (currentUser?.role || '').toLowerCase();
+  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {
-    // Branch management is ONLY accessible to Restaurant Owners
-    if (moduleName === 'branch-management') {
-      return isRestaurantOwner;
+    // Branch management is ONLY accessible to Admin role
+    if (moduleName === 'branch-management' || moduleName === 'branches') {
+      return isAdmin;
     }
 
-    if (isRestaurantOwner) return true;
+    if (isAdmin) return true;
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || rolesConfig[currentUser?.userType] || DEFAULT_ROLES[role] || DEFAULT_ROLES[currentUser?.userType] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
@@ -72,22 +67,24 @@ export default function AdminLayout() {
   };
 
   const isTabAllowed = (tabKey) => {
-    // If tab is branch-management, ONLY restaurant owner can view it
-    if (tabKey === 'branch-management') {
-      return isRestaurantOwner;
+    // If tab is branch-management, ONLY Admin role can view it
+    if (tabKey === 'branch-management' || tabKey === 'branches') {
+      return isAdmin;
     }
 
-    if (isRestaurantOwner) return true;
+    if (isAdmin) return true;
 
     let moduleName = tabKey;
     if (tabKey === 'overview') moduleName = 'overview';
     else if (tabKey === 'plans-management') moduleName = 'plans-management';
+    else if (tabKey === 'inventory') moduleName = 'inventory';
     else if (tabKey === 'orders') moduleName = 'orders';
     else if (tabKey === 'menu') moduleName = 'menu';
     else if (tabKey === 'tables') moduleName = 'tables';
     else if (tabKey === 'billing') moduleName = 'billing';
-    else if (tabKey === 'waiter-list' || tabKey === 'waiter-reports') moduleName = 'waiter';
-    else if (tabKey === 'kitchen-list' || tabKey === 'kitchen-reports') moduleName = 'kitchen';
+    else if (tabKey === 'staff' || tabKey === 'waiter-list' || tabKey === 'waiter-reports' || tabKey === 'kitchen-list' || tabKey === 'kitchen-reports') {
+      return hasPermission('staff', 'view') || hasPermission('waiter', 'view') || hasPermission('kitchen', 'view');
+    }
     else if (tabKey === 'users' || tabKey === 'roles-permissions' || tabKey === 'Settings') moduleName = 'settings';
     else if (tabKey === 'Reports') moduleName = 'reports';
 
@@ -100,19 +97,17 @@ export default function AdminLayout() {
     if (p === '/' || p === '/dashboard' || p === '/overview') return 'Dashboard';
     if (p.startsWith('/branch-management') || p.startsWith('/branches')) return 'Branch Management';
     if (p.startsWith('/plans-management') || p.startsWith('/plans')) return 'Plans & Subscription';
+    if (p.startsWith('/inventory')) return 'Inventory Management';
     if (p === '/tables/add') return 'Add Dining Table';
     if (p.startsWith('/tables/edit')) return 'Edit Dining Table';
     if (p.startsWith('/tables')) return 'Table Management';
     if (p === '/menu/categories') return 'Category List';
     if (p.startsWith('/menu')) return 'Menu Management';
     if (p.startsWith('/orders')) return 'Order Management';
-    if (p === '/waiter/add') return 'Add Staff Member';
-    if (p.startsWith('/waiter/edit')) return 'Edit Staff Member';
-    if (p === '/waiter/reports') return 'Waiter Performance Reports';
-    if (p.startsWith('/waiter')) return 'Waiters List';
-    if (p === '/kitchen/settings') return 'Kitchen Station Settings';
-    if (p === '/kitchen/reports') return 'Kitchen Preparation Reports';
-    if (p.startsWith('/kitchen')) return 'Kitchen Screens';
+    if (p === '/staff/add' || p === '/waiter/add') return 'Add Staff Member';
+    if (p.startsWith('/staff/edit') || p.startsWith('/waiter/edit')) return 'Edit Staff Member';
+    if (p === '/staff/kitchen-settings' || p === '/kitchen/settings') return 'Kitchen Station Settings';
+    if (p.startsWith('/staff') || p.startsWith('/waiter') || p.startsWith('/kitchen')) return 'Staff Management';
     if (p.startsWith('/billing')) return 'Billing & Settlement';
     if (p.startsWith('/reports')) return 'Reports & Analytics';
     if (p.startsWith('/users')) return 'User Accounts';
@@ -137,18 +132,17 @@ export default function AdminLayout() {
   const isPlansActive = pathname.startsWith('/plans-management') || pathname.startsWith('/plans');
   const isTablesActive = pathname.startsWith('/tables');
   const isMenuActive = pathname.startsWith('/menu');
+  const isInventoryActive = pathname.startsWith('/inventory');
   const isOrdersActive = pathname.startsWith('/orders');
-  const isWaiterListActive = pathname === '/waiter/list' || pathname === '/waiter' || pathname.startsWith('/waiter/add') || pathname.startsWith('/waiter/edit');
-  const isWaiterReportsActive = pathname === '/waiter/reports';
-  const isKitchenListActive = pathname === '/kitchen/list' || pathname === '/kitchen' || pathname === '/kitchen/settings';
-  const isKitchenReportsActive = pathname === '/kitchen/reports';
-  const isWaiterGroupActive = isWaiterListActive || isWaiterReportsActive;
-  const isKitchenGroupActive = isKitchenListActive || isKitchenReportsActive;
+  const isStaffActive = pathname.startsWith('/staff') || pathname.startsWith('/waiter') || pathname.startsWith('/kitchen');
   const isUsersActive = pathname.startsWith('/users');
   const isRolesActive = pathname.startsWith('/roles-permissions');
   const isBillingActive = pathname.startsWith('/billing');
   const isReportsActive = pathname.startsWith('/reports');
   const isSettingsActive = pathname.startsWith('/settings');
+
+  const currentSubPlan = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
+  const isCurrentPremium = currentSubPlan.includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
 
   return (
     <div id="dashboard-view" className="dashboard-wrapper">
@@ -198,7 +192,7 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 3. Table Management */}
+          {/* 4. Table Management */}
           {isTabAllowed('tables') && (
             <li className={`sidebar-item ${isTablesActive ? 'active' : ''}`}>
               <Link to="/tables">
@@ -210,7 +204,7 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 4. Menu Management */}
+          {/* 5. Menu Management */}
           {isTabAllowed('menu') && (
             <li className={`sidebar-item ${isMenuActive ? 'active' : ''}`}>
               <Link to="/menu">
@@ -222,7 +216,19 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 5. Order Management */}
+          {/* 6. Inventory Management */}
+          {isTabAllowed('inventory') && (
+            <li className={`sidebar-item ${isInventoryActive ? 'active' : ''}`}>
+              <Link to="/inventory">
+                <span className="sidebar-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                </span>
+                <span className="sidebar-item-label">Inventory Management</span>
+              </Link>
+            </li>
+          )}
+
+          {/* 7. Order Management */}
           {isTabAllowed('orders') && (
             <li className={`sidebar-item ${isOrdersActive ? 'active' : ''}`}>
               <Link to="/orders">
@@ -234,63 +240,15 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 6. Waiter Management Dropdown */}
-          {(isTabAllowed('waiter-list') || isTabAllowed('waiter-reports')) && (
-            <li className={`sidebar-group ${sidebarWaiterOpen ? 'open' : ''}`}>
-              <div
-                className={`sidebar-item dropdown-trigger ${isWaiterGroupActive ? 'child-active' : ''}`}
-                onClick={() => { setSidebarWaiterOpen(!sidebarWaiterOpen); setSidebarKitchenOpen(false); }}
-              >
-                <div className="dropdown-trigger-link">
-                  <span className="sidebar-icon-box">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                  </span>
-                  <span className="sidebar-item-label">Waiter Management</span>
-                  <span className="dropdown-arrow-container">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`dropdown-arrow-svg ${sidebarWaiterOpen ? 'open' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
-                  </span>
-                </div>
-              </div>
-              {sidebarWaiterOpen && (
-                <ul className="sidebar-submenu">
-                  <li className={`sidebar-item ${isWaiterListActive ? 'active' : ''}`}>
-                    <Link to="/waiter/list">Waiter List</Link>
-                  </li>
-                  <li className={`sidebar-item ${isWaiterReportsActive ? 'active' : ''}`}>
-                    <Link to="/waiter/reports">Waiter Report</Link>
-                  </li>
-                </ul>
-              )}
-            </li>
-          )}
-
-          {/* 7. Kitchen Management Dropdown */}
-          {(isTabAllowed('kitchen-list') || isTabAllowed('kitchen-reports')) && (
-            <li className={`sidebar-group ${sidebarKitchenOpen ? 'open' : ''}`}>
-              <div
-                className={`sidebar-item dropdown-trigger ${isKitchenGroupActive ? 'child-active' : ''}`}
-                onClick={() => { setSidebarKitchenOpen(!sidebarKitchenOpen); setSidebarWaiterOpen(false); }}
-              >
-                <div className="dropdown-trigger-link">
-                  <span className="sidebar-icon-box">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"></path><line x1="6" y1="17" x2="18" y2="17"></line></svg>
-                  </span>
-                  <span className="sidebar-item-label">Kitchen Management</span>
-                  <span className="dropdown-arrow-container">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`dropdown-arrow-svg ${sidebarKitchenOpen ? 'open' : ''}`}><polyline points="6 9 12 15 18 9"/></svg>
-                  </span>
-                </div>
-              </div>
-              {sidebarKitchenOpen && (
-                <ul className="sidebar-submenu">
-                  <li className={`sidebar-item ${isKitchenListActive ? 'active' : ''}`}>
-                    <Link to="/kitchen/list">Kitchen List</Link>
-                  </li>
-                  <li className={`sidebar-item ${isKitchenReportsActive ? 'active' : ''}`}>
-                    <Link to="/kitchen/reports">Kitchen Report</Link>
-                  </li>
-                </ul>
-              )}
+          {/* 7. Staff Management (Combined Waiters and Kitchen) */}
+          {(isTabAllowed('staff') || isTabAllowed('waiter-list') || isTabAllowed('kitchen-list')) && (
+            <li className={`sidebar-item ${isStaffActive ? 'active' : ''}`}>
+              <Link to="/staff">
+                <span className="sidebar-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </span>
+                <span className="sidebar-item-label">Staff Management</span>
+              </Link>
             </li>
           )}
 
@@ -299,7 +257,7 @@ export default function AdminLayout() {
             <li className={`sidebar-item ${isUsersActive ? 'active' : ''}`}>
               <Link to="/users">
                 <span className="sidebar-icon-box">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 </span>
                 <span className="sidebar-item-label">User Module</span>
               </Link>
@@ -330,7 +288,7 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 11. Reports */}
+          {/* 11. Reports (Unified with Waiter & Kitchen Reports) */}
           {isTabAllowed('Reports') && (
             <li className={`sidebar-item ${isReportsActive ? 'active' : ''}`}>
               <Link to="/reports">

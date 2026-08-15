@@ -9,10 +9,10 @@ import TableManagement from './pages/TableManagement/TableManagement';
 import TableFormPage from './pages/TableManagement/TableFormPage';
 import MenuManagement from './pages/MenuManagement/MenuManagement';
 import CategoryListPage from './pages/MenuManagement/CategoryListPage';
+import InventoryManagement from './pages/InventoryManagement/InventoryManagement';
 import OrderManagement from './pages/OrderManagement/OrderManagement';
-import WaiterManagement from './pages/WaiterManagement/WaiterManagement';
+import StaffManagement from './pages/StaffManagement/StaffManagement';
 import StaffFormPage from './pages/WaiterManagement/StaffFormPage';
-import KitchenManagement from './pages/KitchenManagement/KitchenManagement';
 import KitchenSettingsPage from './pages/KitchenManagement/KitchenSettingsPage';
 import Users from './pages/Users/Users';
 import RolesPermissions from './pages/RolesPermissions/RolesPermissions';
@@ -50,20 +50,28 @@ export default function App() {
         <Route path="menu" element={<MenuManagement />} />
         <Route path="menu/categories" element={<CategoryListPage />} />
 
+        {/* Inventory Management (Premium Exclusive) */}
+        <Route path="inventory" element={<InventoryManagement />} />
+
         {/* Order Management */}
         <Route path="orders" element={<OrderManagement />} />
 
-        {/* Waiter Management & Staff Forms */}
-        <Route path="waiter" element={<Navigate to="/waiter/list" replace />} />
-        <Route path="waiter/list" element={<WaiterManagement isReports={false} />} />
-        <Route path="waiter/reports" element={<WaiterManagement isReports={true} />} />
+        {/* Staff Management (Combined Waiter List & Kitchen List) */}
+        <Route path="staff" element={<StaffManagement />} />
+        <Route path="staff/add" element={<StaffFormPage />} />
+        <Route path="staff/edit/:staffId" element={<StaffFormPage />} />
+        <Route path="staff/kitchen-settings" element={<KitchenSettingsPage />} />
+
+        {/* Backward Compatibility Redirects for Waiter and Kitchen */}
+        <Route path="waiter" element={<Navigate to="/staff" replace />} />
+        <Route path="waiter/list" element={<Navigate to="/staff" replace />} />
+        <Route path="waiter/reports" element={<Navigate to="/reports?tab=waiter" replace />} />
         <Route path="waiter/add" element={<StaffFormPage />} />
         <Route path="waiter/edit/:staffId" element={<StaffFormPage />} />
 
-        {/* Kitchen Management & Settings */}
-        <Route path="kitchen" element={<Navigate to="/kitchen/list" replace />} />
-        <Route path="kitchen/list" element={<KitchenManagement isReports={false} />} />
-        <Route path="kitchen/reports" element={<KitchenManagement isReports={true} />} />
+        <Route path="kitchen" element={<Navigate to="/staff" replace />} />
+        <Route path="kitchen/list" element={<Navigate to="/staff" replace />} />
+        <Route path="kitchen/reports" element={<Navigate to="/reports?tab=kitchen" replace />} />
         <Route path="kitchen/settings" element={<KitchenSettingsPage />} />
 
         {/* User Management & Roles */}
@@ -73,7 +81,7 @@ export default function App() {
         {/* Billing & Settlement */}
         <Route path="billing" element={<Billing />} />
 
-        {/* Reports & Analytics */}
+        {/* Reports & Analytics (Unified Reports including Waiter & Kitchen reports) */}
         <Route path="reports" element={<Reports />} />
 
         {/* Restaurant Settings */}

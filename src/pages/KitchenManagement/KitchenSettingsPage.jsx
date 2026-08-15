@@ -8,6 +8,7 @@ export default function KitchenSettingsPage() {
   const { activeRestaurant, updateKitchenPassword } = useAppState();
 
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (activeRestaurant?.kitchenLogin?.password) {
@@ -17,19 +18,26 @@ export default function KitchenSettingsPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!password.trim()) return;
+    if (!password.trim()) {
+      setError('Password is required.');
+      return;
+    }
+    if (password.trim().length < 4) {
+      setError('Password must be at least 4 characters.');
+      return;
+    }
 
     if (updateKitchenPassword) {
-      updateKitchenPassword(activeRestaurant.id, password);
+      updateKitchenPassword(activeRestaurant.id, password.trim());
     }
     ShowNotifications.showAlertNotification('Kitchen login password updated successfully.', true);
-    navigate('/kitchen/list');
+    navigate('/staff');
   };
 
   const email = activeRestaurant?.kitchenLogin?.email || 'kitchen@saravana.com';
 
   return (
-    <section className="panel-view active" style={{ padding: '0 24px 24px 24px', maxWidth: '800px', margin: '0 auto' }}>
+    <section className="panel-view active" style={{ padding: '0 0 24px 0', width: '100%' }}>
       <div style={{
         background: '#ffffff',
         borderRadius: '16px',
@@ -44,7 +52,7 @@ export default function KitchenSettingsPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button
             type="button"
-            onClick={() => navigate('/kitchen/list')}
+            onClick={() => navigate('/staff')}
             style={{
               background: 'transparent',
               border: 'none',
@@ -73,7 +81,7 @@ export default function KitchenSettingsPage() {
       </div>
 
       <div style={{ background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+        <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
               Kitchen Station Login Email
@@ -91,37 +99,46 @@ export default function KitchenSettingsPage() {
                 outline: 'none',
                 backgroundColor: '#f8fafc',
                 color: '#64748b',
-                cursor: 'not-allowed'
+                cursor: 'not-allowed',
+                boxSizing: 'border-box'
               }}
             />
           </div>
 
           <div style={{ marginBottom: '32px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-              Kitchen Station Password
+              Kitchen Station Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
               type="text"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) setError('');
+              }}
               placeholder="e.g. kitchen123"
               style={{
                 width: '100%',
                 padding: '12px 16px',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: error ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
                 fontSize: '14px',
                 outline: 'none',
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                boxSizing: 'border-box'
               }}
             />
+            {error && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {error}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button
               type="button"
-              onClick={() => navigate('/kitchen/list')}
+              onClick={() => navigate('/staff')}
               style={{
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',

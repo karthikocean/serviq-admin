@@ -4,6 +4,7 @@ import ShowNotifications from '../helper/ShowNotifications';
 export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-07', onGenerate }) {
   const [tableNumber, setTableNumber] = useState(defaultTableId);
   const [status, setStatus] = useState('Free');
+  const [error, setError] = useState('');
 
   // Format date e.g. "Aug 12, 2026"
   const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -13,6 +14,11 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
 
   const handleGenerateSubmit = (e) => {
     e?.preventDefault();
+    if (!tableNumber || !tableNumber.trim()) {
+      setError('Table Number is required.');
+      return;
+    }
+
     if (onGenerate) {
       onGenerate({ tableId: displayTableId, status, url: qrUrl });
     }
@@ -69,7 +75,6 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
               Generate QR Code
             </h3>
-
           </div>
           <button 
             type="button"
@@ -94,23 +99,25 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleGenerateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <form onSubmit={handleGenerateSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Table Number */}
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              Table Number
+              Table Number <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input 
               type="text" 
               value={tableNumber} 
-              onChange={e => setTableNumber(e.target.value)} 
+              onChange={e => {
+                setTableNumber(e.target.value);
+                if (error) setError('');
+              }} 
               placeholder="T-07"
-              required 
               style={{
                 width: '100%',
                 padding: '10px 14px',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: error ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
                 fontSize: '14px',
                 color: '#0f172a',
                 outline: 'none',
@@ -118,6 +125,11 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
                 boxSizing: 'border-box'
               }}
             />
+            {error && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {error}
+              </span>
+            )}
           </div>
 
           {/* QR Code Container */}
@@ -140,29 +152,6 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
                 style={{ width: '120px', height: '120px', display: 'block', borderRadius: '4px' }} 
               />
             </div>
-          </div>
-
-          {/* QR URL */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              QR URL
-            </label>
-            <input 
-              type="text" 
-              readOnly 
-              value={qrUrl} 
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '12px',
-                color: '#64748b',
-                backgroundColor: '#f1f5f9',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
           </div>
 
           {/* Created Date */}

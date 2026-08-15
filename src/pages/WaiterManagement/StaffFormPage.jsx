@@ -24,6 +24,8 @@ export default function StaffFormPage() {
     status: 'On Duty'
   });
 
+  const [formErrors, setFormErrors] = useState({});
+
   useEffect(() => {
     if (existingStaff) {
       setForm({
@@ -38,9 +40,39 @@ export default function StaffFormPage() {
     }
   }, [existingStaff, selectedBranchId]);
 
+  const validate = () => {
+    const errors = {};
+    if (!form.name.trim()) {
+      errors.name = 'Full Name is required.';
+    } else if (!/^[a-zA-Z\s.]+$/.test(form.name.trim())) {
+      errors.name = 'Full Name should contain letters only.';
+    }
+
+    if (!form.phone.trim()) {
+      errors.phone = 'Phone Number is required.';
+    } else if (!/^[0-9+\s\-()]{7,15}$/.test(form.phone.trim())) {
+      errors.phone = 'Please enter a valid phone number.';
+    }
+
+    if (!form.email.trim()) {
+      errors.email = 'Email Address is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errors.email = 'Please enter a valid email address.';
+    }
+
+    if (!form.password.trim()) {
+      errors.password = 'Password is required.';
+    } else if (form.password.length < 4) {
+      errors.password = 'Password must be at least 4 characters.';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim()) return;
+    if (!validate()) return;
 
     if (isEdit) {
       if (updateStaff) {
@@ -60,11 +92,11 @@ export default function StaffFormPage() {
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" created successfully.`, true);
     }
 
-    navigate('/waiter/list');
+    navigate('/staff');
   };
 
   return (
-    <section className="panel-view active" style={{ padding: '0 24px 24px 24px', maxWidth: '800px', margin: '0 auto' }}>
+    <section className="panel-view active" style={{ padding: '0 0 24px 0', width: '100%' }}>
       <div style={{
         background: '#ffffff',
         borderRadius: '16px',
@@ -79,7 +111,7 @@ export default function StaffFormPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button
             type="button"
-            onClick={() => navigate('/waiter/list')}
+            onClick={() => navigate('/staff')}
             style={{
               background: 'transparent',
               border: 'none',
@@ -100,37 +132,50 @@ export default function StaffFormPage() {
             <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
               {isEdit ? 'Edit Staff Member' : 'Add New Staff Member'}
             </h2>
-           
           </div>
         </div>
       </div>
 
       <div style={{ background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+        <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Full Name *
+                Full Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
+                onChange={(e) => {
+                  setForm({ ...form, name: e.target.value });
+                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                }}
                 placeholder="e.g. Ramesh Kumar"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
+              {formErrors.name && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.name}
+                </span>
+              )}
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Branch Assignment *
+                Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 value={form.branchId}
                 onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                required
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff' }}
+                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
               >
                 {branches.map(b => (
                   <option key={b.id} value={b.id}>
@@ -144,13 +189,12 @@ export default function StaffFormPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Role *
+                Role <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                required
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff' }}
+                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
               >
                 <option value="Waiter">Waiter</option>
                 <option value="Kitchen">Kitchen Staff</option>
@@ -160,46 +204,91 @@ export default function StaffFormPage() {
 
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Phone Number *
+                Phone Number <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
-                type="tel"
+                type="text"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                required
+                onChange={(e) => {
+                  setForm({ ...form, phone: e.target.value });
+                  if (formErrors.phone) setFormErrors({ ...formErrors, phone: '' });
+                }}
                 placeholder="e.g. 9876543210"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.phone ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
+              {formErrors.phone && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.phone}
+                </span>
+              )}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Email Address *
+                Email Address <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
-                type="email"
+                type="text"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value });
+                  if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                }}
                 placeholder="e.g. ramesh@serviq.com"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.email ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
+              {formErrors.email && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.email}
+                </span>
+              )}
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Password *
+                Password <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
                 value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
+                onChange={(e) => {
+                  setForm({ ...form, password: e.target.value });
+                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                }}
                 placeholder="e.g. waiter123"
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none' }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
               />
+              {formErrors.password && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.password}
+                </span>
+              )}
             </div>
           </div>
 
@@ -210,8 +299,7 @@ export default function StaffFormPage() {
             <select
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
-              required
-              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff' }}
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
             >
               <option value="On Duty">On Duty</option>
               <option value="Off Duty">Off Duty</option>
@@ -221,7 +309,7 @@ export default function StaffFormPage() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button
               type="button"
-              onClick={() => navigate('/waiter/list')}
+              onClick={() => navigate('/staff')}
               style={{
                 background: '#ffffff',
                 border: '1px solid #cbd5e1',

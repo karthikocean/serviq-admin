@@ -232,118 +232,158 @@ export default function MenuPanel({
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
       <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+        <table className="menu-items-table" style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ width: '5%', padding: '14px 16px' }}>S.NO</th>
-              <th style={{ width: '7%', padding: '14px 16px' }}>IMAGE</th>
-              <th style={{ width: '25%', padding: '14px 16px' }}>NAME</th>
-              <th style={{ width: '15%', padding: '14px 16px' }}>CATEGORY</th>
-              <th style={{ width: '10%', padding: '14px 16px', textAlign: 'right' }}>PRICE</th>
-              <th style={{ width: '10%', padding: '14px 16px', textAlign: 'center' }}>PREP TIME</th>
-              <th style={{ width: '10%', padding: '14px 16px', textAlign: 'center' }}>TYPE</th>
-              <th style={{ width: '10%', padding: '14px 16px', textAlign: 'center' }}>STATUS</th>
-              <th style={{ width: '8%', padding: '14px 16px', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ width: '4%', padding: '14px 12px' }}>S.NO</th>
+              <th style={{ width: '6%', padding: '14px 12px' }}>IMAGE</th>
+              <th style={{ width: '21%', padding: '14px 14px' }}>NAME</th>
+              <th style={{ width: '12%', padding: '14px 12px' }}>CATEGORY</th>
+              <th style={{ width: '10%', padding: '14px 12px', textAlign: 'right' }}>BASE PRICE</th>
+              <th style={{ width: '11%', padding: '14px 12px', textAlign: 'center' }}>GST RATE</th>
+              <th style={{ width: '13%', padding: '14px 12px', textAlign: 'right' }}>TOTAL (INCL. GST)</th>
+              <th style={{ width: '8%', padding: '14px 10px', textAlign: 'center' }}>TYPE</th>
+              <th style={{ width: '9%', padding: '14px 10px', textAlign: 'center' }}>STATUS</th>
+              <th style={{ width: '6%', padding: '14px 12px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
-            {filteredMenu.map((item, index) => (
-              <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
-                <td style={{ padding: '12px 16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
-                {/* 1. Image */}
-                <td style={{ padding: '12px 16px' }}>
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', display: 'block', border: '1px solid #e2e8f0' }}
-                    />
-                  ) : (
-                    <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <PlateIcon size={18} color="#64748b" />
+            {filteredMenu.map((item, index) => {
+              const basePrice = Number(item.price) || 0;
+              const gstRate = item.gst !== undefined ? Number(item.gst) : 5;
+              const gstAmt = (basePrice * gstRate) / 100;
+              const finalPrice = basePrice + gstAmt;
+
+              return (
+                <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
+                  <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
+                  {/* 1. Image */}
+                  <td style={{ padding: '12px 12px' }}>
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', display: 'block', border: '1px solid #e2e8f0' }}
+                      />
+                    ) : (
+                      <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <PlateIcon size={18} color="#64748b" />
+                      </div>
+                    )}
+                  </td>
+
+                  {/* 2. Name & description */}
+                  <td style={{ padding: '12px 14px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{item.name}</span>
+                      {item.bestseller && (
+                        <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px' }}>
+                          ★ BESTSELLER
+                        </span>
+                      )}
                     </div>
-                  )}
-                </td>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.desc || 'No description provided.'}
+                    </div>
+                  </td>
 
-                {/* 2. Name & description */}
-                <td style={{ padding: '12px 16px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{item.name}</div>
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.desc || 'No description provided.'}
-                  </div>
-                </td>
+                  {/* 3. Category */}
+                  <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>{item.category}</td>
 
-                {/* 3. Category */}
-                <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>{item.category}</td>
+                  {/* 4. Base Price */}
+                  <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>
+                    {currency}{basePrice.toFixed(2)}
+                  </td>
 
-                {/* 4. Price */}
-                <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 800, color: '#0f172a', textAlign: 'right' }}>{currency}{item.price}</td>
+                  {/* 5. GST Rate */}
+                  <td style={{ padding: '12px 12px', textAlign: 'center' }}>
+                    <span style={{
+                      background: '#fff7ed',
+                      border: '1px solid #fed7aa',
+                      color: '#c2410c',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: 800
+                    }}>
+                      {gstRate}% GST
+                    </span>
+                    <div style={{ fontSize: '10px', color: '#9a3412', marginTop: '2px', fontWeight: 600 }}>
+                      +₹{gstAmt.toFixed(2)}
+                    </div>
+                  </td>
 
-                {/* 5. Prep Time */}
-                <td style={{ padding: '12px 16px', fontSize: '12px', fontWeight: 600, color: '#64748b', textAlign: 'center' }}>15 mins</td>
+                  {/* 6. Total with GST */}
+                  <td style={{ padding: '12px 12px', textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 900, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif" }}>
+                      {currency}{finalPrice.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748b' }}>incl. GST</div>
+                  </td>
 
-                {/* 6. Type */}
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    background: item.veg ? '#e6f4ea' : '#fce8e6',
-                    color: item.veg ? '#16a34a' : '#ea4335'
-                  }}>
-                    {item.veg ? 'VEG' : 'NON-VEG'}
-                  </span>
-                </td>
+                  {/* 7. Type */}
+                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      background: item.veg ? '#e6f4ea' : '#fce8e6',
+                      color: item.veg ? '#16a34a' : '#ea4335'
+                    }}>
+                      {item.veg ? 'VEG' : 'NON-VEG'}
+                    </span>
+                  </td>
 
-                {/* 7. Status */}
-                <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
-                    fontSize: '10px',
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    background: item.available ? '#e6f4ea' : '#f1f5f9',
-                    color: item.available ? '#16a34a' : '#64748b'
-                  }}>
-                    {item.available ? 'AVAILABLE' : 'OUT OF STOCK'}
-                  </span>
-                </td>
+                  {/* 8. Status */}
+                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      background: item.available ? '#e6f4ea' : '#f1f5f9',
+                      color: item.available ? '#16a34a' : '#64748b'
+                    }}>
+                      {item.available ? 'AVAILABLE' : 'OUT OF STOCK'}
+                    </span>
+                  </td>
 
-                {/* 8. Actions */}
-                <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <button 
-                      type="button" 
-                      title="Edit Item"
-                      style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                      onClick={() => openEditMenuModal(item)}
-                      onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                    >
-                      <PencilIcon size={16} />
-                    </button>
-                    <button 
-                      type="button" 
-                      title="Delete Item"
-                      style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                      onClick={() => handleDeleteMenu(item._id || item.id)}
-                      onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
-                    >
-                      <TrashIcon size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  {/* 9. Actions */}
+                  <td style={{ padding: '12px 12px', textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        title="Edit Item"
+                        style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                        onClick={() => openEditMenuModal(item)}
+                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                      >
+                        <PencilIcon size={16} />
+                      </button>
+                      <button 
+                        type="button" 
+                        title="Delete Item"
+                        style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                        onClick={() => handleDeleteMenu(item._id || item.id)}
+                        onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
+                      >
+                        <TrashIcon size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {filteredMenu.length === 0 && (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No menu items found matching filters.</td>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No menu items found matching filters.</td>
               </tr>
             )}
           </tbody>

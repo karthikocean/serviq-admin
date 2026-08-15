@@ -19,6 +19,7 @@ export const DEFAULT_ROLES = {
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
@@ -36,6 +37,7 @@ export const DEFAULT_ROLES = {
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
@@ -53,6 +55,7 @@ export const DEFAULT_ROLES = {
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
@@ -70,6 +73,7 @@ export const DEFAULT_ROLES = {
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: false },
@@ -87,6 +91,7 @@ export const DEFAULT_ROLES = {
       menu: { view: true, add: true, edit: true, delete: false },
       tables: { view: true, add: true, edit: true, delete: false },
       billing: { view: true, add: true, edit: true, delete: false },
+      staff: { view: true, add: true, edit: true, delete: false },
       waiter: { view: true, add: true, edit: true, delete: false },
       kitchen: { view: true, add: true, edit: true, delete: false },
       Reports: { view: true, add: false, edit: false, delete: false },
@@ -104,6 +109,7 @@ export const DEFAULT_ROLES = {
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: true, add: false, edit: true, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
+      staff: { view: true, add: false, edit: false, delete: false },
       waiter: { view: true, add: false, edit: false, delete: false },
       kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
@@ -121,8 +127,9 @@ export const DEFAULT_ROLES = {
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
+      staff: { view: true, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
-      kitchen: { view: true, add: false, edit: true, delete: false },
+      kitchen: { view: true, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
@@ -1058,90 +1065,199 @@ export const AppProvider = ({ children }) => {
 
   // Inbound Orders
   const updateOrderStatus = async (id, orderId, nextStatus) => {
+    // 1. Optimistic Local State Update
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentOrders = rest.orders || [];
+      const updatedOrders = currentOrders.map(o => {
+        if (o.id === orderId || o._id === orderId || o.orderId === orderId || String(o.id) === String(orderId)) {
+          const isDone = nextStatus === 'done' || nextStatus === 'served';
+          return {
+            ...o,
+            status: nextStatus,
+            billingStatus: isDone ? 'paid' : (o.billingStatus || 'unpaid')
+          };
+        }
+        return o;
+      });
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          orders: updatedOrders,
+          billingData: computeBillingData(updatedOrders, rest.tables || [])
+        }
+      };
+    });
+
+    // 2. Safe API Sync
     try {
       const rest = restaurantsData[id];
-      if (!rest) return;
-      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
-      if (!order) return;
-      
-      const payload = { status: nextStatus };
-      if (nextStatus === 'done') {
-        payload.billingStatus = 'paid';
-      }
-      
-      const idToUpdate = order._id || order.id || order.orderId;
-      const res = await OrderApi.updateOrder(idToUpdate, payload);
-      if (res && res.status) {
-        await fetchOrders();
-        await fetchTables();
+      if (rest) {
+        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
+        if (order) {
+          const payload = { status: nextStatus };
+          if (nextStatus === 'done' || nextStatus === 'served') {
+            payload.billingStatus = 'paid';
+          }
+          const idToUpdate = order._id || order.id || order.orderId;
+          await OrderApi.updateOrder(idToUpdate, payload).catch(() => {});
+        }
       }
     } catch (e) {
-      console.error(e);
+      // Ignore background sync errors
     }
   };
 
   const assignWaiterToOrder = async (id, orderId, waiterName) => {
+    // 1. Optimistic Local State Update
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentOrders = rest.orders || [];
+      const updatedOrders = currentOrders.map(o => {
+        if (o.id === orderId || o._id === orderId || o.orderId === orderId || String(o.id) === String(orderId)) {
+          return {
+            ...o,
+            waiter: waiterName
+          };
+        }
+        return o;
+      });
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          orders: updatedOrders
+        }
+      };
+    });
+
+    // 2. Safe API Sync
     try {
       const rest = restaurantsData[id];
-      if (!rest) return;
-      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
-      if (!order) return;
-
-      const idToUpdate = order._id || order.id || order.orderId;
-      const res = await OrderApi.updateOrder(idToUpdate, { waiter: waiterName });
-      if (res && res.status) {
-        await fetchOrders();
+      if (rest) {
+        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
+        if (order) {
+          const idToUpdate = order._id || order.id || order.orderId;
+          await OrderApi.updateOrder(idToUpdate, { waiter: waiterName }).catch(() => {});
+        }
       }
     } catch (e) {
-      console.error(e);
+      // Ignore background sync errors
     }
   };
 
   const deleteOrder = async (id, orderId) => {
+    // 1. Optimistic Local State Update
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentOrders = rest.orders || [];
+      const updatedOrders = currentOrders.filter(o => o.id !== orderId && o._id !== orderId && String(o.id) !== String(orderId));
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          orders: updatedOrders,
+          billingData: computeBillingData(updatedOrders, rest.tables || [])
+        }
+      };
+    });
+
+    // 2. Safe API Sync
     try {
       const rest = restaurantsData[id];
-      if (!rest) return;
-      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
-      if (!order) return;
-
-      const idToDelete = order._id || order.id || order.orderId;
-      const res = await OrderApi.deleteOrder(idToDelete);
-      if (res && res.status) {
-        await fetchOrders();
-        await fetchTables();
+      if (rest) {
+        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
+        if (order) {
+          const idToDelete = order._id || order.id || order.orderId;
+          await OrderApi.deleteOrder(idToDelete).catch(() => {});
+        }
       }
     } catch (e) {
-      console.error(e);
+      // Ignore background sync errors
     }
   };
 
   const updateOrder = async (id, orderId, updatedFields) => {
+    // 1. Optimistic Local State Update
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentOrders = rest.orders || [];
+      const updatedOrders = currentOrders.map(o => {
+        if (o.id === orderId || o._id === orderId || o.orderId === orderId || String(o.id) === String(orderId)) {
+          return {
+            ...o,
+            ...updatedFields
+          };
+        }
+        return o;
+      });
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          orders: updatedOrders,
+          billingData: computeBillingData(updatedOrders, rest.tables || [])
+        }
+      };
+    });
+
+    // 2. Safe API Sync
     try {
       const rest = restaurantsData[id];
-      if (!rest) return;
-      const order = rest.orders.find(o => o.orderId === orderId || o.id === orderId || o._id === orderId);
-      if (!order) return;
-
-      const idToUpdate = order._id || order.id || order.orderId;
-      const res = await OrderApi.updateOrder(idToUpdate, updatedFields);
-      if (res && res.status) {
-        await fetchOrders();
-        await fetchTables();
+      if (rest) {
+        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
+        if (order) {
+          const idToUpdate = order._id || order.id || order.orderId;
+          await OrderApi.updateOrder(idToUpdate, updatedFields).catch(() => {});
+        }
       }
     } catch (e) {
-      console.error(e);
+      // Ignore background sync errors
     }
   };
 
   const markBillAsPaid = async (id, tableLabel) => {
+    // 1. Optimistic Local State Update
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const cleanTable = tableLabel.replace('Table ', '').trim();
+      const updatedOrders = (rest.orders || []).map(o => {
+        const oTable = o.table.replace('Table ', '').trim();
+        if (oTable === cleanTable) {
+          return {
+            ...o,
+            billingStatus: 'paid',
+            status: 'done'
+          };
+        }
+        return o;
+      });
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          orders: updatedOrders,
+          billingData: computeBillingData(updatedOrders, rest.tables || [])
+        }
+      };
+    });
+
+    // 2. Safe API Sync
     try {
-      const res = await OrderApi.payBill(tableLabel);
-      if (res && res.status) {
-        await fetchOrders();
-        await fetchTables();
-      }
+      await OrderApi.payBill(tableLabel).catch(() => {});
     } catch (e) {
-      console.error(e);
+      // Ignore background sync errors
     }
   };
 
@@ -1232,7 +1348,17 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const checkIsAdmin = () => {
+    const userRole = (currentUser?.role || '').toLowerCase();
+    const userType = (currentUser?.userType || '').toUpperCase();
+    return userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  };
+
   const addBranch = (restaurantId, branchData) => {
+    if (!checkIsAdmin()) {
+      ShowNotifications.showAlertNotification("Unauthorized: Only Admin role can create new branches.", false);
+      return;
+    }
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
@@ -1275,6 +1401,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateBranch = (restaurantId, branchId, updatedData) => {
+    if (!checkIsAdmin()) {
+      ShowNotifications.showAlertNotification("Unauthorized: Only Admin role can edit branches.", false);
+      return;
+    }
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
@@ -1304,6 +1434,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteBranch = (restaurantId, branchId) => {
+    if (!checkIsAdmin()) {
+      ShowNotifications.showAlertNotification("Unauthorized: Only Admin role can delete branches.", false);
+      return;
+    }
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
@@ -1319,6 +1453,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleBranchStatus = (restaurantId, branchId) => {
+    if (!checkIsAdmin()) {
+      ShowNotifications.showAlertNotification("Unauthorized: Only Admin role can change branch status.", false);
+      return;
+    }
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
@@ -1406,6 +1544,144 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  // INVENTORY MANAGEMENT HANDLERS
+  const addInventoryItem = (id, itemData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentInventory = rest.inventory || [];
+      const newId = itemData.id || `INV-${String(currentInventory.length + 1).padStart(3, '0')}`;
+      const newItem = {
+        ...itemData,
+        id: newId,
+        currentStock: Number(itemData.currentStock) || 0,
+        minStockLevel: Number(itemData.minStockLevel) || 0,
+        costPerUnit: Number(itemData.costPerUnit) || 0,
+        status: (Number(itemData.currentStock) <= 0) ? 'Out of Stock' : (Number(itemData.currentStock) <= Number(itemData.minStockLevel)) ? 'Low Stock' : 'In Stock',
+        lastRestocked: itemData.lastRestocked || new Date().toISOString().split('T')[0]
+      };
+      
+      const newLog = {
+        id: `LOG-${Date.now().toString().slice(-6)}`,
+        itemId: newId,
+        itemName: newItem.name,
+        type: 'Stock In',
+        quantity: newItem.currentStock,
+        unit: newItem.unit,
+        date: new Date().toLocaleString(),
+        reason: 'Initial Stock Creation',
+        user: currentUser?.name || 'Admin',
+        notes: 'Item added to inventory'
+      };
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: [newItem, ...currentInventory],
+          inventoryLogs: [newLog, ...(rest.inventoryLogs || [])]
+        }
+      };
+    });
+  };
+
+  const updateInventoryItem = (id, itemId, itemData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const currentInventory = rest.inventory || [];
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: currentInventory.map(item => {
+            if (item.id === itemId) {
+              const updatedStock = itemData.currentStock !== undefined ? Number(itemData.currentStock) : item.currentStock;
+              const updatedMin = itemData.minStockLevel !== undefined ? Number(itemData.minStockLevel) : item.minStockLevel;
+              const status = (updatedStock <= 0) ? 'Out of Stock' : (updatedStock <= updatedMin) ? 'Low Stock' : 'In Stock';
+              return {
+                ...item,
+                ...itemData,
+                currentStock: updatedStock,
+                minStockLevel: updatedMin,
+                costPerUnit: itemData.costPerUnit !== undefined ? Number(itemData.costPerUnit) : item.costPerUnit,
+                status
+              };
+            }
+            return item;
+          })
+        }
+      };
+    });
+  };
+
+  const deleteInventoryItem = (id, itemId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: (rest.inventory || []).filter(item => item.id !== itemId)
+        }
+      };
+    });
+  };
+
+  const adjustStock = (id, itemId, type, quantity, reason, notes) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const qtyNum = Number(quantity) || 0;
+      let targetItemName = '';
+      let targetUnit = '';
+
+      const updatedInventory = (rest.inventory || []).map(item => {
+        if (item.id === itemId) {
+          targetItemName = item.name;
+          targetUnit = item.unit;
+          let newStock = item.currentStock;
+          if (type === 'Stock In') {
+            newStock += qtyNum;
+          } else {
+            newStock = Math.max(0, newStock - qtyNum);
+          }
+          const status = (newStock <= 0) ? 'Out of Stock' : (newStock <= item.minStockLevel) ? 'Low Stock' : 'In Stock';
+          return {
+            ...item,
+            currentStock: newStock,
+            status,
+            lastRestocked: type === 'Stock In' ? new Date().toISOString().split('T')[0] : item.lastRestocked
+          };
+        }
+        return item;
+      });
+
+      const newLog = {
+        id: `LOG-${Date.now().toString().slice(-6)}`,
+        itemId: itemId,
+        itemName: targetItemName || 'Inventory Item',
+        type: type,
+        quantity: qtyNum,
+        unit: targetUnit || 'units',
+        date: new Date().toLocaleString(),
+        reason: reason || (type === 'Stock In' ? 'Stock Purchase' : 'Kitchen Issue'),
+        user: currentUser?.name || 'Admin',
+        notes: notes || ''
+      };
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: updatedInventory,
+          inventoryLogs: [newLog, ...(rest.inventoryLogs || [])]
+        }
+      };
+    });
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1460,6 +1736,10 @@ export const AppProvider = ({ children }) => {
         addUser,
         updateUser,
         deleteUser,
+        addInventoryItem,
+        updateInventoryItem,
+        deleteInventoryItem,
+        adjustStock,
         selectedBranchId,
         setSelectedBranchId
       }}
