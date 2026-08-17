@@ -1,0 +1,205 @@
+/* Table Management specific styles */
+
+.tables-dashboard-grid {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.tables-list-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tables-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.table-metric-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--border-radius-sm);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--card-shadow);
+}
+
+.table-metric-card .metric-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--black);
+  margin-bottom: 4px;
+}
+
+.table-metric-card .metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #000000;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dining-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.dining-table-card {
+  background-color: var(--bg-secondary);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  position: relative;
+  transition: var(--transition);
+  cursor: pointer;
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dining-table-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--primary);
+  box-shadow: 0 10px 20px -8px rgba(255, 122, 0, 0.15), var(--card-shadow);
+}
+
+.dining-table-card.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-light), 0 8px 24px -6px rgba(255, 122, 0, 0.2);
+  background-color: var(--primary-light) !important;
+}
+
+.dining-table-card .card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dining-table-card .table-name-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--black);
+}
+
+.dining-table-card .seats-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #000000;
+  background-color: var(--bg-tertiary);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+
+.dining-table-card .table-card-status {
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.dining-table-card.free .table-card-status {
+  color: var(--success);
+}
+
+.dining-table-card.occupied .table-card-status {
+  color: var(--primary);
+}
+
+.dining-table-card .table-card-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dining-table-card .table-card-bill-tag {
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--danger);
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.dining-table-card .mini-qr-preview-box {
+  width: 70px;
+  height: 70px;
+  border: 1px solid var(--border);
+  background-color: white;
+  padding: 4px;
+  border-radius: 6px;
+  margin: 0 auto 16px auto;
+  opacity: 0.85;
+  transition: var(--transition);
+}
+
+.dining-table-card:hover .mini-qr-preview-box {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+.dining-table-card .table-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.table-action-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 6px;
+  font-weight: 600;
+  background-color: var(--bg-tertiary);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  transition: var(--transition);
+}
+
+.table-action-btn:hover {
+  background-color: var(--black);
+  color: white;
+}
+
+.table-action-btn.view-btn {
+  flex: 1;
+}
+
+.table-action-btn.clear-btn {
+  background-color: var(--success-light);
+  color: var(--success);
+  border-color: rgba(46, 189, 89, 0.15);
+}
+
+.table-action-btn.clear-btn:hover {
+  background-color: var(--success);
+  color: white;
+}
+
+.table-action-btn.delete-btn {
+  background-color: #fef2f2;
+  color: #ef4444;
+  border-color: #fee2e2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.table-action-btn.delete-btn:hover {
+  background-color: #ef4444;
+  border-color: #ef4444;
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
