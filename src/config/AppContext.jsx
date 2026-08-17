@@ -166,7 +166,20 @@ export const AppProvider = ({ children }) => {
 
 
   // Active computed tenant info
-  const activeRestaurant = currentRestaurantId ? restaurantsData[currentRestaurantId] : null;
+  const activeRestaurant = (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || {
+    tables: [],
+    orders: [],
+    menu: [],
+    staff: [],
+    qrCodes: [],
+    kitchenLogin: {},
+    billing: {},
+    roles: DEFAULT_ROLES,
+    branches: [],
+    users: [],
+    inventory: [],
+    inventoryLogs: []
+  };
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
     return tablesList.map(t => {
@@ -316,10 +329,11 @@ export const AppProvider = ({ children }) => {
     if (!token || !currentUser || !currentRestaurantId) return;
 
     const initData = async () => {
-      await fetchTables();
-      await fetchOrders();
-      await fetchQrCodes();
-      await fetchMenu();
+      // Temporarily comment out pending integration endpoints to prevent UI crash
+      // await fetchTables();
+      // await fetchOrders();
+      // await fetchQrCodes();
+      // await fetchMenu();
     };
     initData();
   }, [currentUser, currentRestaurantId]);
@@ -388,122 +402,6 @@ export const AppProvider = ({ children }) => {
       }
     } catch (e) {
       console.warn("Backend API login attempt note:", e);
-    }
-
-    // 2. Mock/Offline Fallback for Restaurant Owner (e.g. arjun.kumar@royalspice.test)
-    if (cleanEmail === 'arjun.kumar@royalspice.test' && (password === 'admin123' || password === 'admin' || password === '123456' || password === 'password123')) {
-      const user = {
-        id: '6a7ef447d15d03c37e50ea65',
-        name: 'Arjun Kumar',
-        email: 'arjun.kumar@royalspice.test',
-        phoneNumber: '9876543211',
-        userType: 'RESTAURANT_OWNER',
-        role: 'RESTAURANT_OWNER',
-        restaurantId: 'rest-1',
-        activeBranchId: 'BR-001',
-        branchId: 'ALL'
-      };
-      setCurrentUser(user);
-      setCurrentRestaurantId('rest-1');
-      setSelectedBranchId(null);
-      try {
-        localStorage.setItem('serviq_user', JSON.stringify(user));
-        localStorage.setItem('serviq_rest_id', 'rest-1');
-        localStorage.removeItem('serviq_branch_id');
-      } catch (e) {}
-      ShowNotifications.showAlertNotification("Login successful as Restaurant Owner (Offline Mode)", true);
-      return { success: true, user };
-    }
-
-    // 3. Check Admin / users / staff in local restaurant dataset
-    for (let id in restaurantsData) {
-      const rest = restaurantsData[id];
-      
-      // Check Tenant owner/admin
-      if (rest.owner.toLowerCase() === cleanEmail && (password === 'admin123' || password === 'admin' || password === '123456')) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = { name: rest.name + ' Admin', email: cleanEmail, role: 'RESTAURANT_OWNER', userType: 'RESTAURANT_OWNER', branchId: 'ALL' };
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        setSelectedBranchId(null);
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-          localStorage.removeItem('serviq_branch_id');
-        } catch (e) {}
-        if (rest.settings) {
-          setAccentColor(rest.settings.accentColor || '#ff7a00');
-          setDarkMode(rest.settings.darkMode || false);
-        }
-        return { success: true, user };
-      }
-
-      // Check User accounts array
-      const matchingUser = (rest.users || []).find(u => u.email.toLowerCase() === cleanEmail);
-      if (matchingUser && (password === 'admin123' || password === matchingUser.password || password === '1234' || password === '123456')) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = {
-          name: matchingUser.name,
-          email: matchingUser.email,
-          role: matchingUser.role,
-          userType: matchingUser.role,
-          branchId: matchingUser.branchId || 'ALL'
-        };
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        if (user.branchId && user.branchId !== 'ALL') {
-          setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) {}
-        } else {
-          setSelectedBranchId(null);
-          try { localStorage.removeItem('serviq_branch_id'); } catch (e) {}
-        }
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
-        return { success: true, user };
-      }
-
-      // Check Kitchen Login credentials
-      if (rest.kitchenLogin && cleanEmail === rest.kitchenLogin.email.toLowerCase() && (password === rest.kitchenLogin.password || password === '123456')) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = { name: 'Kitchen Station', email: cleanEmail, role: 'Kitchen', userType: 'Kitchen', branchId: 'BR-001' };
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        setSelectedBranchId('BR-001');
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
-        return { success: true, user };
-      }
-
-      // Check Staff credentials
-      const staffMember = (rest.staff || []).find(s => s.email.toLowerCase() === cleanEmail && (s.password === password || password === '1234' || password === 'admin123' || password === '123456'));
-      if (staffMember) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the administration.' };
-        }
-        const user = { name: staffMember.name, email: staffMember.email, role: staffMember.role, userType: staffMember.role, branchId: staffMember.branchId || 'BR-001' };
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        if (user.branchId) {
-          setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) {}
-        }
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
-        return { success: true, user };
-      }
     }
 
     return { success: false, error: backendErrorMessage || 'Invalid email or password. Please check your credentials.' };

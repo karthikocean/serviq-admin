@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import MenuApi from '../api/Menu.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -17,44 +18,42 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const defaultCategoryData = [
-  { id: 'cat-1', name: 'Starters', description: 'Appetizers and quick bites', status: 'AVAILABLE' },
-  { id: 'cat-2', name: 'Rice Meals', description: 'Main course rice dishes', status: 'AVAILABLE' },
-  { id: 'cat-3', name: 'Tiffin', description: 'South Indian tiffins', status: 'AVAILABLE' },
-  { id: 'cat-4', name: 'Rotis', description: 'Indian breads', status: 'AVAILABLE' },
-  { id: 'cat-5', name: 'Desserts', description: 'Sweets and ice creams', status: 'AVAILABLE' },
-  { id: 'cat-6', name: 'Drinks', description: 'Beverages', status: 'AVAILABLE' }
-];
+
 
 export default function CategoryListPanel({
   categories = [],
   onBack,
-  onUpdateCategories,
+  refreshCategories,
   activeRestaurant
 }) {
-  // Convert simple array or object array to standard items
-  const initialItems = React.useMemo(() => {
-    if (!categories || categories.length === 0) return defaultCategoryData;
-    return categories.map((c, idx) => {
-      if (typeof c === 'string') {
-        const foundDef = defaultCategoryData.find(d => d.name.toLowerCase() === c.toLowerCase());
-        return {
-          id: `cat-${idx + 1}`,
-          name: c,
-          description: foundDef ? foundDef.description : 'Menu item category',
-          status: 'AVAILABLE'
-        };
-      }
-      return {
-        id: c.id || `cat-${idx + 1}`,
-        name: c.name || 'Category',
-        description: c.description || 'Menu item category',
-        status: c.status || 'AVAILABLE'
-      };
-    });
-  }, [categories]);
+  const [paginatedCategories, setPaginatedCategories] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const [totalPages, setTotalPages] = useState(1);
 
-  const [categoryItems, setCategoryItems] = useState(initialItems);
+  React.useEffect(() => {
+    fetchPaginatedCategories();
+  }, [page, activeRestaurant]);
+
+  const fetchPaginatedCategories = async () => {
+    if (!activeRestaurant) return;
+    const params = { page, limit };
+    const res = await MenuApi.getCategories(params);
+    if (res?.status && res.response) {
+      if (res.response.data && res.response.data.items) {
+        setPaginatedCategories(res.response.data.items);
+        setTotalItems(res.response.data.total || 0);
+        setTotalPages(Math.ceil((res.response.data.total || 0) / limit) || 1);
+      } else {
+        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        setPaginatedCategories(arr);
+        setTotalItems(arr.length);
+        setTotalPages(Math.ceil(arr.length / limit) || 1);
+      }
+    }
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
@@ -80,47 +79,60 @@ export default function CategoryListPanel({
     setIsModalOpen(true);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e?.preventDefault();
     if (!formName.trim()) {
       setFormErrors({ name: 'Category Name is required.' });
       return;
     }
 
-    let updated;
+    const payload = {
+      name: formName.trim(),
+      description: formDesc.trim(),
+      status: formStatus
+    };
+
     if (editingItem) {
-      updated = categoryItems.map(item =>
-        item.id === editingItem.id
-          ? { ...item, name: formName.trim(), description: formDesc.trim(), status: formStatus }
-          : item
-      );
-      ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
+      if (editingItem._id) {
+        const res = await MenuApi.updateCategory(editingItem._id, payload);
+        if (res.status) {
+          ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
+          if (refreshCategories) refreshCategories();
+          fetchPaginatedCategories();
+        } else {
+          ShowNotifications.showAlertNotification('Failed to update category', false);
+        }
+      } else {
+         ShowNotifications.showAlertNotification('Cannot update default placeholder category. Delete and create a new one.', false);
+      }
     } else {
-      const newItem = {
-        id: `cat-${Date.now()}`,
-        name: formName.trim(),
-        description: formDesc.trim() || 'Menu item category',
-        status: formStatus
-      };
-      updated = [...categoryItems, newItem];
-      ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
+      const res = await MenuApi.createCategory(payload);
+      if (res.status) {
+        ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
+        if (refreshCategories) refreshCategories();
+        fetchPaginatedCategories();
+      } else {
+        ShowNotifications.showAlertNotification('Failed to create category', false);
+      }
     }
 
-    setCategoryItems(updated);
-    if (onUpdateCategories) {
-      onUpdateCategories(updated);
-    }
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id, name) => {
-    if (window.confirm(`Are you sure you want to delete category "${name}"?`)) {
-      const updated = categoryItems.filter(item => item.id !== id);
-      setCategoryItems(updated);
-      if (onUpdateCategories) {
-        onUpdateCategories(updated);
+  const handleDelete = async (item) => {
+    if (window.confirm(`Are you sure you want to delete category "${item.name}"?`)) {
+      if (item._id) {
+        const res = await MenuApi.deleteCategory(item._id);
+        if (res.status) {
+          ShowNotifications.showAlertNotification(`Category "${item.name}" deleted!`, true);
+          if (refreshCategories) refreshCategories();
+          fetchPaginatedCategories();
+        } else {
+          ShowNotifications.showAlertNotification('Failed to delete category', false);
+        }
+      } else {
+        ShowNotifications.showAlertNotification('Cannot delete default placeholder category', false);
       }
-      ShowNotifications.showAlertNotification(`Category "${name}" deleted!`, true);
     }
   };
 
@@ -227,21 +239,21 @@ export default function CategoryListPanel({
               </tr>
             </thead>
             <tbody>
-              {categoryItems.map((item, index) => {
+              {paginatedCategories.map((item, index) => {
                 const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
                 return (
                   <tr 
-                    key={item.id || index}
+                    key={item._id || index}
                     style={{
-                      borderBottom: index < categoryItems.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
                   >
                     {/* S.NO */}
-                    <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b', fontWeight: '500' }}>
-                      {index + 1}
+                    <td style={{ padding: '16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', width: '5%' }}>
+                      {(page - 1) * limit + index + 1}
                     </td>
 
                     {/* CATEGORY NAME */}
@@ -296,7 +308,7 @@ export default function CategoryListPanel({
                         </button>
                         <button 
                           type="button"
-                          onClick={() => handleDelete(item.id, item.name)}
+                          onClick={() => handleDelete(item)}
                           style={{
                             background: 'transparent',
                             border: 'none',
@@ -322,6 +334,48 @@ export default function CategoryListPanel({
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Pagination Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '13px', color: '#64748b' }}>
+          Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            style={{
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: '#fff',
+              color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Prev
+          </button>
+          
+          <button
+            style={{
+              minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: '6px', fontSize: '13px', fontWeight: 700,
+              border: 'none', background: '#000', color: '#fff', cursor: 'default'
+            }}
+          >
+            {page}
+          </button>
+
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || totalPages === 0}
+            style={{
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: '#fff',
+              color: page === totalPages || totalPages === 0 ? '#cbd5e1' : '#64748b', cursor: page === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Next
+          </button>
         </div>
       </div>
 

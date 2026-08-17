@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
+import TableApi from '../../api/Table';
+import StaffApi from '../../api/Staff';
+import BranchApi from '../../api/Branch';
 
 export default function TableFormPage() {
   const navigate = useNavigate();
   const { tableId } = useParams();
-  const { activeRestaurant, addDiningTable, updateDiningTable, selectedBranchId } = useAppState();
+  const location = useLocation();
+  const { activeRestaurant, selectedBranchId } = useAppState();
 
-  const branches = activeRestaurant?.branches || [];
-  const allStaff = activeRestaurant?.staff || [];
+  const [branches, setBranches] = useState([]);
+  const [allStaff, setAllStaff] = useState([]);
   const isEdit = !!tableId;
-  const existingTable = isEdit && activeRestaurant?.tables 
-    ? activeRestaurant.tables.find(t => t.id === tableId || t.id === `T-${tableId}`) 
-    : null;
+  const [existingTable, setExistingTable] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [form, setForm] = useState({
     id: tableId ? (tableId.startsWith('T-') ? tableId : `T-${tableId}`) : '',
-    branchId: selectedBranchId || (branches.length > 0 ? branches[0].id : 'BR-001'),
+    branchId: selectedBranchId || '',
     name: '',
     seats: 4,
     section: 'Main Dining',
@@ -28,32 +31,63 @@ export default function TableFormPage() {
   const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
-    if (existingTable) {
-      // Find matching waiter ID if only name is present
-      let matchedWaiterId = existingTable.assignedWaiterId || '';
-      if (!matchedWaiterId && existingTable.assignedWaiter) {
-        const found = allStaff.find(s => s.name === existingTable.assignedWaiter || s.name === existingTable.assignedWaiterName);
-        if (found) matchedWaiterId = found.id;
-      }
+    fetchBranches();
+    if (isEdit) {
+      fetchTable();
+    } else if (location.state?.table) {
+      setExistingTable(location.state.table);
+    }
+  }, [tableId]);
 
+  useEffect(() => {
+    fetchStaff(form.branchId);
+  }, [form.branchId]);
+
+  const fetchStaff = async (branchId) => {
+    const res = await StaffApi.getStaff(branchId);
+    if (res.status && res.response?.data) {
+      setAllStaff(res.response.data);
+    }
+  };
+
+  const fetchBranches = async () => {
+    const res = await BranchApi.getBranches();
+    if (res.status && res.response?.data) {
+      setBranches(res.response.data);
+    }
+  };
+
+  const fetchTable = async () => {
+    setIsLoading(true);
+    const res = await TableApi.getTableDetails(tableId);
+    if (res.status && res.response?.data) {
+      setExistingTable(res.response.data);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    if (existingTable) {
       setForm({
-        id: existingTable.id,
-        branchId: existingTable.branchId || (selectedBranchId || 'BR-001'),
+        id: existingTable.tableNumber || existingTable.tableNum || existingTable.id || '',
+        branchId: existingTable.branchId || selectedBranchId || '',
         name: existingTable.name || '',
-        seats: existingTable.seats || 4,
+        seats: existingTable.seatingCapacity ?? existingTable.seats ?? 4,
         section: existingTable.section || 'Main Dining',
         status: existingTable.status || 'Free',
-        assignedWaiterId: matchedWaiterId
+        assignedWaiterId: existingTable.assignedWaiter || existingTable.assignedWaiterId || ''
       });
     }
-  }, [existingTable, selectedBranchId, allStaff]);
+  }, [existingTable, selectedBranchId]);
 
   // Filter waiters by role and branch
-  const allWaiters = allStaff.filter(s => s.role === 'Waiter');
-  const branchWaiters = form.branchId
-    ? allWaiters.filter(s => s.branchId === form.branchId || s.branchId === 'ALL')
-    : allWaiters;
-  const availableWaiters = branchWaiters.length > 0 ? branchWaiters : allWaiters;
+  const allWaiters = allStaff.filter(s => s.role === 'Waiter' || s.role?.name === 'Waiter' || (s.roleId && s.roleId.roleName === 'Waiter') || s.userType === 'STAFF');
+  const availableWaiters = form.branchId
+    ? allWaiters.filter(s => {
+        const staffBranchId = s.branchId?._id || s.branchId;
+        return staffBranchId === form.branchId || staffBranchId === 'ALL';
+      })
+    : [];
 
   const validate = () => {
     const errors = {};
@@ -82,37 +116,31 @@ export default function TableFormPage() {
     const assignedWaiterName = selectedWaiterObj ? selectedWaiterObj.name : null;
 
     if (isEdit) {
-      if (updateDiningTable) {
-        await updateDiningTable(activeRestaurant.id, idStr, {
-          branchId: form.branchId,
-          seats: parseInt(form.seats) || 4,
-          status: form.status,
-          section: form.section,
-          name: form.name,
-          assignedWaiterId: form.assignedWaiterId || null,
-          assignedWaiter: assignedWaiterName,
-          assignedWaiterName: assignedWaiterName
-        });
+      const res = await TableApi.updateTable(tableId, {
+        branchId: form.branchId,
+        seatingCapacity: parseInt(form.seats) || 4,
+        status: form.status,
+        section: form.section,
+        tableNumber: idStr,
+        assignedWaiter: form.assignedWaiterId || null
+      });
+      if (res.status) {
+        navigate('/tables');
       }
-      ShowNotifications.showAlertNotification(`Table ${idStr} updated successfully.`, true);
     } else {
-      if (addDiningTable) {
-        await addDiningTable(activeRestaurant.id, {
-          id: idStr,
-          branchId: form.branchId,
-          seats: parseInt(form.seats) || 4,
-          section: form.section,
-          name: form.name,
-          status: 'Free',
-          assignedWaiterId: form.assignedWaiterId || null,
-          assignedWaiter: assignedWaiterName,
-          assignedWaiterName: assignedWaiterName
-        });
+      const res = await TableApi.createTable({
+        restaurantId: activeRestaurant._id,
+        branchId: form.branchId,
+        seatingCapacity: parseInt(form.seats) || 4,
+        status: form.status,
+        section: form.section,
+        tableNumber: idStr,
+        assignedWaiter: form.assignedWaiterId || null
+      });
+      if (res.status) {
+        navigate('/tables');
       }
-      ShowNotifications.showAlertNotification(`Table ${idStr} created successfully.`, true);
     }
-
-    navigate('/tables');
   };
 
   return (
@@ -219,8 +247,9 @@ export default function TableFormPage() {
                   boxSizing: 'border-box'
                 }}
               >
+                <option value="">Select a Branch</option>
                 {branches.map(b => (
-                  <option key={b.id} value={b.id}>
+                  <option key={b._id || b.id} value={b._id || b.id}>
                     {b.branchName} ({b.branchCode})
                   </option>
                 ))}

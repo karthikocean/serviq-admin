@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 import CategoryListPanel from './CategoryListPanel';
+import { server } from '../config/index.js';
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -41,32 +42,61 @@ const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
+import MenuApi from '../api/Menu.js';
+
 export default function MenuPanel({
-  menu = [],
-  menuCategory = 'All Items',
-  setMenuCategory,
-  menuSearch = '',
-  setMenuSearch,
-  menuSort = 'name',
-  setMenuSort,
+  categories = [],
+  refreshCategories,
   openAddMenuModal,
   openEditMenuModal,
   handleDeleteMenu,
   onOpenCategoriesPage,
   onOpenCategoryPanel,
-  currency = '₹'
+  currency = '₹',
+  refreshTrigger
 }) {
+  const getImageUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    return `${server}${path}`;
+  };
   const { activeRestaurant, updateMenuCategories } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
 
-  const defaultCategories = ['Starters', 'Rice Meals', 'Tiffin', 'Rotis', 'Desserts', 'Drinks'];
-  const storedCategories = activeRestaurant?.categories || defaultCategories;
+  const [menuCategory, setMenuCategory] = useState('All Items');
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuSort, setMenuSort] = useState('name');
 
-  const uniqueCategories = Array.from(new Set(menu.map(item => item.category).filter(Boolean)));
-  const combinedCategories = Array.from(new Set([...storedCategories, ...uniqueCategories]));
-  const categoriesList = ['All Items', ...combinedCategories];
+  const [paginatedMenu, setPaginatedMenu] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const [totalPages, setTotalPages] = useState(1);
+
+  React.useEffect(() => {
+    fetchPaginatedMenu();
+  }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger]);
+
+  const fetchPaginatedMenu = async () => {
+    if (!activeRestaurant) return;
+    const params = {
+      page,
+      limit,
+      search: menuSearch || undefined,
+      category: menuCategory === 'All Items' ? undefined : menuCategory,
+    };
+    const res = await MenuApi.getMenuItems(params);
+    if (res?.status && res.response) {
+      setPaginatedMenu(res.response.data || []);
+      setTotalItems(res.response.total || 0);
+      setTotalPages(res.response.totalPages || 1);
+    }
+  };
+
+  const combinedCategories = categories;
+  const categoriesList = ['All Items', ...combinedCategories.map(c => c._id)];
 
   const [editableCategories, setEditableCategories] = useState(combinedCategories);
 
@@ -83,17 +113,14 @@ export default function MenuPanel({
   if (showCategoryPanel) {
     return (
       <CategoryListPanel
-        categories={storedCategories}
+        categories={categories}
         onBack={() => setShowCategoryPanel(false)}
-        onUpdateCategories={(newCats) => {
-          if (updateMenuCategories && activeRestaurant) {
-            updateMenuCategories(activeRestaurant.id, newCats);
-          }
-        }}
+        refreshCategories={refreshCategories}
         activeRestaurant={activeRestaurant}
       />
     );
   }
+
 
   const handleSaveCategories = () => {
     if (activeRestaurant) {
@@ -101,21 +128,6 @@ export default function MenuPanel({
     }
     setIsCategoryModalOpen(false);
   };
-
-  let filteredMenu = menu;
-  if (menuCategory !== 'All Items') {
-    filteredMenu = filteredMenu.filter(item => item.category === menuCategory);
-  }
-  if (menuSearch) {
-    filteredMenu = filteredMenu.filter(item => item.name.toLowerCase().includes(menuSearch.toLowerCase()));
-  }
-
-  filteredMenu = [...filteredMenu].sort((a, b) => {
-    if (menuSort === 'name') return a.name.localeCompare(b.name);
-    if (menuSort === 'price-asc') return a.price - b.price;
-    if (menuSort === 'price-desc') return b.price - a.price;
-    return 0;
-  });
 
   return (
     <section className="panel-view active">
@@ -125,22 +137,22 @@ export default function MenuPanel({
           <div>
             <h2 className="panel-inner-title" style={{ margin: 0 }}>Menu List</h2>
             <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              • {menu.length} items actively listed
+              • {totalItems} items actively listed
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button 
-              type="button" 
-              className="btn btn-outline" 
+            <button
+              type="button"
+              className="btn btn-outline"
               style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               onClick={handleOpenCategoriesModal}
             >
               <SettingsIcon size={14} />
               Manage Categories
             </button>
-            <button 
-              type="button" 
-              className="btn btn-black" 
+            <button
+              type="button"
+              className="btn btn-black"
               style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 700, border: 'none', background: 'var(--primary)', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
               onClick={openAddMenuModal}
             >
@@ -156,13 +168,16 @@ export default function MenuPanel({
             type="text"
             placeholder="Search menu items..."
             value={menuSearch}
-            onChange={(e) => setMenuSearch(e.target.value)}
-            style={{ 
-              width: '100%', 
-              padding: '8px 12px 8px 36px', 
-              fontSize: '13px', 
-              border: '1.5px solid var(--border)', 
-              borderRadius: '8px' 
+            onChange={(e) => {
+              setMenuSearch(e.target.value);
+              setPage(1);
+            }}
+            style={{
+              width: '100%',
+              padding: '8px 12px 8px 36px',
+              fontSize: '13px',
+              border: '1.5px solid var(--border)',
+              borderRadius: '8px'
             }}
           />
           <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
@@ -178,7 +193,10 @@ export default function MenuPanel({
           <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Category:</label>
           <select
             value={menuCategory}
-            onChange={(e) => setMenuCategory(e.target.value)}
+            onChange={(e) => {
+              setMenuCategory(e.target.value);
+              setPage(1); // Reset page on filter
+            }}
             style={{
               padding: '8px 14px',
               fontSize: '13px',
@@ -193,15 +211,12 @@ export default function MenuPanel({
               transition: 'border-color 0.2s ease'
             }}
           >
-            <option value="All Items">All Categories ({menu.length})</option>
-            {combinedCategories.map(cat => {
-              const count = menu.filter(item => item.category === cat).length;
-              return (
-                <option key={cat} value={cat}>
-                  {cat} ({count})
-                </option>
-              );
-            })}
+            <option value="All Items">All Categories ({totalItems})</option>
+            {combinedCategories.map(cat => (
+              <option key={cat._id} value={cat._id}>
+                {cat.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -211,11 +226,11 @@ export default function MenuPanel({
           <select
             value={menuSort}
             onChange={(e) => setMenuSort(e.target.value)}
-            style={{ 
-              padding: '8px 14px', 
-              fontSize: '13px', 
-              borderRadius: '8px', 
-              border: '1.5px solid var(--border)', 
+            style={{
+              padding: '8px 14px',
+              fontSize: '13px',
+              borderRadius: '8px',
+              border: '1.5px solid var(--border)',
               backgroundColor: 'var(--bg-secondary)',
               fontWeight: 600,
               color: 'var(--text-main)',
@@ -248,7 +263,7 @@ export default function MenuPanel({
             </tr>
           </thead>
           <tbody>
-            {filteredMenu.map((item, index) => {
+            {paginatedMenu.map((item, index) => {
               const basePrice = Number(item.price) || 0;
               const gstRate = item.gst !== undefined ? Number(item.gst) : 5;
               const gstAmt = (basePrice * gstRate) / 100;
@@ -261,7 +276,7 @@ export default function MenuPanel({
                   <td style={{ padding: '12px 12px' }}>
                     {item.image ? (
                       <img
-                        src={item.image}
+                        src={getImageUrl(item.image)}
                         alt={item.name}
                         style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', display: 'block', border: '1px solid #e2e8f0' }}
                       />
@@ -288,7 +303,9 @@ export default function MenuPanel({
                   </td>
 
                   {/* 3. Category */}
-                  <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>{item.category}</td>
+                  <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                    {item.category?.name || item.category || 'Unknown'}
+                  </td>
 
                   {/* 4. Base Price */}
                   <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 700, color: '#0f172a', textAlign: 'right' }}>
@@ -356,8 +373,8 @@ export default function MenuPanel({
                   {/* 9. Actions */}
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         title="Edit Item"
                         style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
                         onClick={() => openEditMenuModal(item)}
@@ -366,8 +383,8 @@ export default function MenuPanel({
                       >
                         <PencilIcon size={16} />
                       </button>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         title="Delete Item"
                         style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
                         onClick={() => handleDeleteMenu(item._id || item.id)}
@@ -381,7 +398,7 @@ export default function MenuPanel({
                 </tr>
               );
             })}
-            {filteredMenu.length === 0 && (
+            {paginatedMenu.length === 0 && (
               <tr>
                 <td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No menu items found matching filters.</td>
               </tr>
@@ -390,19 +407,61 @@ export default function MenuPanel({
         </table>
       </div>
 
+      {/* Pagination Controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '13px', color: '#64748b' }}>
+          Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            style={{
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: '#fff',
+              color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Prev
+          </button>
+          
+          <button
+            style={{
+              minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: '6px', fontSize: '13px', fontWeight: 700,
+              border: 'none', background: '#000', color: '#fff', cursor: 'default'
+            }}
+          >
+            {page}
+          </button>
+
+          <button
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || totalPages === 0}
+            style={{
+              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: '#fff',
+              color: page === totalPages || totalPages === 0 ? '#cbd5e1' : '#64748b', cursor: page === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
       {/* MANAGE CATEGORIES MODAL */}
       <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title="Manage Menu Categories">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px 0 0 0' }}>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <input 
-              type="text" 
-              value={newCategory} 
-              onChange={(e) => setNewCategory(e.target.value)} 
-              placeholder="Add new category..." 
+            <input
+              type="text"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="Add new category..."
               style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
             />
-            <button 
-              className="btn btn-black" 
+            <button
+              className="btn btn-black"
               onClick={() => {
                 if (newCategory.trim() && !editableCategories.includes(newCategory.trim())) {
                   setEditableCategories([...editableCategories, newCategory.trim()]);
@@ -414,7 +473,7 @@ export default function MenuPanel({
               Add
             </button>
           </div>
-          
+
           <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
             {editableCategories.length === 0 && (
               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No categories found.</div>
@@ -422,7 +481,7 @@ export default function MenuPanel({
             {editableCategories.map((cat, idx) => (
               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: idx < editableCategories.length - 1 ? '1px solid var(--border)' : 'none' }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{cat}</span>
-                <button 
+                <button
                   onClick={() => setEditableCategories(editableCategories.filter(c => c !== cat))}
                   style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
                   title="Remove Category"
@@ -432,7 +491,7 @@ export default function MenuPanel({
               </div>
             ))}
           </div>
-          
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
             <button className="btn btn-outline" onClick={() => setIsCategoryModalOpen(false)} style={{ padding: '8px 16px' }}>Cancel</button>
             <button className="btn btn-black" onClick={handleSaveCategories} style={{ padding: '8px 16px' }}>Save Categories</button>

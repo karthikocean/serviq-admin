@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import BranchApi from '../api/Branch.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
@@ -215,7 +216,43 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // Delete modal state
   const [branchToDelete, setBranchToDelete] = useState(null);
 
-  const branches = activeRestaurant?.branches || [];
+  const [apiBranches, setApiBranches] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchBranches = async () => {
+    setIsLoading(true);
+    const res = await BranchApi.getBranches();
+    if (res && res.status && res.response && res.response.data) {
+      const mappedBranches = res.response.data.map(b => ({
+        id: b._id,
+        branchName: b.branchName,
+        branchCode: b.branchCode,
+        branchManager: b.managerName,
+        mobileNumber: b.contactNumber,
+        email: b.email,
+        password: '',
+        confirmPassword: '',
+        address: b.address?.street || '',
+        country: b.address?.country || '',
+        state: b.address?.state || '',
+        city: b.address?.city || '',
+        pincode: b.address?.pincode || '',
+        openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : '',
+        status: b.status || 'Active',
+        totalTables: 10
+      }));
+      setApiBranches(mappedBranches);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchBranches();
+    }
+  }, [isAdmin]);
+
+  const branches = apiBranches;
 
   // Subscription Plan details & calculations
   const sub = activeRestaurant?.subscription || {
@@ -366,18 +403,20 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const emailErr = validateEmail(branchForm.email);
     if (emailErr) errors.email = emailErr;
 
-    // Password validation (required, at least 4 characters)
-    if (!branchForm.password || !branchForm.password.trim()) {
-      errors.password = 'Password is required';
-    } else if (branchForm.password.length < 4) {
-      errors.password = 'Password must be at least 4 characters';
-    }
+    // Password validation (required only when creating)
+    if (!isEditing) {
+      if (!branchForm.password || !branchForm.password.trim()) {
+        errors.password = 'Password is required';
+      } else if (branchForm.password.length < 4) {
+        errors.password = 'Password must be at least 4 characters';
+      }
 
-    // Confirm Password validation
-    if (!branchForm.confirmPassword || !branchForm.confirmPassword.trim()) {
-      errors.confirmPassword = 'Confirm password is required';
-    } else if (branchForm.password !== branchForm.confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match';
+      // Confirm Password validation
+      if (!branchForm.confirmPassword || !branchForm.confirmPassword.trim()) {
+        errors.confirmPassword = 'Confirm password is required';
+      } else if (branchForm.password !== branchForm.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match';
+      }
     }
 
     // City & State (characters only if provided)
@@ -392,7 +431,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     return Object.keys(errors).length === 0;
   };
 
-  const handleFormSubmit = (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -400,34 +439,58 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
 
+    const payload = {
+      branchName: branchForm.branchName,
+      branchCode: branchForm.branchCode,
+      branchOpeningDate: branchForm.openingDate,
+      contactNumber: branchForm.mobileNumber,
+      email: branchForm.email,
+      street: branchForm.address,
+      city: branchForm.city,
+      state: branchForm.state,
+      country: branchForm.country,
+      pincode: branchForm.pincode,
+      managerName: branchForm.branchManager,
+      managerMobile: branchForm.mobileNumber,
+      managerEmail: branchForm.email,
+      managerPassword: branchForm.password,
+      status: branchForm.status
+    };
+
     if (isEditing) {
       if (!hasPermission('branch-management', 'edit')) {
         ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
         return;
       }
-      updateBranch(activeRestaurant.id, branchForm.id, branchForm);
-      ShowNotifications.showAlertNotification(`Branch "${branchForm.branchName}" updated successfully!`, true);
+      const res = await BranchApi.updateBranch(branchForm.id, payload);
+      if (res && res.status) {
+        fetchBranches();
+        setActiveView('list');
+      }
     } else {
       if (!hasPermission('branch-management', 'add')) {
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
       }
-      addBranch(activeRestaurant.id, branchForm);
-      ShowNotifications.showAlertNotification(`New branch "${branchForm.branchName}" created successfully!`, true);
+      const res = await BranchApi.createBranch(payload);
+      if (res && res.status) {
+        fetchBranches();
+        setActiveView('list');
+      }
     }
-
-    setActiveView('list');
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (branchToDelete) {
       if (!hasPermission('branch-management', 'delete')) {
         ShowNotifications.showAlertNotification("You do not have permission to delete branches.", false);
         setBranchToDelete(null);
         return;
       }
-      deleteBranch(activeRestaurant.id, branchToDelete.id);
-      ShowNotifications.showAlertNotification(`Branch "${branchToDelete.branchName}" deleted successfully.`, true);
+      const res = await BranchApi.deleteBranch(branchToDelete.id);
+      if (res && res.status) {
+        fetchBranches();
+      }
       setBranchToDelete(null);
     }
   };
@@ -1031,109 +1094,112 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     )}
                   </div>
 
-                  {/* Field 8: Password */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Password <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Enter password"
-                        value={branchForm.password}
-                        onChange={e => {
-                          setBranchForm({ ...branchForm, password: e.target.value });
-                          if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 42px 12px 16px',
-                          borderRadius: '8px',
-                          border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '14px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#64748b'
-                        }}
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-                      </button>
-                    </div>
-                    {formErrors.password && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.password}
-                      </span>
-                    )}
-                  </div>
+                  {/* Field 8 & 9: Password & Confirm Password (Hidden in Edit Mode) */}
+                  {!isEditing && (
+                    <>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                          Password <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="Enter password"
+                            value={branchForm.password}
+                            onChange={e => {
+                              setBranchForm({ ...branchForm, password: e.target.value });
+                              if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '12px 42px 12px 16px',
+                              borderRadius: '8px',
+                              border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                              fontSize: '14px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '12px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#64748b'
+                            }}
+                            title={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                          </button>
+                        </div>
+                        {formErrors.password && (
+                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                            {formErrors.password}
+                          </span>
+                        )}
+                      </div>
 
-                  {/* Field 9: Confirm Password */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Confirm Password <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Confirm password"
-                        value={branchForm.confirmPassword}
-                        onChange={e => {
-                          setBranchForm({ ...branchForm, confirmPassword: e.target.value });
-                          if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 42px 12px 16px',
-                          borderRadius: '8px',
-                          border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '14px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#64748b'
-                        }}
-                        title={showConfirmPassword ? "Hide password" : "Show password"}
-                      >
-                        {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-                      </button>
-                    </div>
-                    {formErrors.confirmPassword && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.confirmPassword}
-                      </span>
-                    )}
-                  </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                          Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder="Confirm password"
+                            value={branchForm.confirmPassword}
+                            onChange={e => {
+                              setBranchForm({ ...branchForm, confirmPassword: e.target.value });
+                              if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '12px 42px 12px 16px',
+                              borderRadius: '8px',
+                              border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                              fontSize: '14px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '12px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#64748b'
+                            }}
+                            title={showConfirmPassword ? "Hide password" : "Show password"}
+                          >
+                            {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                          </button>
+                        </div>
+                        {formErrors.confirmPassword && (
+                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                            {formErrors.confirmPassword}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
 
                 </div>
               </div>

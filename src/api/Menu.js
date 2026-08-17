@@ -2,9 +2,9 @@ import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
 class MenuApi {
-  async getMenuItems() {
+  async getMenuItems(params = {}) {
     try {
-      const response = await apiClient.get("/menu");
+      const response = await apiClient.get("/menu", { params });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -20,6 +20,54 @@ class MenuApi {
         status: false,
         response: error?.response?.data || error,
       };
+    }
+  }
+
+  async getCategories(params = {}) {
+    try {
+      const response = await apiClient.get("/menu/categories", { params });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories", error);
+      return { status: false, response: error };
+    }
+  }
+
+  async createCategory(data) {
+    try {
+      const response = await apiClient.post("/menu/category", data);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.error("Failed to create category", error);
+      return { status: false, response: error };
+    }
+  }
+
+  async updateCategory(id, data) {
+    try {
+      const response = await apiClient.put(`/menu/category/${id}`, data);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.error("Failed to update category", error);
+      return { status: false, response: error };
+    }
+  }
+
+  async deleteCategory(id) {
+    try {
+      const response = await apiClient.delete(`/menu/category/${id}`);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.error("Failed to delete category", error);
+      return { status: false, response: error };
     }
   }
 
