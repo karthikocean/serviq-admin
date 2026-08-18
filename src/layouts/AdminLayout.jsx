@@ -252,17 +252,7 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 8. User Module */}
-          {isTabAllowed('Settings') && (
-            <li className={`sidebar-item ${isUsersActive ? 'active' : ''}`}>
-              <Link to="/users">
-                <span className="sidebar-icon-box">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                </span>
-                <span className="sidebar-item-label">User Module</span>
-              </Link>
-            </li>
-          )}
+
 
           {/* 9. Roles & Permission */}
           {isTabAllowed('Settings') && (

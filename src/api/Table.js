@@ -2,9 +2,9 @@ import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
 class MemberApi {
-  async getTables() {
+  async getTables(params = {}) {
     try {
-      const response = await apiClient.get("/tables");
+      const response = await apiClient.get("/tables", { params });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -128,6 +128,30 @@ class MemberApi {
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
+      };
+    }
+  }
+
+  async assignWaiter(data) {
+    try {
+      // PUT /api/admin/tables/assign-waiter
+      const response = await apiClient.put(`/tables/assign-waiter`, data);
+      if (response.status === 200 || response.status === 201) {
+        ShowNotifications.showAlertNotification(
+          response.data.message || "Waiter Assigned Successfully!",
+          true,
+        );
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to Assign Waiter. Please try again.";
+      ShowNotifications.showAlertNotification(errorMessage, false);
+      return {
+        status: false,
+        response: error?.response?.data || error,
       };
     }
   }

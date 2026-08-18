@@ -17,6 +17,21 @@ class UserApi {
     }
   }
 
+  async getStations(params = {}) {
+    try {
+      const response = await apiClient.get("/users/stations", { params });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage = error?.response?.data?.message || "Failed to fetch stations.";
+      if (error?.response?.status !== 401) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
   async createUser(data) {
     try {
       const response = await apiClient.post("/users", data);

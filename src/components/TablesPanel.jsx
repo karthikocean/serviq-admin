@@ -110,7 +110,12 @@ export default function TablesPanel({
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;
-    if (table.assignedWaiter) return table.assignedWaiter;
+    if (table.assignedWaiter) {
+      if (typeof table.assignedWaiter === 'object' && table.assignedWaiter !== null) {
+        return table.assignedWaiter.name || '';
+      }
+      return table.assignedWaiter;
+    }
     if (table.assignedWaiterId) {
       const found = staff.find(s => s.id === table.assignedWaiterId);
       if (found) return found.name;
