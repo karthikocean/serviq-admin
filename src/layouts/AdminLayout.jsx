@@ -47,9 +47,10 @@ export default function AdminLayout() {
   }, []);
 
   const restaurantName = activeRestaurant?.name || 'Serviq';
-  const role = currentUser?.role || 'Admin';
-  const userType = (currentUser?.userType || currentUser?.role || '').toUpperCase();
-  const userRoleLower = (currentUser?.role || '').toLowerCase();
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser?.role?.roleName : (currentUser?.role || '');
+  const role = roleStr || 'Admin';
+  const userType = (currentUser?.userType || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
   const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   // Permission checks
@@ -60,35 +61,28 @@ export default function AdminLayout() {
     }
 
     if (isAdmin) return true;
+    
+    // Use the permissions object directly embedded in the user's role if it exists
+    if (typeof currentUser?.role === 'object' && currentUser?.role?.permissions) {
+      const modulePerms = currentUser.role.permissions[moduleName] || {};
+      return !!modulePerms[action];
+    }
+
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || rolesConfig[currentUser?.userType] || DEFAULT_ROLES[role] || DEFAULT_ROLES[currentUser?.userType] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
   };
 
-  const isTabAllowed = (tabKey) => {
-    // If tab is branch-management, ONLY Admin role can view it
-    if (tabKey === 'branch-management' || tabKey === 'branches') {
+  const isTabAllowed = (permissionKey) => {
+    // If tab is branch-management or plans, ONLY Admin role can view it
+    if (permissionKey === 'branch-management' || permissionKey === 'plans-management') {
       return isAdmin;
     }
 
     if (isAdmin) return true;
 
-    let moduleName = tabKey;
-    if (tabKey === 'overview') moduleName = 'overview';
-    else if (tabKey === 'plans-management') moduleName = 'plans-management';
-    else if (tabKey === 'inventory') moduleName = 'inventory';
-    else if (tabKey === 'orders') moduleName = 'orders';
-    else if (tabKey === 'menu') moduleName = 'menu';
-    else if (tabKey === 'tables') moduleName = 'tables';
-    else if (tabKey === 'billing') moduleName = 'billing';
-    else if (tabKey === 'staff' || tabKey === 'waiter-list' || tabKey === 'waiter-reports' || tabKey === 'kitchen-list' || tabKey === 'kitchen-reports') {
-      return hasPermission('staff', 'view') || hasPermission('waiter', 'view') || hasPermission('kitchen', 'view');
-    }
-    else if (tabKey === 'users' || tabKey === 'roles-permissions' || tabKey === 'Settings') moduleName = 'settings';
-    else if (tabKey === 'Reports') moduleName = 'reports';
-
-    return hasPermission(moduleName, 'view');
+    return hasPermission(permissionKey, 'view');
   };
 
   // Dynamic Route Titles
@@ -157,7 +151,7 @@ export default function AdminLayout() {
 
         <ul className="sidebar-menu">
           {/* 1. Dashboard */}
-          {isTabAllowed('overview') && (
+          {isTabAllowed('dashboard') && (
             <li className={`sidebar-item ${isDashboardActive ? 'active' : ''}`}>
               <Link to="/dashboard">
                 <span className="sidebar-icon-box">
@@ -241,7 +235,7 @@ export default function AdminLayout() {
           )}
 
           {/* 7. Staff Management (Combined Waiters and Kitchen) */}
-          {(isTabAllowed('staff') || isTabAllowed('waiter-list') || isTabAllowed('kitchen-list')) && (
+          {isTabAllowed('staff_management') && (
             <li className={`sidebar-item ${isStaffActive ? 'active' : ''}`}>
               <Link to="/staff">
                 <span className="sidebar-icon-box">
@@ -255,7 +249,7 @@ export default function AdminLayout() {
 
 
           {/* 9. Roles & Permission */}
-          {isTabAllowed('Settings') && (
+          {isTabAllowed('settings') && (
             <li className={`sidebar-item ${isRolesActive ? 'active' : ''}`}>
               <Link to="/roles-permissions">
                 <span className="sidebar-icon-box">
@@ -279,7 +273,7 @@ export default function AdminLayout() {
           )}
 
           {/* 11. Reports (Unified with Waiter & Kitchen Reports) */}
-          {isTabAllowed('Reports') && (
+          {isTabAllowed('reports_analytics') && (
             <li className={`sidebar-item ${isReportsActive ? 'active' : ''}`}>
               <Link to="/reports">
                 <span className="sidebar-icon-box">
@@ -291,7 +285,7 @@ export default function AdminLayout() {
           )}
 
           {/* 12. Settings */}
-          {isTabAllowed('Settings') && (
+          {isTabAllowed('settings') && (
             <li className={`sidebar-item ${isSettingsActive ? 'active' : ''}`}>
               <Link to="/settings">
                 <span className="sidebar-icon-box">

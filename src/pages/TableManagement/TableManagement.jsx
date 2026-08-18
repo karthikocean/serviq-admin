@@ -142,15 +142,16 @@ export default function TableManagement() {
         deleteDiningTable={handleDeleteDiningTable}
         handleOpenAssignTablesModal={handleOpenAssignTablesModal}
         setAddTableForm={(formState) => {
-          if (formState?.id) {
-            navigate(`/tables/edit/${formState.id}`);
+          const tableId = formState?._id || formState?.id;
+          if (tableId) {
+            navigate(`/tables/edit/${tableId}`);
           } else {
             navigate('/tables/add');
           }
         }}
         setActivePage={(page) => {
-          if (page === 'table-form') navigate('/tables/add');
-          else if (page === 'waiter-list') navigate('/waiter/list');
+          // table-form navigation is handled by setAddTableForm callback
+          if (page === 'waiter-list') navigate('/waiter/list');
         }}
         hasPermission={hasPermission}
 
