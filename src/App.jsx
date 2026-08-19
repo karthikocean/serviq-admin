@@ -22,6 +22,7 @@ import Billing from './pages/Billing/Billing';
 import BillingHistory from './pages/Billing/BillingHistory';
 import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
+import HelpSupport from './pages/HelpSupport/HelpSupport';
 
 export default function App() {
   return (
@@ -93,6 +94,9 @@ export default function App() {
 
         {/* Restaurant Settings */}
         <Route path="settings" element={<Settings />} />
+
+        {/* Help & Support */}
+        <Route path="help-support" element={<HelpSupport />} />
       </Route>
 
       {/* Catch-all route */}
