@@ -10,6 +10,7 @@ import TableFormPage from './pages/TableManagement/TableFormPage';
 import MenuManagement from './pages/MenuManagement/MenuManagement';
 import CategoryListPage from './pages/MenuManagement/CategoryListPage';
 import InventoryManagement from './pages/InventoryManagement/InventoryManagement';
+import InventoryCategoryListPage from './pages/InventoryManagement/InventoryCategoryListPage';
 import OrderManagement from './pages/OrderManagement/OrderManagement';
 import StaffManagement from './pages/StaffManagement/StaffManagement';
 import StaffFormPage from './pages/WaiterManagement/StaffFormPage';
@@ -51,8 +52,10 @@ export default function App() {
         <Route path="menu" element={<MenuManagement />} />
         <Route path="menu/categories" element={<CategoryListPage />} />
 
-        {/* Inventory Management (Premium Exclusive) */}
+        {/* Inventory Management & Categories */}
         <Route path="inventory" element={<InventoryManagement />} />
+        <Route path="inventory/items" element={<InventoryManagement />} />
+        <Route path="inventory/categories" element={<InventoryCategoryListPage />} />
 
         {/* Order Management */}
         <Route path="orders" element={<OrderManagement />} />
@@ -79,7 +82,7 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="roles-permissions" element={<RolesPermissions />} />
 
-        {/* Billing & Settlement */}
+        {/* Billing */}
         <Route path="billing" element={<Billing />} />
         <Route path="billing/history" element={<BillingHistory />} />
 

@@ -44,7 +44,7 @@ const MODULES_LIST = [
   { id: 'dashboard', name: 'Dashboard / Overview' },
   { id: 'branch_management', name: 'Branch Management', adminOnly: true },
   { id: 'plans_subscription', name: 'Plans & Subscription' },
-  { id: 'billing_payments', name: 'Billing & Payments' },
+  { id: 'billing_payments', name: 'Billing' },
   { id: 'staff_management', name: 'Staff Management (Waiters & Kitchen)' },
   { id: 'user_accounts', name: 'User Accounts' },
   { id: 'roles_permissions', name: 'Roles & Permissions' },

@@ -324,7 +324,7 @@ export default function TableFormPage() {
           <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr 1fr' : '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Assign Waiter
+                Assign Waiter (Optional)
               </label>
               <select
                 value={form.assignedWaiterId || ''}

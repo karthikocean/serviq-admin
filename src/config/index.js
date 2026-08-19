@@ -67,9 +67,13 @@ apiClient.interceptors.response.use(
     return response;
   },
   function (error) {
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const isMock = token && token.startsWith("mock_");
+
     // Only redirect if explicitly unauthorized on critical authentication routes,
     // avoiding session disruption during frontend operations
     if (
+      !isMock &&
       error.response?.status === 401 &&
       !error.config?.url?.includes("/login") &&
       !window.location.pathname.includes("/login")
