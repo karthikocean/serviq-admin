@@ -368,7 +368,7 @@ export default function InventoryPanel() {
             </p>
           </div>
 
-          {/* Module Sub-Navigation Switcher (Item Name vs Category) */}
+          {/* Module Sub-Navigation Switcher (Category vs Item Name vs Stock Reduction) */}
           <div style={{
             display: 'inline-flex',
             background: '#f1f5f9',
@@ -377,6 +377,23 @@ export default function InventoryPanel() {
             gap: '4px',
             marginLeft: '8px'
           }}>
+            <button
+              type="button"
+              onClick={() => navigate('/inventory/categories')}
+              style={{
+                border: 'none',
+                padding: '7px 16px',
+                borderRadius: '7px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: 'transparent',
+                color: '#64748b',
+                transition: 'all 0.15s'
+              }}
+            >
+              Category
+            </button>
             <button
               type="button"
               style={{
@@ -395,7 +412,7 @@ export default function InventoryPanel() {
             </button>
             <button
               type="button"
-              onClick={() => navigate('/inventory/categories')}
+              onClick={() => navigate('/inventory/stock-reduction')}
               style={{
                 border: 'none',
                 padding: '7px 16px',
@@ -408,7 +425,7 @@ export default function InventoryPanel() {
                 transition: 'all 0.15s'
               }}
             >
-              Category
+              Stock Reduction
             </button>
           </div>
         </div>
@@ -617,35 +634,6 @@ export default function InventoryPanel() {
             )}
           </div>
 
-          {/* Item Name Dropdown Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
-              Item Name:
-            </label>
-            <select
-              value={itemNameFilter}
-              onChange={e => setItemNameFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: itemNameFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
-                background: itemNameFilter !== 'All' ? '#fff7ed' : '#f8fafc',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: itemNameFilter !== 'All' ? '#c2410c' : '#0f172a',
-                outline: 'none',
-                cursor: 'pointer',
-                minWidth: '160px',
-                maxWidth: '220px'
-              }}
-            >
-              <option value="All">All Item Names ({inventory.length})</option>
-              {uniqueItemNames.map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Category Dropdown Filter */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
@@ -671,6 +659,35 @@ export default function InventoryPanel() {
                 <option key={cat} value={cat}>
                   {cat === 'All' ? `All Categories (${categoriesList.length - 1})` : cat}
                 </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item Name Dropdown Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+              Item Name:
+            </label>
+            <select
+              value={itemNameFilter}
+              onChange={e => setItemNameFilter(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: itemNameFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
+                background: itemNameFilter !== 'All' ? '#fff7ed' : '#f8fafc',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: itemNameFilter !== 'All' ? '#c2410c' : '#0f172a',
+                outline: 'none',
+                cursor: 'pointer',
+                minWidth: '160px',
+                maxWidth: '220px'
+              }}
+            >
+              <option value="All">All Item Names ({inventory.length})</option>
+              {uniqueItemNames.map(name => (
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
           </div>

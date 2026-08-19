@@ -11,6 +11,7 @@ import MenuManagement from './pages/MenuManagement/MenuManagement';
 import CategoryListPage from './pages/MenuManagement/CategoryListPage';
 import InventoryManagement from './pages/InventoryManagement/InventoryManagement';
 import InventoryCategoryListPage from './pages/InventoryManagement/InventoryCategoryListPage';
+import StockReductionPage from './pages/InventoryManagement/StockReductionPage';
 import OrderManagement from './pages/OrderManagement/OrderManagement';
 import StaffManagement from './pages/StaffManagement/StaffManagement';
 import StaffFormPage from './pages/WaiterManagement/StaffFormPage';
@@ -52,10 +53,11 @@ export default function App() {
         <Route path="menu" element={<MenuManagement />} />
         <Route path="menu/categories" element={<CategoryListPage />} />
 
-        {/* Inventory Management & Categories */}
+        {/* Inventory Management, Categories & Stock Reduction */}
         <Route path="inventory" element={<InventoryManagement />} />
         <Route path="inventory/items" element={<InventoryManagement />} />
         <Route path="inventory/categories" element={<InventoryCategoryListPage />} />
+        <Route path="inventory/stock-reduction" element={<StockReductionPage />} />
 
         {/* Order Management */}
         <Route path="orders" element={<OrderManagement />} />

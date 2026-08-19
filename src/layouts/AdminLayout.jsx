@@ -93,6 +93,7 @@ export default function AdminLayout() {
     if (p === '/' || p === '/dashboard' || p === '/overview') return 'Dashboard';
     if (p.startsWith('/branch-management') || p.startsWith('/branches')) return 'Branch Management';
     if (p.startsWith('/plans-management') || p.startsWith('/plans')) return 'Plans & Subscription';
+    if (p === '/inventory/stock-reduction') return 'Stock Reduction';
     if (p === '/inventory/categories') return 'Inventory Categories';
     if (p.startsWith('/inventory')) return 'Inventory Management';
     if (p === '/tables/add') return 'Add Dining Table';
@@ -249,14 +250,19 @@ export default function AdminLayout() {
               </div>
               {sidebarInventoryOpen && (
                 <ul className="sidebar-submenu">
+                  <li className={`sidebar-item ${pathname === '/inventory/categories' ? 'active' : ''}`}>
+                    <Link to="/inventory/categories">
+                      <span>Category</span>
+                    </Link>
+                  </li>
                   <li className={`sidebar-item ${pathname === '/inventory' || pathname === '/inventory/items' ? 'active' : ''}`}>
                     <Link to="/inventory">
                       <span>Item Name</span>
                     </Link>
                   </li>
-                  <li className={`sidebar-item ${pathname === '/inventory/categories' ? 'active' : ''}`}>
-                    <Link to="/inventory/categories">
-                      <span>Category</span>
+                  <li className={`sidebar-item ${pathname === '/inventory/stock-reduction' ? 'active' : ''}`}>
+                    <Link to="/inventory/stock-reduction">
+                      <span>Stock Reduction</span>
                     </Link>
                   </li>
                 </ul>

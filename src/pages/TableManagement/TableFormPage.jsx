@@ -18,8 +18,24 @@ export default function TableFormPage() {
   const [existingTable, setExistingTable] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const generateNextTableId = (existingTablesList = []) => {
+    const rawTables = (existingTablesList && existingTablesList.length > 0)
+      ? existingTablesList 
+      : (activeRestaurant?.tables || []);
+
+    const numbers = rawTables.map(t => {
+      const idStr = String(t.tableNumber || t.tableNum || t.id || '');
+      const match = idStr.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    });
+
+    const maxNum = numbers.length > 0 ? Math.max(...numbers, 0) : 0;
+    const nextNum = maxNum + 1;
+    return `T-${String(nextNum).padStart(2, '0')}`;
+  };
+
   const [form, setForm] = useState({
-    id: tableId ? (tableId.startsWith('T-') ? tableId : `T-${tableId}`) : '',
+    id: tableId ? (tableId.startsWith('T-') ? tableId : `T-${tableId}`) : generateNextTableId(),
     branchId: selectedBranchId || '',
     name: '',
     seats: 4,
@@ -36,6 +52,27 @@ export default function TableFormPage() {
       fetchTable();
     } else if (location.state?.table) {
       setExistingTable(location.state.table);
+    } else {
+      // Auto-generate next available Table ID from live backend tables
+      const fetchTablesForIdGen = async () => {
+        try {
+          const res = await TableApi.getTables();
+          if (res.status && res.response?.data) {
+            const nextId = generateNextTableId(res.response.data);
+            setForm(prev => ({
+              ...prev,
+              id: nextId
+            }));
+          }
+        } catch (e) {
+          // Fallback to local table sequence
+          setForm(prev => ({
+            ...prev,
+            id: prev.id || generateNextTableId()
+          }));
+        }
+      };
+      fetchTablesForIdGen();
     }
   }, [tableId]);
 
@@ -198,34 +235,92 @@ export default function TableFormPage() {
           {/* Row 1: Table Number & Branch Assignment */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Table Number / ID <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={form.id}
-                onChange={(e) => {
-                  setForm({ ...form, id: e.target.value });
-                  if (formErrors.id) setFormErrors({ ...formErrors, id: '' });
-                }}
-                disabled={isEdit}
-                placeholder="e.g. T-08"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: formErrors.id ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: isEdit ? '#f8fafc' : '#ffffff',
-                  cursor: isEdit ? 'not-allowed' : 'text',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.id && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                  Table Number / ID <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                {!isEdit && (
+                  <span style={{
+                    background: '#f0fdf4',
+                    color: '#16a34a',
+                    border: '1px solid #bbf7d0',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <span>⚡ Auto-Generated</span>
+                  </span>
+                )}
+              </div>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={form.id}
+                  onChange={(e) => {
+                    setForm({ ...form, id: e.target.value });
+                    if (formErrors.id) setFormErrors({ ...formErrors, id: '' });
+                  }}
+                  disabled={isEdit}
+                  placeholder="e.g. T-08"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    paddingRight: !isEdit ? '110px' : '16px',
+                    borderRadius: '8px',
+                    border: formErrors.id ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    outline: 'none',
+                    backgroundColor: isEdit ? '#f8fafc' : '#ffffff',
+                    cursor: isEdit ? 'not-allowed' : 'text',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {!isEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newGenerated = generateNextTableId();
+                      setForm({ ...form, id: newGenerated });
+                      if (formErrors.id) setFormErrors({ ...formErrors, id: '' });
+                      ShowNotifications.showAlertNotification(`Auto-generated Table ID: ${newGenerated}`, true);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      background: '#f1f5f9',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#475569',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s'
+                    }}
+                    title="Regenerate next available Table ID"
+                  >
+                    <span>🔄 Auto</span>
+                  </button>
+                )}
+              </div>
+              {formErrors.id ? (
                 <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {formErrors.id}
                 </span>
+              ) : (
+                !isEdit && (
+                  <span style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                    Auto-assigned next table sequence ({form.id || 'T-xx'})
+                  </span>
+                )
               )}
             </div>
 

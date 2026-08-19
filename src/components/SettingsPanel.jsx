@@ -376,7 +376,7 @@ export default function SettingsPanel() {
               opacity: isSaving ? 0.7 : 1
             }}
           >
-            {isSaving ? 'Saving...' : 'Save Settings'}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </form>
