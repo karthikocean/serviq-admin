@@ -224,12 +224,12 @@ export default function StockReductionPanel() {
   };
 
   const handlePurchaseItemSelect = (itemId) => {
-    if (itemId === 'NEW') {
+    if (itemId === 'CUSTOM' || itemId === 'NEW') {
       setPurchaseForm(prev => ({
         ...prev,
-        itemId: '',
+        itemId: 'CUSTOM',
         itemName: '',
-        category: 'General',
+        category: rawCategories[0]?.name || 'General',
         unit: 'kg',
         unitPrice: ''
       }));
@@ -439,69 +439,6 @@ export default function StockReductionPanel() {
                 PREMIUM
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              Reduce stock for kitchen usage, wastage, damage, or expiration & track supplier purchases
-            </p>
-          </div>
-
-          {/* Module Sub-Navigation Switcher (Category vs Item Name vs Stock Reduction) */}
-          <div style={{
-            display: 'inline-flex',
-            background: '#f1f5f9',
-            padding: '4px',
-            borderRadius: '10px',
-            gap: '4px'
-          }}>
-            <button
-              type="button"
-              onClick={() => navigate('/inventory/categories')}
-              style={{
-                border: 'none',
-                padding: '7px 16px',
-                borderRadius: '7px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: 'transparent',
-                color: '#64748b',
-                transition: 'all 0.15s'
-              }}
-            >
-              Category
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/inventory')}
-              style={{
-                border: 'none',
-                padding: '7px 16px',
-                borderRadius: '7px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: 'transparent',
-                color: '#64748b',
-                transition: 'all 0.15s'
-              }}
-            >
-              Item Name
-            </button>
-            <button
-              type="button"
-              style={{
-                border: 'none',
-                padding: '7px 16px',
-                borderRadius: '7px',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                background: '#ffffff',
-                color: '#0f172a',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
-              }}
-            >
-              Stock Reduction
-            </button>
           </div>
         </div>
 
@@ -1339,57 +1276,35 @@ export default function StockReductionPanel() {
         >
           <form onSubmit={handlePurchaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '6px' }}>
             
-            {/* Quick Item Matcher or New Item */}
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Inventory Item <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                value={purchaseForm.itemId || 'NEW'}
-                onChange={e => handlePurchaseItemSelect(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="NEW">-- Enter Custom / New Inventory Item --</option>
-                {inventory.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} ({item.category}) - SKU: {item.sku || item.id}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Item Name & Category (if new/custom) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '12px' }}>
+            {/* Row 1: Item Name & Category */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Item Name <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Premium Basmati Rice"
-                  value={purchaseForm.itemName}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
+                <select
+                  value={purchaseForm.itemId || 'CUSTOM'}
+                  onChange={e => handlePurchaseItemSelect(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
+                    fontWeight: 600,
                     outline: 'none',
+                    backgroundColor: '#ffffff',
                     boxSizing: 'border-box'
                   }}
-                />
+                >
+                  {inventory.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                  <option value="CUSTOM">+ New / Custom Item</option>
+                </select>
               </div>
 
               <div>
@@ -1401,7 +1316,8 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, category: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1417,8 +1333,34 @@ export default function StockReductionPanel() {
               </div>
             </div>
 
-            {/* Supplier Details */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {/* Custom Item Name input if + New / Custom Item is chosen */}
+            {purchaseForm.itemId === 'CUSTOM' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Enter New Item Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Organic Almond Milk"
+                  value={purchaseForm.itemName}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
+                  style={{
+                    width: '100%',
+                    height: '42px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Row 2: Supplier Details */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Supplier Name <span style={{ color: '#ef4444' }}>*</span>
@@ -1430,7 +1372,8 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1451,7 +1394,8 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, supplierPhone: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1462,59 +1406,58 @@ export default function StockReductionPanel() {
               </div>
             </div>
 
-            {/* Quantity, Unit, Unit Price, Total Amount */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            {/* Row 3: Quantity & Unit | Unit Price */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Purchase Qty <span style={{ color: '#ef4444' }}>*</span>
+                  Purchase Qty & Unit <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  required
-                  placeholder="e.g. 20"
-                  value={purchaseForm.quantity}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 700,
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Unit
-                </label>
-                <select
-                  value={purchaseForm.unit}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="kg">kg (Kilograms)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liters)</option>
-                  <option value="ml">ml (Milliliters)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="box">box (Boxes)</option>
-                  <option value="can">can (Cans)</option>
-                </select>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="Qty"
+                    value={purchaseForm.quantity}
+                    onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                    style={{
+                      flex: 1.2,
+                      height: '42px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <select
+                    value={purchaseForm.unit}
+                    onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
+                    style={{
+                      flex: 1,
+                      height: '42px',
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      outline: 'none',
+                      backgroundColor: '#ffffff',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <option value="kg">kg (Kg)</option>
+                    <option value="g">g (Grams)</option>
+                    <option value="L">L (Liters)</option>
+                    <option value="ml">ml (ml)</option>
+                    <option value="pcs">pcs (Pcs)</option>
+                    <option value="box">box (Boxes)</option>
+                    <option value="can">can (Cans)</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -1529,10 +1472,11 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: 700,
                     outline: 'none',
                     boxSizing: 'border-box'
@@ -1541,8 +1485,8 @@ export default function StockReductionPanel() {
               </div>
             </div>
 
-            {/* Invoice # & Purchase Date */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {/* Row 4: Invoice # & Purchase Date */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Invoice Number <span style={{ color: '#ef4444' }}>*</span>
@@ -1555,7 +1499,8 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1575,7 +1520,8 @@ export default function StockReductionPanel() {
                   onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
                   style={{
                     width: '100%',
-                    padding: '9px 12px',
+                    height: '42px',
+                    padding: '10px 12px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1592,13 +1538,13 @@ export default function StockReductionPanel() {
               background: '#f8fafc',
               border: '1px solid #e2e8f0',
               borderRadius: '8px',
-              padding: '12px 16px',
+              padding: '14px 18px',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#64748b' }}>Calculated Total Amount:</span>
-              <span style={{ fontSize: '18px', fontWeight: 900, color: '#ff5a1f' }}>
+              <span style={{ fontSize: '20px', fontWeight: 900, color: '#ff5a1f' }}>
                 ₹{((parseFloat(purchaseForm.quantity) || 0) * (parseFloat(purchaseForm.unitPrice) || 0)).toFixed(2)}
               </span>
             </div>
@@ -1609,7 +1555,7 @@ export default function StockReductionPanel() {
                 type="button"
                 className="btn btn-outline"
                 onClick={() => setIsPurchaseModalOpen(false)}
-                style={{ padding: '9px 18px', borderRadius: '8px', fontSize: '13px' }}
+                style={{ padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
               >
                 Cancel
               </button>
@@ -1619,7 +1565,7 @@ export default function StockReductionPanel() {
                   background: '#ff5a1f',
                   color: '#ffffff',
                   border: 'none',
-                  padding: '9px 22px',
+                  padding: '10px 24px',
                   borderRadius: '8px',
                   fontSize: '13px',
                   fontWeight: 800,

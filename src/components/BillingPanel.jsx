@@ -34,22 +34,48 @@ export default function BillingPanel({
   const selectedBillData = billingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
 
   // Find active orders for selected billing table to show details
-  const billingNum = selectedBillingTable.replace('Table ', '');
-  const activeTableOrders = orders.filter(o => (o.table === billingNum || parseInt(o.table) === parseInt(billingNum)) && o.billingStatus === 'unpaid');
+  const billingNum = (selectedBillingTable || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
+  
+  let activeTableOrders = orders.filter(o => {
+    const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
+    const isMatch = oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
+    return isMatch && o.billingStatus === 'unpaid';
+  });
 
-  // Combine items from all unpaid orders of this table
+  // If no unpaid orders, fallback to any existing orders on this table (even paid) so the bill summary is always populated
+  let isSettled = false;
+  if (activeTableOrders.length === 0) {
+    activeTableOrders = orders.filter(o => {
+      const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
+      return oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
+    });
+    if (activeTableOrders.length > 0) {
+      isSettled = true;
+    }
+  }
+
+  // Combine items from orders of this table
   const billingItems = [];
   activeTableOrders.forEach(o => {
-    o.items.forEach(item => {
+    (o.items || []).forEach(item => {
       const exist = billingItems.find(x => x.name === item.name);
       if (exist) {
         exist.qty += item.qty;
         exist.amount += item.qty * item.price;
+        if (item.notes && !exist.notes) exist.notes = item.notes;
       } else {
-        billingItems.push({ name: item.name, qty: item.qty, rate: item.price, amount: item.qty * item.price });
+        billingItems.push({ 
+          name: item.name, 
+          qty: item.qty, 
+          rate: item.price, 
+          amount: item.qty * item.price,
+          notes: item.notes || (item.customizations ? item.customizations.join(', ') : '')
+        });
       }
     });
   });
+
+  const orderIds = activeTableOrders.map(o => `#ORD-${o.id}`).join(', ');
 
   const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
   const serviceRate = activeRestaurant.settings?.serviceChargeRate || 0;
@@ -136,8 +162,17 @@ export default function BillingPanel({
         <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
             <div>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--black)', marginBottom: '4px' }}>Bill Summary</h3>
-              <p style={{ fontSize: '13px', color: '#64748b' }}>Order ID: #ORD-845 • {selectedBillingTable}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--black)', margin: 0 }}>Bill Summary</h3>
+                {isSettled && (
+                  <span style={{ fontSize: '10px', fontWeight: '800', background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px' }}>
+                    SETTLED / PAID
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                {orderIds ? `Order ID: ${orderIds}` : 'Order Summary'} • {selectedBillingTable}
+              </p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
@@ -211,9 +246,11 @@ export default function BillingPanel({
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
                       <strong style={{ fontSize: '14px', color: 'var(--black)' }}>{item.name}</strong>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', marginLeft: '14px', marginTop: '4px' }}>
-                      Extra Butter, Sambar separate
-                    </div>
+                    {item.notes && (
+                      <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', marginLeft: '14px', marginTop: '4px' }}>
+                        {item.notes}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '16px', textAlign: 'center', fontWeight: '600' }}>{item.qty}</td>
                   <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>₹{(item.rate).toFixed(2)}</td>
@@ -222,7 +259,7 @@ export default function BillingPanel({
               ))}
               {billingItems.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No unpaid items found. This bill is settled.</td>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No items found for this table.</td>
                 </tr>
               )}
             </tbody>
