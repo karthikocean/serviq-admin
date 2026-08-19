@@ -60,7 +60,7 @@ export default function MenuPanel({
     if (path.startsWith('http')) return path;
     return `${server}${path}`;
   };
-  const { activeRestaurant, updateMenuCategories } = useAppState();
+  const { activeRestaurant, updateMenuCategories, selectedBranchId } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -77,7 +77,7 @@ export default function MenuPanel({
 
   React.useEffect(() => {
     fetchPaginatedMenu();
-  }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger]);
+  }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId]);
 
   const fetchPaginatedMenu = async () => {
     if (!activeRestaurant) return;
@@ -87,6 +87,9 @@ export default function MenuPanel({
       search: menuSearch || undefined,
       category: menuCategory === 'All Items' ? undefined : menuCategory,
     };
+    if (selectedBranchId) {
+      params.branchId = selectedBranchId;
+    }
     const res = await MenuApi.getMenuItems(params);
     if (res?.status && res.response) {
       setPaginatedMenu(res.response.data || []);

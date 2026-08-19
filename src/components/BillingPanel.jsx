@@ -31,11 +31,48 @@ export default function BillingPanel({
   const [isEditing, setIsEditing] = React.useState(false);
   const [editItems, setEditItems] = React.useState([]);
 
-  const selectedBillData = billingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
+  // --- DUMMY DATA INJECTION ---
+  const dummyBillingData = [
+    { table: 'Table 01', orders: 2, total: 756, status: 'Unpaid' },
+    { table: 'Table 02', orders: 3, total: 1239, status: 'Unpaid' },
+    { table: 'Table 03', orders: 1, total: 320, status: 'Paid' },
+    { table: 'Table 05', orders: 2, total: 924, status: 'Unpaid' },
+    { table: 'Table 07', orders: 4, total: 2121, status: 'Unpaid' }
+  ];
+
+  const dummyOrders = [
+    {
+      id: "845", table: "01", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }]
+    },
+    {
+      id: "842", table: "02", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }]
+    },
+    {
+      id: "847", table: "03", status: "done", billingStatus: "paid",
+      items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    },
+    {
+      id: "844", table: "05", status: "ready", billingStatus: "unpaid",
+      items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    },
+    {
+      id: "846", table: "07", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    }
+  ];
+
+  const displayBillingData = billingData && billingData.length > 0 ? billingData : dummyBillingData;
+  const displayOrders = orders && orders.length > 0 ? orders : dummyOrders;
+  // -----------------------------
+
+
+  const selectedBillData = displayBillingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
 
   // Find active orders for selected billing table to show details
   const billingNum = selectedBillingTable.replace('Table ', '');
-  const activeTableOrders = orders.filter(o => (o.table === billingNum || parseInt(o.table) === parseInt(billingNum)) && o.billingStatus === 'unpaid');
+  const activeTableOrders = displayOrders.filter(o => (o.table === billingNum || parseInt(o.table) === parseInt(billingNum)) && o.billingStatus === 'unpaid');
 
   // Combine items from all unpaid orders of this table
   const billingItems = [];
@@ -77,11 +114,11 @@ export default function BillingPanel({
       <div style={{ marginBottom: '24px', background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--black)' }}>Active Tables</h3>
-          <span style={{ background: 'var(--primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{billingData.length} ACTIVE</span>
+          <span style={{ background: 'var(--primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{displayBillingData.length} ACTIVE</span>
         </div>
         
         <div style={{ display: 'flex', overflowX: 'auto', gap: '16px', paddingBottom: '16px', scrollbarWidth: 'thin' }}>
-          {billingData.map(b => (
+          {displayBillingData.map(b => (
             <div
               key={b.table}
               onClick={() => setSelectedBillingTable(b.table)}
@@ -123,7 +160,7 @@ export default function BillingPanel({
               </div>
             </div>
           ))}
-          {billingData.length === 0 && (
+          {displayBillingData.length === 0 && (
             <div style={{ padding: '20px', color: '#94a3b8' }}>No dining transactions available.</div>
           )}
         </div>

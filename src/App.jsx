@@ -17,6 +17,7 @@ import KitchenSettingsPage from './pages/KitchenManagement/KitchenSettingsPage';
 import Users from './pages/Users/Users';
 import RolesPermissions from './pages/RolesPermissions/RolesPermissions';
 import Billing from './pages/Billing/Billing';
+import BillingHistory from './pages/Billing/BillingHistory';
 import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
 
@@ -80,6 +81,7 @@ export default function App() {
 
         {/* Billing & Settlement */}
         <Route path="billing" element={<Billing />} />
+        <Route path="billing/history" element={<BillingHistory />} />
 
         {/* Reports & Analytics (Unified Reports including Waiter & Kitchen reports) */}
         <Route path="reports" element={<Reports />} />

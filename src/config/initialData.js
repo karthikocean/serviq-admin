@@ -62,40 +62,40 @@ export const initialRestaurantsData = {
       { id: "menu-8", name: "Lassi", category: "Drinks", price: 60, gst: 5, desc: "Chilled yogurt beverage blended sweet with cardamom and rose water.", image: "https://images.unsplash.com/photo-1553530666-ba11a7da3888?w=500&auto=format&fit=crop&q=60", available: true, veg: true, bestseller: false }
     ],
     orders: [
-      { id: "847", branchId: "BR-001", table: "03", time: "1:28 PM", timeAgo: "2 min ago", items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "Less spicy please", subtotal: 400, tax: 10, charge: 0, total: 420, status: "new", billingStatus: "unpaid", waiter: "Unassigned" },
-      { id: "846", branchId: "BR-001", table: "07", time: "1:22 PM", timeAgo: "8 min ago", items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 2020, tax: 101, charge: 0, total: 2121, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." },
-      { id: "845", branchId: "BR-002", table: "01", time: "1:15 PM", timeAgo: "15 min ago", items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }], notes: "Allergy: peanuts", subtotal: 720, tax: 36, charge: 0, total: 756, status: "preparing", billingStatus: "unpaid", waiter: "Rahul S." },
-      { id: "844", branchId: "BR-002", table: "05", time: "1:08 PM", timeAgo: "22 min ago", items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 880, tax: 44, charge: 0, total: 924, status: "ready", billingStatus: "unpaid", waiter: "Arjun K." },
-      { id: "843", branchId: "BR-003", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
-      { id: "842", branchId: "BR-001", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
+      { id: "847", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", table: "03", time: "1:28 PM", timeAgo: "2 min ago", items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "Less spicy please", subtotal: 400, tax: 10, charge: 0, total: 420, status: "new", billingStatus: "unpaid", waiter: "Unassigned" },
+      { id: "846", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", table: "07", time: "1:22 PM", timeAgo: "8 min ago", items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 2020, tax: 101, charge: 0, total: 2121, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." },
+      { id: "845", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", table: "01", time: "1:15 PM", timeAgo: "15 min ago", items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }], notes: "Allergy: peanuts", subtotal: 720, tax: 36, charge: 0, total: 756, status: "preparing", billingStatus: "unpaid", waiter: "Rahul S." },
+      { id: "844", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", table: "05", time: "1:08 PM", timeAgo: "22 min ago", items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }], notes: "", subtotal: 880, tax: 44, charge: 0, total: 924, status: "ready", billingStatus: "unpaid", waiter: "Arjun K." },
+      { id: "843", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", table: "02", time: "1:00 PM", timeAgo: "30 min ago", items: [{ name: "Veg Thali", qty: 2, price: 120 }, { name: "Masala Chai", qty: 3, price: 40 }], notes: "", subtotal: 360, tax: 18, charge: 0, total: 378, status: "done", billingStatus: "paid", waiter: "Ravi M." },
+      { id: "842", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", table: "02", time: "12:55 PM", timeAgo: "35 min ago", items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }], notes: "", subtotal: 1180, tax: 59, charge: 0, total: 1239, status: "preparing", billingStatus: "unpaid", waiter: "Ravi M." }
     ],
     tables: [
-      { id: "T-01", branchId: "BR-001", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-01" },
-      { id: "T-02", branchId: "BR-001", seats: 2, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-06" },
-      { id: "T-03", branchId: "BR-001", seats: 6, section: "Family Section", status: "Free", assignedWaiterId: "S-01" },
-      { id: "T-04", branchId: "BR-001", seats: 4, section: "AC Dining", status: "Free", assignedWaiterId: "S-06" },
-      { id: "T-05", branchId: "BR-002", seats: 4, section: "Outdoor Terrace", status: "Occupied", assignedWaiterId: "S-03" },
-      { id: "T-06", branchId: "BR-002", seats: 4, section: "Main Hall", status: "Free", assignedWaiterId: "S-07" },
-      { id: "T-07", branchId: "BR-002", seats: 6, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-03" },
-      { id: "T-08", branchId: "BR-003", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-08" },
-      { id: "T-09", branchId: "BR-003", seats: 2, section: "Window Section", status: "Free", assignedWaiterId: "S-08" },
-      { id: "T-10", branchId: "BR-003", seats: 8, section: "VIP Lounge", status: "Free", assignedWaiterId: "S-08" }
+      { id: "T-01", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-01" },
+      { id: "T-02", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", seats: 2, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-06" },
+      { id: "T-03", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", seats: 6, section: "Family Section", status: "Free", assignedWaiterId: "S-01" },
+      { id: "T-04", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", seats: 4, section: "AC Dining", status: "Free", assignedWaiterId: "S-06" },
+      { id: "T-05", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", seats: 4, section: "Outdoor Terrace", status: "Occupied", assignedWaiterId: "S-03" },
+      { id: "T-06", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", seats: 4, section: "Main Hall", status: "Free", assignedWaiterId: "S-07" },
+      { id: "T-07", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", seats: 6, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-03" },
+      { id: "T-08", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", seats: 4, section: "Main Hall", status: "Occupied", assignedWaiterId: "S-08" },
+      { id: "T-09", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", seats: 2, section: "Window Section", status: "Free", assignedWaiterId: "S-08" },
+      { id: "T-10", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", seats: 8, section: "VIP Lounge", status: "Free", assignedWaiterId: "S-08" }
     ],
     qrCodes: [
-      { id: "QR-101", branchId: "BR-001", status: "Assigned", tableId: "T-01", scansCount: 42, createdAt: "2026-06-01" },
-      { id: "QR-102", branchId: "BR-001", status: "Assigned", tableId: "T-02", scansCount: 28, createdAt: "2026-06-01" },
-      { id: "QR-103", branchId: "BR-001", status: "Assigned", tableId: "T-03", scansCount: 15, createdAt: "2026-06-02" },
-      { id: "QR-104", branchId: "BR-001", status: "Assigned", tableId: "T-04", scansCount: 8, createdAt: "2026-06-03" },
-      { id: "QR-105", branchId: "BR-002", status: "Assigned", tableId: "T-05", scansCount: 33, createdAt: "2026-06-03" },
-      { id: "QR-106", branchId: "BR-002", status: "Assigned", tableId: "T-06", scansCount: 19, createdAt: "2026-06-04" },
-      { id: "QR-107", branchId: "BR-002", status: "Assigned", tableId: "T-07", scansCount: 25, createdAt: "2026-06-04" },
-      { id: "QR-108", branchId: "BR-003", status: "Assigned", tableId: "T-08", scansCount: 12, createdAt: "2026-06-05" },
-      { id: "QR-109", branchId: "BR-003", status: "Assigned", tableId: "T-09", scansCount: 6, createdAt: "2026-06-05" },
-      { id: "QR-110", branchId: "BR-003", status: "Assigned", tableId: "T-10", scansCount: 14, createdAt: "2026-06-05" }
+      { id: "QR-101", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", status: "Assigned", tableId: "T-01", scansCount: 42, createdAt: "2026-06-01" },
+      { id: "QR-102", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", status: "Assigned", tableId: "T-02", scansCount: 28, createdAt: "2026-06-01" },
+      { id: "QR-103", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", status: "Assigned", tableId: "T-03", scansCount: 15, createdAt: "2026-06-02" },
+      { id: "QR-104", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", status: "Assigned", tableId: "T-04", scansCount: 8, createdAt: "2026-06-03" },
+      { id: "QR-105", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", status: "Assigned", tableId: "T-05", scansCount: 33, createdAt: "2026-06-03" },
+      { id: "QR-106", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", status: "Assigned", tableId: "T-06", scansCount: 19, createdAt: "2026-06-04" },
+      { id: "QR-107", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", status: "Assigned", tableId: "T-07", scansCount: 25, createdAt: "2026-06-04" },
+      { id: "QR-108", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", status: "Assigned", tableId: "T-08", scansCount: 12, createdAt: "2026-06-05" },
+      { id: "QR-109", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", status: "Assigned", tableId: "T-09", scansCount: 6, createdAt: "2026-06-05" },
+      { id: "QR-110", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", status: "Assigned", tableId: "T-10", scansCount: 14, createdAt: "2026-06-05" }
     ],
     branches: [
       {
-        id: "BR-001",
+        id: "60a1b2c3d4e5f6a7b8c9d0e1",
         branchCode: "BR-CHE-01",
         branchName: "Serviq Chennai Main Branch",
         branchManager: "Saravana Kumaran",
@@ -122,7 +122,7 @@ export const initialRestaurantsData = {
         }
       },
       {
-        id: "BR-002",
+        id: "60a1b2c3d4e5f6a7b8c9d0e2",
         branchCode: "BR-CBE-02",
         branchName: "Serviq Coimbatore Outlet",
         branchManager: "Karthik Raja",
@@ -149,7 +149,7 @@ export const initialRestaurantsData = {
         }
       },
       {
-        id: "BR-003",
+        id: "60a1b2c3d4e5f6a7b8c9d0e3",
         branchCode: "BR-MDU-03",
         branchName: "Serviq Madurai Branch",
         branchManager: "Ramesh V.",
@@ -177,44 +177,51 @@ export const initialRestaurantsData = {
       }
     ],
     billingData: [
-      { table: "Table 01", branchId: "BR-002", orders: 2, total: 756, status: "Unpaid" },
-      { table: "Table 02", branchId: "BR-001", orders: 3, total: 1239, status: "Unpaid" },
-      { table: "Table 03", branchId: "BR-001", orders: 1, total: 320, status: "Paid" },
-      { table: "Table 05", branchId: "BR-002", orders: 2, total: 924, status: "Unpaid" },
-      { table: "Table 07", branchId: "BR-001", orders: 4, total: 2121, status: "Partial" }
+      { table: "Table 01", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", orders: 2, total: 756, status: "Unpaid" },
+      { table: "Table 02", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", orders: 3, total: 1239, status: "Unpaid" },
+      { table: "Table 03", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", orders: 1, total: 320, status: "Paid" },
+      { table: "Table 05", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", orders: 2, total: 924, status: "Unpaid" },
+      { table: "Table 07", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", orders: 4, total: 2121, status: "Partial" }
+    ],
+    billingHistory: [
+      { id: "INV-10245", orderId: "ORD-845", table: "02", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", date: "2026-08-19", time: "10:15 AM", amount: 1239, paymentMethod: "UPI", staff: "Arun", status: "Paid", items: [{ name: "Chicken Biryani", qty: 2, price: 320, total: 640 }, { name: "Dal Makhani", qty: 2, price: 160, total: 320 }, { name: "Paneer Tikka", qty: 1, price: 180, total: 180 }, { name: "Masala Chai", qty: 1, price: 40, total: 40 }], subtotal: 1180, tax: 59 },
+      { id: "INV-10244", orderId: "ORD-844", table: "05", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", date: "2026-08-19", time: "09:42 AM", amount: 924, paymentMethod: "Cash", staff: "Kumar", status: "Paid", items: [{ name: "Paneer Tikka", qty: 2, price: 180, total: 360 }, { name: "Chicken Biryani", qty: 1, price: 320, total: 320 }, { name: "Butter Naan", qty: 3, price: 40, total: 120 }, { name: "Masala Chai", qty: 2, price: 40, total: 80 }], subtotal: 880, tax: 44 },
+      { id: "INV-10243", orderId: "ORD-843", table: "01", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", date: "2026-08-19", time: "09:20 AM", amount: 756, paymentMethod: "Card", staff: "Ravi", status: "Paid", items: [{ name: "Masala Dosa", qty: 5, price: 120, total: 600 }, { name: "Filter Coffee", qty: 3, price: 40, total: 120 }], subtotal: 720, tax: 36 },
+      { id: "INV-10242", orderId: "ORD-842", table: "03", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", date: "2026-08-18", time: "08:15 PM", amount: 420, paymentMethod: "UPI", staff: "Arun", status: "Paid", items: [{ name: "Chicken Biryani", qty: 1, price: 320, total: 320 }, { name: "Masala Chai", qty: 2, price: 40, total: 80 }], subtotal: 400, tax: 20 },
+      { id: "INV-10241", orderId: "ORD-841", table: "08", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", date: "2026-08-18", time: "07:30 PM", amount: 2121, paymentMethod: "Cash", staff: "Vikram", status: "Paid", items: [{ name: "Chicken Biryani", qty: 4, price: 320, total: 1280 }, { name: "Dal Makhani", qty: 3, price: 160, total: 480 }, { name: "Paneer Tikka", qty: 1, price: 180, total: 180 }, { name: "Masala Chai", qty: 2, price: 40, total: 80 }], subtotal: 2020, tax: 101 }
     ],
     staff: [
-      { id: "S-01", branchId: "BR-001", name: "Ramesh Kumar", role: "Waiter", phone: "9876543210", email: "ramesh@serviq.com", status: "On Duty", password: "manager123" },
-      { id: "S-02", branchId: "BR-001", name: "Suresh Pillai", role: "Kitchen", phone: "9876543211", email: "suresh@serviq.com", status: "On Duty", password: "chef123" },
-      { id: "S-03", branchId: "BR-002", name: "Anitha Selvam", role: "Waiter", phone: "9876543212", email: "anitha@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-04", branchId: "BR-003", name: "Vikram Rathore", role: "Waiter", phone: "9876543213", email: "vikram@serviq.com", status: "Off Duty", password: "waiter456" },
-      { id: "S-05", branchId: "BR-002", name: "Priya Patel", role: "Kitchen", phone: "9876543214", email: "priya@serviq.com", status: "On Duty", password: "chef456" },
-      { id: "S-06", branchId: "BR-001", name: "Ravi M.", role: "Waiter", phone: "9876543215", email: "ravi@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-07", branchId: "BR-002", name: "Rahul S.", role: "Waiter", phone: "9876543216", email: "rahul@serviq.com", status: "On Duty", password: "waiter123" },
-      { id: "S-08", branchId: "BR-003", name: "Arjun K.", role: "Waiter", phone: "9876543217", email: "arjun@serviq.com", status: "On Duty", password: "waiter123" }
+      { id: "S-01", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", name: "Ramesh Kumar", role: "Waiter", phone: "9876543210", email: "ramesh@serviq.com", status: "On Duty", password: "manager123" },
+      { id: "S-02", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", name: "Suresh Pillai", role: "Kitchen", phone: "9876543211", email: "suresh@serviq.com", status: "On Duty", password: "chef123" },
+      { id: "S-03", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", name: "Anitha Selvam", role: "Waiter", phone: "9876543212", email: "anitha@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-04", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", name: "Vikram Rathore", role: "Waiter", phone: "9876543213", email: "vikram@serviq.com", status: "Off Duty", password: "waiter456" },
+      { id: "S-05", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", name: "Priya Patel", role: "Kitchen", phone: "9876543214", email: "priya@serviq.com", status: "On Duty", password: "chef456" },
+      { id: "S-06", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", name: "Ravi M.", role: "Waiter", phone: "9876543215", email: "ravi@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-07", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", name: "Rahul S.", role: "Waiter", phone: "9876543216", email: "rahul@serviq.com", status: "On Duty", password: "waiter123" },
+      { id: "S-08", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", name: "Arjun K.", role: "Waiter", phone: "9876543217", email: "arjun@serviq.com", status: "On Duty", password: "waiter123" }
     ],
     users: [
       { id: "USR-001", branchId: "ALL", name: "Saravana Kumaran", email: "admin@saravana.com", phone: "+91 98765 43210", role: "Super Admin", status: "Active", lastLogin: "2026-06-02 12:45 PM" },
-      { id: "USR-002", branchId: "BR-001", name: "Ramesh Kumar", email: "ramesh.admin@serviq.com", phone: "+91 98765 11111", role: "Branch Admin", status: "Active", lastLogin: "2026-06-02 11:30 AM" },
-      { id: "USR-003", branchId: "BR-002", name: "Karthik Raja", email: "karthik.admin@serviq.com", phone: "+91 98765 22222", role: "Branch Admin", status: "Active", lastLogin: "2026-06-01 09:15 PM" },
-      { id: "USR-004", branchId: "BR-003", name: "Ramesh V.", email: "rameshv.admin@serviq.com", phone: "+91 98765 33333", role: "Branch Admin", status: "Active", lastLogin: "2026-05-30 08:20 AM" },
-      { id: "USR-005", branchId: "BR-001", name: "Suresh Pillai", email: "suresh.mgr@serviq.com", phone: "+91 98765 44444", role: "Manager", status: "Active", lastLogin: "2026-06-02 10:15 AM" }
+      { id: "USR-002", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", name: "Ramesh Kumar", email: "ramesh.admin@serviq.com", phone: "+91 98765 11111", role: "Branch Admin", status: "Active", lastLogin: "2026-06-02 11:30 AM" },
+      { id: "USR-003", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", name: "Karthik Raja", email: "karthik.admin@serviq.com", phone: "+91 98765 22222", role: "Branch Admin", status: "Active", lastLogin: "2026-06-01 09:15 PM" },
+      { id: "USR-004", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", name: "Ramesh V.", email: "rameshv.admin@serviq.com", phone: "+91 98765 33333", role: "Branch Admin", status: "Active", lastLogin: "2026-05-30 08:20 AM" },
+      { id: "USR-005", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", name: "Suresh Pillai", email: "suresh.mgr@serviq.com", phone: "+91 98765 44444", role: "Manager", status: "Active", lastLogin: "2026-06-02 10:15 AM" }
     ],
     kitchenLogin: {
       email: "kitchen@saravana.com",
       password: "kitchen123"
     },
     inventory: [
-      { id: "INV-001", sku: "ING-PNR-01", name: "Fresh Paneer (Cottage Cheese)", category: "Dairy", branchId: "BR-001", currentStock: 12.5, minStockLevel: 5.0, unit: "kg", costPerUnit: 320, supplierName: "Nandini Dairy Supplies", supplierPhone: "+91 98450 12345", lastRestocked: "2026-08-14", status: "In Stock" },
-      { id: "INV-002", sku: "ING-RCE-01", name: "Basmati Rice (Classic Grade A)", category: "Grains & Rice", branchId: "BR-001", currentStock: 4.0, minStockLevel: 15.0, unit: "kg", costPerUnit: 110, supplierName: "Royal Grain Traders", supplierPhone: "+91 98765 43210", lastRestocked: "2026-08-10", status: "Low Stock" },
-      { id: "INV-003", sku: "ING-OIL-01", name: "Refined Sunflower Cooking Oil", category: "Oils & Ghee", branchId: "BR-001", currentStock: 28.0, minStockLevel: 10.0, unit: "L", costPerUnit: 145, supplierName: "Fortune Wholesale Agency", supplierPhone: "+91 98200 98765", lastRestocked: "2026-08-12", status: "In Stock" },
-      { id: "INV-004", sku: "ING-CHK-01", name: "Fresh Chicken (Curry Cut)", category: "Meat & Poultry", branchId: "BR-001", currentStock: 2.0, minStockLevel: 8.0, unit: "kg", costPerUnit: 220, supplierName: "Fresh Farms Hatchery", supplierPhone: "+91 99001 22334", lastRestocked: "2026-08-15", status: "Low Stock" },
-      { id: "INV-005", sku: "ING-TOM-01", name: "Fresh Hybrid Tomatoes", category: "Vegetables", branchId: "BR-001", currentStock: 22.0, minStockLevel: 10.0, unit: "kg", costPerUnit: 35, supplierName: "Mandi Fresh Produce", supplierPhone: "+91 94432 11223", lastRestocked: "2026-08-14", status: "In Stock" },
-      { id: "INV-006", sku: "ING-TEA-01", name: "Premium Assam CTC Tea Leaves", category: "Beverages", branchId: "BR-001", currentStock: 0.0, minStockLevel: 3.0, unit: "kg", costPerUnit: 420, supplierName: "Assam Valley Tea Co.", supplierPhone: "+91 97890 55443", lastRestocked: "2026-08-01", status: "Out of Stock" },
-      { id: "INV-007", sku: "PKG-BOX-01", name: "Eco Meal Delivery Containers (3-CP)", category: "Packaging", branchId: "BR-001", currentStock: 450, minStockLevel: 100, unit: "pcs", costPerUnit: 8.5, supplierName: "GreenPack Solutions", supplierPhone: "+91 98401 77665", lastRestocked: "2026-08-11", status: "In Stock" },
-      { id: "INV-008", sku: "ING-BUT-01", name: "Pasteurized Salted Cooking Butter", category: "Dairy", branchId: "BR-002", currentStock: 3.5, minStockLevel: 6.0, unit: "kg", costPerUnit: 480, supplierName: "Amul Distribution Hub", supplierPhone: "+91 98111 22334", lastRestocked: "2026-08-13", status: "Low Stock" },
-      { id: "INV-009", sku: "ING-GAR-01", name: "Peeled Garlic Cloves", category: "Spices & Condiments", branchId: "BR-002", currentStock: 14.0, minStockLevel: 5.0, unit: "kg", costPerUnit: 160, supplierName: "City Spice Mart", supplierPhone: "+91 98333 44556", lastRestocked: "2026-08-14", status: "In Stock" },
-      { id: "INV-010", sku: "ING-MILK-01", name: "Full Cream Dairy Milk", category: "Dairy", branchId: "BR-003", currentStock: 35.0, minStockLevel: 15.0, unit: "L", costPerUnit: 62, supplierName: "Aavin Dairy Milk", supplierPhone: "+91 98555 66778", lastRestocked: "2026-08-15", status: "In Stock" }
+      { id: "INV-001", sku: "ING-PNR-01", name: "Fresh Paneer (Cottage Cheese)", category: "Dairy", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 12.5, minStockLevel: 5.0, unit: "kg", costPerUnit: 320, supplierName: "Nandini Dairy Supplies", supplierPhone: "+91 98450 12345", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-002", sku: "ING-RCE-01", name: "Basmati Rice (Classic Grade A)", category: "Grains & Rice", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 4.0, minStockLevel: 15.0, unit: "kg", costPerUnit: 110, supplierName: "Royal Grain Traders", supplierPhone: "+91 98765 43210", lastRestocked: "2026-08-10", status: "Low Stock" },
+      { id: "INV-003", sku: "ING-OIL-01", name: "Refined Sunflower Cooking Oil", category: "Oils & Ghee", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 28.0, minStockLevel: 10.0, unit: "L", costPerUnit: 145, supplierName: "Fortune Wholesale Agency", supplierPhone: "+91 98200 98765", lastRestocked: "2026-08-12", status: "In Stock" },
+      { id: "INV-004", sku: "ING-CHK-01", name: "Fresh Chicken (Curry Cut)", category: "Meat & Poultry", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 2.0, minStockLevel: 8.0, unit: "kg", costPerUnit: 220, supplierName: "Fresh Farms Hatchery", supplierPhone: "+91 99001 22334", lastRestocked: "2026-08-15", status: "Low Stock" },
+      { id: "INV-005", sku: "ING-TOM-01", name: "Fresh Hybrid Tomatoes", category: "Vegetables", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 22.0, minStockLevel: 10.0, unit: "kg", costPerUnit: 35, supplierName: "Mandi Fresh Produce", supplierPhone: "+91 94432 11223", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-006", sku: "ING-TEA-01", name: "Premium Assam CTC Tea Leaves", category: "Beverages", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 0.0, minStockLevel: 3.0, unit: "kg", costPerUnit: 420, supplierName: "Assam Valley Tea Co.", supplierPhone: "+91 97890 55443", lastRestocked: "2026-08-01", status: "Out of Stock" },
+      { id: "INV-007", sku: "PKG-BOX-01", name: "Eco Meal Delivery Containers (3-CP)", category: "Packaging", branchId: "60a1b2c3d4e5f6a7b8c9d0e1", currentStock: 450, minStockLevel: 100, unit: "pcs", costPerUnit: 8.5, supplierName: "GreenPack Solutions", supplierPhone: "+91 98401 77665", lastRestocked: "2026-08-11", status: "In Stock" },
+      { id: "INV-008", sku: "ING-BUT-01", name: "Pasteurized Salted Cooking Butter", category: "Dairy", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", currentStock: 3.5, minStockLevel: 6.0, unit: "kg", costPerUnit: 480, supplierName: "Amul Distribution Hub", supplierPhone: "+91 98111 22334", lastRestocked: "2026-08-13", status: "Low Stock" },
+      { id: "INV-009", sku: "ING-GAR-01", name: "Peeled Garlic Cloves", category: "Spices & Condiments", branchId: "60a1b2c3d4e5f6a7b8c9d0e2", currentStock: 14.0, minStockLevel: 5.0, unit: "kg", costPerUnit: 160, supplierName: "City Spice Mart", supplierPhone: "+91 98333 44556", lastRestocked: "2026-08-14", status: "In Stock" },
+      { id: "INV-010", sku: "ING-MILK-01", name: "Full Cream Dairy Milk", category: "Dairy", branchId: "60a1b2c3d4e5f6a7b8c9d0e3", currentStock: 35.0, minStockLevel: 15.0, unit: "L", costPerUnit: 62, supplierName: "Aavin Dairy Milk", supplierPhone: "+91 98555 66778", lastRestocked: "2026-08-15", status: "In Stock" }
     ],
     inventoryLogs: [
       { id: "LOG-101", itemId: "INV-001", itemName: "Fresh Paneer (Cottage Cheese)", type: "Stock In", quantity: 10, unit: "kg", date: "2026-08-14 10:30 AM", reason: "Supplier Purchase", user: "Saravana Kumaran", notes: "Invoice #NDS-8834" },
