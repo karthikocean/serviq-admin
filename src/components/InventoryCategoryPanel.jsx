@@ -153,12 +153,10 @@ export default function InventoryCategoryPanel() {
                 PREMIUM
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              Manage and organize raw material inventory categories
-            </p>
+          
           </div>
 
-          {/* Module Sub-Navigation Switcher (Item Name vs Category) */}
+          {/* Module Sub-Navigation Switcher (Category vs Item Name vs Stock Reduction) */}
           <div style={{
             display: 'inline-flex',
             background: '#f1f5f9',
@@ -167,6 +165,22 @@ export default function InventoryCategoryPanel() {
             gap: '4px',
             marginLeft: '8px'
           }}>
+            <button
+              type="button"
+              style={{
+                border: 'none',
+                padding: '7px 16px',
+                borderRadius: '7px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                background: '#ffffff',
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+              }}
+            >
+              Category
+            </button>
             <button
               type="button"
               onClick={() => navigate('/inventory')}
@@ -186,19 +200,20 @@ export default function InventoryCategoryPanel() {
             </button>
             <button
               type="button"
+              onClick={() => navigate('/inventory/stock-reduction')}
               style={{
                 border: 'none',
                 padding: '7px 16px',
                 borderRadius: '7px',
                 fontSize: '13px',
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: 'pointer',
-                background: '#ffffff',
-                color: '#0f172a',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                background: 'transparent',
+                color: '#64748b',
+                transition: 'all 0.15s'
               }}
             >
-              Category
+              Stock Reduction
             </button>
           </div>
         </div>

@@ -52,6 +52,7 @@ const MODULES_LIST = [
   { id: 'reports_analytics', name: 'Reports & Analytics' },
   // Premium
   { id: 'inventory', name: 'Inventory Management (Premium)' },
+  { id: 'stock_reduction', name: 'Stock Reduction & Purchase Logs (Premium)' },
   { id: 'menu', name: 'Menu Management' },
   { id: 'tables', name: 'Tables Management' },
   { id: 'orders', name: 'Orders Management' },
@@ -325,7 +326,7 @@ export default function RolesPermissionsPanel() {
               Cancel
             </button>
             <button type="button" onClick={handleSaveRole} style={{ background: '#ff5a1f', border: 'none', color: '#ffffff', fontWeight: 700, borderRadius: '8px', padding: '10px 22px', fontSize: '13px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(255,90,31,0.25)' }}>
-              Save Role Permissions
+              Save 
             </button>
           </div>
         </div>

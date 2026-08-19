@@ -1875,6 +1875,206 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const reduceInventoryStock = (id, reductionData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+
+      const qtyNum = Math.abs(Number(reductionData.quantity)) || 0;
+      let targetItemName = '';
+      let targetSku = '';
+      let targetCategory = '';
+      let targetUnit = 'kg';
+      let remainingStockVal = 0;
+
+      const updatedInventory = (rest.inventory || []).map(item => {
+        if (item.id === reductionData.itemId) {
+          targetItemName = item.name;
+          targetSku = item.sku || '';
+          targetCategory = item.category || 'General';
+          targetUnit = item.unit || 'units';
+          const newStock = Math.max(0, parseFloat((item.currentStock - qtyNum).toFixed(2)));
+          remainingStockVal = newStock;
+          const status = (newStock <= 0) ? 'Out of Stock' : (newStock <= (item.minStockLevel || 5)) ? 'Low Stock' : 'In Stock';
+          return {
+            ...item,
+            currentStock: newStock,
+            status
+          };
+        }
+        return item;
+      });
+
+      const nextRedId = `RED-${Date.now().toString().slice(-6)}`;
+      const newReduction = {
+        id: nextRedId,
+        itemId: reductionData.itemId,
+        itemName: targetItemName || reductionData.itemName || 'Item',
+        sku: targetSku,
+        category: targetCategory,
+        branchId: reductionData.branchId || rest.selectedBranchId || 'BR-001',
+        quantity: qtyNum,
+        unit: targetUnit,
+        remainingStock: remainingStockVal,
+        reason: reductionData.reason || 'Kitchen Usage',
+        date: reductionData.date || new Date().toLocaleString(),
+        reducedBy: reductionData.reducedBy || currentUser?.name || 'Admin',
+        notes: reductionData.notes || ''
+      };
+
+      const newLog = {
+        id: `LOG-${Date.now().toString().slice(-6)}`,
+        itemId: reductionData.itemId,
+        itemName: targetItemName || 'Inventory Item',
+        type: 'Stock Out',
+        quantity: qtyNum,
+        unit: targetUnit,
+        date: new Date().toLocaleString(),
+        reason: reductionData.reason || 'Stock Reduction',
+        user: reductionData.reducedBy || currentUser?.name || 'Admin',
+        notes: `Reduced ${qtyNum} ${targetUnit} (${reductionData.reason || 'Manual'}). Remaining: ${remainingStockVal} ${targetUnit}. ${reductionData.notes || ''}`
+      };
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: updatedInventory,
+          inventoryReductions: [newReduction, ...(rest.inventoryReductions || [])],
+          inventoryLogs: [newLog, ...(rest.inventoryLogs || [])]
+        }
+      };
+    });
+  };
+
+  const addPurchaseRecord = (id, purchaseData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+
+      const qtyNum = Number(purchaseData.quantity) || 0;
+      const unitPriceNum = Number(purchaseData.unitPrice) || 0;
+      const totalAmountNum = purchaseData.totalAmount ? Number(purchaseData.totalAmount) : (qtyNum * unitPriceNum);
+      const nextPurId = `PUR-${Date.now().toString().slice(-6)}`;
+
+      let targetItemName = purchaseData.itemName || '';
+      let targetUnit = purchaseData.unit || 'kg';
+      let foundExisting = false;
+
+      const updatedInventory = (rest.inventory || []).map(item => {
+        if (item.id === purchaseData.itemId || (purchaseData.itemName && item.name.toLowerCase() === purchaseData.itemName.toLowerCase())) {
+          foundExisting = true;
+          targetItemName = item.name;
+          targetUnit = item.unit || purchaseData.unit || 'kg';
+          const newStock = parseFloat((item.currentStock + qtyNum).toFixed(2));
+          const status = (newStock <= 0) ? 'Out of Stock' : (newStock <= (item.minStockLevel || 5)) ? 'Low Stock' : 'In Stock';
+          return {
+            ...item,
+            currentStock: newStock,
+            costPerUnit: unitPriceNum || item.costPerUnit,
+            lastRestocked: purchaseData.purchaseDate || new Date().toISOString().split('T')[0],
+            supplierName: purchaseData.supplierName || item.supplierName,
+            supplierPhone: purchaseData.supplierPhone || item.supplierPhone,
+            status
+          };
+        }
+        return item;
+      });
+
+      // If it's a new item not in inventory yet, add it
+      let finalInventory = updatedInventory;
+      if (!foundExisting && purchaseData.itemName) {
+        const newItemObj = {
+          id: purchaseData.itemId || `INV-${String(rest.inventory?.length + 1 || 1).padStart(3, '0')}`,
+          sku: purchaseData.sku || `ING-${purchaseData.itemName.slice(0, 3).toUpperCase()}-01`,
+          name: purchaseData.itemName,
+          category: purchaseData.category || 'General',
+          branchId: purchaseData.branchId || 'BR-001',
+          currentStock: qtyNum,
+          minStockLevel: 5.0,
+          unit: purchaseData.unit || 'kg',
+          costPerUnit: unitPriceNum,
+          supplierName: purchaseData.supplierName || 'General Supplier',
+          supplierPhone: purchaseData.supplierPhone || '',
+          lastRestocked: purchaseData.purchaseDate || new Date().toISOString().split('T')[0],
+          status: qtyNum > 0 ? 'In Stock' : 'Out of Stock'
+        };
+        finalInventory = [newItemObj, ...finalInventory];
+      }
+
+      const newPurchase = {
+        id: nextPurId,
+        itemId: purchaseData.itemId || (finalInventory[0]?.id),
+        itemName: targetItemName || purchaseData.itemName,
+        category: purchaseData.category || 'General',
+        branchId: purchaseData.branchId || 'BR-001',
+        supplierName: purchaseData.supplierName || 'General Supplier',
+        supplierPhone: purchaseData.supplierPhone || '',
+        supplierEmail: purchaseData.supplierEmail || '',
+        quantity: qtyNum,
+        unit: targetUnit,
+        unitPrice: unitPriceNum,
+        totalAmount: totalAmountNum,
+        invoiceNumber: purchaseData.invoiceNumber || `INV-${Date.now().toString().slice(-4)}`,
+        purchaseDate: purchaseData.purchaseDate || new Date().toISOString().split('T')[0],
+        paymentStatus: purchaseData.paymentStatus || 'Paid',
+        addedBy: purchaseData.addedBy || currentUser?.name || 'Admin',
+        notes: purchaseData.notes || ''
+      };
+
+      const newLog = {
+        id: `LOG-${Date.now().toString().slice(-6)}`,
+        itemId: newPurchase.itemId,
+        itemName: newPurchase.itemName,
+        type: 'Stock In',
+        quantity: qtyNum,
+        unit: targetUnit,
+        date: new Date().toLocaleString(),
+        reason: 'Supplier Purchase',
+        user: purchaseData.addedBy || currentUser?.name || 'Admin',
+        notes: `Purchased ${qtyNum} ${targetUnit} from ${purchaseData.supplierName || 'Supplier'} (Invoice #${newPurchase.invoiceNumber})`
+      };
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventory: finalInventory,
+          inventoryPurchases: [newPurchase, ...(rest.inventoryPurchases || [])],
+          inventoryLogs: [newLog, ...(rest.inventoryLogs || [])]
+        }
+      };
+    });
+  };
+
+  const deletePurchaseRecord = (id, purchaseId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventoryPurchases: (rest.inventoryPurchases || []).filter(p => p.id !== purchaseId)
+        }
+      };
+    });
+  };
+
+  const deleteReductionRecord = (id, reductionId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          inventoryReductions: (rest.inventoryReductions || []).filter(r => r.id !== reductionId)
+        }
+      };
+    });
+  };
+
   const addInventoryCategory = (id, categoryData) => {
     setRestaurantsData(prev => {
       const rest = prev[id];
@@ -1988,6 +2188,10 @@ export const AppProvider = ({ children }) => {
         updateInventoryItem,
         deleteInventoryItem,
         adjustStock,
+        reduceInventoryStock,
+        addPurchaseRecord,
+        deletePurchaseRecord,
+        deleteReductionRecord,
         addInventoryCategory,
         updateInventoryCategory,
         deleteInventoryCategory
@@ -1999,4 +2203,3 @@ export const AppProvider = ({ children }) => {
 };
 
 export const useAppState = () => useContext(AppContext);
-
