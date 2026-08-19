@@ -27,7 +27,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (billingData.length > 0 && !selectedBillingTable) {
-      setSelectedBillingTable(billingData[0].table);
+      const firstActive = billingData.find(b => b.status === 'Unpaid') || billingData[0];
+      setSelectedBillingTable(firstActive.table);
     }
   }, [billingData, selectedBillingTable]);
 
