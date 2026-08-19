@@ -23,6 +23,7 @@ export default function AdminLayout() {
   const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(location.pathname.startsWith('/waiter'));
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(location.pathname.startsWith('/kitchen'));
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(location.pathname.startsWith('/billing'));
+  const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
 
