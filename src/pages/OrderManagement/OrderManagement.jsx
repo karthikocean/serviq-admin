@@ -6,6 +6,8 @@ import './OrderManagement.css';
 export default function OrderManagement() {
   const {
     activeRestaurant,
+    addOrder,
+    createOrder,
     updateOrder,
     deleteOrder,
     updateOrderStatus,
@@ -32,6 +34,7 @@ export default function OrderManagement() {
         setOrderFilter={setOrderFilter}
         selectedWaiterFilter={selectedWaiterFilter}
         setSelectedWaiterFilter={setSelectedWaiterFilter}
+        addOrder={addOrder || createOrder}
         deleteOrder={deleteOrder}
         activeRestaurant={activeRestaurant}
         updateOrderStatus={updateOrderStatus}

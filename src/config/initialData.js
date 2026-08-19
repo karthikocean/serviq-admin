@@ -222,6 +222,16 @@ export const initialRestaurantsData = {
       { id: "LOG-103", itemId: "INV-006", itemName: "Premium Assam CTC Tea Leaves", type: "Stock Out", quantity: 2, unit: "kg", date: "2026-08-14 06:00 PM", reason: "Kitchen Issue", user: "Ravi M.", notes: "Daily tea service" },
       { id: "LOG-104", itemId: "INV-003", itemName: "Refined Sunflower Cooking Oil", type: "Stock In", quantity: 20, unit: "L", date: "2026-08-12 02:15 PM", reason: "Supplier Purchase", user: "Saravana Kumaran", notes: "Invoice #FW-9021" }
     ],
+    inventoryCategories: [
+      { id: "INV-CAT-001", name: "Dairy", description: "Milk, butter, paneer, cream, yogurt", status: "AVAILABLE" },
+      { id: "INV-CAT-002", name: "Grains & Rice", description: "Basmati rice, wheat flour, grains, pulses", status: "AVAILABLE" },
+      { id: "INV-CAT-003", name: "Oils & Ghee", description: "Cooking oil, mustard oil, pure desi ghee", status: "AVAILABLE" },
+      { id: "INV-CAT-004", name: "Meat & Poultry", description: "Fresh chicken, mutton, seafood", status: "AVAILABLE" },
+      { id: "INV-CAT-005", name: "Vegetables", description: "Farm fresh onions, tomatoes, potatoes, herbs", status: "AVAILABLE" },
+      { id: "INV-CAT-006", name: "Spices & Condiments", description: "Cardamom, clove, whole & ground spices", status: "AVAILABLE" },
+      { id: "INV-CAT-007", name: "Beverages", description: "Tea leaves, coffee beans, syrups, juices", status: "AVAILABLE" },
+      { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
+    ],
     categories: ['Starters', 'Rice Meals', 'Tiffin', 'Rotis', 'Desserts', 'Drinks'],
     roles: {
       Admin: {

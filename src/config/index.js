@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.13:5000/public";
-    BASE_URL = "http://192.168.1.13:5000/api/admin";
-    server = "http://192.168.1.13:5000";
+    IMAGE_BASE_URL = "http://192.168.1.17:5000/public";
+    BASE_URL = "http://192.168.1.17:5000/api/admin";
+    server = "http://192.168.1.17:5000";
     break;
 }
 
@@ -67,9 +67,13 @@ apiClient.interceptors.response.use(
     return response;
   },
   function (error) {
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const isMock = token && token.startsWith("mock_");
+
     // Only redirect if explicitly unauthorized on critical authentication routes,
     // avoiding session disruption during frontend operations
     if (
+      !isMock &&
       error.response?.status === 401 &&
       !error.config?.url?.includes("/login") &&
       !window.location.pathname.includes("/login")

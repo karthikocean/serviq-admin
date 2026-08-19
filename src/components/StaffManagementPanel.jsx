@@ -1080,16 +1080,14 @@ export default function StaffManagementPanel({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '5px',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
+                        padding: '6px 12px',
                         borderRadius: '20px',
                         fontSize: '12px',
                         fontWeight: 700,
                         color: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#fff' : '#475569',
                         background: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#10b981' : '#e2e8f0',
                         cursor: 'pointer',
-                        border: 'none',
-                        padding: '6px 12px'
+                        border: 'none'
                       }}
                     >
                       {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}

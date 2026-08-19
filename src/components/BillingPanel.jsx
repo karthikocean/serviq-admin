@@ -69,7 +69,7 @@ export default function BillingPanel({
     <section className="panel-view active">
       <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
         <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Billing Panel</h2>
+          <h2 className="panel-inner-title">Billing</h2>
         </div>
       </div>
 
