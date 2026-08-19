@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import React, { useState, useEffect } from 'react';
+import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -40,61 +40,74 @@ const isAdminRole = (roleName = '') => {
 };
 
 const MODULES_LIST = [
-  { id: 'overview', name: 'Dashboard / Overview' },
-  { id: 'branch-management', name: 'Branch Management', adminOnly: true },
-  { id: 'plans-management', name: 'Plans & Subscription' },
+  // Core
+  { id: 'dashboard', name: 'Dashboard / Overview' },
+  { id: 'branch_management', name: 'Branch Management', adminOnly: true },
+  { id: 'plans_subscription', name: 'Plans & Subscription' },
+  { id: 'billing_payments', name: 'Billing & Payments' },
+  { id: 'staff_management', name: 'Staff Management (Waiters & Kitchen)' },
+  { id: 'user_accounts', name: 'User Accounts' },
+  { id: 'roles_permissions', name: 'Roles & Permissions' },
+  { id: 'settings', name: 'Settings' },
+  { id: 'reports_analytics', name: 'Reports & Analytics' },
+  // Premium
   { id: 'inventory', name: 'Inventory Management (Premium)' },
-  { id: 'orders', name: 'Orders Management' },
   { id: 'menu', name: 'Menu Management' },
   { id: 'tables', name: 'Tables Management' },
-  { id: 'billing', name: 'Billing & Payments' },
-  { id: 'staff', name: 'Staff Management (Waiters & Kitchen)' },
-  { id: 'Reports', name: 'Reports & Analytics' },
-  { id: 'users', name: 'User Accounts' },
-  { id: 'roles-permissions', name: 'Roles & Permissions' },
-  { id: 'Settings', name: 'Settings' }
+  { id: 'orders', name: 'Orders Management' },
+  { id: 'waiter-list', name: 'Waiter App Access (Premium)' },
+  { id: 'kitchen-list', name: 'Kitchen Display System (Premium)' },
+  { id: 'qr-code-config', name: 'QR Code Configuration' }
 ];
 
 export default function RolesPermissionsPanel() {
-  const { activeRestaurant, updateRolePermissions, addNewRole, deleteRole } = useAppState();
   const [viewState, setViewState] = useState('list'); // 'list' | 'edit' | 'add'
+  const [editingRoleId, setEditingRoleId] = useState(null);
   const [editingRoleName, setEditingRoleName] = useState('');
   const [roleNameError, setRoleNameError] = useState('');
   const [permissionsState, setPermissionsState] = useState({});
   const [roleToDelete, setRoleToDelete] = useState(null);
+  const [apiRoles, setApiRoles] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
+  const fetchRoles = async () => {
+    setIsLoading(true);
+    const res = await RoleApi.getRoles();
+    if (res?.status) {
+      setApiRoles(res.response.data || []);
+    }
+    setIsLoading(false);
+  };
 
-  const rolesList = Object.keys(rolesConfig).length > 0
-    ? Object.keys(rolesConfig).map((role, idx) => ({
-      id: idx + 1,
-      name: role,
-      status: 'Active'
-    }))
-    : defaultRolesList;
+  useEffect(() => {
+    fetchRoles();
+  }, []);
 
-  const handleDeleteRole = (roleName) => {
-    if (roleName === 'Admin' || roleName === 'Super Admin' || roleName === 'Waiter' || roleName === 'Kitchen') {
+  const handleDeleteRole = (role) => {
+    if (role.isDefault) {
       ShowNotifications.showAlertNotification("System default roles cannot be deleted.", false);
       return;
     }
-    setRoleToDelete(roleName);
+    setRoleToDelete(role);
   };
 
-  const handleConfirmDelete = () => {
-    if (roleToDelete && deleteRole && activeRestaurant?.id) {
-      deleteRole(activeRestaurant.id, roleToDelete);
-      ShowNotifications.showAlertNotification(`Role "${roleToDelete}" deleted!`, true);
-      setRoleToDelete(null);
+  const handleConfirmDelete = async () => {
+    if (roleToDelete) {
+      const res = await RoleApi.deleteRole(roleToDelete._id);
+      if (res.status) {
+        setRoleToDelete(null);
+        fetchRoles();
+      }
     }
   };
 
-  const handleEditRole = (roleName) => {
-    setEditingRoleName(roleName);
+  const handleEditRole = (role) => {
+    setEditingRoleId(role._id);
+    setEditingRoleName(role.roleName);
     setRoleNameError('');
-    const existingPerms = rolesConfig[roleName]?.permissions || {};
+    const existingPerms = role.permissions || {};
     const basePermissions = {};
-    const isTargetAdmin = isAdminRole(roleName);
+    const isTargetAdmin = isAdminRole(role.roleName);
 
     MODULES_LIST.forEach(m => {
       if (m.adminOnly && !isTargetAdmin) {
@@ -108,6 +121,7 @@ export default function RolesPermissionsPanel() {
   };
 
   const handleAddRole = () => {
+    setEditingRoleId(null);
     setEditingRoleName('');
     setRoleNameError('');
     const basePermissions = {};
@@ -118,38 +132,35 @@ export default function RolesPermissionsPanel() {
     setViewState('add');
   };
 
-  const handleSaveRole = () => {
+  const handleSaveRole = async () => {
     const trimmedRoleName = editingRoleName.trim();
     if (!trimmedRoleName) {
       setRoleNameError("Role Name is required.");
       return;
     }
 
-    if (viewState === 'add' && addNewRole && activeRestaurant?.id) {
-      if (rolesConfig[trimmedRoleName]) {
-        setRoleNameError("A role with this name already exists.");
-        return;
-      }
-      addNewRole(activeRestaurant.id, trimmedRoleName);
-    }
-
-    // Strict enforcement: Non-admin roles NEVER get branch-management permissions
     const isTargetAdmin = isAdminRole(trimmedRoleName);
     const finalPermissions = { ...permissionsState };
     if (!isTargetAdmin) {
-      finalPermissions['branch-management'] = { view: false, add: false, edit: false, delete: false };
+      finalPermissions['branch_management'] = { view: false, add: false, edit: false, delete: false };
     }
 
-    if (updateRolePermissions && activeRestaurant?.id) {
-      updateRolePermissions(activeRestaurant.id, trimmedRoleName, finalPermissions);
+    let res;
+    if (viewState === 'add') {
+      res = await RoleApi.createRole({ roleName: trimmedRoleName, permissions: finalPermissions });
+    } else {
+      res = await RoleApi.updateRole(editingRoleId, { roleName: trimmedRoleName, permissions: finalPermissions });
     }
-    ShowNotifications.showAlertNotification(`Role ${trimmedRoleName} saved successfully!`, true);
-    setViewState('list');
+
+    if (res.status) {
+      setViewState('list');
+      fetchRoles();
+    }
   };
 
   const togglePermission = (moduleId, action) => {
     const isTargetAdmin = isAdminRole(editingRoleName);
-    if (moduleId === 'branch-management' && !isTargetAdmin) {
+    if (moduleId === 'branch_management' && !isTargetAdmin) {
       ShowNotifications.showAlertNotification("Branch Management is restricted to Admin role only.", false);
       return;
     }
@@ -388,11 +399,11 @@ export default function RolesPermissionsPanel() {
               </tr>
             </thead>
             <tbody>
-              {rolesList.map((role, index) => (
+              {apiRoles.map((role, index) => (
                 <tr
-                  key={role.name || index}
+                  key={role._id}
                   style={{
-                    borderBottom: index < rolesList.length - 1 ? '1px solid #f1f5f9' : 'none',
+                    borderBottom: index < apiRoles.length - 1 ? '1px solid #f1f5f9' : 'none',
                     transition: 'background 0.15s'
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -405,7 +416,7 @@ export default function RolesPermissionsPanel() {
 
                   {/* ROLE NAME */}
                   <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-                    {role.name}
+                    {role.roleName}
                   </td>
 
                   {/* STATUS */}
@@ -416,11 +427,11 @@ export default function RolesPermissionsPanel() {
                       borderRadius: '20px',
                       fontSize: '12px',
                       fontWeight: '700',
-                      backgroundColor: '#e6f4ea',
-                      border: '1.5px solid #86efac',
-                      color: '#16a34a'
+                      backgroundColor: role.isActive ? '#e6f4ea' : '#fee2e2',
+                      border: role.isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+                      color: role.isActive ? '#16a34a' : '#dc2626'
                     }}>
-                      Active
+                      {role.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
 
@@ -429,7 +440,7 @@ export default function RolesPermissionsPanel() {
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                       <button
                         type="button"
-                        onClick={() => handleEditRole(role.name)}
+                        onClick={() => handleEditRole(role)}
                         style={{
                           background: 'transparent',
                           border: 'none',
@@ -448,27 +459,29 @@ export default function RolesPermissionsPanel() {
                       >
                         <PencilIcon size={16} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRole(role.name)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          padding: '6px',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
-                        title="Delete Role"
-                      >
-                        <TrashIcon size={16} />
-                      </button>
+                      {!role.isDefault && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRole(role)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
+                          title="Delete Role"
+                        >
+                          <TrashIcon size={16} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -487,7 +500,7 @@ export default function RolesPermissionsPanel() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
           <p style={{ margin: 0, fontSize: '14px', color: '#475569' }}>
-            Are you sure you want to delete role <strong>"{roleToDelete}"</strong>?
+            Are you sure you want to delete role <strong>"{roleToDelete?.roleName}"</strong>?
           </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button

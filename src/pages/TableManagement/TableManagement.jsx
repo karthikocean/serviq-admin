@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import TablesPanel from '../../components/TablesPanel';
 import { Modal } from '../../components/Modal';
+import TableApi from '../../api/Table';
+import StaffApi from '../../api/Staff';
 import './TableManagement.css';
 
 export default function TableManagement() {
@@ -27,13 +29,53 @@ export default function TableManagement() {
 
   if (!activeRestaurant) return null;
 
-  const rawTables = activeRestaurant.tables || [];
-  const rawStaff = activeRestaurant.staff || [];
-  const rawOrders = activeRestaurant.orders || [];
+  const [tables, setTables] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [orders, setOrders] = useState([]); // Or fetch from OrderApi if needed later
+  const [isLoading, setIsLoading] = useState(true);
 
-  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  useEffect(() => {
+    if (activeRestaurant) {
+      fetchData();
+    }
+  }, [activeRestaurant, selectedBranchId]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const tablesRes = await TableApi.getTables();
+      if (tablesRes.status && tablesRes.response?.data) {
+        setTables(tablesRes.response.data);
+      }
+      const staffRes = await StaffApi.getStaff();
+      if (staffRes.status && staffRes.response?.data) {
+        setStaff(staffRes.response.data);
+      }
+      // Orders dummy for now
+      const rawOrders = activeRestaurant.orders || [];
+      const branchOrders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+      setOrders(branchOrders);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateDiningTable = async (id, payload) => {
+    // We will override the context update with API later
+  };
+
+  const handleDeleteDiningTable = async (id) => {
+    if (window.confirm("Are you sure you want to delete this table?")) {
+      const res = await TableApi.deleteTable(id);
+      if (res.status) {
+        fetchData();
+      }
+    }
+  };
+
+
 
   // Permission checks
   const role = currentUser?.role || 'Waiter';
@@ -48,8 +90,8 @@ export default function TableManagement() {
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
     if (waiterId) {
-      const assignedTables = tables.filter(t => t.assignedWaiterId === waiterId);
-      setModalTableIds(assignedTables.map(t => t.id));
+      const assignedTables = tables.filter(t => t.assignedWaiter === waiterId);
+      setModalTableIds(assignedTables.map(t => t._id || t.id));
       const firstTableWithCover = assignedTables.find(t => t.tempWaiterId);
       setModalCoverWaiterId(firstTableWithCover ? firstTableWithCover.tempWaiterId : '');
     } else {
@@ -60,15 +102,33 @@ export default function TableManagement() {
 
   const handleOpenAssignTablesModal = (waiterId) => {
     const waiters = staff.filter(s => s.role === 'Waiter');
-    const targetId = waiterId || (waiters.length > 0 ? waiters[0].id : '');
+    const targetId = waiterId || (waiters.length > 0 ? waiters[0]._id || waiters[0].id : '');
     loadWaiterAssignments(targetId);
     setShowAssignTablesModal(true);
   };
 
-  const handleSaveAssignments = () => {
+  const handleSaveAssignments = async () => {
     if (!modalWaiterId) return;
-    assignTablesToWaiter(activeRestaurant.id, modalWaiterId, modalTableIds, modalCoverWaiterId);
+    
+    // Find tables to unassign (currently assigned to this waiter but not in modalTableIds)
+    const toUnassign = tables.filter(t => t.assignedWaiter === modalWaiterId && !modalTableIds.includes(t._id || t.id));
+    
+    // Find tables to assign (in modalTableIds but not currently assigned to this waiter)
+    const toAssign = tables.filter(t => modalTableIds.includes(t._id || t.id) && t.assignedWaiter !== modalWaiterId);
+
+    // Call API for each
+    const promises = [];
+    for (const t of toUnassign) {
+      promises.push(TableApi.updateTable(t._id || t.id, { assignedWaiter: null }));
+    }
+    for (const t of toAssign) {
+      promises.push(TableApi.updateTable(t._id || t.id, { assignedWaiter: modalWaiterId }));
+    }
+    
+    await Promise.all(promises);
+    
     setShowAssignTablesModal(false);
+    fetchData(); // Refresh tables
   };
 
   return (
@@ -78,25 +138,23 @@ export default function TableManagement() {
         staff={staff}
         orders={orders}
         activeRestaurant={activeRestaurant}
-        updateDiningTable={updateDiningTable}
-        deleteDiningTable={deleteDiningTable}
+        updateDiningTable={handleUpdateDiningTable}
+        deleteDiningTable={handleDeleteDiningTable}
         handleOpenAssignTablesModal={handleOpenAssignTablesModal}
         setAddTableForm={(formState) => {
-          if (formState?.id) {
-            navigate(`/tables/edit/${formState.id}`);
+          const tableId = formState?._id || formState?.id;
+          if (tableId) {
+            navigate(`/tables/edit/${tableId}`);
           } else {
             navigate('/tables/add');
           }
         }}
         setActivePage={(page) => {
-          if (page === 'table-form') navigate('/tables/add');
-          else if (page === 'waiter-list') navigate('/waiter/list');
+          // table-form navigation is handled by setAddTableForm callback
+          if (page === 'waiter-list') navigate('/waiter/list');
         }}
         hasPermission={hasPermission}
-        generateQrCode={generateQrCode}
-        assignQrCode={assignQrCode}
-        revokeQrCode={revokeQrCode}
-        deleteQrCode={deleteQrCode}
+
       />
 
       {/* MODAL OVERLAY FOR ASSIGN TABLES */}

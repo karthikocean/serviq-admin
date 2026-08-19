@@ -21,10 +21,10 @@ const HistoryIcon = ({ size = 18, color = 'currentColor' }) => (
 
 const ReceiptIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
-    <path d="M16 8h-8"/>
-    <path d="M16 12h-8"/>
-    <path d="M10 16H8"/>
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+    <path d="M16 8h-8" />
+    <path d="M16 12h-8" />
+    <path d="M10 16H8" />
   </svg>
 );
 
@@ -93,8 +93,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const remainingSlots = Math.max(0, totalAllowedBranches - activeBranchesCount);
   const branchUsagePercent = Math.min(100, Math.round((activeBranchesCount / (totalAllowedBranches || 1)) * 100));
 
-  const matchedActivePlan = AVAILABLE_PLANS.find(p => 
-    p.id === sub.planId || 
+  const matchedActivePlan = AVAILABLE_PLANS.find(p =>
+    p.id === sub.planId ||
     p.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
     (sub.planName || '').toLowerCase().includes(p.name.toLowerCase().replace(' plan', ''))
   );
@@ -123,7 +123,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   // Filtered Invoices
   const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch = 
+    const matchesSearch =
       (inv.id || '').toLowerCase().includes(historySearch.toLowerCase()) ||
       (inv.description || '').toLowerCase().includes(historySearch.toLowerCase()) ||
       (inv.planName || '').toLowerCase().includes(historySearch.toLowerCase()) ||
@@ -131,7 +131,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       (inv.paymentMethod || '').toLowerCase().includes(historySearch.toLowerCase());
 
     const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot'));
-    
+
     if (historyFilter === 'plan') {
       return matchesSearch && !isAddon;
     }
@@ -182,7 +182,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-      
+
       {/* Top Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
@@ -201,7 +201,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             <BuildingIcon size={16} /> + Buy Addons
           </button>
 
-          <button
+          {/* <button
             type="button"
             className="btn btn-primary"
             onClick={() => {
@@ -222,13 +222,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             }}
           >
             ⚡ Upgrade / Change Plan
-          </button>
+          </button> */}
         </div>
       </div>
 
       {/* 1. TOP METRICS & LAST RECHARGE SUMMARY ROW (4 CARDS - SINGLE ROW) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px', alignItems: 'stretch' }}>
-        
+
         {/* Card 1: Active Subscription Plan */}
         <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' }}>
           <div>
@@ -304,7 +304,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             <div style={{ fontSize: '11px', color: '#334155', fontWeight: 600, marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               📦 {lastRecharge.planName || lastRecharge.description}
             </div>
-           
+
           </div>
 
           <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -399,7 +399,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
       {/* 2. PLANS RECHARGE HISTORY & INVOICES LOG */}
       <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '28px', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-        
+
         {/* Header & Meta Summary Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
           <div>
@@ -795,7 +795,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           maxWidth="1050px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '4px' }}>
-            
+
             {/* Top Cycle Toggle & Current Status Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: '#f8fafc', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <div>
@@ -859,8 +859,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 const isStandard = plan.id === 'plan-standard' || plan.name.toLowerCase().includes('standard');
                 const isPremium = plan.id === 'plan-premium' || plan.name.toLowerCase().includes('premium');
 
-                const isCurrentActive = 
-                  plan.id === sub.planId || 
+                const isCurrentActive =
+                  plan.id === sub.planId ||
                   plan.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
                   (sub.planName || '').toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
 
@@ -897,7 +897,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           )}
                           {isPremium && (
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/>
+                              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
                             </svg>
                           )}
                           <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
@@ -908,8 +908,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                         {/* Edit Pencil Icon */}
                         <div style={{ color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-                            <path d="m15 5 4 4"/>
+                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                            <path d="m15 5 4 4" />
                           </svg>
                         </div>
                       </div>
@@ -1015,7 +1015,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                         }}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                         </svg>
                         Deactivate Plan
                       </button>

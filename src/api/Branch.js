@@ -1,10 +1,10 @@
 import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
-class MemberApi {
-  async getTables(params = {}) {
+class BranchApi {
+  async getBranches() {
     try {
-      const response = await apiClient.get("/tables", { params });
+      const response = await apiClient.get("/branches");
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -12,7 +12,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Fetch Tables. Please try again.";
+        "Failed to Fetch Branches. Please try again.";
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -23,12 +23,12 @@ class MemberApi {
     }
   }
 
-  async createTable(data) {
+  async createBranch(data) {
     try {
-      const response = await apiClient.post("/tables", data);
+      const response = await apiClient.post("/branches", data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || "Table Created Successfully!",
+          response.data.message || "Branch Created Successfully!",
           true,
         );
         return { status: true, response: response.data };
@@ -37,7 +37,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Create Table. Please try again.";
+        "Failed to Create Branch. Please try again.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -46,9 +46,9 @@ class MemberApi {
     }
   }
 
-  async getTableDetails(id) {
+  async getBranchDetails(id) {
     try {
-      const response = await apiClient.get(`/tables/${id}`);
+      const response = await apiClient.get(`/branches/${id}`);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -56,7 +56,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Get Member Details. Please try again.";
+        "Failed to Get Branch Details. Please try again.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -65,12 +65,12 @@ class MemberApi {
     }
   }
 
-  async updateTable(id, data) {
+  async updateBranch(id, data) {
     try {
-      const response = await apiClient.patch(`/tables/${id}`, data);
+      const response = await apiClient.put(`/branches/${id}`, data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || "Table Updated Successfully!",
+          response.data.message || "Branch Updated Successfully!",
           true,
         );
         return { status: true, response: response.data };
@@ -79,7 +79,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Update Table. Please try again.";
+        "Failed to Update Branch. Please try again.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -88,12 +88,12 @@ class MemberApi {
     }
   }
 
-  async deleteTable(id) {
+  async deleteBranch(id) {
     try {
-      const response = await apiClient.delete(`/tables/${id}`);
+      const response = await apiClient.delete(`/branches/${id}`);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || "Table Deleted Successfully!",
+          response.data.message || "Branch Deleted Successfully!",
           true,
         );
         return { status: true, response: response.data };
@@ -102,7 +102,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Delete Table. Please try again.";
+        "Failed to Delete Branch. Please try again.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -110,52 +110,6 @@ class MemberApi {
       };
     }
   }
-  async statusUpdate(id, reason) {
-    try {
-      const response = await apiClient.patch(`/tables/${id}/status`, { reason });
-      if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Table Status Updated Successfully!",
-          true,
-        );
-        return { status: true, response: response.data };
-      }
-    } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to Delete Table. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
-      return {
-        status: false,
-      };
-    }
-  }
-
-  async assignWaiter(data) {
-    try {
-      // PUT /api/admin/tables/assign-waiter
-      const response = await apiClient.put(`/tables/assign-waiter`, data);
-      if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Waiter Assigned Successfully!",
-          true,
-        );
-        return { status: true, response: response.data };
-      }
-    } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to Assign Waiter. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
-      return {
-        status: false,
-        response: error?.response?.data || error,
-      };
-    }
-  }
-
 }
 
-export default new MemberApi();
+export default new BranchApi();

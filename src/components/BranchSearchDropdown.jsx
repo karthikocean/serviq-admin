@@ -67,7 +67,9 @@ export default function BranchSearchDropdown() {
   const branches = activeRestaurant?.branches || [];
   
   // Check if user is locked to a specific branch
-  const isBranchLocked = currentUser?.branchId && currentUser?.branchId !== 'ALL' && currentUser?.role !== 'Admin' && currentUser?.role !== 'Super Admin';
+  const isRestaurantOwner = currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.role === 'RESTAURANT_OWNER';
+  const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin' || isRestaurantOwner;
+  const isBranchLocked = currentUser?.branchId && currentUser?.branchId !== 'ALL' && !isAdmin;
 
   // Automatically lock branch if user is branch-scoped
   useEffect(() => {

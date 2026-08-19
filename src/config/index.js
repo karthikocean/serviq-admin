@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.17:5000/public";
-    BASE_URL = "http://192.168.1.17:5000/api/admin";
-    server = "http://192.168.1.17:5000";
+    IMAGE_BASE_URL = "http://192.168.1.13:5000/public";
+    BASE_URL = "http://192.168.1.13:5000/api/admin";
+    server = "http://192.168.1.13:5000";
     break;
 }
 
@@ -47,6 +47,14 @@ apiClient.interceptors.request.use(
       config.headers["Content-Type"] = "application/json";
     }
 
+    // Automatically attach branchId to GET requests if a specific branch is selected
+    if (config.method?.toLowerCase() === 'get') {
+      const branchId = localStorage.getItem("serviq_branch_id");
+      if (branchId && branchId !== 'ALL') {
+        config.params = { ...config.params, branchId };
+      }
+    }
+
     return config;
   },
   function (error) {
@@ -66,14 +74,10 @@ apiClient.interceptors.response.use(
       !error.config?.url?.includes("/login") &&
       !window.location.pathname.includes("/login")
     ) {
-      const isLocalUser = localStorage.getItem("serviq_user");
-      const hasToken = localStorage.getItem("userToken") || localStorage.getItem("token");
-      if (!isLocalUser && !hasToken) {
-        localStorage.removeItem("userToken");
-        localStorage.removeItem("token");
-        localStorage.removeItem("serviq_user");
-        window.location.href = "/login";
-      }
+      localStorage.removeItem("userToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("serviq_user");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   }

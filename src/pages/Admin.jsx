@@ -16,7 +16,7 @@ import KitchenReportsPanel from '../components/KitchenReportsPanel';
 import SettingsPanel from '../components/SettingsPanel';
 import ReportsPanel from '../components/ReportsPanel';
 import QRManagementPanel from '../components/QRManagementPanel';
-import UserListPanel from '../components/UserListPanel';
+
 import RolesPermissionsPanel from '../components/RolesPermissionsPanel';
 import CategoryListPanel from '../components/CategoryListPanel';
 import BranchManagementPanel from '../components/BranchManagementPanel';
@@ -2009,16 +2009,6 @@ export default function Admin() {
                   setAccentColor={setAccentColor}
                   darkMode={darkMode}
                   setDarkMode={setDarkMode}
-                />
-              )}
-              {activeTab === 'users' && (
-                <UserListPanel
-                  activeRestaurant={activeRestaurant}
-                  staff={filteredStaff}
-                  addStaff={addStaff}
-                  updateStaff={updateStaff}
-                  deleteStaff={deleteStaff}
-                  hasPermission={hasPermission}
                 />
               )}
 

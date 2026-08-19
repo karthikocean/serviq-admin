@@ -4,9 +4,17 @@ import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
+import MenuApi from '../../api/Menu.js';
+import UploadApi from '../../api/Upload.js';
+import { server } from '../../config/index.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
+  const getImageUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    return `${server}${path}`;
+  };
   const {
     currentUser,
     activeRestaurant,
@@ -17,14 +25,16 @@ export default function MenuManagement() {
 
   const navigate = useNavigate();
   const [activePage, setActivePage] = useState(null); // null | 'menu-form'
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [menuForm, setMenuForm] = useState({
     _id: '',
     name: '',
     desc: '',
     price: '',
     gst: 5,
-    category: 'Starters',
+    category: '',
     image: '',
+    coverImage: '',
     veg: true,
     available: true,
     bestseller: false
@@ -33,7 +43,25 @@ export default function MenuManagement() {
   const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [customCategoryError, setCustomCategoryError] = useState('');
-  const [previousCategory, setPreviousCategory] = useState('Starters');
+  const [previousCategory, setPreviousCategory] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, [activeRestaurant]);
+
+  const fetchCategories = async () => {
+    const res = await MenuApi.getCategories();
+    if (res?.status && res.response) {
+      const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+      setCategories(catArray);
+      if (catArray.length > 0 && !menuForm.category) {
+        setMenuForm(prev => ({ ...prev, category: catArray[0]._id }));
+      }
+    }
+  };
 
   if (!activeRestaurant) return null;
 
@@ -60,8 +88,9 @@ export default function MenuManagement() {
       desc: '',
       price: '',
       gst: 5,
-      category: 'Starters',
+      category: categories.length > 0 ? categories[0]._id : '',
       image: '',
+      coverImage: '',
       veg: true,
       available: true,
       bestseller: false
@@ -81,8 +110,9 @@ export default function MenuManagement() {
       desc: item.desc || '',
       price: item.price,
       gst: item.gst !== undefined ? item.gst : 5,
-      category: item.category,
+      category: item.category?._id || item.category || '',
       image: item.image || '',
+      coverImage: item.coverImage || '',
       veg: item.veg !== undefined ? item.veg : true,
       available: item.available !== undefined ? item.available : true,
       bestseller: item.bestseller !== undefined ? item.bestseller : false
@@ -91,13 +121,14 @@ export default function MenuManagement() {
     setActivePage('menu-form');
   };
 
-  const handleDeleteMenu = (itemId) => {
+  const handleDeleteMenu = async (itemId) => {
     if (!hasPermission('menu', 'delete')) {
       ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to delete menu items.', false);
       return;
     }
     if (window.confirm('Are you sure you want to delete this menu item?')) {
-      deleteMenuItem(activeRestaurant.id, itemId);
+      await deleteMenuItem(activeRestaurant.id, itemId);
+      setRefreshTrigger(prev => prev + 1);
     }
   };
 
@@ -131,6 +162,7 @@ export default function MenuManagement() {
       gst: parseFloat(menuForm.gst) !== undefined ? parseFloat(menuForm.gst) : 5,
       category: menuForm.category,
       image: menuForm.image,
+      coverImage: menuForm.coverImage,
       available: menuForm.available,
       veg: menuForm.veg,
       bestseller: menuForm.bestseller
@@ -143,6 +175,7 @@ export default function MenuManagement() {
       await addMenuItem(activeRestaurant.id, itemData);
       ShowNotifications.showAlertNotification(`Menu item "${itemData.name}" created successfully.`, true);
     }
+    setRefreshTrigger(prev => prev + 1);
     setActivePage(null);
   };
 
@@ -180,97 +213,182 @@ export default function MenuManagement() {
             <PageHeader title={menuForm._id ? 'Edit Menu Item' : 'Add Menu Item'} />
             <div style={sty.pageCard}>
               <form onSubmit={handleMenuSubmit} noValidate style={{ width: '100%' }}>
-                <div
-                  className="menu-item-cover-banner"
-                  onClick={() => document.getElementById('menu-item-image-file').click()}
-                  style={{ cursor: 'pointer' }}
-                >
-                  {menuForm.image ? (
-                    <>
-                      <img src={menuForm.image} alt={menuForm.name} />
-                      <div className="menu-item-cover-overlay">
-                        <span>Change Cover Photo</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="menu-item-cover-banner-placeholder">
-                      <span className="text">Click to upload cover photo</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label>
-                    Item Name <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={menuForm.name}
-                    onChange={(e) => {
-                      setMenuForm({ ...menuForm, name: e.target.value });
-                      if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
-                    }}
-                    placeholder="e.g. Chicken Biryani"
-                    style={{
-                      borderColor: formErrors.name ? '#ef4444' : undefined
-                    }}
-                  />
-                  {formErrors.name && (
-                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                      {formErrors.name}
-                    </span>
-                  )}
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#000000' }}>Item Image</label>
+                {/* --- TOP: COVER PHOTO BANNER --- */}
+                <div style={{ marginBottom: '24px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Cover Photo (Banner)</label>
                   <div
-                    onClick={() => document.getElementById('menu-item-image-file').click()}
+                    onClick={() => document.getElementById('menu-item-cover-file').click()}
                     style={{
-                      border: '2px dashed var(--border)',
-                      borderRadius: '12px',
-                      padding: '24px 20px',
-                      textAlign: 'center',
-                      background: '#f8fafc',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
+                      position: 'relative',
+                      width: '100%',
+                      height: '140px',
+                      background: '#f8fafc',
+                      borderRadius: '16px',
+                      border: '2px dashed #cbd5e1',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s'
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-light)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#fff7ed'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
                   >
                     <input
-                      id="menu-item-image-file"
+                      id="menu-item-cover-file"
                       type="file"
                       accept="image/*"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setMenuForm({ ...menuForm, image: reader.result });
-                          };
-                          reader.readAsDataURL(file);
+                          setIsUploadingCover(true);
+                          const res = await UploadApi.uploadImage(file);
+                          setIsUploadingCover(false);
+                          if (res?.status && res.response?.data?.url) {
+                            setMenuForm({ ...menuForm, coverImage: res.response.data.url });
+                          }
                         }
                       }}
                       style={{ display: 'none' }}
                     />
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--primary)' }}>
-                      {menuForm.image ? 'Change Selected Image' : 'Upload from folder'}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                      Supports JPG, JPEG, PNG, GIF
-                    </div>
+                    {isUploadingCover ? (
+                      <div style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '14px' }}>Uploading...</div>
+                    ) : menuForm.coverImage ? (
+                      <>
+                        <img src={getImageUrl(menuForm.coverImage)} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', padding: '6px', textAlign: 'center', color: '#fff', fontSize: '12px', fontWeight: 600, backdropFilter: 'blur(2px)' }}>
+                          Click to Change Cover Photo
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#64748b' }}>Upload Cover Photo</div>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>Landscape recommended (e.g. 1200x400)</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label>Description</label>
-                  <textarea
-                    rows="3"
-                    value={menuForm.desc}
-                    onChange={(e) => setMenuForm({ ...menuForm, desc: e.target.value })}
-                    placeholder="Item description..."
-                  ></textarea>
+                {/* --- MIDDLE: ITEM IMAGE + NAME/DESC --- */}
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap' }}>
+
+                  {/* Left: Item Square Image */}
+                  <div style={{ flexShrink: 0 }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Item Image</label>
+                    <div
+                      onClick={() => document.getElementById('menu-item-image-file').click()}
+                      style={{
+                        width: '160px',
+                        height: '160px',
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: '16px',
+                        background: '#f8fafc',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#fff7ed'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+                    >
+                      <input
+                        id="menu-item-image-file"
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setIsUploadingImage(true);
+                            const res = await UploadApi.uploadImage(file);
+                            setIsUploadingImage(false);
+                            if (res?.status && res.response?.data?.url) {
+                              setMenuForm({ ...menuForm, image: res.response.data.url });
+                            }
+                          }
+                        }}
+                        style={{ display: 'none' }}
+                      />
+                      {isUploadingImage ? (
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '13px' }}>Uploading...</div>
+                      ) : menuForm.image ? (
+                        <>
+                          <img src={getImageUrl(menuForm.image)} alt="Item" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', padding: '4px', textAlign: 'center', color: '#fff', fontSize: '11px', fontWeight: 600, backdropFilter: 'blur(2px)' }}>
+                            Change Image
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '10px' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Upload Image</div>
+                          <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '4px' }}>Square aspect ratio</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Name & Description */}
+                  <div style={{ flex: 1, minWidth: '300px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                        Item Name <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={menuForm.name}
+                        onChange={(e) => {
+                          setMenuForm({ ...menuForm, name: e.target.value });
+                          if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                        }}
+                        placeholder="e.g. Chicken Biryani"
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          outline: 'none',
+                          transition: 'border-color 0.2s'
+                        }}
+                        onFocus={e => { if (!formErrors.name) e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                        onBlur={e => { if (!formErrors.name) e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                      />
+                      {formErrors.name && (
+                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {formErrors.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                        Description
+                      </label>
+                      <textarea
+                        rows="3"
+                        value={menuForm.desc}
+                        onChange={(e) => setMenuForm({ ...menuForm, desc: e.target.value })}
+                        placeholder="Briefly describe the item (ingredients, flavor, size)..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          outline: 'none',
+                          resize: 'vertical',
+                          minHeight: '86px',
+                          transition: 'border-color 0.2s'
+                        }}
+                        onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                        onBlur={e => e.currentTarget.style.borderColor = '#cbd5e1'}
+                      ></textarea>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Price, GST, Category Grid */}
@@ -325,7 +443,7 @@ export default function MenuManagement() {
                       value={menuForm.category}
                       onChange={(e) => {
                         if (e.target.value === 'custom') {
-                          setPreviousCategory(menuForm.category || 'Starters');
+                          setPreviousCategory(menuForm.category || (categories[0] ? categories[0]._id : ''));
                           setCustomCategoryInput('');
                           setCustomCategoryError('');
                           setShowCustomCategoryModal(true);
@@ -335,8 +453,8 @@ export default function MenuManagement() {
                       }}
                       style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
                     >
-                      {Array.from(new Set([...['Starters', 'Rice Meals', 'Tiffin', 'Rotis', 'Desserts', 'Drinks'], ...menu.map(i => i.category).filter(Boolean)])).map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                      {categories.map(cat => (
+                        <option key={cat._id} value={cat._id}>{cat.name}</option>
                       ))}
                       <option value="custom">+ Add Custom Category...</option>
                     </select>
@@ -491,6 +609,9 @@ export default function MenuManagement() {
       ) : (
         <MenuPanel
           menu={menu}
+          categories={categories}
+          refreshCategories={fetchCategories}
+          refreshTrigger={refreshTrigger}
           activeRestaurant={activeRestaurant}
           openAddMenuModal={openAddMenuModal}
           openEditMenuModal={openEditMenuModal}

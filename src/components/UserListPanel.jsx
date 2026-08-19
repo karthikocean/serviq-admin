@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { useAppState } from '../config/AppContext';
+import React, { useState, useEffect } from 'react';
+import UserApi from '../api/User';
+import BranchApi from '../api/Branch';
+import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -25,6 +27,12 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const KeyIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+  </svg>
+);
+
 const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -33,26 +41,75 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function UserListPanel({
-  activeRestaurant = {},
-  staff = [],
-  addUser,
-  updateUser,
-  deleteUser
-}) {
-  const { selectedBranchId, branches: contextBranches } = useAppState();
-  const branches = activeRestaurant?.branches || contextBranches || [];
-
+export default function UserListPanel() {
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
-  const [editingUser, setEditingUser] = useState(null);
+  const [editingUserId, setEditingUserId] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [changePasswordUserId, setChangePasswordUserId] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+
+  const [apiUsers, setApiUsers] = useState([]);
+  const [apiBranches, setApiBranches] = useState([]);
+  const [apiRoles, setApiRoles] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const limit = 10;
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    const [usersRes, branchesRes, rolesRes] = await Promise.all([
+      UserApi.getUsers({ 
+        page, 
+        limit, 
+        search: searchQuery, 
+        roleFilter: roleFilter === 'All' ? '' : roleFilter,
+        statusFilter: statusFilter === 'All' ? '' : statusFilter
+      }),
+      BranchApi.getBranches(),
+      RoleApi.getRoles()
+    ]);
+    if (usersRes?.status) {
+      setApiUsers(usersRes.response.data || []);
+      setTotalPages(usersRes.response.totalPages || 1);
+      setTotalRecords(usersRes.response.total || 0);
+    }
+    if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
+    if (rolesRes?.status) setApiRoles(rolesRes.response.data || []);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchData();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [page, searchQuery, roleFilter, statusFilter]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const [userForm, setUserForm] = useState({
     name: '',
-    branchId: 'ALL',
-    role: 'Branch Admin',
+    branchId: '',
+    roleId: '',
     status: 'Active',
     phone: '',
     email: '',
@@ -61,11 +118,11 @@ export default function UserListPanel({
   const [formErrors, setFormErrors] = useState({});
 
   const openAddUser = () => {
-    setEditingUser(null);
+    setEditingUserId(null);
     setUserForm({
       name: '',
-      branchId: selectedBranchId || 'ALL',
-      role: 'Branch Admin',
+      branchId: '',
+      roleId: '',
       status: 'Active',
       phone: '',
       email: '',
@@ -76,15 +133,15 @@ export default function UserListPanel({
   };
 
   const openEditUser = (user) => {
-    setEditingUser(user);
+    setEditingUserId(user._id);
     setUserForm({
       name: user.name || '',
-      branchId: user.branchId || 'ALL',
-      role: user.role || 'Branch Admin',
-      status: user.status === 'Off Duty' || user.status === 'Inactive' || user.status === 'Disabled' ? 'Inactive' : 'Active',
-      phone: user.phone || '',
+      branchId: (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : ''),
+      roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
+      status: user.isActive ? 'Active' : 'Inactive',
+      phone: user.phoneNumber || '',
       email: user.email || '',
-      password: user.password || 'user123'
+      password: ''
     });
     setFormErrors({});
     setViewState('form');
@@ -97,6 +154,14 @@ export default function UserListPanel({
       errors.name = 'Full Name is required.';
     } else if (!/^[a-zA-Z\s.]+$/.test(nameTrimmed)) {
       errors.name = 'Full Name should contain letters only.';
+    }
+
+    if (!userForm.branchId) {
+      errors.branchId = 'Branch selection is required.';
+    }
+
+    if (!userForm.roleId) {
+      errors.roleId = 'Role selection is required.';
     }
 
     const phoneTrimmed = (userForm.phone || '').trim();
@@ -113,92 +178,99 @@ export default function UserListPanel({
       errors.email = 'Please enter a valid email address.';
     }
 
-    if (!userForm.password || !userForm.password.trim()) {
-      errors.password = 'Password is required.';
-    } else if (userForm.password.length < 4) {
-      errors.password = 'Password must be at least 4 characters.';
+    if (!editingUserId) {
+      if (!userForm.password || !userForm.password.trim()) {
+        errors.password = 'Password is required.';
+      } else if (userForm.password.length < 4) {
+        errors.password = 'Password must be at least 4 characters.';
+      }
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleUserSubmit = (e) => {
+  const handleUserSubmit = async (e) => {
     e.preventDefault();
 
     if (!validate()) {
       return;
     }
 
-    const sanitizedForm = {
+    const roleName = apiRoles.find(r => r._id === userForm.roleId)?.roleName || '';
+    const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
+
+    const payload = {
       name: userForm.name.trim(),
-      branchId: userForm.branchId || 'ALL',
-      role: userForm.role,
-      status: userForm.status === 'Active' ? 'Active' : 'Inactive',
-      phone: userForm.phone.trim(),
-      email: userForm.email.trim(),
-      password: userForm.password
+      roleId: userForm.roleId,
+      branchId: userForm.branchId,
+      userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
+      status: userForm.status,
+      phoneNumber: userForm.phone.trim(),
     };
 
-    if (editingUser && updateUser && activeRestaurant?.id) {
-      updateUser(activeRestaurant.id, editingUser.id, sanitizedForm);
-      ShowNotifications.showAlertNotification("User account updated successfully!", true);
-    } else if (addUser && activeRestaurant?.id) {
-      addUser(activeRestaurant.id, sanitizedForm);
-      ShowNotifications.showAlertNotification("New user created successfully!", true);
+    if (userForm.email.trim()) {
+      payload.email = userForm.email.trim();
     }
-    setViewState('list');
+
+    let res;
+    if (editingUserId) {
+      res = await UserApi.updateUser(editingUserId, payload);
+    } else {
+      payload.password = userForm.password;
+      res = await UserApi.createUser(payload);
+    }
+
+    if (res.status) {
+      setViewState('list');
+      fetchData();
+    }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (!userToDelete) return;
-    if (deleteUser && activeRestaurant?.id) {
-      deleteUser(activeRestaurant.id, userToDelete.id);
-      ShowNotifications.showAlertNotification("User account deleted successfully.", true);
+    const res = await UserApi.deleteUser(userToDelete._id);
+    if (res.status) {
+      setUserToDelete(null);
+      fetchData();
     }
-    setUserToDelete(null);
   };
 
-  // Get users from activeRestaurant
-  const rawUsers = activeRestaurant?.users || [];
-  
-  // Filter by selected branch & search query & role
-  const filteredUsers = rawUsers.filter(u => {
-    if (selectedBranchId && u.branchId !== 'ALL' && u.branchId !== selectedBranchId) {
-      return false;
+  const handleChangePasswordSubmit = async () => {
+    if (!newPassword || newPassword.length < 4) {
+      setPasswordError('Password must be at least 4 characters.');
+      return;
     }
-    if (roleFilter !== 'All' && u.role !== roleFilter) {
-      return false;
+    const res = await UserApi.changePassword(changePasswordUserId._id, newPassword);
+    if (res.status) {
+      setChangePasswordUserId(null);
+      setNewPassword('');
+      setPasswordError('');
     }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchName = (u.name || '').toLowerCase().includes(q);
-      const matchEmail = (u.email || '').toLowerCase().includes(q);
-      const matchPhone = (u.phone || '').toLowerCase().includes(q);
-      const matchRole = (u.role || '').toLowerCase().includes(q);
-      const matchBranch = (u.branchId || '').toLowerCase().includes(q);
-      return matchName || matchEmail || matchPhone || matchRole || matchBranch;
-    }
-    return true;
-  });
+  };
 
   // Export CSV
   const handleExportCSV = () => {
-    if (filteredUsers.length === 0) {
+    if (apiUsers.length === 0) {
       ShowNotifications.showAlertNotification('No user records to export.', false);
       return;
     }
-    const headers = ['User ID', 'Full Name', 'Branch', 'Role', 'Email', 'Phone', 'Status', 'Last Login'];
-    const rows = filteredUsers.map(u => [
-      u.id,
-      `"${u.name}"`,
-      `"${u.branchId === 'ALL' ? 'All Branches' : u.branchId}"`,
-      `"${u.role}"`,
-      `"${u.email}"`,
-      `"${u.phone}"`,
-      `"${u.status}"`,
-      `"${u.lastLogin || 'N/A'}"`
-    ]);
+    const headers = ['Full Name', 'Branch', 'Role', 'Email', 'Phone', 'Status', 'Last Login'];
+    const rows = apiUsers.map(u => {
+      const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
+      const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
+      const uRole = u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
+      const uBranch = u.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+      return [
+        `"${u.name}"`,
+        `"${uBranch}"`,
+        `"${uRole}"`,
+        `"${u.email || ''}"`,
+        `"${u.phoneNumber}"`,
+        `"${u.isActive ? 'Active' : 'Inactive'}"`,
+        `"N/A"`
+      ];
+    });
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -246,10 +318,10 @@ export default function UserListPanel({
           boxSizing: 'border-box'
         }}>
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUser ? 'Edit User Account' : 'Create User Account'}
+            {editingUserId ? 'Edit User Account' : 'Create User Account'}
           </h2>
           <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px 0' }}>
-            {editingUser ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
+            {editingUserId ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
           </p>
 
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -288,16 +360,24 @@ export default function UserListPanel({
                 </label>
                 <select
                   value={userForm.branchId}
-                  onChange={e => setUserForm({ ...userForm, branchId: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
+                  onChange={e => {
+                    setUserForm({ ...userForm, branchId: e.target.value });
+                    if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                  }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
-                  <option value="ALL">All Branches (Global Admin)</option>
-                  {branches.map(b => (
-                    <option key={b.id} value={b.id}>
+                  <option value="" disabled>Select a branch...</option>
+                  {apiBranches.map(b => (
+                    <option key={b._id} value={b._id}>
                       {b.branchName} ({b.branchCode})
                     </option>
                   ))}
                 </select>
+                {formErrors.branchId && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.branchId}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -307,16 +387,23 @@ export default function UserListPanel({
                   Access Role <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <select
-                  value={userForm.role}
-                  onChange={e => setUserForm({ ...userForm, role: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
+                  value={userForm.roleId}
+                  onChange={e => {
+                    setUserForm({ ...userForm, roleId: e.target.value });
+                    if (formErrors.roleId) setFormErrors({ ...formErrors, roleId: '' });
+                  }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.roleId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
                 >
-                  <option value="Super Admin">Super Admin</option>
-                  <option value="Branch Admin">Branch Admin</option>
-                  <option value="Manager">Branch Manager</option>
-                  <option value="Waiter">Waiter</option>
-                  <option value="Kitchen">Kitchen Staff</option>
+                  <option value="" disabled>Select a role...</option>
+                  {apiRoles.map(r => (
+                    <option key={r._id} value={r._id}>{r.roleName}</option>
+                  ))}
                 </select>
+                {formErrors.roleId && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.roleId}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -392,33 +479,35 @@ export default function UserListPanel({
               </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                Password <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                value={userForm.password}
-                onChange={e => {
-                  setUserForm({ ...userForm, password: e.target.value });
-                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                }}
-                placeholder="e.g. securepass123"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.password && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.password}
-                </span>
-              )}
-            </div>
+            {!editingUserId && (
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                  Password <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={userForm.password}
+                  onChange={e => {
+                    setUserForm({ ...userForm, password: e.target.value });
+                    if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                  }}
+                  placeholder="Set a secure password"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.password && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.password}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
               <button 
@@ -432,7 +521,7 @@ export default function UserListPanel({
                 type="submit" 
                 style={{ background: '#ff5a1f', border: 'none', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
               >
-                {editingUser ? 'Save Changes' : 'Create User'}
+                {editingUserId ? 'Save Changes' : 'Create User'}
               </button>
             </div>
           </form>
@@ -443,7 +532,6 @@ export default function UserListPanel({
 
   return (
     <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
-      {/* Main Card Container */}
       <div style={{
         background: '#ffffff',
         borderRadius: '16px',
@@ -452,7 +540,6 @@ export default function UserListPanel({
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
         overflow: 'hidden'
       }}>
-        {/* Card Header Row */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -465,7 +552,6 @@ export default function UserListPanel({
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               User Accounts
             </h2>
-            
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
@@ -502,53 +588,75 @@ export default function UserListPanel({
           </div>
         </div>
 
-        {/* Filter Controls Row */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="Search by name, email, phone or role..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{
-              padding: '9px 14px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              fontSize: '13px',
-              minWidth: '260px',
-              outline: 'none'
-            }}
-          />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by name, email, phone or role..."
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+              style={{
+                width: '100%',
+                padding: '10px 14px 10px 38px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
           <select
             value={roleFilter}
-            onChange={e => setRoleFilter(e.target.value)}
+            onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
             style={{
-              padding: '9px 14px',
-              borderRadius: '8px',
+              padding: '10px 16px',
               border: '1px solid #cbd5e1',
-              fontSize: '13px',
+              borderRadius: '8px',
+              fontSize: '14px',
               background: '#ffffff',
+              minWidth: '200px',
+              cursor: 'pointer',
+              color: '#0f172a',
               outline: 'none'
             }}
           >
             <option value="All">All Roles</option>
-            <option value="Super Admin">Super Admin</option>
-            <option value="Branch Admin">Branch Admin</option>
-            <option value="Manager">Manager</option>
-            <option value="Waiter">Waiter</option>
-            <option value="Kitchen">Kitchen Staff</option>
+            {apiRoles.map(r => (
+              <option key={r._id} value={r._id}>{r.roleName}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+            style={{
+              padding: '10px 16px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '8px',
+              fontSize: '14px',
+              background: '#ffffff',
+              minWidth: '150px',
+              cursor: 'pointer',
+              color: '#0f172a',
+              outline: 'none'
+            }}
+          >
+            <option value="All">All Statuses</option>
+            <option value="Active">Active Users</option>
+            <option value="Inactive">Inactive Users</option>
           </select>
         </div>
 
-        {/* Users Table */}
         <div style={{ width: '100%', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO.
-                </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  USER ID
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   FULL NAME
@@ -574,112 +682,140 @@ export default function UserListPanel({
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((u, index) => {
-                const isActive = u.status === 'Active' || u.status === 'On Duty';
-                const branchObj = branches.find(b => b.id === u.branchId);
+              {apiUsers.map((user, index) => {
+                const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
+                const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
+                const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
+                const uBranchName = user.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+                
+                let roleBadgeStyle = {
+                  display: 'inline-block',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  border: '1.5px solid transparent'
+                };
+
+                const roleLower = uRoleName.toLowerCase();
+                if (roleLower.includes('super admin')) {
+                  roleBadgeStyle.backgroundColor = '#f3e8ff';
+                  roleBadgeStyle.color = '#7e22ce';
+                  roleBadgeStyle.borderColor = '#d8b4fe';
+                } else if (roleLower.includes('branch admin')) {
+                  roleBadgeStyle.backgroundColor = '#e0e7ff';
+                  roleBadgeStyle.color = '#4338ca';
+                  roleBadgeStyle.borderColor = '#c7d2fe';
+                } else if (roleLower.includes('manager')) {
+                  roleBadgeStyle.backgroundColor = '#fff7ed';
+                  roleBadgeStyle.color = '#c2410c';
+                  roleBadgeStyle.borderColor = '#fed7aa';
+                } else {
+                  roleBadgeStyle.backgroundColor = '#f1f5f9';
+                  roleBadgeStyle.color = '#475569';
+                  roleBadgeStyle.borderColor = '#cbd5e1';
+                }
+
+                let statusBadgeStyle = {
+                  display: 'inline-block',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                };
+
+                if (user.status === 'Active' || (!user.status && user.isActive)) {
+                  statusBadgeStyle.backgroundColor = '#e6f4ea';
+                  statusBadgeStyle.color = '#16a34a';
+                  statusBadgeStyle.border = '1.5px solid #86efac';
+                } else {
+                  statusBadgeStyle.backgroundColor = '#fee2e2';
+                  statusBadgeStyle.color = '#dc2626';
+                  statusBadgeStyle.border = '1.5px solid #fca5a5';
+                }
 
                 return (
-                  <tr 
-                    key={u.id || index} 
-                    style={{ 
-                      borderBottom: '1px solid #f1f5f9',
-                      transition: 'background 0.15s' 
-                    }}
+                  <tr
+                    key={user._id}
+                    style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
                   >
-                    {/* S.NO. */}
-                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                      {index + 1}
+                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                      {(page - 1) * limit + index + 1}
                     </td>
-
-                    {/* USER ID */}
-                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '600', color: '#334155' }}>
-                      {u.id}
+                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                      {user.name}
                     </td>
-
-                    {/* FULL NAME */}
-                    <td style={{ padding: '16px 18px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-                      {u.name}
+                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                      {uBranchName}
                     </td>
-
-                    {/* BRANCH ASSIGNMENT */}
-                    <td style={{ padding: '16px 18px' }}>
-                      {u.branchId === 'ALL' ? (
-                        <span style={{ fontSize: '11px', background: '#eff6ff', color: '#2563eb', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                          All Branches (HQ)
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: '11px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
-                          {branchObj ? `${branchObj.branchCode}` : u.branchId}
-                        </span>
-                      )}
+                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                      {user.email || 'N/A'}
                     </td>
-
-                    {/* EMAIL ADDRESS */}
-                    <td style={{ padding: '16px 18px', fontSize: '13px', color: '#64748b', fontWeight: '400' }}>
-                      {u.email}
+                    <td style={{ padding: '16px 20px', fontSize: '13px', color: '#475569', fontWeight: '500' }}>
+                      {user.phoneNumber}
                     </td>
-
-                    {/* PHONE NUMBER */}
-                    <td style={{ padding: '16px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a' }}>
-                      {u.phone}
-                    </td>
-
-                    {/* ACCESS ROLE */}
-                    <td style={{ padding: '16px 18px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 12px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        backgroundColor: '#f1f5f9',
-                        color: '#475569',
-                        letterSpacing: '0.3px',
-                        textTransform: 'uppercase'
-                      }}>
-                        {u.role}
+                    <td style={{ padding: '16px 20px' }}>
+                      <span style={roleBadgeStyle}>
+                        {uRoleName}
                       </span>
                     </td>
-
-                    {/* ACCOUNT STATUS */}
-                    <td style={{ padding: '16px 18px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '4px 14px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: '700',
-                        backgroundColor: isActive ? '#e6f4ea' : '#fef2f2',
-                        border: isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
-                        color: isActive ? '#16a34a' : '#dc2626'
-                      }}>
-                        {isActive ? 'Active' : 'Inactive'}
+                    <td style={{ padding: '16px 20px' }}>
+                      <span style={statusBadgeStyle}>
+                        {user.status || (user.isActive ? 'Active' : 'Inactive')}
                       </span>
                     </td>
-
-                    {/* ACTIONS */}
-                    <td style={{ padding: '16px 18px', textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button
                           type="button"
-                          onClick={() => openEditUser(u)}
-                          title="Edit User"
+                          onClick={() => openEditUser(user)}
                           style={{
                             background: 'transparent',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '6px',
+                            border: 'none',
+                            color: '#64748b',
                             cursor: 'pointer',
-                            color: '#475569'
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
                           }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                          title="Edit User"
                         >
-                          <PencilIcon size={14} />
+                          <PencilIcon size={16} />
                         </button>
                         <button
+                        title="Change Password"
+                        onClick={() => {
+                          setChangePasswordUserId(user);
+                          setNewPassword('');
+                          setPasswordError('');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '6px',
+                          color: '#eab308',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '6px',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                      >
+                        <KeyIcon />
+                      </button>
+                      <button
                           type="button"
-                          onClick={() => setUserToDelete(u)}
+                          onClick={() => setUserToDelete(user)}
                           title="Delete User"
                           style={{
                             background: 'transparent',
@@ -697,19 +833,111 @@ export default function UserListPanel({
                   </tr>
                 );
               })}
-              {filteredUsers.length === 0 && (
+              {apiUsers.length === 0 && (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#94a3b8', fontSize: '13px' }}>
-                    No users found matching your criteria.
+                  <td colSpan="8" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '50%', color: '#94a3b8' }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '15px', fontWeight: '600', color: '#334155' }}>No users found</p>
+                      <p style={{ margin: 0, fontSize: '14px' }}>Try adjusting your search or filters to find what you're looking for.</p>
+                    </div>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '16px 20px',
+          background: '#ffffff',
+          borderTop: '1px solid #e2e8f0',
+          borderRadius: '0 0 16px 16px',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          {/* Left Info Text */}
+          <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+            Showing {totalRecords === 0 ? 0 : ((page - 1) * limit) + 1} to {Math.min(page * limit, totalRecords)} of {totalRecords} entries
+          </div>
+
+          {/* Right Pagination Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              type="button"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page === 1 ? '#f8fafc' : '#ffffff',
+                color: page === 1 ? '#cbd5e1' : '#334155',
+                fontSize: '0.82rem',
+                fontWeight: '600',
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '34px',
+                  height: '34px',
+                  padding: '0 8px',
+                  borderRadius: '8px',
+                  border: pageNum === page ? 'none' : '1px solid #e2e8f0',
+                  background: pageNum === page ? '#000000' : '#ffffff',
+                  color: pageNum === page ? '#ffffff' : '#334155',
+                  fontSize: '0.85rem',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: pageNum === page ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page >= totalPages ? '#f8fafc' : '#ffffff',
+                color: page >= totalPages ? '#cbd5e1' : '#334155',
+                fontSize: '0.82rem',
+                fontWeight: '600',
+                cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* DELETE CONFIRMATION MODAL */}
       <Modal
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
@@ -717,10 +945,10 @@ export default function UserListPanel({
         maxWidth="440px"
       >
         <div style={{ padding: '10px 0' }}>
-          <p style={{ fontSize: '14px', color: '#334155', margin: '0 0 20px 0' }}>
-            Are you sure you want to delete user <strong>"{userToDelete?.name}"</strong> ({userToDelete?.email})? This action cannot be undone.
+          <p style={{ margin: 0, fontSize: '14px', color: '#475569' }}>
+            Are you sure you want to delete user <strong>{userToDelete?.name}</strong>? This action cannot be undone and will immediately revoke their access.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
             <button
               type="button"
               className="btn btn-outline"
@@ -743,6 +971,71 @@ export default function UserListPanel({
               onClick={handleDeleteConfirm}
             >
               Delete User
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!changePasswordUserId}
+        onClose={() => setChangePasswordUserId(null)}
+        title="Change Password"
+        maxWidth="440px"
+      >
+        <div style={{ padding: '10px 0' }}>
+          <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569' }}>
+            Set a new password for <strong>{changePasswordUserId?.name}</strong>.
+          </p>
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+              New Password <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={newPassword}
+              onChange={e => {
+                setNewPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
+              placeholder="Enter new password"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: passwordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                fontSize: '14px',
+                boxSizing: 'border-box'
+              }}
+            />
+            {passwordError && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {passwordError}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setChangePasswordUserId(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{
+                background: '#000000',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '10px 20px',
+                fontWeight: 700,
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+              onClick={handleChangePasswordSubmit}
+            >
+              Save Password
             </button>
           </div>
         </div>

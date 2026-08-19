@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
-import GenerateQRModal from './GenerateQRModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
 // Clean SVG Icons
@@ -104,26 +103,19 @@ export default function TablesPanel({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied'
   const [tableToDelete, setTableToDelete] = useState(null);
-  const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [selectedQrTableId, setSelectedQrTableId] = useState('T-01');
   const [viewingQrTable, setViewingQrTable] = useState(null);
   const [showBatchPrintModal, setShowBatchPrintModal] = useState(false);
 
-  // Default sample tables matching restaurant workflow if tables prop is empty
-  const sampleTables = [
-    { id: 'T-01', status: 'Free', seats: 4, section: 'Main Dining', assignedWaiterName: 'Rahul S.', qrId: 'QR-101' },
-    { id: 'T-02', status: 'Occupied', seats: 2, section: 'Main Dining', assignedWaiterName: 'Arjun K.', qrId: 'QR-102' },
-    { id: 'T-03', status: 'Occupied', seats: 4, section: 'AC Hall', assignedWaiterName: 'Ravi M.', qrId: 'QR-103' },
-    { id: 'T-04', status: 'Free', seats: 6, section: 'Garden View', assignedWaiterName: null, qrId: 'QR-104' },
-    { id: 'T-05', status: 'Occupied', seats: 2, section: 'Main Dining', assignedWaiterName: 'Priya M.', qrId: 'QR-105' },
-    { id: 'T-06', status: 'Free', seats: 4, section: 'AC Hall', assignedWaiterName: 'Rahul S.', qrId: 'QR-106' }
-  ];
-
-  const displayTables = tables.length > 0 ? tables : sampleTables;
+  const displayTables = tables;
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;
-    if (table.assignedWaiter) return table.assignedWaiter;
+    if (table.assignedWaiter) {
+      if (typeof table.assignedWaiter === 'object' && table.assignedWaiter !== null) {
+        return table.assignedWaiter.name || '';
+      }
+      return table.assignedWaiter;
+    }
     if (table.assignedWaiterId) {
       const found = staff.find(s => s.id === table.assignedWaiterId);
       if (found) return found.name;
@@ -131,11 +123,6 @@ export default function TablesPanel({
     return null;
   };
 
-  const getTableQrUrl = (tableId) => {
-    const cleanId = tableId.replace(/\D/g, '') || '01';
-    const slug = (activeRestaurant?.name || 'serviq').toLowerCase().replace(/\s+/g, '-');
-    return `https://serviq.app/menu/${slug}/t-${cleanId.padStart(2, '0')}`;
-  };
 
   // Filtered tables based on search and status
   const filteredTables = displayTables.filter(t => {
@@ -147,7 +134,7 @@ export default function TablesPanel({
 
     const matchesStatus = 
       statusFilter === 'All' ? true :
-      statusFilter === 'Free' ? (t.status?.toLowerCase() === 'free') :
+      statusFilter === 'Free' ? (t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available') :
       statusFilter === 'Occupied' ? (t.status?.toLowerCase() === 'occupied') : true;
 
     return matchesSearch && matchesStatus;
@@ -155,7 +142,9 @@ export default function TablesPanel({
 
   const totalCount = displayTables.length;
   const occupiedCount = displayTables.filter(t => t.status?.toLowerCase() === 'occupied').length;
-  const freeCount = displayTables.filter(t => t.status?.toLowerCase() === 'free').length;
+  const freeCount = displayTables.filter(t => t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available').length;
+  const qrCount = displayTables.filter(t => t.assignedQrId || t.qrUrl).length;
+  const qrPercentage = totalCount > 0 ? Math.round((qrCount / totalCount) * 100) : 0;
 
   const handleCopyQrLink = (url) => {
     navigator.clipboard.writeText(url);
@@ -207,33 +196,6 @@ export default function TablesPanel({
             title="Batch print all QR codes"
           >
             <PrintIcon size={14} color="#0f172a" /> Print All QR Codes
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => {
-              setSelectedQrTableId('T-01');
-              setShowGenerateModal(true);
-            }}
-            style={{
-              background: '#ffffff',
-              border: '1.5px solid var(--primary)',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--primary)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              transition: 'all 0.15s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--primary-light)'}
-            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-          >
-            <QrIcon size={15} color="var(--primary)" /> Generate QR Code
           </button>
 
           <button 
@@ -291,7 +253,7 @@ export default function TablesPanel({
         <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>QR CODES ACTIVE</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {totalCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Live (100%)</span>
+            {qrCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Live ({qrPercentage}%)</span>
           </div>
         </div>
       </div>
@@ -380,21 +342,21 @@ export default function TablesPanel({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
         {filteredTables.length > 0 ? (
           filteredTables.map((table, index) => {
-            const isFree = table.status?.toLowerCase() === 'free';
+            const isFree = table.status?.toLowerCase() === 'free' || table.status?.toLowerCase() === 'available';
             const statusText = isFree ? 'FREE' : 'OCCUPIED';
             
             const accentColor = isFree ? '#22c55e' : '#ef4444';
             const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
             const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
 
-            const tableIdStr = table.id?.startsWith('T-') ? table.id : `T-${String(table.id || index + 1).padStart(2, '0')}`;
+            const tableIdStr = table.tableNumber || table.tableNum || `T-${String(index + 1).padStart(2, '0')}`;
             const waiterName = getWaiterName(table);
-            const qrUrl = getTableQrUrl(tableIdStr);
-            const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}`;
+            const qrUrl = table.qrUrl || '';
+            const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
 
             return (
               <div 
-                key={table.id || index}
+                key={table._id || table.id || index}
                 style={{
                   background: '#ffffff',
                   borderRadius: '14px',
@@ -432,11 +394,6 @@ export default function TablesPanel({
                       <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
                         {tableIdStr}
                       </span>
-                      {table.branchId && (
-                        <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {table.branchId}
-                        </span>
-                      )}
                     </div>
                     <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b', whiteSpace: 'nowrap' }}>
                       {table.section || 'Main Dining'}
@@ -480,7 +437,7 @@ export default function TablesPanel({
                   whiteSpace: 'nowrap'
                 }}>
                   <UsersGroupIcon size={15} color="#64748b" />
-                  <span>{table.seats || 4} seats</span>
+                  <span>{table.seatingCapacity ?? table.seats ?? 4} seats</span>
                 </div>
 
                 {/* Col 4: Assigned Waiter */}
@@ -506,85 +463,109 @@ export default function TablesPanel({
                 </div>
 
                 {/* Col 5: Integrated QR Code Module Box */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  background: '#f8fafc',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid #e2e8f0',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {/* QR Thumbnail */}
-                  <div 
-                    onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                    style={{
-                      width: '34px',
-                      height: '34px',
-                      background: '#ffffff',
-                      borderRadius: '6px',
-                      border: '1px solid #cbd5e1',
-                      padding: '2px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}
-                    title="Click to expand QR Code"
-                  >
-                    <img 
-                      src={qrImgSrc} 
-                      alt={`QR ${tableIdStr}`} 
-                      style={{ width: '30px', height: '30px', display: 'block', borderRadius: '4px' }} 
-                    />
-                  </div>
-
-                  {/* QR Meta */}
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                        QR Active
-                      </span>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
-                    </div>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      Scan to Order
-                    </span>
-                  </div>
-
-                  {/* QR Quick Action Icons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
-                    <button
-                      type="button"
+                {table.qrUrl || table.assignedQrId ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: '#f8fafc',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    border: '1px solid #e2e8f0',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {/* QR Thumbnail */}
+                    <div 
                       onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
                       style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        cursor: 'pointer',
-                        padding: '6px 10px',
+                        width: '34px',
+                        height: '34px',
+                        background: '#ffffff',
                         borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        padding: '2px',
+                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '12px',
-                        fontWeight: 700
+                        justifyContent: 'center',
+                        flexShrink: 0
                       }}
-                      title="View & Print QR Code"
+                      title="Click to expand QR Code"
                     >
-                      <QrIcon size={16} /> View QR
-                    </button>
+                      <img 
+                        src={qrImgSrc} 
+                        alt={`QR ${tableIdStr}`} 
+                        style={{ width: '30px', height: '30px', display: 'block', borderRadius: '4px' }} 
+                      />
+                    </div>
+
+                    {/* QR Meta */}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
+                          QR Active
+                        </span>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                        Scan to Order
+                      </span>
+                    </div>
+
+                    {/* QR Quick Action Icons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+                      <button
+                        type="button"
+                        onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 700
+                        }}
+                        title="View & Print QR Code"
+                      >
+                        <QrIcon size={16} /> View QR
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: '#fef2f2',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    border: '1px dashed #fca5a5',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#dc2626' }}>
+                          No QR Generated
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#ef4444' }}>
+                        Click generate above
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Col 6: Edit & Delete Actions */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, justifyContent: 'flex-end' }}>
                   <button 
                     type="button"
                     onClick={() => {
-                      if (setAddTableForm) setAddTableForm({ id: table.id, seats: table.seats || 4, status: table.status || 'Free', isEdit: true });
+                      if (setAddTableForm) setAddTableForm(table);
                       if (setActivePage) setActivePage('table-form');
                     }}
                     style={{
@@ -823,12 +804,12 @@ export default function TablesPanel({
               padding: '6px'
             }}>
               {displayTables.map((t, idx) => {
-                const tableIdStr = t.id?.startsWith('T-') ? t.id : `T-${String(t.id || idx + 1).padStart(2, '0')}`;
-                const qrUrl = getTableQrUrl(tableIdStr);
+                const tableIdStr = t.tableNumber || t.tableNum || `T-${String(idx + 1).padStart(2, '0')}`;
+                const qrUrl = getTableQrUrl(t);
 
                 return (
                   <div
-                    key={t.id || idx}
+                    key={t._id || t.id || idx}
                     style={{
                       background: '#ffffff',
                       border: '1.5px solid #0f172a',
@@ -864,7 +845,7 @@ export default function TablesPanel({
                       Scan to Order
                     </div>
                     <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                      {t.seats || 4} Seats • {t.section || 'Main Dining'}
+                      {t.seatingCapacity ?? t.seats ?? 4} seats • {t.section || 'Main Dining'}
                     </div>
                   </div>
                 );
@@ -884,16 +865,6 @@ export default function TablesPanel({
           </div>
         </Modal>
       )}
-
-      {/* MODAL: GENERATE QR MODAL */}
-      <GenerateQRModal
-        isOpen={showGenerateModal}
-        onClose={() => setShowGenerateModal(false)}
-        defaultTableId={selectedQrTableId}
-        onGenerate={(data) => {
-          if (generateQrCode) generateQrCode(activeRestaurant.id, data.tableId);
-        }}
-      />
 
       {/* MODAL: DELETE DINING TABLE MODAL */}
       <Modal
