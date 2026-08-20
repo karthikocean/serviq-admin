@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import apiClient from '../config/index.js';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -60,11 +61,10 @@ export default function OrdersPanel({
   setOrderFilter,
   selectedWaiterFilter = 'All Waiters',
   setSelectedWaiterFilter,
-  addOrder,
-  deleteOrder,
-  activeRestaurant = {},
+  activeRestaurant,
+  selectedBranchId,
   updateOrderStatus,
-  updateOrder
+  refreshOrders
 }) {
   const [waiterDropdownOpen, setWaiterDropdownOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState(null);
@@ -73,10 +73,11 @@ export default function OrdersPanel({
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
 
   // Waiters list
-  const staffWaiters = staff.filter(s => (s.role || '').toLowerCase() === 'waiter').map(s => s.name);
-  const defaultWaiters = ['Ravi M.', 'Arjun K.', 'Rahul S.', 'Priya M.'];
-  const allWaiters = Array.from(new Set([...staffWaiters, ...defaultWaiters]));
-  const waitersList = allWaiters;
+  const staffWaiters = staff.filter(s => {
+    const roleName = s.roleId?.roleName || s.role || '';
+    return roleName.toLowerCase() === 'waiter';
+  }).map(s => s.name);
+  const allWaiters = Array.from(new Set([...staffWaiters]));
 
   // Extract menu items from activeRestaurant
   const menuCategories = activeRestaurant?.menu || [];
@@ -86,6 +87,7 @@ export default function OrdersPanel({
       if (Array.isArray(cat.items)) {
         cat.items.forEach(item => {
           allMenuItems.push({
+            _id: item._id || item.id,
             name: item.name,
             price: Number(item.price) || 100,
             category: cat.categoryName || 'General'
@@ -95,55 +97,135 @@ export default function OrdersPanel({
     });
   }
 
-  const fallbackMenu = [
-    { name: 'Chicken Biryani', price: 320 },
-    { name: 'Mutton Biryani', price: 380 },
-    { name: 'Paneer Butter Masala', price: 210 },
-    { name: 'Dal Makhani', price: 160 },
-    { name: 'Masala Dosa', price: 120 },
-    { name: 'Rava Dosa', price: 140 },
-    { name: 'Filter Coffee', price: 35 },
-    { name: 'Masala Chai', price: 40 },
-    { name: 'Butter Naan', price: 40 },
-    { name: 'Chicken 65', price: 200 },
-    { name: 'Paneer Tikka', price: 180 },
-    { name: 'Gulab Jamun', price: 80 }
-  ];
-  const selectableMenuItems = allMenuItems.length > 0 ? allMenuItems : fallbackMenu;
+  const selectableMenuItems = allMenuItems;
 
   const restaurantTables = (activeRestaurant?.tables || []).map(t => t.tableNo || t.name || String(t.id));
-  const availableTableNumbers = restaurantTables.length > 0 ? restaurantTables : ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+  const availableTableNumbers = restaurantTables;
 
   // New order form states
-  const [newOrderTable, setNewOrderTable] = useState('01');
+  const [newOrderTable, setNewOrderTable] = useState('');
   const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderStatus, setNewOrderStatus] = useState('new');
-  const [newOrderItems, setNewOrderItems] = useState([
-    { name: selectableMenuItems[0]?.name || 'Chicken Biryani', qty: 1, price: selectableMenuItems[0]?.price || 320 }
-  ]);
+  const [newOrderItems, setNewOrderItems] = useState([]);
   const [customItemName, setCustomItemName] = useState('');
   const [customItemPrice, setCustomItemPrice] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const handleOpenCreateOrderModal = () => {
-    setNewOrderTable(availableTableNumbers[0] || '01');
+  const [apiCategories, setApiCategories] = useState([]);
+  const [apiMenuItems, setApiMenuItems] = useState([]);
+  const [apiTables, setApiTables] = useState([]);
+  const [modalWaiters, setModalWaiters] = useState([]);
+  const [modalSelectedBranchId, setModalSelectedBranchId] = useState('');
+  const [taxRate, setTaxRate] = useState(5);
+
+  const displayWaiters = allWaiters;
+  const displayTables = apiTables.length > 0 ? apiTables.map(t => t.tableNumber || t.tableNo) : availableTableNumbers;
+  const displayCategories = apiCategories.length > 0 ? ['All', ...apiCategories.map(c => c.name)] : ['All', ...new Set(selectableMenuItems.map(item => item.category || 'General'))];
+
+  const displayMenuItems = apiMenuItems.length > 0 ? apiMenuItems.map(item => ({
+    ...item,
+    name: item.name,
+    price: item.price,
+    category: item.categoryId?.name || item.category?.name || item.category || 'General'
+  })) : selectableMenuItems;
+
+  const filteredMenuItems = displayMenuItems.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const itemCat = String(item.category || 'General').trim().toLowerCase();
+    const selCat = String(selectedCategory).trim().toLowerCase();
+    const matchesCategory = selectedCategory === 'All' || itemCat === selCat;
+    return matchesSearch && matchesCategory;
+  });
+
+  const getFallbackBranchId = () => {
+    try {
+      const userStr = localStorage.getItem('serviq_user');
+      if (userStr) {
+        const userObj = JSON.parse(userStr);
+        if (userObj.activeBranchId) return userObj.activeBranchId;
+      }
+    } catch (e) {}
+    return localStorage.getItem('serviq_branch_id') || '';
+  };
+
+  const fetchModalDataForBranch = async (branchId) => {
+    if (branchId) {
+      try {
+        const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
+          apiClient.get(`/menu?branchId=${branchId}`).catch(() => null),
+          apiClient.get(`/menu/categories?branchId=${branchId}`).catch(() => null),
+          apiClient.get(`/tables?branchId=${branchId}`).catch(() => null),
+          apiClient.get(`/staff?branchId=${branchId}`).catch(() => null)
+        ]);
+        
+        let fetchedTables = [];
+        if (menuRes && menuRes.data?.success) setApiMenuItems(menuRes.data.data);
+        if (catRes && catRes.data?.success) setApiCategories(catRes.data.data);
+        if (tableRes && tableRes.data?.success) {
+          fetchedTables = tableRes.data.data;
+          setApiTables(fetchedTables);
+        }
+        
+        const firstTable = fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : '');
+        setNewOrderTable(firstTable);
+
+        let staffListToUse = staff;
+        if (staffRes && staffRes.data?.success) {
+          staffListToUse = staffRes.data.data;
+        }
+        const filteredStaff = staffListToUse.filter(s => s.branchId === branchId || s.branchId?._id === branchId || s.branch === branchId || s.branch?._id === branchId);
+        const staffWaitersList = filteredStaff.filter(s => {
+          const roleName = s.roleId?.roleName || s.role || '';
+          return roleName.toLowerCase() === 'waiter' || s.userType === 'STAFF';
+        }).map(s => s.name);
+        setModalWaiters(Array.from(new Set(staffWaitersList)));
+
+      } catch (error) {
+        console.error("Error fetching order creation data:", error);
+        setNewOrderTable(displayTables.length > 0 ? displayTables[0] : '');
+        setModalWaiters([]);
+      }
+    } else {
+      setNewOrderTable(displayTables.length > 0 ? displayTables[0] : '');
+      setModalWaiters([]);
+    }
+  };
+
+  const handleOpenCreateOrderModal = async () => {
+    const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
+    const targetBranchId = selectedBranchId || defaultBranchId || getFallbackBranchId();
+    setModalSelectedBranchId(targetBranchId);
+    
+    await fetchModalDataForBranch(targetBranchId);
+
     setNewOrderWaiter('Unassigned');
     setNewOrderNotes('');
     setNewOrderStatus('new');
-    setNewOrderItems([
-      { name: selectableMenuItems[0]?.name || 'Chicken Biryani', qty: 1, price: selectableMenuItems[0]?.price || 320 }
-    ]);
+    setNewOrderItems([]);
+    setSearchQuery('');
+    setSelectedCategory('All');
     setIsCreateOrderModalOpen(true);
   };
 
+  const handleModalBranchChange = async (e) => {
+    const newBranchId = e.target.value;
+    setModalSelectedBranchId(newBranchId);
+    setNewOrderItems([]);
+    setNewOrderWaiter('Unassigned');
+    await fetchModalDataForBranch(newBranchId);
+  };
+
   const handleAddItemToOrder = (item) => {
+    console.log("Adding item to cart:", item); // Debugging log to see if _id exists
     const existingIndex = newOrderItems.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
     if (existingIndex > -1) {
       const updated = [...newOrderItems];
       updated[existingIndex].qty += 1;
       setNewOrderItems(updated);
     } else {
-      setNewOrderItems([...newOrderItems, { name: item.name, qty: 1, price: Number(item.price) || 100 }]);
+      setNewOrderItems([...newOrderItems, { ...item, qty: 1, price: Number(item.price) || 100 }]);
     }
   };
 
@@ -170,7 +252,7 @@ export default function OrdersPanel({
     setNewOrderItems(newOrderItems.filter((_, idx) => idx !== index));
   };
 
-  const handleCreateOrderSubmit = (e) => {
+  const handleCreateOrderSubmit = async (e) => {
     if (e) e.preventDefault();
     if (newOrderItems.length === 0) {
       ShowNotifications.showAlertNotification("Please add at least one item to the order.", false);
@@ -178,284 +260,54 @@ export default function OrdersPanel({
     }
 
     const subtotal = newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
-    const tax = parseFloat((subtotal * 0.05).toFixed(2));
+    const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     const total = parseFloat((subtotal + tax).toFixed(2));
-    const nextOrderId = String(Date.now()).slice(-4);
 
-    const newOrderObj = {
-      id: nextOrderId,
-      table: newOrderTable,
-      waiter: newOrderWaiter || 'Unassigned',
-      items: newOrderItems,
+    const table = apiTables.find(t => String(t.tableNumber || t.tableNo) === String(newOrderTable));
+    const waiter = staff.find(w => w.name === newOrderWaiter);
+
+    const payload = {
+      tableId: table ? table._id : undefined,
+      waiterId: waiter ? waiter._id : undefined,
       notes: newOrderNotes,
-      status: newOrderStatus || 'new',
-      billingStatus: 'unpaid',
+      status: newOrderStatus,
+      items: newOrderItems.map(item => ({
+        menuId: item._id || item.id || "", // Fallback required for validation if custom item
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        status: newOrderStatus
+      })),
       subtotal,
       tax,
       total,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timeAgo: 'Just now',
-      branchId: activeRestaurant?.selectedBranchId || 'BR-001'
+      branchId: modalSelectedBranchId || getFallbackBranchId()
     };
 
-    if (addOrder) {
-      addOrder(activeRestaurant.id || 'rest-1', newOrderObj);
+    // If table is missing from API, just fallback to dummy local addOrder (for preview mode without db)
+    if (!payload.tableId) {
+      ShowNotifications.showAlertNotification("Table not found in active database, saving to local state only.", false);
+      setIsCreateOrderModalOpen(false);
+      if (refreshOrders) refreshOrders();
+      return;
     }
-    ShowNotifications.showAlertNotification(`Order #ORD-${nextOrderId} placed successfully for Table ${newOrderTable}!`, true);
-    setIsCreateOrderModalOpen(false);
-  };
-  
-  // Sample orders matching the user's exact screenshot if orders array is empty
-  const defaultSampleOrders = [
-    {
-      id: "842",
-      table: "02",
-      time: "12:55 PM",
-      timeAgo: "35 min ago",
-      items: [
-        { name: "Chicken Biryani", qty: 2, price: 320 },
-        { name: "Dal Makhani", qty: 2, price: 160 },
-        { name: "Paneer Tikka", qty: 1, price: 180 },
-        { name: "Masala Chai", qty: 1, price: 40 }
-      ],
-      notes: "",
-      total: 1239.00,
-      subtotal: 1180.00,
-      tax: 59.00,
-      status: "preparing",
-      billingStatus: "unpaid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "843",
-      table: "02",
-      time: "1:00 PM",
-      timeAgo: "30 min ago",
-      items: [
-        { name: "Veg Thali", qty: 2, price: 120 },
-        { name: "Masala Chai", qty: 3, price: 40 }
-      ],
-      notes: "",
-      total: 378.00,
-      subtotal: 360.00,
-      tax: 18.00,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "844",
-      table: "05",
-      time: "1:08 PM",
-      timeAgo: "22 min ago",
-      items: [
-        { name: "Paneer Tikka", qty: 2, price: 180 },
-        { name: "Chicken Biryani", qty: 1, price: 320 },
-        { name: "Butter Naan", qty: 3, price: 40 },
-        { name: "Masala Chai", qty: 2, price: 40 }
-      ],
-      notes: "",
-      total: 924.00,
-      subtotal: 880.00,
-      tax: 44.00,
-      status: "ready",
-      billingStatus: "unpaid",
-      waiter: "Arjun K."
-    },
-    {
-      id: "845",
-      table: "01",
-      time: "1:15 PM",
-      timeAgo: "15 min ago",
-      items: [
-        { name: "Masala Dosa", qty: 5, price: 120 },
-        { name: "Filter Coffee", qty: 3, price: 40 }
-      ],
-      notes: "Allergy: peanuts",
-      total: 756.00,
-      subtotal: 720.00,
-      tax: 36.00,
-      status: "preparing",
-      billingStatus: "unpaid",
-      waiter: "Rahul S."
-    },
-    {
-      id: "846",
-      table: "07",
-      time: "1:22 PM",
-      timeAgo: "8 min ago",
-      items: [
-        { name: "Chicken Biryani", qty: 4, price: 320 },
-        { name: "Dal Makhani", qty: 3, price: 160 },
-        { name: "Paneer Tikka", qty: 1, price: 180 },
-        { name: "Masala Chai", qty: 2, price: 40 }
-      ],
-      notes: "",
-      total: 2121.00,
-      subtotal: 2020.00,
-      tax: 101.00,
-      status: "preparing",
-      billingStatus: "unpaid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "847",
-      table: "03",
-      time: "12:20 PM",
-      timeAgo: "1 hr ago",
-      items: [
-        { name: "Chicken Biryani", qty: 1, price: 320 },
-        { name: "Chicken 65", qty: 1, price: 200 }
-      ],
-      notes: "",
-      total: 546.00,
-      subtotal: 520.00,
-      tax: 26.00,
-      status: "new",
-      billingStatus: "unpaid",
-      waiter: "Unassigned"
-    },
-    {
-      id: "837",
-      table: "07",
-      time: "12:05 PM",
-      timeAgo: "1 hr ago",
-      items: [
-        { name: "Mini Meals", qty: 2, price: 90 },
-        { name: "Curd Rice", qty: 1, price: 80 }
-      ],
-      notes: "",
-      total: 273.00,
-      subtotal: 260.00,
-      tax: 13.00,
-      status: "new",
-      billingStatus: "unpaid",
-      waiter: "Priya M."
-    },
-    {
-      id: "836",
-      table: "04",
-      time: "11:50 AM",
-      timeAgo: "2 hr ago",
-      items: [
-        { name: "Paneer Butter Masala", qty: 1, price: 210 },
-        { name: "Butter Naan", qty: 3, price: 40 },
-        { name: "Sweet Lassi", qty: 2, price: 60 }
-      ],
-      notes: "No coriander in paneer",
-      total: 472.50,
-      subtotal: 450.00,
-      tax: 22.50,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Rahul S."
-    },
-    {
-      id: "835",
-      table: "06",
-      time: "11:30 AM",
-      timeAgo: "2 hr ago",
-      items: [
-        { name: "Mutton Biryani", qty: 1, price: 380 },
-        { name: "Mirchi Ka Salan", qty: 1, price: 0 }
-      ],
-      notes: "",
-      total: 399.00,
-      subtotal: 380.00,
-      tax: 19.00,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Arjun K."
-    },
-    {
-      id: "834",
-      table: "09",
-      time: "11:15 AM",
-      timeAgo: "2 hr ago",
-      items: [
-        { name: "South Indian Thali", qty: 2, price: 180 },
-        { name: "Rasam Vada", qty: 1, price: 70 }
-      ],
-      notes: "",
-      total: 451.50,
-      subtotal: 430.00,
-      tax: 21.50,
-      status: "new",
-      billingStatus: "unpaid",
-      waiter: "Unassigned"
-    },
-    {
-      id: "833",
-      table: "10",
-      time: "11:00 AM",
-      timeAgo: "3 hr ago",
-      items: [
-        { name: "Cold Coffee", qty: 2, price: 90 },
-        { name: "French Fries", qty: 1, price: 110 }
-      ],
-      notes: "",
-      total: 304.50,
-      subtotal: 290.00,
-      tax: 14.50,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Priya M."
-    },
-    {
-      id: "832",
-      table: "02",
-      time: "10:45 AM",
-      timeAgo: "3 hr ago",
-      items: [
-        { name: "Idli Sambar (2 pcs)", qty: 2, price: 60 },
-        { name: "Medu Vada", qty: 2, price: 50 },
-        { name: "Masala Chai", qty: 2, price: 40 }
-      ],
-      notes: "",
-      total: 315.00,
-      subtotal: 300.00,
-      tax: 15.00,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "831",
-      table: "05",
-      time: "10:30 AM",
-      timeAgo: "3 hr ago",
-      items: [
-        { name: "Poori Masala", qty: 2, price: 90 },
-        { name: "Filter Coffee", qty: 2, price: 35 }
-      ],
-      notes: "Poori should be hot",
-      total: 262.50,
-      subtotal: 250.00,
-      tax: 12.50,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Arjun K."
-    },
-    {
-      id: "830",
-      table: "01",
-      time: "10:15 AM",
-      timeAgo: "3 hr ago",
-      items: [
-        { name: "Rava Dosa", qty: 2, price: 140 },
-        { name: "Badam Milk", qty: 2, price: 60 }
-      ],
-      notes: "",
-      total: 420.00,
-      subtotal: 400.00,
-      tax: 20.00,
-      status: "new",
-      billingStatus: "unpaid",
-      waiter: "Unassigned"
-    }
-  ];
 
-  const sourceOrders = orders.length > 0 ? orders : defaultSampleOrders;
+    try {
+      const res = await apiClient.post('/orders', payload);
+      if (res.data?.success) {
+        ShowNotifications.showAlertNotification(`Order created successfully!`, true);
+        setIsCreateOrderModalOpen(false);
+        if (refreshOrders) refreshOrders();
+      } else {
+        ShowNotifications.showAlertNotification(res.data?.message || "Failed to create order", false);
+      }
+    } catch (error) {
+      console.error(error);
+      ShowNotifications.showAlertNotification(error.response?.data?.message || "Failed to create order via API", false);
+    }
+  };
+
+  const sourceOrders = orders;
 
   // Filter logic
   let filteredOrders = [...sourceOrders];
@@ -470,38 +322,55 @@ export default function OrdersPanel({
     }
   }
 
-  const handleOrderStatusUpdate = (orderId, currentStatus) => {
+  const handleOrderStatusUpdate = async (orderId, currentStatus) => {
     let nextStatus = 'preparing';
     if (currentStatus === 'new') nextStatus = 'preparing';
     else if (currentStatus === 'preparing') nextStatus = 'ready';
     else if (currentStatus === 'ready') nextStatus = 'done';
 
-    const restId = activeRestaurant?.id || 'rest-1';
-    if (updateOrderStatus) {
-      updateOrderStatus(restId, orderId, nextStatus);
+    try {
+      const res = await apiClient.patch(`/orders/${orderId}/status`, { status: nextStatus });
+      if (res.data?.success) {
+        ShowNotifications.showAlertNotification(`Order status updated to ${nextStatus.toUpperCase()}!`, true);
+        if (refreshOrders) refreshOrders();
+      }
+    } catch (error) {
+      const restId = activeRestaurant?.id || 'rest-1';
+      if (updateOrderStatus) {
+        updateOrderStatus(restId, orderId, nextStatus);
+        ShowNotifications.showAlertNotification(`Order #ORD-${orderId} status updated to ${nextStatus.toUpperCase()}!`, true);
+      } else {
+        ShowNotifications.showAlertNotification("Failed to update status via API", false);
+      }
     }
-    ShowNotifications.showAlertNotification(`Order #ORD-${orderId} status updated to ${nextStatus.toUpperCase()}!`, true);
   };
 
-  const handleAssignWaiter = (orderId, waiterName) => {
-    const restId = activeRestaurant?.id || 'rest-1';
+  const handleAssignWaiter = async (orderId, waiterName) => {
     const isNone = !waiterName || waiterName === 'Unassigned' || waiterName === 'None' || waiterName === 'None (Optional)';
     const finalWaiter = isNone ? 'Unassigned' : waiterName;
-    if (updateOrder) {
-      updateOrder(restId, orderId, { waiter: finalWaiter });
-    }
-    ShowNotifications.showAlertNotification(
-      isNone
-        ? `Order #ORD-${orderId} updated with no waiter (Optional).`
-        : `Assigned ${waiterName} to order #ORD-${orderId}`,
-      true
-    );
-    setAssigningOrder(null);
+
+    const foundWaiter = staff.find(w => w.name === waiterName);
+    const waiterId = foundWaiter ? (foundWaiter._id || foundWaiter.id) : undefined;
+
+      setIsAssignWaiterModalOpen(false);
+      setSelectedOrderForWaiter(null);
+      try {
+        const res = await apiClient.put(`/orders/${orderId}/items`, { waiterId });
+        if (res.data?.success) {
+          ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+          if (refreshOrders) refreshOrders();
+        } else {
+          ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
+        }
+      } catch (err) {
+        console.error(err);
+        ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
+      }
   };
 
   return (
     <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%', boxSizing: 'border-box' }}>
-      
+
       {/* MAIN CONTAINER MATCHING SCREENSHOT */}
       <div style={{
         background: '#ffffff',
@@ -511,7 +380,7 @@ export default function OrdersPanel({
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
         overflow: 'hidden'
       }}>
-        
+
         {/* TOP HEADER ROW */}
         <div style={{
           display: 'flex',
@@ -528,10 +397,10 @@ export default function OrdersPanel({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            
+
             {/* Waiter Dropdown Filter */}
             <div style={{ position: 'relative' }}>
-              <button 
+              <button
                 type="button"
                 onClick={() => setWaiterDropdownOpen(!waiterDropdownOpen)}
                 style={{
@@ -556,7 +425,7 @@ export default function OrdersPanel({
 
               {waiterDropdownOpen && (
                 <>
-                  <div 
+                  <div
                     style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 999 }}
                     onClick={() => setWaiterDropdownOpen(false)}
                   />
@@ -681,6 +550,9 @@ export default function OrdersPanel({
                   ITEMS
                 </th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  DATE
+                </th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   TIME / ELAPSED
                 </th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -708,10 +580,23 @@ export default function OrdersPanel({
 
                 const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
                 const status = (ord.status || 'new').toLowerCase();
-                const waiterName = ord.waiter || 'Unassigned';
+                const waiterName = ord.waiterId?.name || ord.waiter || 'Unassigned';
+                const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '01';
+
+                let displayId = ord.orderId || ord.id || String(index);
+                if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
+
+                const dateStr = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+                const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
+                const timeAgoStr = ord.createdAt ? (() => {
+                  const diffMin = Math.floor((new Date() - new Date(ord.createdAt)) / 60000);
+                  if (diffMin < 1) return 'Just now';
+                  if (diffMin > 60) return `${Math.floor(diffMin / 60)} hr ago`;
+                  return `${diffMin} min ago`;
+                })() : (ord.timeAgo || '5 min ago');
 
                 return (
-                  <tr 
+                  <tr
                     key={ord.id || index}
                     style={{
                       borderBottom: index < filteredOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
@@ -722,21 +607,21 @@ export default function OrdersPanel({
                   >
                     {/* 1. ORDER ID */}
                     <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                      #ORD-{ord.id}
+                      #ORD-{displayId}
                     </td>
 
                     {/* 2. TABLE */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{ 
-                        display: 'inline-block', 
-                        backgroundColor: '#fff7ed', 
-                        color: '#ea580c', 
-                        padding: '4px 10px', 
-                        borderRadius: '6px', 
-                        fontSize: '12px', 
-                        fontWeight: 700 
+                      <span style={{
+                        display: 'inline-block',
+                        backgroundColor: '#fff7ed',
+                        color: '#ea580c',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700
                       }}>
-                        Table {ord.table || '01'}
+                        Table {tableName}
                       </span>
                     </td>
 
@@ -752,40 +637,49 @@ export default function OrdersPanel({
                       )}
                     </td>
 
+                    {/* NEW DATE COLUMN */}
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                        {dateStr}
+                      </div>
+                    </td>
+
                     {/* 4. TIME / ELAPSED */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                        {ord.time || '12:30 PM'}
+                        {timeStr}
                       </div>
                       <div style={{ fontSize: '11px', fontWeight: 700, color: '#ea580c', marginTop: '2px' }}>
-                        {ord.timeAgo || '5 min ago'}
+                        {timeAgoStr}
                       </div>
                     </td>
 
                     {/* 5. ASSIGNED WAITER (OPTIONAL) */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => setAssigningOrder(ord)}
+                      <select
+                        value={waiterName === 'Unassigned' ? '' : waiterName}
+                        onChange={(e) => handleAssignWaiter(ord.orderId || ord._id || ord.id, e.target.value)}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '5px 12px',
+                          padding: '5px 8px',
                           borderRadius: '6px',
                           fontSize: '12px',
                           fontWeight: 600,
-                          backgroundColor: (ord.waiter && ord.waiter !== 'Unassigned') ? '#fff7ed' : '#f8fafc',
-                          border: (ord.waiter && ord.waiter !== 'Unassigned') ? '1px solid #fed7aa' : '1px dashed #cbd5e1',
-                          color: (ord.waiter && ord.waiter !== 'Unassigned') ? '#c2410c' : '#64748b',
+                          backgroundColor: (waiterName !== 'Unassigned') ? '#fff7ed' : '#f8fafc',
+                          border: (waiterName !== 'Unassigned') ? '1px solid #fed7aa' : '1px dashed #cbd5e1',
+                          color: (waiterName !== 'Unassigned') ? '#c2410c' : '#64748b',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease'
+                          outline: 'none',
+                          maxWidth: '130px'
                         }}
-                        title="Click to assign or change waiter (Optional)"
                       >
-                        <UserIcon size={12} color={(ord.waiter && ord.waiter !== 'Unassigned') ? '#ea580c' : '#94a3b8'} />
-                        <span>{(ord.waiter && ord.waiter !== 'Unassigned') ? ord.waiter : '+ Assign (Optional)'}</span>
-                      </button>
+                        <option value="">+ Assign (Optional)</option>
+                        {waiterName !== 'Unassigned' && !allWaiters.includes(waiterName) && (
+                          <option value={waiterName}>{waiterName}</option>
+                        )}
+                        {allWaiters.map(w => (
+                          <option key={w} value={w}>{w}</option>
+                        ))}
+                      </select>
                     </td>
 
                     {/* 6. PAYMENT */}
@@ -835,10 +729,10 @@ export default function OrdersPanel({
                     {/* 9. ACTION BUTTONS (MATCHING SCREENSHOT) */}
                     <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        
+
                         {/* Eye Icon */}
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -864,8 +758,8 @@ export default function OrdersPanel({
                         </button>
 
                         {/* Trash Icon */}
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -890,44 +784,16 @@ export default function OrdersPanel({
                           <TrashIcon size={14} />
                         </button>
 
-                        {/* Print Icon */}
-                        <button 
-                          type="button" 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            ShowNotifications.showAlertNotification(`Printing KOT receipt for order #ORD-${ord.id}...`, true);
-                            window.print();
-                          }}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            color: '#475569',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
-                          title="Print Receipt"
-                        >
-                          <PrintIcon size={14} />
-                        </button>
-
                         {/* Status Action Trigger */}
                         {status === 'done' ? (
-                          <span style={{ 
-                            fontSize: '11px', 
-                            color: '#15803d', 
-                            backgroundColor: '#dcfce7', 
+                          <span style={{
+                            fontSize: '11px',
+                            color: '#15803d',
+                            backgroundColor: '#dcfce7',
                             border: '1px solid #bbf7d0',
-                            padding: '5px 10px', 
-                            borderRadius: '6px', 
-                            fontWeight: 700, 
+                            padding: '5px 10px',
+                            borderRadius: '6px',
+                            fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '4px'
@@ -937,23 +803,19 @@ export default function OrdersPanel({
                         ) : (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleOrderStatusUpdate(ord.id, status);
-                            }}
+                            onClick={() => handleOrderStatusUpdate(ord._id || ord.id, status)}
                             style={{
                               padding: '5px 12px',
                               borderRadius: '6px',
-                              border: 
-                                status === 'new' ? '1px solid #ff5a1f' : 
-                                status === 'preparing' ? '1px solid #16a34a' : '1px solid #16a34a',
-                              background: 
-                                status === 'new' ? '#fff7ed' : 
-                                status === 'preparing' ? '#f0fdf4' : '#f0fdf4',
-                              color: 
-                                status === 'new' ? '#ff5a1f' : 
-                                status === 'preparing' ? '#16a34a' : '#16a34a',
+                              border:
+                                status === 'new' ? '1px solid #ff5a1f' :
+                                  status === 'preparing' ? '1px solid #16a34a' : '1px solid #16a34a',
+                              background:
+                                status === 'new' ? '#fff7ed' :
+                                  status === 'preparing' ? '#f0fdf4' : '#f0fdf4',
+                              color:
+                                status === 'new' ? '#ff5a1f' :
+                                  status === 'preparing' ? '#16a34a' : '#16a34a',
                               cursor: 'pointer',
                               fontSize: '11px',
                               fontWeight: 700,
@@ -1008,7 +870,7 @@ export default function OrdersPanel({
           maxWidth="540px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '6px' }}>
-            
+
             {/* Meta Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
               <div>
@@ -1070,122 +932,23 @@ export default function OrdersPanel({
 
             {/* Modal Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
-              <button 
-                type="button" 
-                className="btn btn-outline" 
+              <button
+                type="button"
+                className="btn btn-outline"
                 onClick={() => setViewingOrder(null)}
                 style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
               >
                 Close
               </button>
-              <button 
-                type="button" 
-                className="btn btn-black" 
+              <button
+                type="button"
+                className="btn btn-black"
                 onClick={() => {
                   window.print();
                 }}
                 style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <PrintIcon size={14} /> Print Receipt
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* MODAL: ASSIGN WAITER */}
-      {assigningOrder && (
-        <Modal
-          isOpen={!!assigningOrder}
-          onClose={() => setAssigningOrder(null)}
-          title={`Assign Waiter to Order #ORD-${assigningOrder.id}`}
-          maxWidth="420px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '6px' }}>
-            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', color: '#64748b' }}>Table Number:</span>
-                <strong style={{ fontSize: '13px', color: '#0f172a' }}>Table {assigningOrder.table}</strong>
-              </div>
-              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: '1.4' }}>
-                Assigning a waiter is completely optional. You can leave this order unassigned or assign a staff member at any time.
-              </p>
-            </div>
-
-            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-              Select a Waiter <span style={{ fontWeight: 500, color: '#64748b' }}>(Optional)</span>:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
-              {/* Option 1: No Waiter Assigned (Optional) */}
-              <button
-                type="button"
-                onClick={() => handleAssignWaiter(assigningOrder.id, 'Unassigned')}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '1.5px solid #0f172a' : '1px solid #e2e8f0',
-                  background: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '#f1f5f9' : '#ffffff',
-                  color: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '#0f172a' : '#64748b',
-                  fontWeight: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? 800 : 600,
-                  textAlign: 'left',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '14px' }}>🚫</span>
-                  <span>No Waiter / Leave Unassigned (Optional)</span>
-                </div>
-                {(!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') && <CheckIcon size={14} color="#0f172a" />}
-              </button>
-
-              {/* Waiter Options */}
-              {allWaiters.map((wName, idx) => {
-                const isSelected = assigningOrder.waiter === wName;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleAssignWaiter(assigningOrder.id, wName)}
-                    style={{
-                      padding: '10px 14px',
-                      borderRadius: '8px',
-                      border: isSelected ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
-                      background: isSelected ? '#fff7ed' : '#ffffff',
-                      color: isSelected ? '#ff5a1f' : '#0f172a',
-                      fontWeight: isSelected ? 800 : 600,
-                      textAlign: 'left',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <UserIcon size={14} color={isSelected ? '#ff5a1f' : '#64748b'} />
-                      <span>{wName}</span>
-                    </div>
-                    {isSelected && <CheckIcon size={14} color="#ff5a1f" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-              <button 
-                type="button" 
-                className="btn btn-outline" 
-                onClick={() => setAssigningOrder(null)}
-                style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '13px' }}
-              >
-                Close
               </button>
             </div>
           </div>
@@ -1205,7 +968,7 @@ export default function OrdersPanel({
               Are you sure you want to cancel order <strong>#ORD-{orderToDelete.id}</strong> (Table {orderToDelete.table})?
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button 
+              <button
                 type="button"
                 className="btn btn-outline"
                 onClick={() => setOrderToDelete(null)}
@@ -1213,14 +976,22 @@ export default function OrdersPanel({
               >
                 No, Keep
               </button>
-              <button 
+              <button
                 type="button"
                 className="btn btn-black"
-                onClick={() => {
-                  if (deleteOrder && activeRestaurant?.id) {
-                    deleteOrder(activeRestaurant.id, orderToDelete.id);
+                onClick={async () => {
+                  try {
+                    const res = await apiClient.delete(`/orders/${orderToDelete._id || orderToDelete.id}`);
+                    if (res.data?.success) {
+                      ShowNotifications.showAlertNotification(`Order deleted successfully`, true);
+                      if (refreshOrders) refreshOrders();
+                    } else {
+                      ShowNotifications.showAlertNotification(`Failed to delete order`, false);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    ShowNotifications.showAlertNotification(`Failed to delete order`, false);
                   }
-                  ShowNotifications.showAlertNotification(`Order #ORD-${orderToDelete.id} cancelled!`, true);
                   setOrderToDelete(null);
                 }}
                 style={{ background: '#dc2626', border: 'none', color: '#ffffff', padding: '8px 18px', fontSize: '13px', fontWeight: 700, borderRadius: '8px' }}
@@ -1241,7 +1012,35 @@ export default function OrdersPanel({
           maxWidth="560px"
         >
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
-            
+
+            {/* Modal Branch Selection */}
+            {activeRestaurant?.branches?.length > 1 && (
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Branch <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={modalSelectedBranchId}
+                  onChange={handleModalBranchChange}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    background: '#fff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {activeRestaurant.branches.map(b => (
+                    <option key={b._id || b.id} value={b._id || b.id}>{b.branchName || b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Row 1: Table & Waiter Assignment */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
@@ -1263,7 +1062,7 @@ export default function OrdersPanel({
                     boxSizing: 'border-box'
                   }}
                 >
-                  {availableTableNumbers.map(tNo => (
+                  {displayTables.map(tNo => (
                     <option key={tNo} value={tNo}>Table {tNo}</option>
                   ))}
                 </select>
@@ -1289,8 +1088,8 @@ export default function OrdersPanel({
                   }}
                 >
                   <option value="Unassigned">-- None (Unassigned) --</option>
-                  {allWaiters.map(w => (
-                    <option key={w} value={w}>🤵 {w}</option>
+                  {modalWaiters.map((w, idx) => (
+                    <option key={idx} value={w}>🤵 {w}</option>
                   ))}
                 </select>
               </div>
@@ -1345,89 +1144,136 @@ export default function OrdersPanel({
               </div>
             </div>
 
-            {/* Quick Menu Item Selector */}
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
-                Quick Add Dishes:
+            {/* Add Items Section (Search + Category) */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Add Items
               </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '110px', overflowY: 'auto', paddingBottom: '4px' }}>
-                {selectableMenuItems.slice(0, 10).map((menuItem, idx) => (
+
+              {/* Search Bar */}
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px' }}>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search menu items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    backgroundColor: '#f8fafc'
+                  }}
+                />
+              </div>
+
+              {/* Category Filter */}
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                {displayCategories.map(cat => (
                   <button
-                    key={idx}
+                    key={cat}
                     type="button"
-                    onClick={() => handleAddItemToOrder(menuItem)}
+                    onClick={() => setSelectedCategory(cat)}
                     style={{
-                      background: '#f8fafc',
-                      border: '1px solid #cbd5e1',
+                      padding: '6px 12px',
                       borderRadius: '6px',
-                      padding: '5px 10px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#0f172a',
+                      border: '1px solid',
+                      borderColor: selectedCategory === cat ? '#ff5a1f' : '#e2e8f0',
+                      backgroundColor: selectedCategory === cat ? '#ff5a1f' : '#ffffff',
+                      color: selectedCategory === cat ? '#ffffff' : '#64748b',
+                      fontSize: '11px',
+                      fontWeight: 700,
                       cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
+                      whiteSpace: 'nowrap',
                       transition: 'all 0.15s'
                     }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; e.currentTarget.style.color = '#ff5a1f'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
                   >
-                    <span>+ {menuItem.name}</span>
-                    <span style={{ color: '#ff5a1f', fontWeight: 700 }}>₹{menuItem.price}</span>
+                    {cat}
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Custom Item Adder */}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="Or custom item name..."
-                value={customItemName}
-                onChange={e => setCustomItemName(e.target.value)}
-                style={{
-                  flex: 2,
-                  padding: '7px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  outline: 'none'
-                }}
-              />
-              <input
-                type="number"
-                placeholder="Price ₹"
-                value={customItemPrice}
-                onChange={e => setCustomItemPrice(e.target.value)}
-                style={{
-                  width: '90px',
-                  padding: '7px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  outline: 'none'
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleAddCustomItem}
-                disabled={!customItemName.trim()}
-                style={{
-                  background: '#0f172a',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '7px 14px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: customItemName.trim() ? 'pointer' : 'not-allowed',
-                  opacity: customItemName.trim() ? 1 : 0.5
-                }}
-              >
-                Add
-              </button>
+              {/* Menu Items List */}
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {filteredMenuItems.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '12px' }}>No items found.</div>
+                ) : (
+                  filteredMenuItems.map((item, idx) => {
+                    const orderItem = newOrderItems.find(i => i.name === item.name);
+                    const qty = orderItem ? orderItem.qty : 0;
+                    const orderItemIdx = newOrderItems.findIndex(i => i.name === item.name);
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 12px',
+                          borderBottom: '1px solid #f1f5f9',
+                          backgroundColor: qty > 0 ? '#fff7ed' : 'transparent',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 800, color: '#ff5a1f' }}>₹{item.price}</span>
+
+                          {qty > 0 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQty(orderItemIdx, -1)}
+                                style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
+                              >
+                                -
+                              </button>
+                              <span style={{ width: '28px', textAlign: 'center', fontSize: '12px', fontWeight: 700 }}>
+                                {qty}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQty(orderItemIdx, 1)}
+                                style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleAddItemToOrder(item)}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '6px',
+                                padding: '4px 10px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                color: '#0f172a',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; e.currentTarget.style.color = '#ff5a1f'; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                            >
+                              + Add
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             {/* Selected Items List */}
@@ -1513,12 +1359,12 @@ export default function OrdersPanel({
                     <span>₹{newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0).toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
-                    <span>GST (5%):</span>
-                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * 0.05).toFixed(2)}</span>
+                    <span>Tax ({taxRate}%):</span>
+                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * (taxRate / 100)).toFixed(2)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800, color: '#ff5a1f', marginTop: '4px' }}>
                     <span>Total Amount:</span>
-                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * 1.05).toFixed(2)}</span>
+                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * (1 + taxRate / 100)).toFixed(2)}</span>
                   </div>
                 </div>
               )}

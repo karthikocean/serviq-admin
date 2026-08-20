@@ -112,7 +112,7 @@ export default function TableFormPage() {
         seats: existingTable.seatingCapacity ?? existingTable.seats ?? 4,
         section: existingTable.section || 'Main Dining',
         status: existingTable.status || 'Free',
-        assignedWaiterId: existingTable.assignedWaiter || existingTable.assignedWaiterId || ''
+        assignedWaiterId: existingTable.assignedWaiter?._id || existingTable.assignedWaiter || existingTable.assignedWaiterId || ''
       });
     }
   }, [existingTable, selectedBranchId]);
@@ -437,7 +437,7 @@ export default function TableFormPage() {
               >
                 <option value="">-- None (Unassigned) --</option>
                 {availableWaiters.map(w => (
-                  <option key={w.id} value={w.id}>
+                  <option key={w._id || w.id} value={w._id || w.id}>
                     🤵 {w.name} ({w.status || 'Active'})
                   </option>
                 ))}

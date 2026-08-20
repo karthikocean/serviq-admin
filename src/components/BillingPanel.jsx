@@ -1,6 +1,7 @@
 import React from 'react';
 import { Badge } from './Badge';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import BillingApi from '../api/Billing.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill={color} viewBox="0 0 16 16" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -22,97 +23,30 @@ export default function BillingPanel({
   billingData = [],
   selectedBillingTable = '',
   setSelectedBillingTable,
-  orders = [],
   activeRestaurant = {},
   billingPaymentMethod = 'UPI',
   setBillingPaymentMethod,
-  markBillAsPaid
+  fetchBillingData,
+  selectedBranchId
 }) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editItems, setEditItems] = React.useState([]);
 
-  // --- DUMMY DATA INJECTION ---
-  const dummyBillingData = [
-    { table: 'Table 01', orders: 2, total: 756, status: 'Unpaid' },
-    { table: 'Table 02', orders: 3, total: 1239, status: 'Unpaid' },
-    { table: 'Table 03', orders: 1, total: 320, status: 'Paid' },
-    { table: 'Table 05', orders: 2, total: 924, status: 'Unpaid' },
-    { table: 'Table 07', orders: 4, total: 2121, status: 'Unpaid' }
-  ];
+  const displayBillingData = billingData || [];
 
-  const dummyOrders = [
-    {
-      id: "845", table: "01", status: "preparing", billingStatus: "unpaid",
-      items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }]
-    },
-    {
-      id: "842", table: "02", status: "preparing", billingStatus: "unpaid",
-      items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }]
-    },
-    {
-      id: "847", table: "03", status: "done", billingStatus: "paid",
-      items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }]
-    },
-    {
-      id: "844", table: "05", status: "ready", billingStatus: "unpaid",
-      items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }]
-    },
-    {
-      id: "846", table: "07", status: "preparing", billingStatus: "unpaid",
-      items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }]
-    }
-  ];
+  const selectedBillData = displayBillingData.find(b => b.tableId === selectedBillingTable) || { 
+    tableId: selectedBillingTable, 
+    table: 'Unknown Table', 
+    orders: 0, 
+    total: 0, 
+    status: 'Paid',
+    items: [],
+    orderIds: []
+  };
 
-  const displayBillingData = billingData && billingData.length > 0 ? billingData : dummyBillingData;
-  const displayOrders = orders && orders.length > 0 ? orders : dummyOrders;
-  // -----------------------------
-
-
-  const selectedBillData = displayBillingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
-
-  // Find active orders for selected billing table to show details
-  const billingNum = (selectedBillingTable || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
-
-  let activeTableOrders = orders.filter(o => {
-    const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
-    const isMatch = oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
-    return isMatch && o.billingStatus === 'unpaid';
-  });
-
-  // If no unpaid orders, fallback to any existing orders on this table (even paid) so the bill summary is always populated
-  let isSettled = false;
-  if (activeTableOrders.length === 0) {
-    activeTableOrders = orders.filter(o => {
-      const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
-      return oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
-    });
-    if (activeTableOrders.length > 0) {
-      isSettled = true;
-    }
-  }
-
-  // Combine items from orders of this table
-  const billingItems = [];
-  activeTableOrders.forEach(o => {
-    (o.items || []).forEach(item => {
-      const exist = billingItems.find(x => x.name === item.name);
-      if (exist) {
-        exist.qty += item.qty;
-        exist.amount += item.qty * item.price;
-        if (item.notes && !exist.notes) exist.notes = item.notes;
-      } else {
-        billingItems.push({
-          name: item.name,
-          qty: item.qty,
-          rate: item.price,
-          amount: item.qty * item.price,
-          notes: item.notes || (item.customizations ? item.customizations.join(', ') : '')
-        });
-      }
-    });
-  });
-
-  const orderIds = activeTableOrders.map(o => `#ORD-${o.id}`).join(', ');
+  const isSettled = selectedBillData.status !== 'Unpaid';
+  const billingItems = selectedBillData.items || [];
+  const orderIdDisplay = selectedBillData.orderId ? `#${selectedBillData.orderId}` : '';
 
   const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
   const serviceRate = activeRestaurant.settings?.serviceChargeRate || 0;
@@ -122,10 +56,21 @@ export default function BillingPanel({
   const serviceAmt = parseFloat((subtotal * serviceRate).toFixed(2));
   const totalAmt = subtotal + taxAmt + serviceAmt;
 
-  const handleMarkAsPaidSubmit = () => {
+  const handleMarkAsPaidSubmit = async () => {
     if (!selectedBillingTable) return;
-    markBillAsPaid(activeRestaurant.id, selectedBillingTable);
-    ShowNotifications.showAlertNotification(`Marked bill as paid for ${selectedBillingTable}!`, true);
+    
+    const response = await BillingApi.processTablePayment({
+      branchId: selectedBranchId,
+      tableId: selectedBillingTable,
+      paymentMethod: billingPaymentMethod.toLowerCase()
+    });
+
+    if (response.status) {
+      ShowNotifications.showAlertNotification(`Marked bill as paid for ${selectedBillData.table}!`, true);
+      if (typeof fetchBillingData === 'function') {
+        fetchBillingData();
+      }
+    }
   };
 
   return (
@@ -146,14 +91,14 @@ export default function BillingPanel({
         <div style={{ display: 'flex', overflowX: 'auto', gap: '16px', paddingBottom: '16px', scrollbarWidth: 'thin' }}>
           {displayBillingData.map(b => (
             <div
-              key={b.table}
-              onClick={() => setSelectedBillingTable(b.table)}
+              key={b.tableId}
+              onClick={() => setSelectedBillingTable(b.tableId)}
               style={{
                 minWidth: '240px',
-                border: selectedBillingTable === b.table ? '2px solid var(--primary)' : '1px solid var(--border)',
+                border: selectedBillingTable === b.tableId ? '2px solid var(--primary)' : '1px solid var(--border)',
                 borderRadius: '12px',
                 padding: '16px',
-                background: selectedBillingTable === b.table ? '#fffcf9' : '#ffffff',
+                background: selectedBillingTable === b.tableId ? '#fffcf9' : '#ffffff',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 position: 'relative'
@@ -177,9 +122,9 @@ export default function BillingPanel({
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
-                <span>{b.orders} Guests</span>
+                <span title={b.orderId}>{b.orderId || 'No Order'}</span>
                 <span>•</span>
-                <span>30 mins</span>
+                <span>Wait</span>
               </div>
               <div style={{ textAlign: 'right', fontSize: '20px', fontWeight: '800', color: 'var(--black)' }}>
                 ₹{b.total}
@@ -208,7 +153,7 @@ export default function BillingPanel({
                 )}
               </div>
               <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
-                {orderIds ? `Order ID: ${orderIds}` : 'Order Summary'} • {selectedBillingTable}
+                {orderIdDisplay ? `Order ID: ${orderIdDisplay}` : 'Order Summary'} • {selectedBillData.table}
               </p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -330,7 +275,7 @@ export default function BillingPanel({
           <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ marginBottom: '24px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--black)', marginBottom: '4px' }}>Payment Method</h3>
-              <p style={{ fontSize: '13px', color: '#64748b' }}>Select preference for {selectedBillingTable}</p>
+              <p style={{ fontSize: '13px', color: '#64748b' }}>Select preference for {selectedBillData.table}</p>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>

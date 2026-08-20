@@ -151,6 +151,94 @@ export default function TablesPanel({
     ShowNotifications.showAlertNotification("Table QR Link copied to clipboard!", true);
   };
 
+  const handleBatchPrint = () => {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const qrItemsHtml = displayTables.map((t, idx) => {
+      const tableIdStr = t.tableNumber || t.tableNum || `T-${String(idx + 1).padStart(2, '0')}`;
+      const qrUrl = t.qrUrl || '';
+      const restaurantName = activeRestaurant?.name || 'SERVIQ DINING';
+      const seatsText = `${t.seatingCapacity ?? t.seats ?? 4} seats`;
+      const sectionText = t.section || 'Main Dining';
+
+      return `
+        <div style="background: #ffffff; border: 1.5px solid #0f172a; border-radius: 12px; padding: 16px; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.03); page-break-inside: avoid;">
+          <div style="font-size: 10px; font-weight: 800; color: #ff7a00; letter-spacing: 0.8px; text-transform: uppercase;">
+            ${restaurantName}
+          </div>
+          <div style="font-size: 18px; font-weight: 900; color: #0f172a; margin: 2px 0 8px 0; font-family: 'Outfit', sans-serif;">
+            TABLE ${tableIdStr}
+          </div>
+          <div style="background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; display: inline-block; margin: 0 auto 8px auto;">
+            <img 
+              src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}" 
+              alt="QR ${tableIdStr}" 
+              style="width: 110px; height: 110px; display: block;" 
+            />
+          </div>
+          <div style="font-size: 11px; font-weight: 700; color: #0f172a;">
+            Scan to Order
+          </div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+            ${seatsText} • ${sectionText}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <title>Batch QR Standees - ${activeRestaurant?.name || 'Serviq'}</title>
+          <style>
+            body { font-family: 'Inter', system-ui, sans-serif; padding: 20px; color: #0f172a; background: #fff; }
+            h2 { font-family: 'Outfit', sans-serif; text-align: center; margin-bottom: 20px; }
+            .grid-container {
+              display: grid;
+              grid-template-columns: repeat(3, 1fr);
+              gap: 20px;
+            }
+            @media print {
+              body { padding: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Batch QR Standees Sheet</h2>
+          <div class="grid-container">
+            ${qrItemsHtml}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    // Clean up the iframe after a reasonable time for the print dialog to open and close
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe);
+      }
+    }, 15000);
+  };
+
   return (
     <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
       
@@ -175,7 +263,7 @@ export default function TablesPanel({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <button 
             type="button"
-            onClick={() => setShowBatchPrintModal(true)}
+            onClick={handleBatchPrint}
             style={{
               background: '#ffffff',
               border: '1px solid #cbd5e1',
@@ -750,118 +838,6 @@ export default function TablesPanel({
             >
               Close Window
             </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* MODAL: BATCH PRINT ALL TABLE QR CODES */}
-      {showBatchPrintModal && (
-        <Modal
-          isOpen={showBatchPrintModal}
-          onClose={() => setShowBatchPrintModal(false)}
-          title="Print All Dining Table QR Codes"
-          maxWidth="850px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 18px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                  Batch QR Standees Sheet ({displayTables.length} Tables)
-                </span>
-                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                  Print ready standee cards formatted for tableside acrylic holders.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => window.print()}
-                style={{
-                  padding: '9px 18px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: 'var(--primary)',
-                  color: '#ffffff',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <PrintIcon size={15} /> Print Standees Sheet
-              </button>
-            </div>
-
-            {/* 3-Column Grid for Table QR Standees */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '14px',
-              maxHeight: '480px',
-              overflowY: 'auto',
-              padding: '6px'
-            }}>
-              {displayTables.map((t, idx) => {
-                const tableIdStr = t.tableNumber || t.tableNum || `T-${String(idx + 1).padStart(2, '0')}`;
-                const qrUrl = getTableQrUrl(t);
-
-                return (
-                  <div
-                    key={t._id || t.id || idx}
-                    style={{
-                      background: '#ffffff',
-                      border: '1.5px solid #0f172a',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      textAlign: 'center',
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
-                    }}
-                  >
-                    <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
-                      {activeRestaurant?.name || 'SERVIQ DINING'}
-                    </div>
-                    <div style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', margin: '2px 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
-                      TABLE {tableIdStr}
-                    </div>
-
-                    <div style={{
-                      background: '#ffffff',
-                      border: '1px dashed #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      display: 'inline-block',
-                      margin: '0 auto 8px auto'
-                    }}>
-                      <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}`} 
-                        alt={`QR ${tableIdStr}`} 
-                        style={{ width: '110px', height: '110px', display: 'block' }} 
-                      />
-                    </div>
-
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>
-                      Scan to Order
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                      {t.seatingCapacity ?? t.seats ?? 4} seats • {t.section || 'Main Dining'}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setShowBatchPrintModal(false)}
-                style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
-              >
-                Close
-              </button>
-            </div>
           </div>
         </Modal>
       )}

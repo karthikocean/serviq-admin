@@ -1,63 +1,109 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Modal } from './Modal';
+import * as XLSX from 'xlsx';
+import BillingApi from '../api/Billing';
+import ShowNotifications from '../helper/ShowNotifications';
 
-export default function BillingHistoryPanel({ billingHistory = [], branches = [] }) {
-  // State for Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dateRange, setDateRange] = useState('Today');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('All');
-  const [selectedPayment, setSelectedPayment] = useState('All');
-  
+export default function BillingHistoryPanel({
+  billingHistory = [],
+  branches = [],
+  isLoading,
+  searchTerm, setSearchTerm,
+  dateRange, setDateRange,
+  customStartDate, setCustomStartDate,
+  customEndDate, setCustomEndDate,
+  selectedPayment, setSelectedPayment,
+  selectedBranchId,
+  page, setPage,
+  limit,
+  totalItems,
+  summary
+}) {
+
   // State for Modals
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [exportFormat, setExportFormat] = useState('Excel');
   const [selectedInvoice, setSelectedInvoice] = useState(null); // For Invoice View Modal
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Dummy Handle Export (ready for API integration)
-  const handleExport = () => {
-    // In future: await api.exportBillingHistory({ dateRange, selectedBranch, selectedPayment, format: exportFormat })
-    alert(`Downloading ${exportFormat} file for Billing History...`);
-    setShowExportModal(false);
+  // Direct Excel Export (Fetches full filtered dataset without pagination)
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+
+    const filters = {
+      search: searchTerm,
+      dateRange,
+      startDate: customStartDate,
+      endDate: customEndDate,
+      branchId: selectedBranchId,
+      paymentMethod: selectedPayment,
+      isExport: 'true',
+      limit: '0' // Tell backend to fetch all for export
+    };
+
+    const result = await BillingApi.getBillingHistory(filters);
+
+    if (result.status && result.response.data && result.response.data.items) {
+      const itemsToExport = result.response.data.items;
+
+      if (itemsToExport.length === 0) {
+        ShowNotifications.showAlertNotification("No data available to export.", false);
+        setIsExporting(false);
+        return;
+      }
+
+      const exportData = itemsToExport.map(item => ({
+        'Invoice ID': item.invoiceId,
+        'Order ID': item.orderRefId,
+        'Table': `Table ${item.tableNumber}`,
+        'Date': new Date(item.createdAt).toLocaleDateString(),
+        'Time': new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        'Subtotal': item.subtotal,
+        'Tax': item.tax,
+        'Discount': item.discount,
+        'Total Amount': item.totalAmount,
+        'Payment Method': item.paymentMethod === 'upi' ? 'UPI' : (item.paymentMethod || '').charAt(0).toUpperCase() + (item.paymentMethod || '').slice(1),
+        'Payment Status': item.paymentStatus,
+        'Staff': item.staffName,
+        'Branch ID': item.branchId
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
+
+      // Auto-size columns loosely
+      const wscols = [
+        { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+        { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
+        { wch: 15 }, { wch: 15 }, { wch: 25 }
+      ];
+      worksheet['!cols'] = wscols;
+
+      const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    } else {
+      ShowNotifications.showAlertNotification("Failed to fetch data for export.", false);
+    }
+
+    setIsExporting(false);
   };
 
-  // Filter Logic
-  const filteredHistory = useMemo(() => {
-    return billingHistory.filter(invoice => {
-      // Branch filter
-      if (selectedBranch !== 'All' && invoice.branchId !== selectedBranch) return false;
-      // Payment filter
-      if (selectedPayment !== 'All' && invoice.paymentMethod !== selectedPayment) return false;
-      // Search filter
-      if (searchTerm) {
-        const lowerSearch = searchTerm.toLowerCase();
-        if (!invoice.id.toLowerCase().includes(lowerSearch) && 
-            !invoice.orderId.toLowerCase().includes(lowerSearch)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [billingHistory, selectedBranch, selectedPayment, searchTerm, dateRange, customStartDate, customEndDate]);
-
   // Calculate Summaries
-  const totalBills = filteredHistory.length;
-  const totalSales = filteredHistory.reduce((acc, curr) => acc + curr.amount, 0);
-  const cashTotal = filteredHistory.filter(i => i.paymentMethod === 'Cash').reduce((acc, curr) => acc + curr.amount, 0);
-  const upiTotal = filteredHistory.filter(i => i.paymentMethod === 'UPI').reduce((acc, curr) => acc + curr.amount, 0);
+  const totalBills = totalItems || 0;
+  const totalSales = summary?.totalSales || 0;
+  const cashTotal = summary?.cashTotal || 0;
+  const upiTotal = summary?.upiTotal || 0;
 
   return (
     <section>
       <div style={{ width: '100%' }}>
         {/* FILTERS AREA */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '24px', alignItems: 'flex-end' }}>
-          
+
           <div style={{ flex: '1', minWidth: '200px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Search Invoice / Order</label>
-            <input 
-              type="text" 
-              placeholder="e.g. INV-10245" 
+            <input
+              type="text"
+              placeholder="e.g. INV-10245"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }}
@@ -66,8 +112,8 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
 
           <div style={{ flex: '1', minWidth: '150px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Date Range</label>
-            <select 
-              value={dateRange} 
+            <select
+              value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
             >
@@ -94,8 +140,8 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
 
           <div style={{ flex: '1', minWidth: '150px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Payment Method</label>
-            <select 
-              value={selectedPayment} 
+            <select
+              value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
             >
@@ -106,28 +152,15 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
             </select>
           </div>
 
-          <div style={{ flex: '1', minWidth: '150px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Branch</label>
-            <select 
-              value={selectedBranch} 
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value="All">All Branches</option>
-              {branches.map(b => (
-                <option key={b.id} value={b.id}>{b.branchName}</option>
-              ))}
-            </select>
-          </div>
-
           <div>
-            <button 
-              className="btn btn-black" 
+            <button
+              className="btn btn-black"
               style={{ padding: '10px 24px', height: '42px', display: 'flex', alignItems: 'center', gap: '8px' }}
-              onClick={() => setShowExportModal(true)}
+              onClick={handleExportExcel}
+              disabled={isExporting}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Export
+              {isExporting ? 'Exporting...' : 'Export to Excel'}
             </button>
           </div>
         </div>
@@ -170,83 +203,102 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
                 </tr>
               </thead>
               <tbody>
-                {filteredHistory.map((invoice, idx) => (
-                  <tr key={invoice.id} style={{ borderBottom: idx !== filteredHistory.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>{invoice.id}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.orderId}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>Table {invoice.table}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.date}, {invoice.time}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>₹{invoice.amount.toLocaleString()}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>{invoice.paymentMethod}</td>
-                    <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.staff}</td>
-                    <td style={{ padding: '16px 20px' }}>
-                      <span style={{ 
-                        display: 'inline-block', 
-                        padding: '4px 10px', 
-                        borderRadius: '12px', 
-                        fontSize: '12px', 
-                        fontWeight: '700', 
-                        background: invoice.status === 'Paid' ? '#dcfce7' : '#fef08a', 
-                        color: invoice.status === 'Paid' ? '#166534' : '#854d0e' 
-                      }}>
-                        {invoice.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
-                      <button 
-                        onClick={() => setSelectedInvoice(invoice)}
-                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '700', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredHistory.length === 0 && (
+                {isLoading ? (
                   <tr>
                     <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
-                      No billing history found for the selected filters.
+                      Loading billing history...
                     </td>
                   </tr>
+                ) : (
+                  <>
+                    {billingHistory.map((invoice, idx) => (
+                      <tr key={invoice.id} style={{ borderBottom: idx !== billingHistory.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>{invoice.id}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.orderId}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>Table {invoice.table}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.date}, {invoice.time}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>₹{invoice.amount.toLocaleString()}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>{invoice.paymentMethod}</td>
+                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.staff}</td>
+                        <td style={{ padding: '16px 20px' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            background: invoice.status === 'Paid' ? '#dcfce7' : '#fef08a',
+                            color: invoice.status === 'Paid' ? '#166534' : '#854d0e'
+                          }}>
+                            {invoice.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '16px 20px', textAlign: 'right' }}>
+                          <button
+                            onClick={() => setSelectedInvoice(invoice)}
+                            style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '700', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {billingHistory.length === 0 && (
+                      <tr>
+                        <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                          No billing history found for the selected filters.
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 )}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
 
-      {/* EXPORT MODAL */}
-      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Billing History" maxWidth="400px">
-        <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Date Range</label>
-            <input type="text" value={dateRange === 'Custom' ? `${customStartDate} to ${customEndDate}` : dateRange} readOnly style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#f8fafc', color: '#64748b' }} />
+        {/* Pagination Controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: '13px', color: '#64748b' }}>
+            Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
           </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Payment Method</label>
-            <input type="text" value={selectedPayment === 'All' ? 'All Methods' : selectedPayment} readOnly style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#f8fafc', color: '#64748b' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Branch</label>
-            <input type="text" value={selectedBranch === 'All' ? 'All Branches' : branches.find(b => b.id === selectedBranch)?.branchName || 'All Branches'} readOnly style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#f8fafc', color: '#64748b' }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Format</label>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              {['Excel', 'PDF', 'CSV'].map(fmt => (
-                <label key={fmt} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '600' }}>
-                  <input type="radio" name="format" checked={exportFormat === fmt} onChange={() => setExportFormat(fmt)} style={{ accentColor: 'var(--primary)' }} />
-                  {fmt}
-                </label>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-            <button className="btn btn-outline" style={{ padding: '10px 20px' }} onClick={() => setShowExportModal(false)}>Cancel</button>
-            <button className="btn btn-black" style={{ padding: '10px 24px' }} onClick={handleExport}>Export</button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                border: '1px solid #e2e8f0', background: '#fff',
+                color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Prev
+            </button>
+
+            <button
+              style={{
+                minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: '6px', fontSize: '13px', fontWeight: 700,
+                border: 'none', background: '#000', color: '#fff', cursor: 'default'
+              }}
+            >
+              {page}
+            </button>
+
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page * limit >= totalItems}
+              style={{
+                padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                border: '1px solid #e2e8f0', background: '#fff',
+                color: page * limit >= totalItems ? '#cbd5e1' : '#64748b', cursor: page * limit >= totalItems ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Next
+            </button>
           </div>
         </div>
-      </Modal>
+      </div>
 
       {/* INVOICE DETAILS MODAL */}
       <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Invoice Details" maxWidth="450px">
@@ -260,7 +312,7 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
               <span>Table {selectedInvoice.table}</span>
               <span>{selectedInvoice.date} • {selectedInvoice.time}</span>
             </div>
-            
+
             <div style={{ borderTop: '1px dashed #cbd5e1', borderBottom: '1px dashed #cbd5e1', padding: '16px 0', marginBottom: '24px' }}>
               {selectedInvoice.items.map((item, idx) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '14px' }}>
@@ -302,7 +354,7 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px' }}>
+            {/* <div style={{ display: 'flex', gap: '12px' }}>
               <button className="btn btn-outline" style={{ flex: 1, padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                 Print Invoice
@@ -311,7 +363,7 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 Download PDF
               </button>
-            </div>
+            </div> */}
           </div>
         )}
       </Modal>
