@@ -24,7 +24,6 @@ export default function AdminLayout() {
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(location.pathname.startsWith('/kitchen'));
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(location.pathname.startsWith('/billing'));
   const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
-  const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
 
@@ -103,6 +102,8 @@ export default function AdminLayout() {
     if (p === '/menu/categories') return 'Category List';
     if (p.startsWith('/menu')) return 'Menu Management';
     if (p.startsWith('/orders')) return 'Order Management';
+    if (p.startsWith('/service-requests') || p.startsWith('/requests')) return 'Service Requests';
+    if (p.startsWith('/feedback')) return 'Customer Feedback';
     if (p === '/staff/add' || p === '/waiter/add') return 'Add Staff Member';
     if (p.startsWith('/staff/edit') || p.startsWith('/waiter/edit')) return 'Edit Staff Member';
     if (p === '/staff/kitchen-settings' || p === '/kitchen/settings') return 'Kitchen Station Settings';
@@ -126,6 +127,11 @@ export default function AdminLayout() {
     (!selectedBranchId || o.branchId === selectedBranchId) && (o.status === 'new' || o.status === 'preparing')
   ).length;
 
+  // Pending waiter requests count
+  const pendingWaiterRequestsCount = (activeRestaurant?.waiterRequests || activeRestaurant?.serviceRequests || []).filter(r =>
+    (!selectedBranchId || r.branchId === selectedBranchId) && (r.status === 'Pending')
+  ).length;
+
   const pathname = location.pathname;
   const isDashboardActive = pathname === '/' || pathname === '/dashboard' || pathname === '/overview';
   const isBranchActive = pathname.startsWith('/branch-management') || pathname.startsWith('/branches');
@@ -134,6 +140,7 @@ export default function AdminLayout() {
   const isMenuActive = pathname.startsWith('/menu');
   const isInventoryActive = pathname.startsWith('/inventory');
   const isOrdersActive = pathname.startsWith('/orders');
+  const isFeedbackActive = pathname.startsWith('/feedback');
   const isStaffActive = pathname.startsWith('/staff') || pathname.startsWith('/waiter') || pathname.startsWith('/kitchen');
   const isUsersActive = pathname.startsWith('/users');
   const isRolesActive = pathname.startsWith('/roles-permissions');
@@ -278,12 +285,38 @@ export default function AdminLayout() {
                 <span className="sidebar-icon-box">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
                 </span>
-                <span className="sidebar-item-label">Order management</span>
+                <span className="sidebar-item-label">Order Management</span>
+                {pendingOrdersCount > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: '#ff5a1f',
+                    color: '#fff',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    padding: '2px 7px',
+                    borderRadius: '10px'
+                  }}>
+                    {pendingOrdersCount}
+                  </span>
+                )}
               </Link>
             </li>
           )}
 
-          {/* 7. Staff Management (Combined Waiters and Kitchen) */}
+          {/* 8. Customer Feedback */}
+          <li className={`sidebar-item ${isFeedbackActive ? 'active' : ''}`}>
+            <Link to="/feedback">
+              <span className="sidebar-icon-box">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  <polygon points="12 7 13.2 9.6 16 10 14 12 14.5 14.8 12 13.4 9.5 14.8 10 12 8 10 10.8 9.6 12 7" fill="currentColor" />
+                </svg>
+              </span>
+              <span className="sidebar-item-label">Feedback</span>
+            </Link>
+          </li>
+
+          {/* 9. Staff Management (Combined Waiters, Kitchen & Waiter Requests) */}
           {isTabAllowed('staff_management') && (
             <li className={`sidebar-item ${isStaffActive ? 'active' : ''}`}>
               <Link to="/staff">
@@ -291,6 +324,19 @@ export default function AdminLayout() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                 </span>
                 <span className="sidebar-item-label">Staff Management</span>
+                {pendingWaiterRequestsCount > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: '#ea580c',
+                    color: '#fff',
+                    fontSize: '10px',
+                    fontWeight: 800,
+                    padding: '2px 7px',
+                    borderRadius: '10px'
+                  }}>
+                    {pendingWaiterRequestsCount}
+                  </span>
+                )}
               </Link>
             </li>
           )}
@@ -349,19 +395,6 @@ export default function AdminLayout() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                 </span>
                 <span className="sidebar-item-label">Reports</span>
-              </Link>
-            </li>
-          )}
-
-          {/* 11.5 Help & Support */}
-          {/* Restricting Help & Support to Restaurant Owner / Admin only */}
-          {isAdmin && (
-            <li className={`sidebar-item ${isHelpSupportActive ? 'active' : ''}`}>
-              <Link to="/help-support">
-                <span className="sidebar-icon-box">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                </span>
-                <span className="sidebar-item-label">Help & Support</span>
               </Link>
             </li>
           )}

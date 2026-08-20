@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import { useAppState } from '../config/AppContext';
+import {
+  ReceiptIcon,
+  ChefHatIcon,
+  BellIcon as BellSvgIcon,
+  CheckCircleIcon,
+  EditIcon,
+  RefreshCwIcon,
+  FlameIcon
+} from './Icons';
 
 // Clean SVG Icons
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
@@ -53,6 +63,15 @@ const CheckIcon = ({ size = 12, color = 'currentColor' }) => (
   </svg>
 );
 
+const ReorderIcon = ({ size = 13, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
 export default function OrdersPanel({
   orders = [],
   staff = [],
@@ -62,10 +81,15 @@ export default function OrdersPanel({
   setSelectedWaiterFilter,
   addOrder,
   deleteOrder,
-  activeRestaurant = {},
-  updateOrderStatus,
-  updateOrder
+  activeRestaurant: propActiveRestaurant,
+  updateOrderStatus: propUpdateOrderStatus,
+  updateOrder: propUpdateOrder
 }) {
+  const appContext = useAppState();
+  const activeRestaurant = propActiveRestaurant || appContext?.activeRestaurant || {};
+  const updateOrderStatus = propUpdateOrderStatus || appContext?.updateOrderStatus;
+  const updateOrder = propUpdateOrder || appContext?.updateOrder;
+  const reorderOrder = appContext?.reorderOrder;
   const [waiterDropdownOpen, setWaiterDropdownOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
@@ -204,80 +228,47 @@ export default function OrdersPanel({
     ShowNotifications.showAlertNotification(`Order #ORD-${nextOrderId} placed successfully for Table ${newOrderTable}!`, true);
     setIsCreateOrderModalOpen(false);
   };
+
+  const handleOrderStatusUpdate = (orderId, currentStatus) => {
+    let nextStatus = 'preparing';
+    const normStatus = (currentStatus || '').toLowerCase();
+    if (normStatus === 'new' || normStatus === 'received') nextStatus = 'preparing';
+    else if (normStatus === 'preparing') nextStatus = 'ready';
+    else if (normStatus === 'ready') nextStatus = 'done'; // Served
+    
+    if (updateOrderStatus && activeRestaurant?.id) {
+      updateOrderStatus(activeRestaurant.id, orderId, nextStatus);
+      ShowNotifications.showAlertNotification(`Order #ORD-${orderId} status updated to ${nextStatus.toUpperCase()}!`, true);
+    }
+  };
+
+  const handleReorder = (orderId) => {
+    if (reorderOrder && activeRestaurant?.id) {
+      reorderOrder(activeRestaurant.id, orderId);
+      ShowNotifications.showAlertNotification(`Order #ORD-${orderId} reordered successfully! Items added back to table session.`, true);
+    } else {
+      ShowNotifications.showAlertNotification(`Order #ORD-${orderId} items added back to active cart for reorder.`, true);
+    }
+  };
   
   // Sample orders matching the user's exact screenshot if orders array is empty
   const defaultSampleOrders = [
     {
-      id: "842",
-      table: "02",
-      time: "12:55 PM",
-      timeAgo: "35 min ago",
+      id: "847",
+      table: "03",
+      time: "1:28 PM",
+      timeAgo: "2 min ago",
       items: [
-        { name: "Chicken Biryani", qty: 2, price: 320 },
-        { name: "Dal Makhani", qty: 2, price: 160 },
-        { name: "Paneer Tikka", qty: 1, price: 180 },
-        { name: "Masala Chai", qty: 1, price: 40 }
-      ],
-      notes: "",
-      total: 1239.00,
-      subtotal: 1180.00,
-      tax: 59.00,
-      status: "preparing",
-      billingStatus: "unpaid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "843",
-      table: "02",
-      time: "1:00 PM",
-      timeAgo: "30 min ago",
-      items: [
-        { name: "Veg Thali", qty: 2, price: 120 },
-        { name: "Masala Chai", qty: 3, price: 40 }
-      ],
-      notes: "",
-      total: 378.00,
-      subtotal: 360.00,
-      tax: 18.00,
-      status: "done",
-      billingStatus: "paid",
-      waiter: "Ravi M."
-    },
-    {
-      id: "844",
-      table: "05",
-      time: "1:08 PM",
-      timeAgo: "22 min ago",
-      items: [
-        { name: "Paneer Tikka", qty: 2, price: 180 },
-        { name: "Chicken Biryani", qty: 1, price: 320 },
-        { name: "Butter Naan", qty: 3, price: 40 },
+        { name: "Chicken Biryani", qty: 1, price: 340 },
         { name: "Masala Chai", qty: 2, price: 40 }
       ],
-      notes: "",
-      total: 924.00,
-      subtotal: 880.00,
-      tax: 44.00,
-      status: "ready",
+      notes: "Less spicy please",
+      total: 420.00,
+      subtotal: 400.00,
+      tax: 20.00,
+      status: "new",
       billingStatus: "unpaid",
-      waiter: "Arjun K."
-    },
-    {
-      id: "845",
-      table: "01",
-      time: "1:15 PM",
-      timeAgo: "15 min ago",
-      items: [
-        { name: "Masala Dosa", qty: 5, price: 120 },
-        { name: "Filter Coffee", qty: 3, price: 40 }
-      ],
-      notes: "Allergy: peanuts",
-      total: 756.00,
-      subtotal: 720.00,
-      tax: 36.00,
-      status: "preparing",
-      billingStatus: "unpaid",
-      waiter: "Rahul S."
+      waiter: "Unassigned"
     },
     {
       id: "846",
@@ -299,21 +290,76 @@ export default function OrdersPanel({
       waiter: "Ravi M."
     },
     {
-      id: "847",
-      table: "03",
-      time: "12:20 PM",
-      timeAgo: "1 hr ago",
+      id: "845",
+      table: "01",
+      time: "1:15 PM",
+      timeAgo: "15 min ago",
       items: [
+        { name: "Masala Dosa", qty: 5, price: 120 },
+        { name: "Filter Coffee", qty: 3, price: 40 }
+      ],
+      notes: "Allergy: peanuts",
+      total: 756.00,
+      subtotal: 720.00,
+      tax: 36.00,
+      status: "preparing",
+      billingStatus: "unpaid",
+      waiter: "Rahul S."
+    },
+    {
+      id: "844",
+      table: "05",
+      time: "1:08 PM",
+      timeAgo: "22 min ago",
+      items: [
+        { name: "Paneer Tikka", qty: 2, price: 180 },
         { name: "Chicken Biryani", qty: 1, price: 320 },
-        { name: "Chicken 65", qty: 1, price: 200 }
+        { name: "Butter Naan", qty: 3, price: 40 },
+        { name: "Masala Chai", qty: 2, price: 40 }
       ],
       notes: "",
-      total: 546.00,
-      subtotal: 520.00,
-      tax: 26.00,
-      status: "new",
+      total: 924.00,
+      subtotal: 880.00,
+      tax: 44.00,
+      status: "ready",
       billingStatus: "unpaid",
-      waiter: "Unassigned"
+      waiter: "Arjun K."
+    },
+    {
+      id: "843",
+      table: "02",
+      time: "1:00 PM",
+      timeAgo: "30 min ago",
+      items: [
+        { name: "Veg Thali", qty: 2, price: 120 },
+        { name: "Masala Chai", qty: 3, price: 40 }
+      ],
+      notes: "",
+      total: 378.00,
+      subtotal: 360.00,
+      tax: 18.00,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Ravi M."
+    },
+    {
+      id: "842",
+      table: "02",
+      time: "12:55 PM",
+      timeAgo: "35 min ago",
+      items: [
+        { name: "Chicken Biryani", qty: 2, price: 320 },
+        { name: "Dal Makhani", qty: 2, price: 160 },
+        { name: "Paneer Tikka", qty: 1, price: 180 },
+        { name: "Masala Chai", qty: 1, price: 40 }
+      ],
+      notes: "",
+      total: 1239.00,
+      subtotal: 1180.00,
+      tax: 59.00,
+      status: "preparing",
+      billingStatus: "unpaid",
+      waiter: "Ravi M."
     },
     {
       id: "837",
@@ -469,19 +515,6 @@ export default function OrdersPanel({
       filteredOrders = filteredOrders.filter(o => o.waiter === selectedWaiterFilter);
     }
   }
-
-  const handleOrderStatusUpdate = (orderId, currentStatus) => {
-    let nextStatus = 'preparing';
-    if (currentStatus === 'new') nextStatus = 'preparing';
-    else if (currentStatus === 'preparing') nextStatus = 'ready';
-    else if (currentStatus === 'ready') nextStatus = 'done';
-
-    const restId = activeRestaurant?.id || 'rest-1';
-    if (updateOrderStatus) {
-      updateOrderStatus(restId, orderId, nextStatus);
-    }
-    ShowNotifications.showAlertNotification(`Order #ORD-${orderId} status updated to ${nextStatus.toUpperCase()}!`, true);
-  };
 
   const handleAssignWaiter = (orderId, waiterName) => {
     const restId = activeRestaurant?.id || 'rest-1';
@@ -667,45 +700,41 @@ export default function OrdersPanel({
         </div>
 
         {/* ORDERS TABLE */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', borderRadius: '8px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1060px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', width: '110px' }}>
                   ORDER ID
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '100px' }}>
                   TABLE
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '260px' }}>
                   ITEMS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '120px' }}>
                   TIME / ELAPSED
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '160px' }}>
                   ASSIGNED WAITER
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '95px' }}>
                   PAYMENT
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', width: '100px' }}>
                   TOTAL
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '110px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '160px' }}>
                   ACTIONS
                 </th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map((ord, index) => {
-                const itemSummary = Array.isArray(ord.items)
-                  ? ord.items.map(i => `${i.name} × ${i.qty}`).join(', ')
-                  : (ord.items || 'Standard Order');
-
                 const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
                 const status = (ord.status || 'new').toLowerCase();
                 const waiterName = ord.waiter || 'Unassigned';
@@ -714,23 +743,24 @@ export default function OrdersPanel({
                   <tr 
                     key={ord.id || index}
                     style={{
-                      borderBottom: index < filteredOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      borderBottom: '1px solid #f1f5f9',
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
                   >
                     {/* 1. ORDER ID */}
-                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       #ORD-{ord.id}
                     </td>
 
                     {/* 2. TABLE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <span style={{ 
                         display: 'inline-block', 
                         backgroundColor: '#fff7ed', 
                         color: '#ea580c', 
+                        border: '1px solid #ffedd5',
                         padding: '4px 10px', 
                         borderRadius: '6px', 
                         fontSize: '12px', 
@@ -741,19 +771,60 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 3. ITEMS */}
-                    <td style={{ padding: '16px', fontSize: '13px', maxWidth: '300px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>
-                        {itemSummary}
-                      </div>
-                      {ord.notes && (
-                        <div style={{ fontSize: '11px', color: '#d97706', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>✏️ Note: {ord.notes}</span>
+                    <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                          {Array.isArray(ord.items) && ord.items.length > 0 ? (
+                            ord.items.map((it, iIdx) => (
+                              <span
+                                key={iIdx}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  backgroundColor: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '6px',
+                                  padding: '3px 8px',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  color: '#1e293b',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                <span>{it.name}</span>
+                                <span style={{ color: '#ff5a1f', fontWeight: 700 }}>× {it.qty}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px' }}>
+                              {typeof ord.items === 'string' ? ord.items : 'Standard Order'}
+                            </span>
+                          )}
                         </div>
-                      )}
+                        {ord.notes && (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            color: '#b45309',
+                            backgroundColor: '#fef3c7',
+                            border: '1px solid #fde68a',
+                            borderRadius: '4px',
+                            padding: '2px 8px',
+                            marginTop: '2px',
+                            width: 'fit-content'
+                          }}>
+                            <EditIcon size={11} color="#b45309" />
+                            <span><b>Note:</b> {ord.notes}</span>
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     {/* 4. TIME / ELAPSED */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
                         {ord.time || '12:30 PM'}
                       </div>
@@ -763,7 +834,7 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 5. ASSIGNED WAITER (OPTIONAL) */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <button
                         type="button"
                         onClick={() => setAssigningOrder(ord)}
@@ -789,7 +860,7 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 6. PAYMENT */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <span style={{
                         display: 'inline-block',
                         padding: '4px 10px',
@@ -797,19 +868,20 @@ export default function OrdersPanel({
                         fontSize: '11px',
                         fontWeight: 700,
                         backgroundColor: isPaid ? '#dcfce7' : '#fef2f2',
-                        color: isPaid ? '#16a34a' : '#ef4444'
+                        color: isPaid ? '#16a34a' : '#ef4444',
+                        border: isPaid ? '1px solid #bbf7d0' : '1px solid #fecaca'
                       }}>
                         {isPaid ? 'Paid' : 'Unpaid'}
                       </span>
                     </td>
 
                     {/* 7. TOTAL */}
-                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '14px', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13.5px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       ₹{parseFloat(ord.total || 0).toFixed(2)}
                     </td>
 
                     {/* 8. STATUS BADGE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '14px 12px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       {status === 'preparing' && (
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }}>
                           Preparing
@@ -832,9 +904,9 @@ export default function OrdersPanel({
                       )}
                     </td>
 
-                    {/* 9. ACTION BUTTONS (MATCHING SCREENSHOT) */}
-                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    {/* 9. ACTION BUTTONS */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         
                         {/* Eye Icon */}
                         <button 
@@ -843,6 +915,7 @@ export default function OrdersPanel({
                             e.preventDefault();
                             e.stopPropagation();
                             setViewingOrder(ord);
+                            
                           }}
                           style={{
                             background: '#ffffff',
@@ -918,6 +991,36 @@ export default function OrdersPanel({
                           <PrintIcon size={14} />
                         </button>
 
+                        {/* Reorder / Order Again Action */}
+                        <button 
+                          type="button" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReorder(ord.id);
+                          }}
+                          style={{
+                            background: '#fff7ed',
+                            border: '1px solid #fed7aa',
+                            color: '#ea580c',
+                            cursor: 'pointer',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#ffedd5'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}
+                          title="Reorder items from this order"
+                        >
+                          <ReorderIcon size={12} color="#ea580c" />
+                          <span>Reorder</span>
+                        </button>
+
                         {/* Status Action Trigger */}
                         {status === 'done' ? (
                           <span style={{ 
@@ -943,7 +1046,7 @@ export default function OrdersPanel({
                               handleOrderStatusUpdate(ord.id, status);
                             }}
                             style={{
-                              padding: '5px 12px',
+                              padding: '5px 10px',
                               borderRadius: '6px',
                               border: 
                                 status === 'new' ? '1px solid #ff5a1f' : 
@@ -965,7 +1068,7 @@ export default function OrdersPanel({
                           >
                             {status === 'new' && (
                               <>
-                                <PlayIcon size={11} /> Start
+                                <PlayIcon size={11} /> Start Prep
                               </>
                             )}
                             {status === 'preparing' && (
@@ -1005,10 +1108,66 @@ export default function OrdersPanel({
           isOpen={!!viewingOrder}
           onClose={() => setViewingOrder(null)}
           title={`Order Details: #ORD-${viewingOrder.id}`}
-          maxWidth="540px"
+          maxWidth="560px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '6px' }}>
             
+            {/* 4-Stage Progress Stepper */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '12px', letterSpacing: '0.5px' }}>
+                Customer Live Order Tracking
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                {[
+                  { key: 'new', label: 'Received', getIcon: (passed) => <ReceiptIcon size={14} color={passed ? '#ffffff' : '#64748b'} /> },
+                  { key: 'preparing', label: 'Preparing', getIcon: (passed) => <ChefHatIcon size={14} color={passed ? '#ffffff' : '#64748b'} /> },
+                  { key: 'ready', label: 'Ready', getIcon: (passed) => <BellSvgIcon size={14} color={passed ? '#ffffff' : '#64748b'} /> },
+                  { key: 'done', label: 'Served', getIcon: (passed) => <CheckCircleIcon size={14} color={passed ? '#ffffff' : '#64748b'} /> }
+                ].map((step, sIdx, arr) => {
+                  const currentNorm = (viewingOrder.status || 'new').toLowerCase();
+                  const stageIndex = currentNorm === 'done' || currentNorm === 'served' ? 3 : currentNorm === 'ready' ? 2 : currentNorm === 'preparing' ? 1 : 0;
+                  const isPassed = sIdx <= stageIndex;
+                  const isCurrent = sIdx === stageIndex;
+
+                  return (
+                    <React.Fragment key={step.key}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2 }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '50%',
+                          background: isPassed ? 'var(--primary)' : '#ffffff',
+                          border: isPassed ? '2px solid var(--primary)' : '2px solid #cbd5e1',
+                          color: isPassed ? '#ffffff' : '#64748b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          boxShadow: isCurrent ? '0 0 0 4px rgba(255, 90, 31, 0.2)' : 'none'
+                        }}>
+                          {step.getIcon(isPassed)}
+                        </div>
+                        <span style={{ fontSize: '11px', fontWeight: isCurrent ? 800 : 600, color: isPassed ? '#0f172a' : '#94a3b8', marginTop: '6px' }}>
+                          {step.label}
+                        </span>
+                      </div>
+                      {sIdx < arr.length - 1 && (
+                        <div style={{
+                          flex: 1,
+                          height: '3px',
+                          background: sIdx < stageIndex ? 'var(--primary)' : '#e2e8f0',
+                          margin: '0 4px',
+                          position: 'relative',
+                          top: '-10px'
+                        }}></div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Meta Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
               <div>
@@ -1022,14 +1181,24 @@ export default function OrdersPanel({
                 </strong>
               </div>
               <div>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block' }}>Status</span>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block' }}>Current Status</span>
                 <strong style={{ fontSize: '13px', color: '#ff5a1f', textTransform: 'capitalize' }}>● {viewingOrder.status}</strong>
               </div>
             </div>
 
-            {viewingOrder.notes && (
-              <div style={{ padding: '8px 12px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', fontSize: '12px', color: '#d48806', fontWeight: 600 }}>
-                Note: {viewingOrder.notes}
+            {/* Special Instructions & Spice Level */}
+            {(viewingOrder.notes || viewingOrder.spiceLevel) && (
+              <div style={{ padding: '10px 14px', background: '#fffbe6', border: '1.5px solid #ffe58f', borderRadius: '10px', fontSize: '12px', color: '#92400e' }}>
+                {viewingOrder.spiceLevel && (
+                  <div style={{ fontWeight: 800, marginBottom: '2px' }}>
+                    Spice Preference: <span style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>{viewingOrder.spiceLevel}</span>
+                  </div>
+                )}
+                {viewingOrder.notes && (
+                  <div>
+                    <b>Special Cooking Instructions:</b> "{viewingOrder.notes}"
+                  </div>
+                )}
               </div>
             )}
 
@@ -1049,7 +1218,10 @@ export default function OrdersPanel({
                 <tbody>
                   {Array.isArray(viewingOrder.items) && viewingOrder.items.map((it, iIdx) => (
                     <tr key={iIdx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px 0', fontWeight: 600, color: '#0f172a' }}>{it.name}</td>
+                      <td style={{ padding: '8px 0', fontWeight: 600, color: '#0f172a' }}>
+                        <div>{it.name}</div>
+                        {it.notes && <div style={{ fontSize: '11px', color: '#ea580c', fontWeight: 500 }}>Note: {it.notes}</div>}
+                      </td>
                       <td style={{ padding: '8px 0', textAlign: 'center', fontWeight: 700 }}>{it.qty}</td>
                       <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                         ₹{((it.price || 0) * it.qty).toFixed(2)}
@@ -1069,25 +1241,51 @@ export default function OrdersPanel({
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
               <button 
                 type="button" 
-                className="btn btn-outline" 
-                onClick={() => setViewingOrder(null)}
-                style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
-              >
-                Close
-              </button>
-              <button 
-                type="button" 
-                className="btn btn-black" 
                 onClick={() => {
-                  window.print();
+                  handleReorder(viewingOrder.id);
+                  setViewingOrder(null);
                 }}
-                style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: '#fff7ed',
+                  border: '1.5px solid #fed7aa',
+                  color: '#ea580c',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
               >
-                <PrintIcon size={14} /> Print Receipt
+                <ReorderIcon size={14} color="#ea580c" />
+                <span>Reorder Items</span>
               </button>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-outline" 
+                  onClick={() => setViewingOrder(null)}
+                  style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
+                >
+                  Close
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-black" 
+                  onClick={() => {
+                    window.print();
+                  }}
+                  style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <PrintIcon size={14} /> Print Receipt
+                </button>
+              </div>
             </div>
           </div>
         </Modal>

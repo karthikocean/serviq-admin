@@ -201,7 +201,10 @@ export const AppProvider = ({ children }) => {
     users: [],
     inventory: [],
     inventoryLogs: [],
-    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES
+    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES,
+    waiterRequests: [],
+    serviceRequests: [],
+    feedback: []
   };
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
@@ -716,6 +719,39 @@ export const AppProvider = ({ children }) => {
   };
 
   const addMenuItem = async (id, itemData) => {
+    const newItem = {
+      id: itemData.id || `menu-${Date.now()}`,
+      _id: itemData._id || `menu-${Date.now()}`,
+      name: itemData.name,
+      desc: itemData.desc || '',
+      price: Number(itemData.price) || 0,
+      gst: itemData.gst !== undefined ? Number(itemData.gst) : 5,
+      category: itemData.category || 'Starters',
+      image: itemData.image || '',
+      coverImage: itemData.coverImage || '',
+      available: itemData.available !== undefined ? itemData.available : true,
+      veg: itemData.veg !== undefined ? itemData.veg : true,
+      bestseller: !!itemData.bestseller,
+      chefSpecial: !!itemData.chefSpecial,
+      prepTime: Number(itemData.prepTime) || 15,
+      allowSpecialInstructions: itemData.allowSpecialInstructions !== undefined ? !!itemData.allowSpecialInstructions : true,
+      stockQuantity: itemData.stockQuantity !== undefined ? Number(itemData.stockQuantity) : 50,
+      minStockThreshold: itemData.minStockThreshold !== undefined ? Number(itemData.minStockThreshold) : 5,
+      branchId: itemData.branchId || selectedBranchId || 'BR-001'
+    };
+
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          menu: [newItem, ...(rest.menu || [])]
+        }
+      };
+    });
+
     try {
       const res = await MenuApi.createMenuItem(itemData);
       if (res && res.status) {
@@ -727,6 +763,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateMenuItem = async (id, itemId, updatedData) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          menu: (rest.menu || []).map(m => (m.id === itemId || m._id === itemId) ? { ...m, ...updatedData } : m)
+        }
+      };
+    });
+
     try {
       const res = await MenuApi.updateMenuItem(itemId, updatedData);
       if (res && res.status) {
@@ -738,6 +786,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteMenuItem = async (id, itemId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          menu: (rest.menu || []).filter(m => m.id !== itemId && m._id !== itemId)
+        }
+      };
+    });
+
     try {
       const res = await MenuApi.deleteMenuItem(itemId);
       if (res && res.status) {
@@ -746,6 +806,200 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       console.error("Failed to delete menu item", e);
     }
+  };
+
+  // Waiter Requests Handlers (Integrated with Table Waiter Assignments)
+  const addWaiterRequest = (id, requestData) => {
+    const currentRest = (restaurantsData && restaurantsData[id]) || activeRestaurant;
+    let assignedWaiterName = requestData.assignedStaff || requestData.assignedWaiterName || '';
+    let assignedWaiterId = requestData.assignedWaiterId || '';
+
+    // Auto-lookup assigned waiter from table assignment if not passed
+    const targetTableNum = String(requestData.table || '01').replace('Table ', '').replace('T-', '');
+    const foundTable = (currentRest?.tables || []).find(t =>
+      String(t.id).replace('T-', '') === targetTableNum ||
+      String(t.tableNo || t.name || '').includes(targetTableNum)
+    );
+
+    if (foundTable && (!assignedWaiterName || assignedWaiterName === 'Unassigned')) {
+      if (foundTable.assignedWaiterId) {
+        assignedWaiterId = foundTable.assignedWaiterId;
+        const matchedStaff = (currentRest?.staff || []).find(s => s.id === foundTable.assignedWaiterId || s._id === foundTable.assignedWaiterId);
+        if (matchedStaff) {
+          assignedWaiterName = matchedStaff.name || matchedStaff.fullName;
+        }
+      }
+    }
+
+    if (!assignedWaiterName) {
+      assignedWaiterName = 'Unassigned';
+    }
+
+    const nextReq = {
+      id: requestData.id || `WR-${Date.now().toString().slice(-4)}`,
+      branchId: requestData.branchId || selectedBranchId || '60a1b2c3d4e5f6a7b8c9d0e1',
+      table: targetTableNum,
+      requestType: requestData.requestType || 'Call Waiter',
+      requestTime: requestData.requestTime || requestData.requestedTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      requestedTime: requestData.requestedTime || requestData.requestTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timeAgo: 'Just now',
+      status: requestData.status || 'Pending', // Pending | Accepted | Completed
+      assignedWaiterId: assignedWaiterId,
+      assignedWaiterName: assignedWaiterName,
+      assignedStaff: assignedWaiterName,
+      notes: requestData.notes || 'Customer called waiter to table',
+      acceptedTime: requestData.acceptedTime || null,
+      completedTime: requestData.completedTime || null,
+      duration: requestData.duration || null,
+      createdAt: new Date().toISOString()
+    };
+
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const updatedList = [nextReq, ...(rest.waiterRequests || rest.serviceRequests || [])];
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          waiterRequests: updatedList,
+          serviceRequests: updatedList
+        }
+      };
+    });
+
+    return nextReq;
+  };
+
+  const updateWaiterRequestStatus = (id, requestId, newStatus, assignedStaff) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const currentList = rest.waiterRequests || rest.serviceRequests || [];
+      const updatedList = currentList.map(r => {
+        if (r.id === requestId || r._id === requestId) {
+          const updated = {
+            ...r,
+            status: newStatus || r.status,
+            assignedStaff: assignedStaff !== undefined ? assignedStaff : r.assignedStaff,
+            assignedWaiterName: assignedStaff !== undefined ? assignedStaff : (r.assignedWaiterName || r.assignedStaff)
+          };
+          if (newStatus === 'Accepted' && !r.acceptedTime) {
+            updated.acceptedTime = nowStr;
+          }
+          if (newStatus === 'Completed') {
+            updated.completedTime = nowStr;
+            updated.duration = r.acceptedTime ? 'Attended in 3 mins' : 'Completed';
+          }
+          return updated;
+        }
+        return r;
+      });
+
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          waiterRequests: updatedList,
+          serviceRequests: updatedList
+        }
+      };
+    });
+  };
+
+  const deleteWaiterRequest = (id, requestId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      const updatedList = (rest.waiterRequests || rest.serviceRequests || []).filter(r => r.id !== requestId && r._id !== requestId);
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          waiterRequests: updatedList,
+          serviceRequests: updatedList
+        }
+      };
+    });
+  };
+
+  // Backwards compatibility aliases for any external components
+  const addServiceRequest = addWaiterRequest;
+  const updateServiceRequestStatus = updateWaiterRequestStatus;
+  const deleteServiceRequest = deleteWaiterRequest;
+
+  // Customer Feedback Handlers
+  const addFeedback = (id, feedbackData) => {
+    const foodR = Number(feedbackData.foodRating) || 5;
+    const servR = Number(feedbackData.serviceRating) || 5;
+    const nextFb = {
+      id: feedbackData.id || `FB-${Date.now().toString().slice(-4)}`,
+      branchId: feedbackData.branchId || selectedBranchId || 'BR-001',
+      orderId: feedbackData.orderId || '',
+      table: feedbackData.table || '01',
+      customerName: feedbackData.customerName || 'Anonymous Guest',
+      phone: feedbackData.phone || '',
+      foodRating: foodR,
+      serviceRating: servR,
+      overallRating: Number(feedbackData.overallRating) || parseFloat(((foodR + servR) / 2).toFixed(1)),
+      comments: feedbackData.comments || '',
+      date: feedbackData.date || new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: feedbackData.status || 'Reviewed',
+      createdAt: new Date().toISOString()
+    };
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          feedback: [nextFb, ...(rest.feedback || [])]
+        }
+      };
+    });
+    return nextFb;
+  };
+
+  const deleteFeedback = (id, feedbackId) => {
+    setRestaurantsData(prev => {
+      const rest = prev[id];
+      if (!rest) return prev;
+      return {
+        ...prev,
+        [id]: {
+          ...rest,
+          feedback: (rest.feedback || []).filter(f => f.id !== feedbackId && f._id !== feedbackId)
+        }
+      };
+    });
+  };
+
+  // Reorder Support
+  const reorderOrder = (id, orderId, targetTable) => {
+    const rest = restaurantsData[id];
+    if (!rest) return null;
+    const sourceOrder = (rest.orders || []).find(o => o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
+    if (!sourceOrder) return null;
+    const reorderedOrderData = {
+      id: String(Date.now()).slice(-4),
+      table: targetTable || sourceOrder.table || '01',
+      items: Array.isArray(sourceOrder.items) ? sourceOrder.items.map(it => ({ ...it })) : sourceOrder.items,
+      spiceLevel: sourceOrder.spiceLevel || 'Medium Spicy',
+      specialInstructions: sourceOrder.specialInstructions || '',
+      notes: sourceOrder.notes || '',
+      subtotal: sourceOrder.subtotal || 0,
+      tax: sourceOrder.tax || 0,
+      charge: sourceOrder.charge || 0,
+      total: sourceOrder.total || 0,
+      status: 'new',
+      billingStatus: 'unpaid',
+      waiter: 'Unassigned',
+      branchId: sourceOrder.branchId || selectedBranchId || 'BR-001'
+    };
+    return addOrder(id, reorderedOrderData);
   };
 
   const addDiningTable = async (id, table) => {
@@ -2022,19 +2276,6 @@ export const AppProvider = ({ children }) => {
         notes: purchaseData.notes || ''
       };
 
-      const newLog = {
-        id: `LOG-${Date.now().toString().slice(-6)}`,
-        itemId: newPurchase.itemId,
-        itemName: newPurchase.itemName,
-        type: 'Stock In',
-        quantity: qtyNum,
-        unit: targetUnit,
-        date: new Date().toLocaleString(),
-        reason: 'Supplier Purchase',
-        user: purchaseData.addedBy || currentUser?.name || 'Admin',
-        notes: `Purchased ${qtyNum} ${targetUnit} from ${purchaseData.supplierName || 'Supplier'} (Invoice #${newPurchase.invoiceNumber})`
-      };
-
       return {
         ...prev,
         [id]: {
@@ -2164,7 +2405,6 @@ export const AppProvider = ({ children }) => {
         upgradeSubscriptionPlan,
         purchaseExtraBranchSlots,
         toggleSubscriptionAutoRenew,
-        assignWaiterToOrder,
         addOrder,
         createOrder: addOrder,
         deleteOrder,
@@ -2194,7 +2434,16 @@ export const AppProvider = ({ children }) => {
         deleteReductionRecord,
         addInventoryCategory,
         updateInventoryCategory,
-        deleteInventoryCategory
+        deleteInventoryCategory,
+        addWaiterRequest,
+        updateWaiterRequestStatus,
+        deleteWaiterRequest,
+        addServiceRequest,
+        updateServiceRequestStatus,
+        deleteServiceRequest,
+        addFeedback,
+        deleteFeedback,
+        reorderOrder
       }}
     >
       {children}

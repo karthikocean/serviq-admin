@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AppContext } from '../config/AppContext';
 import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
@@ -6,6 +7,8 @@ import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import { UserIcon as StaffUserIcon, ChefHatIcon, ShieldCheckIcon, ConciergeBellIcon } from './Icons';
+import WaiterRequestsSection from './WaiterRequestsSection';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -63,9 +66,23 @@ export default function StaffManagementPanel({
   handleOpenAssignTablesModal,
   openKitchenSettingsModal
 }) {
-  const { currentUser: user, selectedBranchId } = useContext(AppContext);
+  const { activeRestaurant, currentUser: user, selectedBranchId } = useContext(AppContext);
   const currentBranchId = typeof user?.branchId === 'object' ? user?.branchId?._id : user?.branchId;
   const isAdmin = user?.userType === 'RESTAURANT_OWNER' || user?.userType === 'SUPER_ADMIN';
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTabFromUrl = searchParams.get('tab') === 'requests' ? 'requests' : 'staff';
+  const [mainTab, setMainTab] = useState(activeTabFromUrl);
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t === 'requests') setMainTab('requests');
+    else if (t === 'staff' || !t) setMainTab('staff');
+  }, [searchParams]);
+
+  const pendingRequestsCount = (activeRestaurant?.waiterRequests || activeRestaurant?.serviceRequests || []).filter(r =>
+    (!selectedBranchId || r.branchId === selectedBranchId) && (r.status === 'Pending')
+  ).length;
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -355,7 +372,7 @@ export default function StaffManagementPanel({
     setShowAssignTablesModal(true);
   };
 
-  const { assignTablesToWaiter, activeRestaurant } = useContext(AppContext);
+  const { assignTablesToWaiter } = useContext(AppContext);
   const handleSaveAssignments = async () => {
     if (!modalWaiterId) {
       ShowNotifications.showAlertNotification("Please select a waiter.", false);
@@ -717,81 +734,153 @@ export default function StaffManagementPanel({
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
             Staff Management
           </h2>
+         
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => {
-              setKitchenForm({ branchId: apiBranches[0]?._id || '', email: '', password: '' });
-              setKitchenFormErrors({});
-              setShowKitchenModal(true);
-            }}
-            style={{
-              padding: '9px 16px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px',
-              background: '#fff'
-            }}
-          >
-            <KeyIcon size={15} color="#ea580c" />
-            Kitchen Station Settings
-          </button>
+        {mainTab === 'staff' && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => openAssignTablesModal()}
+              style={{
+                padding: '9px 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '8px',
+                background: '#fff'
+              }}
+            >
+              <TableAssignIcon size={15} color="var(--primary)" />
+              Assign Tables
+            </button>
 
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => openAssignTablesModal()}
-            style={{
-              padding: '9px 16px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px',
-              background: '#fff'
-            }}
-          >
-            <TableAssignIcon size={15} color="var(--primary)" />
-            Assign Tables
-          </button>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleExportCSV}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600, borderRadius: '8px' }}
+            >
+              <DownloadIcon size={14} /> Export CSV
+            </button>
 
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={handleExportCSV}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600, borderRadius: '8px' }}
-          >
-            <DownloadIcon size={14} /> Export CSV
-          </button>
-
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={openAddUser}
-            style={{
-              padding: '9px 18px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px'
-            }}
-          >
-            + Add Staff Member
-          </button>
-        </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openAddUser}
+              style={{
+                padding: '9px 18px',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '8px'
+              }}
+            >
+              + Add Staff Member
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* KPI Stats Overview Grid */}
+      {/* Primary Tab Navigation: Staff Directory vs Waiter Requests */}
       <div style={{
+        display: 'flex',
+        gap: '10px',
+        marginBottom: '24px',
+        borderBottom: '2px solid #e2e8f0',
+        paddingBottom: '2px'
+      }}>
+        <button
+          type="button"
+          onClick={() => { setMainTab('staff'); setSearchParams({ tab: 'staff' }); }}
+          style={{
+            padding: '10px 22px',
+            border: 'none',
+            borderBottom: mainTab === 'staff' ? '3px solid var(--primary)' : '3px solid transparent',
+            background: 'transparent',
+            color: mainTab === 'staff' ? 'var(--primary)' : '#64748b',
+            fontSize: '14px',
+            fontWeight: mainTab === 'staff' ? 800 : 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '-2px',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <StaffUserIcon size={16} color={mainTab === 'staff' ? 'var(--primary)' : '#64748b'} />
+          Staff Directory & Roles
+          <span style={{
+            background: mainTab === 'staff' ? '#fff7ed' : '#f1f5f9',
+            color: mainTab === 'staff' ? 'var(--primary)' : '#64748b',
+            fontSize: '11px',
+            fontWeight: 800,
+            padding: '2px 8px',
+            borderRadius: '10px'
+          }}>
+            {totalRecords || apiUsers.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => { setMainTab('requests'); setSearchParams({ tab: 'requests' }); }}
+          style={{
+            padding: '10px 22px',
+            border: 'none',
+            borderBottom: mainTab === 'requests' ? '3px solid var(--primary)' : '3px solid transparent',
+            background: 'transparent',
+            color: mainTab === 'requests' ? 'var(--primary)' : '#64748b',
+            fontSize: '14px',
+            fontWeight: mainTab === 'requests' ? 800 : 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '-2px',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <ConciergeBellIcon size={16} color={mainTab === 'requests' ? 'var(--primary)' : '#64748b'} />
+          Waiter Requests
+          {pendingRequestsCount > 0 ? (
+            <span style={{
+              background: '#ea580c',
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 900,
+              padding: '2px 8px',
+              borderRadius: '10px'
+            }}>
+              {pendingRequestsCount} Pending
+            </span>
+          ) : (
+            <span style={{
+              background: mainTab === 'requests' ? '#fff7ed' : '#f1f5f9',
+              color: mainTab === 'requests' ? 'var(--primary)' : '#64748b',
+              fontSize: '11px',
+              fontWeight: 800,
+              padding: '2px 8px',
+              borderRadius: '10px'
+            }}>
+              {(activeRestaurant?.waiterRequests || []).length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {mainTab === 'requests' ? (
+        <WaiterRequestsSection />
+      ) : (
+        <>
+          {/* KPI Stats Overview Grid */}
+          <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '16px',
@@ -1005,15 +1094,16 @@ export default function StaffManagementPanel({
                     <span style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
+                      gap: '5px',
+                      padding: '4px 9px',
                       borderRadius: '6px',
                       fontSize: '11px',
                       fontWeight: 800,
                       background: isWaiter ? '#dcfce7' : (isKitchen ? '#ffedd5' : '#f1f5f9'),
                       color: isWaiter ? '#166534' : (isKitchen ? '#c2410c' : '#334155')
                     }}>
-                      {isWaiter ? '🤵 Waiter' : (isKitchen ? '👨‍🍳 Kitchen' : `💼 ${uRoleName}`)}
+                      {isWaiter ? <StaffUserIcon size={12} color="#166534" /> : (isKitchen ? <ChefHatIcon size={12} color="#c2410c" /> : <ShieldCheckIcon size={12} color="#334155" />)}
+                      <span>{isWaiter ? 'Waiter' : (isKitchen ? 'Kitchen' : uRoleName)}</span>
                     </span>
                   </td>
 
@@ -1460,9 +1550,9 @@ export default function StaffManagementPanel({
                                 setShowKitchenModal(false);
                               }}
                               title="Reset Password"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              🔑
+                              <KeyIcon size={16} color="#64748b" />
                             </button>
                             <button
                               type="button"
@@ -1471,9 +1561,9 @@ export default function StaffManagementPanel({
                                 setShowKitchenModal(false);
                               }}
                               title="Delete Station"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                              🗑️
+                              <TrashIcon size={16} color="#ef4444" />
                             </button>
                           </div>
                         </li>
@@ -1771,6 +1861,8 @@ export default function StaffManagementPanel({
           </div>
         </div>
       </Modal>
+        </>
+      )}
 
     </section>
   );
