@@ -18,6 +18,7 @@ export default function MenuManagement() {
   const {
     currentUser,
     activeRestaurant,
+    selectedBranchId,
     addMenuItem,
     updateMenuItem,
     deleteMenuItem
@@ -37,7 +38,8 @@ export default function MenuManagement() {
     coverImage: '',
     veg: true,
     available: true,
-    bestseller: false
+    bestseller: false,
+    branchId: ''
   });
   const [formErrors, setFormErrors] = useState({});
   const [showCustomCategoryModal, setShowCustomCategoryModal] = useState(false);
@@ -45,15 +47,37 @@ export default function MenuManagement() {
   const [customCategoryError, setCustomCategoryError] = useState('');
   const [previousCategory, setPreviousCategory] = useState('');
   const [categories, setCategories] = useState([]);
+  const [menuItems, setMenuItems] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   React.useEffect(() => {
     fetchCategories();
-  }, [activeRestaurant]);
+    fetchMenuItems();
+  }, [activeRestaurant, selectedBranchId, refreshTrigger]);
+
+  const fetchMenuItems = async () => {
+    const params = {};
+    if (selectedBranchId) {
+      params.branchId = selectedBranchId;
+    } else {
+      params.branchId = 'all';
+    }
+    
+    const res = await MenuApi.getMenuItems(params);
+    if (res?.status && res.response) {
+      if (res.response.data && res.response.data.items) {
+        setMenuItems(res.response.data.items);
+      } else {
+        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        setMenuItems(arr);
+      }
+    }
+  };
 
   const fetchCategories = async () => {
-    const res = await MenuApi.getCategories();
+    const params = selectedBranchId ? { branchId: selectedBranchId } : {};
+    const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       setCategories(catArray);
@@ -65,7 +89,7 @@ export default function MenuManagement() {
 
   if (!activeRestaurant) return null;
 
-  const { menu = [] } = activeRestaurant;
+  const menu = menuItems;
 
   // Permission checks
   const role = currentUser?.role || 'Waiter';
@@ -93,7 +117,8 @@ export default function MenuManagement() {
       coverImage: '',
       veg: true,
       available: true,
-      bestseller: false
+      bestseller: false,
+      branchId: selectedBranchId || (activeRestaurant.branches?.length > 0 ? activeRestaurant.branches[0]._id : '')
     });
     setFormErrors({});
     setActivePage('menu-form');
@@ -115,7 +140,8 @@ export default function MenuManagement() {
       coverImage: item.coverImage || '',
       veg: item.veg !== undefined ? item.veg : true,
       available: item.available !== undefined ? item.available : true,
-      bestseller: item.bestseller !== undefined ? item.bestseller : false
+      bestseller: item.bestseller !== undefined ? item.bestseller : false,
+      branchId: item.branchId || selectedBranchId
     });
     setFormErrors({});
     setActivePage('menu-form');
@@ -165,7 +191,8 @@ export default function MenuManagement() {
       coverImage: menuForm.coverImage,
       available: menuForm.available,
       veg: menuForm.veg,
-      bestseller: menuForm.bestseller
+      bestseller: menuForm.bestseller,
+      branchId: menuForm.branchId
     };
 
     if (menuForm._id) {
@@ -434,6 +461,23 @@ export default function MenuManagement() {
                       <option value="28">28% GST</option>
                     </select>
                   </div>
+
+                  {(currentUser?.role === 'Admin' || currentUser?.role === 'RESTAURANT_OWNER' || currentUser?.userType === 'RESTAURANT_OWNER') && activeRestaurant.branches?.length > 0 && (
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>
+                        Branch <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <select
+                        value={menuForm.branchId}
+                        onChange={(e) => setMenuForm({ ...menuForm, branchId: e.target.value })}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
+                      >
+                        {activeRestaurant.branches.map(b => (
+                          <option key={b.id} value={b.id}>{b.branchName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>

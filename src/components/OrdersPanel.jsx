@@ -60,6 +60,7 @@ export default function OrdersPanel({
   setOrderFilter,
   selectedWaiterFilter = 'All Waiters',
   setSelectedWaiterFilter,
+  addOrder,
   deleteOrder,
   activeRestaurant = {},
   updateOrderStatus,
@@ -69,8 +70,140 @@ export default function OrdersPanel({
   const [viewingOrder, setViewingOrder] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
   const [orderToDelete, setOrderToDelete] = useState(null);
+  const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
 
-  const waitersList = staff.filter(s => s.role === 'Waiter').map(s => s.name);
+  // Waiters list
+  const staffWaiters = staff.filter(s => (s.role || '').toLowerCase() === 'waiter').map(s => s.name);
+  const defaultWaiters = ['Ravi M.', 'Arjun K.', 'Rahul S.', 'Priya M.'];
+  const allWaiters = Array.from(new Set([...staffWaiters, ...defaultWaiters]));
+  const waitersList = allWaiters;
+
+  // Extract menu items from activeRestaurant
+  const menuCategories = activeRestaurant?.menu || [];
+  const allMenuItems = [];
+  if (Array.isArray(menuCategories)) {
+    menuCategories.forEach(cat => {
+      if (Array.isArray(cat.items)) {
+        cat.items.forEach(item => {
+          allMenuItems.push({
+            name: item.name,
+            price: Number(item.price) || 100,
+            category: cat.categoryName || 'General'
+          });
+        });
+      }
+    });
+  }
+
+  const fallbackMenu = [
+    { name: 'Chicken Biryani', price: 320 },
+    { name: 'Mutton Biryani', price: 380 },
+    { name: 'Paneer Butter Masala', price: 210 },
+    { name: 'Dal Makhani', price: 160 },
+    { name: 'Masala Dosa', price: 120 },
+    { name: 'Rava Dosa', price: 140 },
+    { name: 'Filter Coffee', price: 35 },
+    { name: 'Masala Chai', price: 40 },
+    { name: 'Butter Naan', price: 40 },
+    { name: 'Chicken 65', price: 200 },
+    { name: 'Paneer Tikka', price: 180 },
+    { name: 'Gulab Jamun', price: 80 }
+  ];
+  const selectableMenuItems = allMenuItems.length > 0 ? allMenuItems : fallbackMenu;
+
+  const restaurantTables = (activeRestaurant?.tables || []).map(t => t.tableNo || t.name || String(t.id));
+  const availableTableNumbers = restaurantTables.length > 0 ? restaurantTables : ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+
+  // New order form states
+  const [newOrderTable, setNewOrderTable] = useState('01');
+  const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
+  const [newOrderNotes, setNewOrderNotes] = useState('');
+  const [newOrderStatus, setNewOrderStatus] = useState('new');
+  const [newOrderItems, setNewOrderItems] = useState([
+    { name: selectableMenuItems[0]?.name || 'Chicken Biryani', qty: 1, price: selectableMenuItems[0]?.price || 320 }
+  ]);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+
+  const handleOpenCreateOrderModal = () => {
+    setNewOrderTable(availableTableNumbers[0] || '01');
+    setNewOrderWaiter('Unassigned');
+    setNewOrderNotes('');
+    setNewOrderStatus('new');
+    setNewOrderItems([
+      { name: selectableMenuItems[0]?.name || 'Chicken Biryani', qty: 1, price: selectableMenuItems[0]?.price || 320 }
+    ]);
+    setIsCreateOrderModalOpen(true);
+  };
+
+  const handleAddItemToOrder = (item) => {
+    const existingIndex = newOrderItems.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+    if (existingIndex > -1) {
+      const updated = [...newOrderItems];
+      updated[existingIndex].qty += 1;
+      setNewOrderItems(updated);
+    } else {
+      setNewOrderItems([...newOrderItems, { name: item.name, qty: 1, price: Number(item.price) || 100 }]);
+    }
+  };
+
+  const handleAddCustomItem = () => {
+    if (!customItemName.trim()) return;
+    const priceNum = parseFloat(customItemPrice) || 100;
+    handleAddItemToOrder({ name: customItemName.trim(), price: priceNum });
+    setCustomItemName('');
+    setCustomItemPrice('');
+  };
+
+  const handleUpdateItemQty = (index, delta) => {
+    const updated = [...newOrderItems];
+    const newQty = (updated[index].qty || 1) + delta;
+    if (newQty <= 0) {
+      updated.splice(index, 1);
+    } else {
+      updated[index].qty = newQty;
+    }
+    setNewOrderItems(updated);
+  };
+
+  const handleRemoveItemFromOrder = (index) => {
+    setNewOrderItems(newOrderItems.filter((_, idx) => idx !== index));
+  };
+
+  const handleCreateOrderSubmit = (e) => {
+    if (e) e.preventDefault();
+    if (newOrderItems.length === 0) {
+      ShowNotifications.showAlertNotification("Please add at least one item to the order.", false);
+      return;
+    }
+
+    const subtotal = newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
+    const tax = parseFloat((subtotal * 0.05).toFixed(2));
+    const total = parseFloat((subtotal + tax).toFixed(2));
+    const nextOrderId = String(Date.now()).slice(-4);
+
+    const newOrderObj = {
+      id: nextOrderId,
+      table: newOrderTable,
+      waiter: newOrderWaiter || 'Unassigned',
+      items: newOrderItems,
+      notes: newOrderNotes,
+      status: newOrderStatus || 'new',
+      billingStatus: 'unpaid',
+      subtotal,
+      tax,
+      total,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timeAgo: 'Just now',
+      branchId: activeRestaurant?.selectedBranchId || 'BR-001'
+    };
+
+    if (addOrder) {
+      addOrder(activeRestaurant.id || 'rest-1', newOrderObj);
+    }
+    ShowNotifications.showAlertNotification(`Order #ORD-${nextOrderId} placed successfully for Table ${newOrderTable}!`, true);
+    setIsCreateOrderModalOpen(false);
+  };
   
   // Sample orders matching the user's exact screenshot if orders array is empty
   const defaultSampleOrders = [
@@ -168,13 +301,151 @@ export default function OrdersPanel({
     {
       id: "847",
       table: "03",
-      time: "1:28 PM",
-      timeAgo: "2 min ago",
+      time: "12:20 PM",
+      timeAgo: "1 hr ago",
       items: [
         { name: "Chicken Biryani", qty: 1, price: 320 },
+        { name: "Chicken 65", qty: 1, price: 200 }
+      ],
+      notes: "",
+      total: 546.00,
+      subtotal: 520.00,
+      tax: 26.00,
+      status: "new",
+      billingStatus: "unpaid",
+      waiter: "Unassigned"
+    },
+    {
+      id: "837",
+      table: "07",
+      time: "12:05 PM",
+      timeAgo: "1 hr ago",
+      items: [
+        { name: "Mini Meals", qty: 2, price: 90 },
+        { name: "Curd Rice", qty: 1, price: 80 }
+      ],
+      notes: "",
+      total: 273.00,
+      subtotal: 260.00,
+      tax: 13.00,
+      status: "new",
+      billingStatus: "unpaid",
+      waiter: "Priya M."
+    },
+    {
+      id: "836",
+      table: "04",
+      time: "11:50 AM",
+      timeAgo: "2 hr ago",
+      items: [
+        { name: "Paneer Butter Masala", qty: 1, price: 210 },
+        { name: "Butter Naan", qty: 3, price: 40 },
+        { name: "Sweet Lassi", qty: 2, price: 60 }
+      ],
+      notes: "No coriander in paneer",
+      total: 472.50,
+      subtotal: 450.00,
+      tax: 22.50,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Rahul S."
+    },
+    {
+      id: "835",
+      table: "06",
+      time: "11:30 AM",
+      timeAgo: "2 hr ago",
+      items: [
+        { name: "Mutton Biryani", qty: 1, price: 380 },
+        { name: "Mirchi Ka Salan", qty: 1, price: 0 }
+      ],
+      notes: "",
+      total: 399.00,
+      subtotal: 380.00,
+      tax: 19.00,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Arjun K."
+    },
+    {
+      id: "834",
+      table: "09",
+      time: "11:15 AM",
+      timeAgo: "2 hr ago",
+      items: [
+        { name: "South Indian Thali", qty: 2, price: 180 },
+        { name: "Rasam Vada", qty: 1, price: 70 }
+      ],
+      notes: "",
+      total: 451.50,
+      subtotal: 430.00,
+      tax: 21.50,
+      status: "new",
+      billingStatus: "unpaid",
+      waiter: "Unassigned"
+    },
+    {
+      id: "833",
+      table: "10",
+      time: "11:00 AM",
+      timeAgo: "3 hr ago",
+      items: [
+        { name: "Cold Coffee", qty: 2, price: 90 },
+        { name: "French Fries", qty: 1, price: 110 }
+      ],
+      notes: "",
+      total: 304.50,
+      subtotal: 290.00,
+      tax: 14.50,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Priya M."
+    },
+    {
+      id: "832",
+      table: "02",
+      time: "10:45 AM",
+      timeAgo: "3 hr ago",
+      items: [
+        { name: "Idli Sambar (2 pcs)", qty: 2, price: 60 },
+        { name: "Medu Vada", qty: 2, price: 50 },
         { name: "Masala Chai", qty: 2, price: 40 }
       ],
-      notes: "Less spicy please",
+      notes: "",
+      total: 315.00,
+      subtotal: 300.00,
+      tax: 15.00,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Ravi M."
+    },
+    {
+      id: "831",
+      table: "05",
+      time: "10:30 AM",
+      timeAgo: "3 hr ago",
+      items: [
+        { name: "Poori Masala", qty: 2, price: 90 },
+        { name: "Filter Coffee", qty: 2, price: 35 }
+      ],
+      notes: "Poori should be hot",
+      total: 262.50,
+      subtotal: 250.00,
+      tax: 12.50,
+      status: "done",
+      billingStatus: "paid",
+      waiter: "Arjun K."
+    },
+    {
+      id: "830",
+      table: "01",
+      time: "10:15 AM",
+      timeAgo: "3 hr ago",
+      items: [
+        { name: "Rava Dosa", qty: 2, price: 140 },
+        { name: "Badam Milk", qty: 2, price: 60 }
+      ],
+      notes: "",
       total: 420.00,
       subtotal: 400.00,
       tax: 20.00,
@@ -192,7 +463,11 @@ export default function OrdersPanel({
     filteredOrders = filteredOrders.filter(o => (o.status || '').toLowerCase() === orderFilter.toLowerCase());
   }
   if (selectedWaiterFilter !== 'All Waiters') {
-    filteredOrders = filteredOrders.filter(o => o.waiter === selectedWaiterFilter);
+    if (selectedWaiterFilter === 'Unassigned (Optional)') {
+      filteredOrders = filteredOrders.filter(o => !o.waiter || o.waiter === 'Unassigned' || o.waiter === 'None');
+    } else {
+      filteredOrders = filteredOrders.filter(o => o.waiter === selectedWaiterFilter);
+    }
   }
 
   const handleOrderStatusUpdate = (orderId, currentStatus) => {
@@ -210,10 +485,17 @@ export default function OrdersPanel({
 
   const handleAssignWaiter = (orderId, waiterName) => {
     const restId = activeRestaurant?.id || 'rest-1';
+    const isNone = !waiterName || waiterName === 'Unassigned' || waiterName === 'None' || waiterName === 'None (Optional)';
+    const finalWaiter = isNone ? 'Unassigned' : waiterName;
     if (updateOrder) {
-      updateOrder(restId, orderId, { waiter: waiterName });
+      updateOrder(restId, orderId, { waiter: finalWaiter });
     }
-    ShowNotifications.showAlertNotification(`Assigned ${waiterName} to order #ORD-${orderId}`, true);
+    ShowNotifications.showAlertNotification(
+      isNone
+        ? `Order #ORD-${orderId} updated with no waiter (Optional).`
+        : `Assigned ${waiterName} to order #ORD-${orderId}`,
+      true
+    );
     setAssigningOrder(null);
   };
 
@@ -291,7 +573,7 @@ export default function OrdersPanel({
                     overflow: 'hidden',
                     padding: '4px'
                   }}>
-                    {['All Waiters', 'Ravi M.', 'Arjun K.', 'Rahul S.', 'Priya M.', ...waitersList.filter(w => !['Ravi M.', 'Arjun K.', 'Rahul S.', 'Priya M.'].includes(w))].map((w, idx) => {
+                    {['All Waiters', 'Unassigned (Optional)', ...allWaiters].map((w, idx) => {
                       const isSelected = selectedWaiterFilter === w;
                       return (
                         <div
@@ -353,6 +635,34 @@ export default function OrdersPanel({
                 );
               })}
             </div>
+
+            {/* + Order Button */}
+            <button
+              type="button"
+              onClick={handleOpenCreateOrderModal}
+              style={{
+                background: '#ff5a1f',
+                color: '#ffffff',
+                border: 'none',
+                padding: '8px 18px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.15s ease'
+              }}
+              title="Create a new customer order"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span> Order</span>
+            </button>
           </div>
         </div>
 
@@ -452,7 +762,7 @@ export default function OrdersPanel({
                       </div>
                     </td>
 
-                    {/* 5. ASSIGNED WAITER */}
+                    {/* 5. ASSIGNED WAITER (OPTIONAL) */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button
                         type="button"
@@ -465,15 +775,16 @@ export default function OrdersPanel({
                           borderRadius: '6px',
                           fontSize: '12px',
                           fontWeight: 600,
-                          backgroundColor: '#f1f5f9',
-                          border: '1px solid #e2e8f0',
-                          color: waiterName === 'Unassigned' ? '#64748b' : '#0f172a',
-                          cursor: 'pointer'
+                          backgroundColor: (ord.waiter && ord.waiter !== 'Unassigned') ? '#fff7ed' : '#f8fafc',
+                          border: (ord.waiter && ord.waiter !== 'Unassigned') ? '1px solid #fed7aa' : '1px dashed #cbd5e1',
+                          color: (ord.waiter && ord.waiter !== 'Unassigned') ? '#c2410c' : '#64748b',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
                         }}
-                        title="Click to assign waiter"
+                        title="Click to assign or change waiter (Optional)"
                       >
-                        <UserIcon size={12} color="#64748b" />
-                        <span>{waiterName}</span>
+                        <UserIcon size={12} color={(ord.waiter && ord.waiter !== 'Unassigned') ? '#ea580c' : '#94a3b8'} />
+                        <span>{(ord.waiter && ord.waiter !== 'Unassigned') ? ord.waiter : '+ Assign (Optional)'}</span>
                       </button>
                     </td>
 
@@ -705,8 +1016,10 @@ export default function OrdersPanel({
                 <strong style={{ fontSize: '14px', color: '#0f172a' }}>Table {viewingOrder.table}</strong>
               </div>
               <div>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block' }}>Waiter</span>
-                <strong style={{ fontSize: '14px', color: '#0f172a' }}>{viewingOrder.waiter || 'Unassigned'}</strong>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block' }}>Waiter (Optional)</span>
+                <strong style={{ fontSize: '14px', color: (viewingOrder.waiter && viewingOrder.waiter !== 'Unassigned') ? '#0f172a' : '#94a3b8' }}>
+                  {(viewingOrder.waiter && viewingOrder.waiter !== 'Unassigned') ? viewingOrder.waiter : 'None (Optional)'}
+                </strong>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block' }}>Status</span>
@@ -786,38 +1099,83 @@ export default function OrdersPanel({
           isOpen={!!assigningOrder}
           onClose={() => setAssigningOrder(null)}
           title={`Assign Waiter to Order #ORD-${assigningOrder.id}`}
-          maxWidth="380px"
+          maxWidth="420px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '6px' }}>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-              Select a waiter for Table {assigningOrder.table}:
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>Table Number:</span>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>Table {assigningOrder.table}</strong>
+              </div>
+              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: '1.4' }}>
+                Assigning a waiter is completely optional. You can leave this order unassigned or assign a staff member at any time.
+              </p>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+              Select a Waiter <span style={{ fontWeight: 500, color: '#64748b' }}>(Optional)</span>:
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {['Ravi M.', 'Arjun K.', 'Rahul S.', 'Priya M.', 'Unassigned'].map((wName, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleAssignWaiter(assigningOrder.id, wName)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    background: assigningOrder.waiter === wName ? '#fff7ed' : '#ffffff',
-                    color: assigningOrder.waiter === wName ? '#ff5a1f' : '#0f172a',
-                    fontWeight: assigningOrder.waiter === wName ? 800 : 600,
-                    textAlign: 'left',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center'
-                  }}
-                >
-                  <span>{wName}</span>
-                  {assigningOrder.waiter === wName && <CheckIcon size={14} color="#ff5a1f" />}
-                </button>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '280px', overflowY: 'auto' }}>
+              {/* Option 1: No Waiter Assigned (Optional) */}
+              <button
+                type="button"
+                onClick={() => handleAssignWaiter(assigningOrder.id, 'Unassigned')}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '1.5px solid #0f172a' : '1px solid #e2e8f0',
+                  background: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '#f1f5f9' : '#ffffff',
+                  color: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? '#0f172a' : '#64748b',
+                  fontWeight: (!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') ? 800 : 600,
+                  textAlign: 'left',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '14px' }}>🚫</span>
+                  <span>No Waiter / Leave Unassigned (Optional)</span>
+                </div>
+                {(!assigningOrder.waiter || assigningOrder.waiter === 'Unassigned') && <CheckIcon size={14} color="#0f172a" />}
+              </button>
+
+              {/* Waiter Options */}
+              {allWaiters.map((wName, idx) => {
+                const isSelected = assigningOrder.waiter === wName;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleAssignWaiter(assigningOrder.id, wName)}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: isSelected ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
+                      background: isSelected ? '#fff7ed' : '#ffffff',
+                      color: isSelected ? '#ff5a1f' : '#0f172a',
+                      fontWeight: isSelected ? 800 : 600,
+                      textAlign: 'left',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <UserIcon size={14} color={isSelected ? '#ff5a1f' : '#64748b'} />
+                      <span>{wName}</span>
+                    </div>
+                    {isSelected && <CheckIcon size={14} color="#ff5a1f" />}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
@@ -827,7 +1185,7 @@ export default function OrdersPanel({
                 onClick={() => setAssigningOrder(null)}
                 style={{ padding: '8px 16px', borderRadius: '8px', fontSize: '13px' }}
               >
-                Cancel
+                Close
               </button>
             </div>
           </div>
@@ -871,6 +1229,329 @@ export default function OrdersPanel({
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* MODAL: CREATE / PLACE NEW ORDER */}
+      {isCreateOrderModalOpen && (
+        <Modal
+          isOpen={isCreateOrderModalOpen}
+          onClose={() => setIsCreateOrderModalOpen(false)}
+          title="Place New Order"
+          maxWidth="560px"
+        >
+          <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
+            
+            {/* Row 1: Table & Waiter Assignment */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Dining Table <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={newOrderTable}
+                  onChange={e => setNewOrderTable(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {availableTableNumbers.map(tNo => (
+                    <option key={tNo} value={tNo}>Table {tNo}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Assigned Waiter <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>(Optional)</span>
+                </label>
+                <select
+                  value={newOrderWaiter}
+                  onChange={e => setNewOrderWaiter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="Unassigned">-- None (Unassigned) --</option>
+                  {allWaiters.map(w => (
+                    <option key={w} value={w}>🤵 {w}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Row 2: Initial Status & Order Notes */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Initial Status
+                </label>
+                <select
+                  value={newOrderStatus}
+                  onChange={e => setNewOrderStatus(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="new">New (KOT)</option>
+                  <option value="preparing">Preparing</option>
+                  <option value="ready">Ready to Serve</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Special Instructions / Kitchen Note
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Less spicy, separate sambar"
+                  value={newOrderNotes}
+                  onChange={e => setNewOrderNotes(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Quick Menu Item Selector */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                Quick Add Dishes:
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '110px', overflowY: 'auto', paddingBottom: '4px' }}>
+                {selectableMenuItems.slice(0, 10).map((menuItem, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleAddItemToOrder(menuItem)}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '6px',
+                      padding: '5px 10px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; e.currentTarget.style.color = '#ff5a1f'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                  >
+                    <span>+ {menuItem.name}</span>
+                    <span style={{ color: '#ff5a1f', fontWeight: 700 }}>₹{menuItem.price}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Item Adder */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Or custom item name..."
+                value={customItemName}
+                onChange={e => setCustomItemName(e.target.value)}
+                style={{
+                  flex: 2,
+                  padding: '7px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+              <input
+                type="number"
+                placeholder="Price ₹"
+                value={customItemPrice}
+                onChange={e => setCustomItemPrice(e.target.value)}
+                style={{
+                  width: '90px',
+                  padding: '7px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '12px',
+                  outline: 'none'
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomItem}
+                disabled={!customItemName.trim()}
+                style={{
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: customItemName.trim() ? 'pointer' : 'not-allowed',
+                  opacity: customItemName.trim() ? 1 : 0.5
+                }}
+              >
+                Add
+              </button>
+            </div>
+
+            {/* Selected Items List */}
+            <div style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Order Items ({newOrderItems.length})
+                </span>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Qty & Rate</span>
+              </div>
+
+              {newOrderItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>
+                  No items added yet. Click dishes above to add.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {newOrderItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        background: '#ffffff',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid #e2e8f0'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{item.name}</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>₹{item.price} each</span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {/* Qty Stepper */}
+                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemQty(idx, -1)}
+                            style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
+                          >
+                            -
+                          </button>
+                          <span style={{ width: '28px', textAlign: 'center', fontSize: '12px', fontWeight: 700 }}>
+                            {item.qty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateItemQty(idx, 1)}
+                            style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Amount */}
+                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', minWidth: '60px', textAlign: 'right' }}>
+                          ₹{((item.price || 0) * (item.qty || 1)).toFixed(2)}
+                        </span>
+
+                        {/* Remove */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItemFromOrder(idx)}
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' }}
+                          title="Remove item"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Totals Summary */}
+              {newOrderItems.length > 0 && (
+                <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                    <span>Subtotal:</span>
+                    <span>₹{newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+                    <span>GST (5%):</span>
+                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * 0.05).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800, color: '#ff5a1f', marginTop: '4px' }}>
+                    <span>Total Amount:</span>
+                    <span>₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * 1.05).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsCreateOrderModalOpen(false)}
+                style={{ padding: '9px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{
+                  background: '#ff5a1f',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '9px 22px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(255, 90, 31, 0.3)'
+                }}
+              >
+                Place Order
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

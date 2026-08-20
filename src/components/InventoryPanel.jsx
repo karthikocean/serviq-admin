@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { useAppState } from '../config/AppContext';
+import { useNavigate } from 'react-router-dom';
+import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -86,6 +87,7 @@ const ArrowUpRightIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 export default function InventoryPanel() {
+  const navigate = useNavigate();
   const {
     activeRestaurant,
     addInventoryItem,
@@ -98,6 +100,7 @@ export default function InventoryPanel() {
   const branches = activeRestaurant?.branches || [];
   const rawInventory = activeRestaurant?.inventory || [];
   const rawLogs = activeRestaurant?.inventoryLogs || [];
+  const rawCategories = activeRestaurant?.inventoryCategories || DEFAULT_INVENTORY_CATEGORIES;
 
   // Filter inventory by branch if a branch is selected in the global header
   const inventory = selectedBranchId
@@ -113,6 +116,7 @@ export default function InventoryPanel() {
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const [itemNameFilter, setItemNameFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Low Stock' | 'Out of Stock' | 'In Stock'
 
@@ -124,12 +128,21 @@ export default function InventoryPanel() {
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
+  // Dynamic Unique Categories & Items List for Dropdowns
+  const dynamicCatNames = Array.from(new Set([
+    ...rawCategories.map(c => c.name),
+    ...rawInventory.map(i => i.category)
+  ].filter(Boolean))).sort();
+  const categoriesList = ['All', ...dynamicCatNames];
+
+  const uniqueItemNames = Array.from(new Set(inventory.map(i => i.name).filter(Boolean))).sort();
+
   // Form states for Add / Edit Item
   const [formState, setFormState] = useState({
     id: '',
     name: '',
     sku: '',
-    category: 'Dairy',
+    category: dynamicCatNames[0] || 'Dairy',
     branchId: selectedBranchId || (branches.length > 0 ? branches[0].id : 'BR-001'),
     currentStock: '',
     minStockLevel: '',
@@ -150,9 +163,6 @@ export default function InventoryPanel() {
   });
   const [adjustErrors, setAdjustErrors] = useState({});
 
-  // Unique Categories
-  const categoriesList = ['All', 'Dairy', 'Grains & Rice', 'Meat & Poultry', 'Vegetables', 'Oils & Ghee', 'Spices & Condiments', 'Beverages', 'Packaging'];
-
   // Metrics
   const totalItemsCount = inventory.length;
   const lowStockCount = inventory.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock').length;
@@ -166,6 +176,7 @@ export default function InventoryPanel() {
       (item.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.category || '').toLowerCase().includes(searchTerm.toLowerCase());
 
+    const matchesItemName = itemNameFilter === 'All' || item.name === itemNameFilter;
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
 
     const matchesStatus = statusFilter === 'All'
@@ -174,7 +185,7 @@ export default function InventoryPanel() {
         ? (item.status === 'Low Stock' || item.status === 'Out of Stock')
         : item.status === statusFilter;
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesItemName && matchesCategory && matchesStatus;
   });
 
   const handleOpenAddModal = () => {
@@ -334,22 +345,24 @@ export default function InventoryPanel() {
         gap: '16px',
         marginBottom: '24px'
       }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-              Inventory & Raw Materials
-            </h2>
-            <span style={{
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-              color: '#ffffff',
-              fontSize: '11px',
-              fontWeight: 800,
-              padding: '3px 8px',
-              borderRadius: '6px',
-              letterSpacing: '0.5px'
-            }}>
-              PREMIUM
-            </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                Inventory Management
+              </h2>
+              <span style={{
+                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
+                color: '#ffffff',
+                fontSize: '11px',
+                fontWeight: 800,
+                padding: '3px 8px',
+                borderRadius: '6px',
+                letterSpacing: '0.5px'
+              }}>
+                PREMIUM
+              </span>
+            </div>
           </div>
         </div>
 
@@ -504,7 +517,7 @@ export default function InventoryPanel() {
         </div>
       </div>
 
-      {/* 3. SEARCH & STATUS FILTERS BAR */}
+      {/* 3. SEARCH & DROPDOWN FILTERS BAR */}
       <div style={{
         background: '#ffffff',
         borderRadius: '12px',
@@ -515,47 +528,133 @@ export default function InventoryPanel() {
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '12px'
+        gap: '14px'
       }}>
-        {/* Search Bar */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          background: '#f8fafc',
-          border: '1px solid #cbd5e1',
-          borderRadius: '8px',
-          padding: '8px 12px',
-          width: '320px',
-          boxSizing: 'border-box'
-        }}>
-          <SearchIcon size={15} color="#64748b" />
-          <input
-            type="text"
-            placeholder="Search by Item, SKU, supplier..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              fontSize: '13px',
-              width: '100%',
-              color: '#0f172a'
-            }}
-          />
-          {searchTerm && (
+        {/* Left Side: Search + Dropdowns */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+          {/* Search Bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#f8fafc',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            minWidth: '220px',
+            boxSizing: 'border-box'
+          }}>
+            <SearchIcon size={15} color="#64748b" />
+            <input
+              type="text"
+              placeholder="Search items, SKU, suppliers..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                fontSize: '13px',
+                width: '100%',
+                color: '#0f172a'
+              }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Category Dropdown Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+              Category:
+            </label>
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: categoryFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
+                background: categoryFilter !== 'All' ? '#fff7ed' : '#f8fafc',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: categoryFilter !== 'All' ? '#c2410c' : '#0f172a',
+                outline: 'none',
+                cursor: 'pointer',
+                minWidth: '150px'
+              }}
+            >
+              {categoriesList.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat === 'All' ? `All Categories (${categoriesList.length - 1})` : cat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Item Name Dropdown Filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+              Item Name:
+            </label>
+            <select
+              value={itemNameFilter}
+              onChange={e => setItemNameFilter(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: itemNameFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
+                background: itemNameFilter !== 'All' ? '#fff7ed' : '#f8fafc',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: itemNameFilter !== 'All' ? '#c2410c' : '#0f172a',
+                outline: 'none',
+                cursor: 'pointer',
+                minWidth: '160px',
+                maxWidth: '220px'
+              }}
+            >
+              <option value="All">All Item Names ({inventory.length})</option>
+              {uniqueItemNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reset Filters button if any filter is applied */}
+          {(itemNameFilter !== 'All' || categoryFilter !== 'All' || searchTerm || statusFilter !== 'All') && (
             <button
               type="button"
-              onClick={() => setSearchTerm('')}
-              style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
+              onClick={() => {
+                setItemNameFilter('All');
+                setCategoryFilter('All');
+                setSearchTerm('');
+                setStatusFilter('All');
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#ff5a1f',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                padding: '6px 8px',
+                textDecoration: 'underline'
+              }}
             >
-              ✕
+              Reset Filters
             </button>
           )}
         </div>
 
-        {/* Status Filter Pills */}
+        {/* Right Side: Status Filter Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[
             { id: 'All', label: `All Items (${totalItemsCount})` },

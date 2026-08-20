@@ -466,9 +466,7 @@ export default function StaffManagementPanel({
           <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
             {editingUserId ? 'Edit Staff Member' : 'Add Staff Member'}
           </h2>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px 0' }}>
-            {editingUserId ? 'Update staff credentials, role, and branch assignment' : 'Add new staff or administrator to the system'}
-          </p>
+        <br></br>
 
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -1080,16 +1078,14 @@ export default function StaffManagementPanel({
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '5px',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
+                        padding: '6px 12px',
                         borderRadius: '20px',
                         fontSize: '12px',
                         fontWeight: 700,
                         color: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#fff' : '#475569',
                         background: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#10b981' : '#e2e8f0',
                         cursor: 'pointer',
-                        border: 'none',
-                        padding: '6px 12px'
+                        border: 'none'
                       }}
                     >
                       {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}

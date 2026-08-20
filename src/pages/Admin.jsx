@@ -8,6 +8,7 @@ import OverviewPanel from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
 import MenuPanel from '../components/MenuPanel';
 import BillingPanel from '../components/BillingPanel';
+import BillingHistoryPanel from '../components/BillingHistoryPanel';
 import TablesPanel from '../components/TablesPanel';
 import WaiterListPanel from '../components/WaiterListPanel';
 import WaiterReportsPanel from '../components/WaiterReportsPanel';
@@ -214,6 +215,7 @@ export default function Admin() {
     'orders': 'Order management',
     'menu': 'Menu Management',
     'billing': 'Billing & Settlement',
+    'billing-history': 'Billing History',
     'tables': 'Table Management',
     'waiter-list': 'Waiter Management',
     'waiter-reports': 'Waiter Management',
@@ -331,6 +333,7 @@ export default function Admin() {
   const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(false);
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarUsersOpen, setSidebarUsersOpen] = useState(false);
+  const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
   // Roles & Permissions state
@@ -1706,13 +1709,33 @@ export default function Admin() {
               </a>
             </li>
           )}
-          {/* 9. Billing */}
+          {/* 9. Billing Dropdown */}
           {isTabAllowed('billing') && (
-            <li className={`sidebar-item ${activeTab === 'billing' ? 'active' : ''}`} onClick={() => { setActiveTab('billing'); setActivePage(null); }}>
-              <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M1.5 2.5a.5.5 0 0 1 .5-.5h12a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5zM2 3v10h12V3zm1.5 1a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1z"/></svg>
-                Billing
-              </a>
+            <li className={`sidebar-group ${sidebarBillingOpen ? 'open' : ''}`}>
+              <div
+                className="sidebar-item dropdown-trigger"
+                onClick={() => { setSidebarBillingOpen(!sidebarBillingOpen); setSidebarWaiterOpen(false); setSidebarKitchenOpen(false); setSidebarUsersOpen(false); }}
+                style={{ cursor: 'pointer' }}
+              >
+                <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M1.5 2.5a.5.5 0 0 1 .5-.5h12a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5zM2 3v10h12V3zm1.5 1a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1z"/></svg>
+                  Billing
+                  {sidebarBillingOpen ? 
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15"/></svg> : 
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9"/></svg>
+                  }
+                </a>
+              </div>
+              {sidebarBillingOpen && (
+                <ul className="sidebar-submenu">
+                  <li className={`sidebar-item ${activeTab === 'billing' ? 'active' : ''}`} onClick={() => { setActiveTab('billing'); setActivePage(null); }}>
+                    <a href="#">Current Billing</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'billing-history' ? 'active' : ''}`} onClick={() => { setActiveTab('billing-history'); setActivePage(null); }}>
+                    <a href="#">Billing History</a>
+                  </li>
+                </ul>
+              )}
             </li>
           )}
           {/* 10. Reports */}
@@ -1930,6 +1953,12 @@ export default function Admin() {
                   setBillingPaymentMethod={setBillingPaymentMethod}
                   markBillAsPaid={markBillAsPaid}
                   hasPermission={hasPermission}
+                />
+              )}
+              {activeTab === 'billing-history' && (
+                <BillingHistoryPanel
+                  billingHistory={activeRestaurant?.billingHistory || []}
+                  branches={activeRestaurant?.branches || []}
                 />
               )}
               {(activeTab === 'tables' || activeTab === 'qr-code-config') && (

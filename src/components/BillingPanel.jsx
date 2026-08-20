@@ -4,7 +4,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill={color} viewBox="0 0 16 16" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-3.5 1a.5.5 0 0 0-.374.374l1 3.5a.5.5 0 0 0 .49.49l3.468-1.026z"/>
+    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-3.5 1a.5.5 0 0 0-.374.374l1 3.5a.5.5 0 0 0 .49.49l3.468-1.026z" />
   </svg>
 );
 
@@ -31,25 +31,88 @@ export default function BillingPanel({
   const [isEditing, setIsEditing] = React.useState(false);
   const [editItems, setEditItems] = React.useState([]);
 
-  const selectedBillData = billingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
+  // --- DUMMY DATA INJECTION ---
+  const dummyBillingData = [
+    { table: 'Table 01', orders: 2, total: 756, status: 'Unpaid' },
+    { table: 'Table 02', orders: 3, total: 1239, status: 'Unpaid' },
+    { table: 'Table 03', orders: 1, total: 320, status: 'Paid' },
+    { table: 'Table 05', orders: 2, total: 924, status: 'Unpaid' },
+    { table: 'Table 07', orders: 4, total: 2121, status: 'Unpaid' }
+  ];
+
+  const dummyOrders = [
+    {
+      id: "845", table: "01", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Masala Dosa", qty: 5, price: 120 }, { name: "Filter Coffee", qty: 3, price: 40 }]
+    },
+    {
+      id: "842", table: "02", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Chicken Biryani", qty: 2, price: 320 }, { name: "Dal Makhani", qty: 2, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 1, price: 40 }]
+    },
+    {
+      id: "847", table: "03", status: "done", billingStatus: "paid",
+      items: [{ name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    },
+    {
+      id: "844", table: "05", status: "ready", billingStatus: "unpaid",
+      items: [{ name: "Paneer Tikka", qty: 2, price: 180 }, { name: "Chicken Biryani", qty: 1, price: 320 }, { name: "Butter Naan", qty: 3, price: 40 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    },
+    {
+      id: "846", table: "07", status: "preparing", billingStatus: "unpaid",
+      items: [{ name: "Chicken Biryani", qty: 4, price: 320 }, { name: "Dal Makhani", qty: 3, price: 160 }, { name: "Paneer Tikka", qty: 1, price: 180 }, { name: "Masala Chai", qty: 2, price: 40 }]
+    }
+  ];
+
+  const displayBillingData = billingData && billingData.length > 0 ? billingData : dummyBillingData;
+  const displayOrders = orders && orders.length > 0 ? orders : dummyOrders;
+  // -----------------------------
+
+
+  const selectedBillData = displayBillingData.find(b => b.table === selectedBillingTable) || { table: selectedBillingTable, orders: 0, total: 0, status: 'Paid' };
 
   // Find active orders for selected billing table to show details
-  const billingNum = selectedBillingTable.replace('Table ', '');
-  const activeTableOrders = orders.filter(o => (o.table === billingNum || parseInt(o.table) === parseInt(billingNum)) && o.billingStatus === 'unpaid');
+  const billingNum = (selectedBillingTable || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
 
-  // Combine items from all unpaid orders of this table
+  let activeTableOrders = orders.filter(o => {
+    const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
+    const isMatch = oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
+    return isMatch && o.billingStatus === 'unpaid';
+  });
+
+  // If no unpaid orders, fallback to any existing orders on this table (even paid) so the bill summary is always populated
+  let isSettled = false;
+  if (activeTableOrders.length === 0) {
+    activeTableOrders = orders.filter(o => {
+      const oTable = (o.table || '').replace(/^Table\s*/i, '').replace(/^T-/i, '').trim();
+      return oTable === billingNum || parseInt(oTable, 10) === parseInt(billingNum, 10) || o.table === selectedBillingTable;
+    });
+    if (activeTableOrders.length > 0) {
+      isSettled = true;
+    }
+  }
+
+  // Combine items from orders of this table
   const billingItems = [];
   activeTableOrders.forEach(o => {
-    o.items.forEach(item => {
+    (o.items || []).forEach(item => {
       const exist = billingItems.find(x => x.name === item.name);
       if (exist) {
         exist.qty += item.qty;
         exist.amount += item.qty * item.price;
+        if (item.notes && !exist.notes) exist.notes = item.notes;
       } else {
-        billingItems.push({ name: item.name, qty: item.qty, rate: item.price, amount: item.qty * item.price });
+        billingItems.push({
+          name: item.name,
+          qty: item.qty,
+          rate: item.price,
+          amount: item.qty * item.price,
+          notes: item.notes || (item.customizations ? item.customizations.join(', ') : '')
+        });
       }
     });
   });
+
+  const orderIds = activeTableOrders.map(o => `#ORD-${o.id}`).join(', ');
 
   const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
   const serviceRate = activeRestaurant.settings?.serviceChargeRate || 0;
@@ -69,7 +132,7 @@ export default function BillingPanel({
     <section className="panel-view active">
       <div className="panel-header-flex" style={{ marginBottom: '20px' }}>
         <div className="panel-title-desc">
-          <h2 className="panel-inner-title">Billing Panel</h2>
+          <h2 className="panel-inner-title">Billing</h2>
         </div>
       </div>
 
@@ -77,11 +140,11 @@ export default function BillingPanel({
       <div style={{ marginBottom: '24px', background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'var(--black)' }}>Active Tables</h3>
-          <span style={{ background: 'var(--primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{billingData.length} ACTIVE</span>
+          <span style={{ background: 'var(--primary)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{displayBillingData.length} ACTIVE</span>
         </div>
-        
+
         <div style={{ display: 'flex', overflowX: 'auto', gap: '16px', paddingBottom: '16px', scrollbarWidth: 'thin' }}>
-          {billingData.map(b => (
+          {displayBillingData.map(b => (
             <div
               key={b.table}
               onClick={() => setSelectedBillingTable(b.table)}
@@ -99,9 +162,9 @@ export default function BillingPanel({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                 <strong style={{ fontSize: '16px', fontWeight: '700', color: 'var(--black)' }}>{b.table}</strong>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ 
-                    fontSize: '10px', 
-                    fontWeight: '800', 
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: '800',
                     color: b.status === 'Paid' ? '#16a34a' : '#ef4444',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
@@ -123,7 +186,7 @@ export default function BillingPanel({
               </div>
             </div>
           ))}
-          {billingData.length === 0 && (
+          {displayBillingData.length === 0 && (
             <div style={{ padding: '20px', color: '#94a3b8' }}>No dining transactions available.</div>
           )}
         </div>
@@ -131,21 +194,30 @@ export default function BillingPanel({
 
       {/* Split Bottom View: Summary & Payment */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '24px' }}>
-        
+
         {/* Bill Summary details */}
         <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
             <div>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--black)', marginBottom: '4px' }}>Bill Summary</h3>
-              <p style={{ fontSize: '13px', color: '#64748b' }}>Order ID: #ORD-845 • {selectedBillingTable}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--black)', margin: 0 }}>Bill Summary</h3>
+                {isSettled && (
+                  <span style={{ fontSize: '10px', fontWeight: '800', background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: '6px' }}>
+                    SETTLED / PAID
+                  </span>
+                )}
+              </div>
+              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                {orderIds ? `Order ID: ${orderIds}` : 'Order Summary'} • {selectedBillingTable}
+              </p>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button 
+              <button
                 title="Edit Bill"
                 aria-label="Edit Bill"
-                style={{ 
-                  padding: '8px 12px', 
-                  fontSize: '12px', 
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '12px',
                   fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -166,18 +238,18 @@ export default function BillingPanel({
               >
                 <PencilIcon size={14} />
               </button>
-              <button 
+              <button
                 title="Delete Bill"
                 aria-label="Delete Bill"
-                style={{ 
-                  padding: '8px 12px', 
-                  fontSize: '12px', 
-                  fontWeight: 600, 
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
                   borderRadius: '8px',
-                  border: '1px solid #fca5a5', 
+                  border: '1px solid #fca5a5',
                   background: '#fff',
                   color: '#ef4444',
                   cursor: 'pointer',
@@ -211,9 +283,11 @@ export default function BillingPanel({
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
                       <strong style={{ fontSize: '14px', color: 'var(--black)' }}>{item.name}</strong>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', marginLeft: '14px', marginTop: '4px' }}>
-                      Extra Butter, Sambar separate
-                    </div>
+                    {item.notes && (
+                      <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', marginLeft: '14px', marginTop: '4px' }}>
+                        {item.notes}
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: '16px', textAlign: 'center', fontWeight: '600' }}>{item.qty}</td>
                   <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>₹{(item.rate).toFixed(2)}</td>
@@ -222,7 +296,7 @@ export default function BillingPanel({
               ))}
               {billingItems.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No unpaid items found. This bill is settled.</td>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>No items found for this table.</td>
                 </tr>
               )}
             </tbody>
@@ -244,7 +318,7 @@ export default function BillingPanel({
               </div>
             </div>
           )}
-          
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '18px', fontWeight: '700', color: 'var(--primary)' }}>Grand Total</span>
             <span style={{ fontSize: '24px', fontWeight: '800', color: 'var(--primary)' }}>₹{totalAmt.toFixed(2)}</span>
@@ -261,23 +335,23 @@ export default function BillingPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
               {[
-                { 
-                  id: 'UPI', 
-                  label: 'UPI / QR Code', 
-                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z"/><path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z"/><path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z"/><path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z"/><path d="M12 9h2V8h-2z"/></svg>, 
-                  desc: 'Instant digital payment' 
+                {
+                  id: 'UPI',
+                  label: 'UPI / QR Code',
+                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1H1v2.5a.5.5 0 0 1-1 0zm12 0a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0V1h-2.5a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5V15h2.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1 0-1H15v-2.5a.5.5 0 0 1 .5-.5M4 4h1v1H4z" /><path d="M7 2H2v5h5zM3 3h3v3H3zm2 8H4v1h1z" /><path d="M7 9H2v5h5zm-4 1h3v3H3zm8-6h1v1h-1z" /><path d="M9 2h5v5H9zm1 1v3h3V3zM8 8v2h1v1H8v1h2v-2h1v2h1v-1h2v-1h-3V8zm2 2H9V9h1zm4 2h-1v1h-2v1h3zm-4 2v-1H8v1z" /><path d="M12 9h2V8h-2z" /></svg>,
+                  desc: 'Instant digital payment'
                 },
-                { 
-                  id: 'Card', 
-                  label: 'Credit / Debit Card', 
-                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v1h14V4a1 1 0 0 0-1-1zm13 4H1v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1z"/><path d="M2 10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg>, 
-                  desc: 'Visa, Mastercard, RuPay' 
+                {
+                  id: 'Card',
+                  label: 'Credit / Debit Card',
+                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v1h14V4a1 1 0 0 0-1-1zm13 4H1v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1z" /><path d="M2 10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" /></svg>,
+                  desc: 'Visa, Mastercard, RuPay'
                 },
-                { 
-                  id: 'Cash', 
-                  label: 'Cash', 
-                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1zm7 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M0 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V7a2 2 0 0 1-2-2z"/></svg>, 
-                  desc: 'Manual reconciliation' 
+                {
+                  id: 'Cash',
+                  label: 'Cash',
+                  icon: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M1 3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1zm7 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4" /><path d="M0 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H1a1 1 0 0 1-1-1zm3 0a2 2 0 0 1-2 2v4a2 2 0 0 1 2 2h10a2 2 0 0 1 2-2V7a2 2 0 0 1-2-2z" /></svg>,
+                  desc: 'Manual reconciliation'
                 }
               ].map(method => {
                 const isSelected = billingPaymentMethod === method.id;
@@ -310,13 +384,13 @@ export default function BillingPanel({
             </div>
 
             <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <button 
-                className="btn" 
-                onClick={handleMarkAsPaidSubmit} 
-                style={{ 
-                  width: '100%', 
-                  padding: '16px', 
-                  fontSize: '16px', 
+              <button
+                className="btn"
+                onClick={handleMarkAsPaidSubmit}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  fontSize: '16px',
                   fontWeight: '700',
                   borderRadius: '10px',
                   display: 'flex',
@@ -334,15 +408,15 @@ export default function BillingPanel({
               </button>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button 
-                  className="btn btn-outline" 
+                <button
+                  className="btn btn-outline"
                   onClick={() => ShowNotifications.showAlertNotification('PDF invoice downloaded!', true)}
                   style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
                 >
                   Print
                 </button>
-                <button 
-                  className="btn btn-outline" 
+                <button
+                  className="btn btn-outline"
                   onClick={() => ShowNotifications.showAlertNotification('Invoice link copied!', true)}
                   style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
                 >
@@ -388,7 +462,7 @@ export default function BillingPanel({
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px' }}>
               <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>Edit Bill Items</h3>
-              <button 
+              <button
                 onClick={() => setIsEditing(false)}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
@@ -407,8 +481,8 @@ export default function BillingPanel({
             <div style={{ padding: '0 24px', maxHeight: '400px', overflowY: 'auto' }}>
               {editItems.map((item, index) => (
                 <div key={index} style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr', gap: '16px', padding: '16px 0', borderBottom: '1px solid #f1f5f9' }}>
-                  <input 
-                    value={item.name} 
+                  <input
+                    value={item.name}
                     onChange={(e) => {
                       const newItems = [...editItems];
                       newItems[index] = { ...newItems[index], name: e.target.value };
@@ -416,9 +490,9 @@ export default function BillingPanel({
                     }}
                     style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', outline: 'none', color: '#0f172a' }}
                   />
-                  <input 
+                  <input
                     type="number"
-                    value={item.qty} 
+                    value={item.qty}
                     onChange={(e) => {
                       const newItems = [...editItems];
                       newItems[index] = { ...newItems[index], qty: Number(e.target.value) };
@@ -426,9 +500,9 @@ export default function BillingPanel({
                     }}
                     style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', textAlign: 'center', outline: 'none', color: '#0f172a' }}
                   />
-                  <input 
+                  <input
                     type="number"
-                    value={item.rate} 
+                    value={item.rate}
                     onChange={(e) => {
                       const newItems = [...editItems];
                       newItems[index] = { ...newItems[index], rate: Number(e.target.value) };
@@ -442,13 +516,13 @@ export default function BillingPanel({
 
             {/* Actions */}
             <div style={{ padding: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button 
+              <button
                 onClick={() => setIsEditing(false)}
                 style={{ padding: '10px 24px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: '700', color: '#0f172a', cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={() => {
                   // In a real app we'd trigger an API to update
                   setIsEditing(false);

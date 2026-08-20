@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
+import { useAppState } from '../config/AppContext';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -26,6 +27,7 @@ export default function CategoryListPanel({
   refreshCategories,
   activeRestaurant
 }) {
+  const { currentUser, selectedBranchId } = useAppState();
   const [paginatedCategories, setPaginatedCategories] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
@@ -34,11 +36,16 @@ export default function CategoryListPanel({
 
   React.useEffect(() => {
     fetchPaginatedCategories();
-  }, [page, activeRestaurant]);
+  }, [page, activeRestaurant, selectedBranchId]);
 
   const fetchPaginatedCategories = async () => {
     if (!activeRestaurant) return;
     const params = { page, limit };
+    if (selectedBranchId) {
+      params.branchId = selectedBranchId;
+    } else {
+      params.branchId = 'all';
+    }
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       if (res.response.data && res.response.data.items) {
@@ -59,6 +66,7 @@ export default function CategoryListPanel({
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formStatus, setFormStatus] = useState('AVAILABLE');
+  const [formBranchId, setFormBranchId] = useState('');
   const [formErrors, setFormErrors] = useState({});
 
   const handleOpenAdd = () => {
@@ -66,6 +74,7 @@ export default function CategoryListPanel({
     setFormName('');
     setFormDesc('');
     setFormStatus('AVAILABLE');
+    setFormBranchId(selectedBranchId || (activeRestaurant?.branches?.length > 0 ? activeRestaurant.branches[0]._id : ''));
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -75,6 +84,7 @@ export default function CategoryListPanel({
     setFormName(item.name);
     setFormDesc(item.description);
     setFormStatus(item.status || 'AVAILABLE');
+    setFormBranchId(item.branchId || selectedBranchId);
     setFormErrors({});
     setIsModalOpen(true);
   };
@@ -89,7 +99,8 @@ export default function CategoryListPanel({
     const payload = {
       name: formName.trim(),
       description: formDesc.trim(),
-      status: formStatus
+      status: formStatus,
+      branchId: formBranchId
     };
 
     if (editingItem) {
@@ -103,7 +114,7 @@ export default function CategoryListPanel({
           ShowNotifications.showAlertNotification('Failed to update category', false);
         }
       } else {
-         ShowNotifications.showAlertNotification('Cannot update default placeholder category. Delete and create a new one.', false);
+        ShowNotifications.showAlertNotification('Cannot update default placeholder category. Delete and create a new one.', false);
       }
     } else {
       const res = await MenuApi.createCategory(payload);
@@ -152,12 +163,12 @@ export default function CategoryListPanel({
           <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Menu Categories
           </h2>
-        
+
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
           {onBack && (
-            <button 
+            <button
               type="button"
               onClick={onBack}
               style={{
@@ -181,8 +192,8 @@ export default function CategoryListPanel({
               ← Back to Menu
             </button>
           )}
-          
-          <button 
+
+          <button
             type="button"
             onClick={handleOpenAdd}
             style={{
@@ -242,7 +253,7 @@ export default function CategoryListPanel({
               {paginatedCategories.map((item, index) => {
                 const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
                 return (
-                  <tr 
+                  <tr
                     key={item._id || index}
                     style={{
                       borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
@@ -285,7 +296,7 @@ export default function CategoryListPanel({
                     {/* ACTIONS */}
                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                        <button 
+                        <button
                           type="button"
                           onClick={() => handleOpenEdit(item)}
                           style={{
@@ -306,7 +317,7 @@ export default function CategoryListPanel({
                         >
                           <PencilIcon size={16} />
                         </button>
-                        <button 
+                        <button
                           type="button"
                           onClick={() => handleDelete(item)}
                           style={{
@@ -354,7 +365,7 @@ export default function CategoryListPanel({
           >
             Prev
           </button>
-          
+
           <button
             style={{
               minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -391,8 +402,8 @@ export default function CategoryListPanel({
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
               Category Name <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={formName}
               onChange={e => {
                 setFormName(e.target.value);
@@ -421,7 +432,7 @@ export default function CategoryListPanel({
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
               Description
             </label>
-            <textarea 
+            <textarea
               rows="3"
               value={formDesc}
               onChange={e => setFormDesc(e.target.value)}
@@ -464,6 +475,33 @@ export default function CategoryListPanel({
             </select>
           </div>
 
+          {(currentUser?.role === 'Admin' || currentUser?.role === 'RESTAURANT_OWNER' || currentUser?.userType === 'RESTAURANT_OWNER') && activeRestaurant?.branches?.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                Branch
+              </label>
+              <select
+                value={formBranchId}
+                onChange={e => setFormBranchId(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  color: '#0f172a',
+                  backgroundColor: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {activeRestaurant.branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.branchName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div style={{
             display: 'flex',
             justifyContent: 'flex-end',
@@ -472,8 +510,8 @@ export default function CategoryListPanel({
             paddingTop: '16px',
             marginTop: '8px'
           }}>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsModalOpen(false)}
               style={{
                 background: '#ffffff',
@@ -488,7 +526,7 @@ export default function CategoryListPanel({
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               style={{
                 background: '#ff5a1f',
