@@ -223,29 +223,6 @@ export default function MenuPanel({
           </select>
         </div>
 
-        {/* Sort Select */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Sort by:</label>
-          <select
-            value={menuSort}
-            onChange={(e) => setMenuSort(e.target.value)}
-            style={{
-              padding: '8px 14px',
-              fontSize: '13px',
-              borderRadius: '8px',
-              border: '1.5px solid var(--border)',
-              backgroundColor: 'var(--bg-secondary)',
-              fontWeight: 600,
-              color: 'var(--text-main)',
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            <option value="name">Name</option>
-            <option value="price-asc">Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-          </select>
-        </div>
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
@@ -429,7 +406,7 @@ export default function MenuPanel({
           >
             Prev
           </button>
-          
+
           <button
             style={{
               minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -110,10 +110,10 @@ export default function TableManagement() {
 
   const handleSaveAssignments = async () => {
     if (!modalWaiterId) return;
-    
+
     // Find tables to unassign (currently assigned to this waiter but not in modalTableIds)
     const toUnassign = tables.filter(t => t.assignedWaiter === modalWaiterId && !modalTableIds.includes(t._id || t.id));
-    
+
     // Find tables to assign (in modalTableIds but not currently assigned to this waiter)
     const toAssign = tables.filter(t => modalTableIds.includes(t._id || t.id) && t.assignedWaiter !== modalWaiterId);
 
@@ -125,9 +125,9 @@ export default function TableManagement() {
     for (const t of toAssign) {
       promises.push(TableApi.updateTable(t._id || t.id, { assignedWaiter: modalWaiterId }));
     }
-    
+
     await Promise.all(promises);
-    
+
     setShowAssignTablesModal(false);
     fetchData(); // Refresh tables
   };

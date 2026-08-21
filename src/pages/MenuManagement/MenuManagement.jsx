@@ -63,7 +63,7 @@ export default function MenuManagement() {
     } else {
       params.branchId = 'all';
     }
-    
+
     const res = await MenuApi.getMenuItems(params);
     if (res?.status && res.response) {
       if (res.response.data && res.response.data.items) {
@@ -102,10 +102,6 @@ export default function MenuManagement() {
   };
 
   const openAddMenuModal = () => {
-    if (!hasPermission('menu', 'add')) {
-      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to add menu items.', false);
-      return;
-    }
     setMenuForm({
       _id: '',
       name: '',
@@ -125,10 +121,7 @@ export default function MenuManagement() {
   };
 
   const openEditMenuModal = (item) => {
-    if (!hasPermission('menu', 'edit')) {
-      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to edit menu items.', false);
-      return;
-    }
+
     setMenuForm({
       _id: item._id || item.id,
       name: item.name,
@@ -148,10 +141,7 @@ export default function MenuManagement() {
   };
 
   const handleDeleteMenu = async (itemId) => {
-    if (!hasPermission('menu', 'delete')) {
-      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to delete menu items.', false);
-      return;
-    }
+
     if (window.confirm('Are you sure you want to delete this menu item?')) {
       await deleteMenuItem(activeRestaurant.id, itemId);
       setRefreshTrigger(prev => prev + 1);

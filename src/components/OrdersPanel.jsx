@@ -59,12 +59,18 @@ export default function OrdersPanel({
   staff = [],
   orderFilter = 'All',
   setOrderFilter,
-  selectedWaiterFilter = 'All Waiters',
+  selectedWaiterFilter = 'All',
   setSelectedWaiterFilter,
   activeRestaurant,
   selectedBranchId,
   updateOrderStatus,
-  refreshOrders
+  refreshOrders,
+  page = 0,
+  setPage = () => { },
+  limit = 10,
+  setLimit = () => { },
+  totalPages = 1,
+  totalCount = 0
 }) {
   const [waiterDropdownOpen, setWaiterDropdownOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState(null);
@@ -72,12 +78,26 @@ export default function OrdersPanel({
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [isCreateOrderModalOpen, setIsCreateOrderModalOpen] = useState(false);
 
+  // New States for Appending Items
+  const [appendingOrder, setAppendingOrder] = useState(null);
+  const [appendItemsCart, setAppendItemsCart] = useState([]);
+  const [appendSearchQuery, setAppendSearchQuery] = useState('');
+  const [appendSelectedCategory, setAppendSelectedCategory] = useState('All');
+
+  // Check branch lock
+  const localUser = JSON.parse(localStorage.getItem('serviq_user') || '{}');
+  const isRestaurantOwner = localUser?.userType === 'RESTAURANT_OWNER';
+  const isBranchLocked = !isRestaurantOwner;
+
   // Waiters list
   const staffWaiters = staff.filter(s => {
     const roleName = s.roleId?.roleName || s.role || '';
     return roleName.toLowerCase() === 'waiter';
-  }).map(s => s.name);
-  const allWaiters = Array.from(new Set([...staffWaiters]));
+  }).map(s => ({ id: s._id || s.id, name: s.name }));
+
+  const uniqueWaitersMap = new Map();
+  staffWaiters.forEach(w => uniqueWaitersMap.set(w.name, w));
+  const allWaiters = Array.from(uniqueWaitersMap.values());
 
   // Extract menu items from activeRestaurant
   const menuCategories = activeRestaurant?.menu || [];
@@ -121,7 +141,20 @@ export default function OrdersPanel({
   const [taxRate, setTaxRate] = useState(5);
 
   const displayWaiters = allWaiters;
-  const displayTables = apiTables.length > 0 ? apiTables.map(t => t.tableNumber || t.tableNo) : availableTableNumbers;
+  const activeOrdersForTable = orders.filter(o => (o.billingStatus || '').toLowerCase() === 'unpaid');
+
+  const occupiedTableIdentifiers = activeOrdersForTable.map(o => {
+    if (typeof o.table === 'string') return String(o.table);
+    if (o.tableId && typeof o.tableId === 'object') return String(o.tableId.tableNumber || o.tableId.tableNo);
+    if (o.tableId && typeof o.tableId === 'string') {
+      const found = apiTables.find(t => String(t._id) === o.tableId || String(t.id) === o.tableId);
+      if (found) return String(found.tableNumber || found.tableNo);
+    }
+    return String(o.tableId);
+  }).filter(Boolean);
+
+  const displayTables = apiTables.length > 0 ? apiTables.map(t => String(t.tableNumber || t.tableNo)) : availableTableNumbers.map(String);
+
   const displayCategories = apiCategories.length > 0 ? ['All', ...apiCategories.map(c => c.name)] : ['All', ...new Set(selectableMenuItems.map(item => item.category || 'General'))];
 
   const displayMenuItems = apiMenuItems.length > 0 ? apiMenuItems.map(item => ({
@@ -146,7 +179,7 @@ export default function OrdersPanel({
         const userObj = JSON.parse(userStr);
         if (userObj.activeBranchId) return userObj.activeBranchId;
       }
-    } catch (e) {}
+    } catch (e) { }
     return localStorage.getItem('serviq_branch_id') || '';
   };
 
@@ -159,7 +192,6 @@ export default function OrdersPanel({
           apiClient.get(`/tables?branchId=${branchId}`).catch(() => null),
           apiClient.get(`/staff?branchId=${branchId}`).catch(() => null)
         ]);
-        
         let fetchedTables = [];
         if (menuRes && menuRes.data?.success) setApiMenuItems(menuRes.data.data);
         if (catRes && catRes.data?.success) setApiCategories(catRes.data.data);
@@ -167,7 +199,6 @@ export default function OrdersPanel({
           fetchedTables = tableRes.data.data;
           setApiTables(fetchedTables);
         }
-        
         const firstTable = fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : '');
         setNewOrderTable(firstTable);
 
@@ -197,7 +228,6 @@ export default function OrdersPanel({
     const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
     const targetBranchId = selectedBranchId || defaultBranchId || getFallbackBranchId();
     setModalSelectedBranchId(targetBranchId);
-    
     await fetchModalDataForBranch(targetBranchId);
 
     setNewOrderWaiter('Unassigned');
@@ -235,6 +265,85 @@ export default function OrdersPanel({
     handleAddItemToOrder({ name: customItemName.trim(), price: priceNum });
     setCustomItemName('');
     setCustomItemPrice('');
+  };
+
+  const handleOpenAppendModal = async (order) => {
+    setAppendingOrder(order);
+    setAppendItemsCart([]);
+    setAppendSearchQuery('');
+    setAppendSelectedCategory('All');
+    setViewingOrder(null); // Close view modal
+
+    if (apiMenuItems.length === 0) {
+      const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
+      const targetBranchId = selectedBranchId || defaultBranchId || getFallbackBranchId();
+      await fetchModalDataForBranch(targetBranchId);
+    }
+  };
+
+  const handleAddItemToAppendCart = (item) => {
+    const existingIndex = appendItemsCart.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+    if (existingIndex > -1) {
+      const updated = [...appendItemsCart];
+      updated[existingIndex].qty += 1;
+      setAppendItemsCart(updated);
+    } else {
+      setAppendItemsCart([...appendItemsCart, { ...item, qty: 1, price: Number(item.price) || 100 }]);
+    }
+  };
+
+  const handleRemoveItemFromAppendCart = (index) => {
+    const updated = [...appendItemsCart];
+    updated.splice(index, 1);
+    setAppendItemsCart(updated);
+  };
+
+  const handleUpdateAppendItemQty = (index, delta) => {
+    const updated = [...appendItemsCart];
+    const newQty = (updated[index].qty || 1) + delta;
+    if (newQty < 1) return;
+    updated[index].qty = newQty;
+    setAppendItemsCart(updated);
+  };
+
+  const handleSubmitAppendItems = async (e) => {
+    e.preventDefault();
+    if (appendItemsCart.length === 0) {
+      ShowNotifications.showAlertNotification("Please add at least one item", false);
+      return;
+    }
+
+    try {
+      const orderSubtotal = appendItemsCart.reduce((sum, i) => sum + (Number(i.price) || 0) * (i.qty || 1), 0);
+      const taxAmount = (orderSubtotal * taxRate) / 100;
+      const orderTotal = orderSubtotal + taxAmount;
+
+      const payload = {
+        items: appendItemsCart.map(item => ({
+          menuId: item._id,
+          name: item.name,
+          qty: item.qty || 1,
+          price: item.price,
+          status: 'new'
+        })),
+        subtotal: orderSubtotal,
+        tax: taxAmount,
+        charge: 0,
+        total: orderTotal
+      };
+
+      const res = await apiClient.put(`/orders/${appendingOrder._id || appendingOrder.id}/items/append`, payload);
+      if (res.data.success) {
+        ShowNotifications.showAlertNotification("Items added successfully!", true);
+        setAppendingOrder(null);
+        if (refreshOrders) refreshOrders();
+      } else {
+        ShowNotifications.showAlertNotification(res.data.message || "Failed to add items", false);
+      }
+    } catch (err) {
+      console.error("Error appending items:", err);
+      ShowNotifications.showAlertNotification(err.response?.data?.message || "Error adding items", false);
+    }
   };
 
   const handleUpdateItemQty = (index, delta) => {
@@ -309,27 +418,18 @@ export default function OrdersPanel({
 
   const sourceOrders = orders;
 
-  // Filter logic
+  // Filter logic is now handled by the backend
   let filteredOrders = [...sourceOrders];
-  if (orderFilter !== 'All') {
-    filteredOrders = filteredOrders.filter(o => (o.status || '').toLowerCase() === orderFilter.toLowerCase());
-  }
-  if (selectedWaiterFilter !== 'All Waiters') {
-    if (selectedWaiterFilter === 'Unassigned (Optional)') {
-      filteredOrders = filteredOrders.filter(o => !o.waiter || o.waiter === 'Unassigned' || o.waiter === 'None');
-    } else {
-      filteredOrders = filteredOrders.filter(o => o.waiter === selectedWaiterFilter);
-    }
-  }
 
-  const handleOrderStatusUpdate = async (orderId, currentStatus) => {
+  const handleOrderStatusUpdate = async (orderId, currentStatus, branchId) => {
     let nextStatus = 'preparing';
     if (currentStatus === 'new') nextStatus = 'preparing';
     else if (currentStatus === 'preparing') nextStatus = 'ready';
     else if (currentStatus === 'ready') nextStatus = 'done';
 
     try {
-      const res = await apiClient.patch(`/orders/${orderId}/status`, { status: nextStatus });
+      const branchQuery = branchId ? `?branchId=${branchId}` : '';
+      const res = await apiClient.patch(`/orders/${orderId}/status${branchQuery}`, { status: nextStatus });
       if (res.data?.success) {
         ShowNotifications.showAlertNotification(`Order status updated to ${nextStatus.toUpperCase()}!`, true);
         if (refreshOrders) refreshOrders();
@@ -352,20 +452,20 @@ export default function OrdersPanel({
     const foundWaiter = staff.find(w => w.name === waiterName);
     const waiterId = foundWaiter ? (foundWaiter._id || foundWaiter.id) : undefined;
 
-      setIsAssignWaiterModalOpen(false);
-      setSelectedOrderForWaiter(null);
-      try {
-        const res = await apiClient.put(`/orders/${orderId}/items`, { waiterId });
-        if (res.data?.success) {
-          ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
-          if (refreshOrders) refreshOrders();
-        } else {
-          ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
-        }
-      } catch (err) {
-        console.error(err);
+    setIsAssignWaiterModalOpen(false);
+    setSelectedOrderForWaiter(null);
+    try {
+      const res = await apiClient.put(`/orders/${orderId}/items`, { waiterId });
+      if (res.data?.success) {
+        ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+        if (refreshOrders) refreshOrders();
+      } else {
         ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
       }
+    } catch (err) {
+      console.error(err);
+      ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
+    }
   };
 
   return (
@@ -419,7 +519,7 @@ export default function OrdersPanel({
                 }}
               >
                 <UserIcon size={14} color="#64748b" />
-                <span>{selectedWaiterFilter}</span>
+                <span>{selectedWaiterFilter?.name || 'All Waiters'}</span>
                 <span style={{ fontSize: '10px', color: '#64748b', marginLeft: '4px' }}>▼</span>
               </button>
 
@@ -442,8 +542,8 @@ export default function OrdersPanel({
                     overflow: 'hidden',
                     padding: '4px'
                   }}>
-                    {['All Waiters', 'Unassigned (Optional)', ...allWaiters].map((w, idx) => {
-                      const isSelected = selectedWaiterFilter === w;
+                    {[{ id: 'All Waiters', name: 'All Waiters' }, { id: 'unassigned', name: 'Unassigned (Optional)' }, ...allWaiters].map((w, idx) => {
+                      const isSelected = selectedWaiterFilter?.id === w.id;
                       return (
                         <div
                           key={idx}
@@ -468,7 +568,7 @@ export default function OrdersPanel({
                             if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
                           }}
                         >
-                          {w}
+                          {w.name}
                         </div>
                       );
                     })}
@@ -540,10 +640,10 @@ export default function OrdersPanel({
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '130px', position: 'sticky', left: 0, zIndex: 10, backgroundColor: '#000000' }}>
                   ORDER ID
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px', position: 'sticky', left: '130px', zIndex: 10, backgroundColor: '#000000' }}>
                   TABLE
                 </th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -567,16 +667,29 @@ export default function OrdersPanel({
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '120px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
                   ACTIONS
                 </th>
               </tr>
             </thead>
             <tbody>
               {filteredOrders.map((ord, index) => {
+                let totalItemsCount = 0;
+                if (Array.isArray(ord.items)) {
+                  totalItemsCount = ord.items.length;
+                }
+
                 const itemSummary = Array.isArray(ord.items)
-                  ? ord.items.map(i => `${i.name} × ${i.qty}`).join(', ')
-                  : (ord.items || 'Standard Order');
+                  ? (
+                    <div style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}>
+                      {totalItemsCount} Items
+                    </div>
+                  )
+                  : (
+                    <div style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}>
+                      {ord.items || 'Standard Order'}
+                    </div>
+                  );
 
                 const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
                 const status = (ord.status || 'new').toLowerCase();
@@ -600,18 +713,19 @@ export default function OrdersPanel({
                     key={ord.id || index}
                     style={{
                       borderBottom: index < filteredOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s'
+                      transition: 'background 0.15s',
+                      backgroundColor: '#ffffff'
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
                     {/* 1. ORDER ID */}
-                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 5, backgroundColor: 'inherit' }}>
                       #ORD-{displayId}
                     </td>
 
                     {/* 2. TABLE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', left: '130px', zIndex: 5, backgroundColor: 'inherit' }}>
                       <span style={{
                         display: 'inline-block',
                         backgroundColor: '#fff7ed',
@@ -630,11 +744,6 @@ export default function OrdersPanel({
                       <div style={{ fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>
                         {itemSummary}
                       </div>
-                      {ord.notes && (
-                        <div style={{ fontSize: '11px', color: '#d97706', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span>✏️ Note: {ord.notes}</span>
-                        </div>
-                      )}
                     </td>
 
                     {/* NEW DATE COLUMN */}
@@ -656,30 +765,9 @@ export default function OrdersPanel({
 
                     {/* 5. ASSIGNED WAITER (OPTIONAL) */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <select
-                        value={waiterName === 'Unassigned' ? '' : waiterName}
-                        onChange={(e) => handleAssignWaiter(ord.orderId || ord._id || ord.id, e.target.value)}
-                        style={{
-                          padding: '5px 8px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          backgroundColor: (waiterName !== 'Unassigned') ? '#fff7ed' : '#f8fafc',
-                          border: (waiterName !== 'Unassigned') ? '1px solid #fed7aa' : '1px dashed #cbd5e1',
-                          color: (waiterName !== 'Unassigned') ? '#c2410c' : '#64748b',
-                          cursor: 'pointer',
-                          outline: 'none',
-                          maxWidth: '130px'
-                        }}
-                      >
-                        <option value="">+ Assign (Optional)</option>
-                        {waiterName !== 'Unassigned' && !allWaiters.includes(waiterName) && (
-                          <option value={waiterName}>{waiterName}</option>
-                        )}
-                        {allWaiters.map(w => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
-                      </select>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: waiterName === 'Unassigned' ? '#94a3b8' : '#0f172a' }}>
+                        {waiterName === 'Unassigned' ? '-' : waiterName}
+                      </span>
                     </td>
 
                     {/* 6. PAYMENT */}
@@ -727,7 +815,7 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 9. ACTION BUTTONS (MATCHING SCREENSHOT) */}
-                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: 'inherit' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
 
                         {/* Eye Icon */}
@@ -803,7 +891,7 @@ export default function OrdersPanel({
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleOrderStatusUpdate(ord._id || ord.id, status)}
+                            onClick={() => handleOrderStatusUpdate(ord._id || ord.id, status, ord.branchId)}
                             style={{
                               padding: '5px 12px',
                               borderRadius: '6px',
@@ -859,6 +947,52 @@ export default function OrdersPanel({
             </tbody>
           </table>
         </div>
+
+        {/* PAGINATION UI */}
+        {totalCount > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff' }}>
+            <div style={{ fontSize: '13px', color: '#64748b' }}>
+              Showing {page * limit + (totalCount > 0 ? 1 : 0)} to {Math.min((page + 1) * limit, totalCount)} of {totalCount} entries
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                onClick={() => setPage(page - 1)}
+                disabled={page === 0}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                  border: '1px solid #e2e8f0', background: '#fff',
+                  color: page === 0 ? '#cbd5e1' : '#64748b', cursor: page === 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Prev
+              </button>
+
+              <button
+                type="button"
+                style={{
+                  minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: '6px', fontSize: '13px', fontWeight: 700,
+                  border: 'none', background: '#000', color: '#fff', cursor: 'default'
+                }}
+              >
+                {page + 1}
+              </button>
+
+              <button
+                onClick={() => setPage(page + 1)}
+                disabled={page >= totalPages - 1}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
+                  border: '1px solid #e2e8f0', background: '#fff',
+                  color: page >= totalPages - 1 ? '#cbd5e1' : '#64748b', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* MODAL: VIEW ORDER DETAILS */}
@@ -931,7 +1065,7 @@ export default function OrdersPanel({
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
               <button
                 type="button"
                 className="btn btn-outline"
@@ -940,13 +1074,23 @@ export default function OrdersPanel({
               >
                 Close
               </button>
+              {viewingOrder.status !== 'completed' && viewingOrder.status !== 'cancelled' && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => handleOpenAppendModal(viewingOrder)}
+                  style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none' }}
+                >
+                  + Add More Items
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-black"
                 onClick={() => {
                   window.print();
                 }}
-                style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', border: 'none' }}
               >
                 <PrintIcon size={14} /> Print Receipt
               </button>
@@ -1030,9 +1174,11 @@ export default function OrdersPanel({
                     fontSize: '13px',
                     fontWeight: 600,
                     color: '#0f172a',
-                    background: '#fff',
+                    background: isBranchLocked ? '#f8fafc' : '#fff',
+                    cursor: isBranchLocked ? 'not-allowed' : 'pointer',
                     boxSizing: 'border-box'
                   }}
+                  disabled={isBranchLocked}
                 >
                   {activeRestaurant.branches.map(b => (
                     <option key={b._id || b.id} value={b._id || b.id}>{b.branchName || b.name}</option>
@@ -1059,12 +1205,19 @@ export default function OrdersPanel({
                     fontWeight: 600,
                     outline: 'none',
                     backgroundColor: '#ffffff',
+                    color: occupiedTableIdentifiers.some(id => String(id).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ? '#ef4444' : '#22c55e',
                     boxSizing: 'border-box'
                   }}
                 >
-                  {displayTables.map(tNo => (
-                    <option key={tNo} value={tNo}>Table {tNo}</option>
-                  ))}
+                  {displayTables.map(tNo => {
+                    const tNoClean = String(tNo).trim().toLowerCase();
+                    const isOccupied = occupiedTableIdentifiers.some(id => String(id).trim().toLowerCase() === tNoClean);
+                    return (
+                      <option key={tNo} value={tNo} disabled={isOccupied} style={{ color: isOccupied ? '#ef4444' : '#22c55e', fontWeight: 600 }}>
+                        Table {tNo} {isOccupied ? '(Occupied)' : '(Available)'}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1395,6 +1548,224 @@ export default function OrdersPanel({
                 }}
               >
                 Place Order
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* MODAL: APPEND ITEMS TO ORDER */}
+      {appendingOrder && (
+        <Modal
+          isOpen={!!appendingOrder}
+          onClose={() => setAppendingOrder(null)}
+          title={`Add Items to Order #ORD-${appendingOrder.orderId || appendingOrder.id || appendingOrder._id}`}
+          maxWidth="600px"
+        >
+          <form onSubmit={handleSubmitAppendItems} style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '10px' }}>
+
+            {/* Info Box */}
+            <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Table</span>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Table {appendingOrder.tableId?.tableNumber || appendingOrder.tableId?.tableNo || appendingOrder.table}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Order Total So Far</span>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>₹{appendingOrder.total}</div>
+              </div>
+            </div>
+
+            {/* Menu Search */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+                ADD NEW ITEMS
+              </label>
+              <div style={{ position: 'relative', marginBottom: '12px' }}>
+                <div style={{ position: 'absolute', top: '10px', left: '12px', color: '#94a3b8' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search menu items..."
+                  value={appendSearchQuery}
+                  onChange={(e) => setAppendSearchQuery(e.target.value)}
+                  style={{ width: '100%', padding: '10px 10px 10px 34px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px' }}
+                />
+              </div>
+
+              {/* Categories */}
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px' }}>
+                {displayCategories.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setAppendSelectedCategory(cat)}
+                    style={{
+                      padding: '4px 12px',
+                      borderRadius: '16px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      border: cat === appendSelectedCategory ? 'none' : '1px solid #e2e8f0',
+                      background: cat === appendSelectedCategory ? '#ff5a1f' : '#fff',
+                      color: cat === appendSelectedCategory ? '#fff' : '#64748b',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Menu List */}
+              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', marginTop: '12px', background: '#fff' }}>
+                {displayMenuItems.filter(item => {
+                  const matchesSearch = item.name.toLowerCase().includes(appendSearchQuery.toLowerCase());
+                  const itemCat = String(item.category || 'General').trim().toLowerCase();
+                  const selCat = String(appendSelectedCategory).trim().toLowerCase();
+                  const matchesCategory = appendSelectedCategory === 'All' || itemCat === selCat;
+                  return matchesSearch && matchesCategory;
+                }).length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No items found.</div>
+                ) : (
+                  displayMenuItems.filter(item => {
+                    const matchesSearch = item.name.toLowerCase().includes(appendSearchQuery.toLowerCase());
+                    const itemCat = String(item.category || 'General').trim().toLowerCase();
+                    const selCat = String(appendSelectedCategory).trim().toLowerCase();
+                    const matchesCategory = appendSelectedCategory === 'All' || itemCat === selCat;
+                    return matchesSearch && matchesCategory;
+                  }).map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.name}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#ff5a1f' }}>₹{item.price}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddItemToAppendCart(item)}
+                          style={{
+                            padding: '4px 12px',
+                            background: '#fff',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Add
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Cart Summary */}
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>NEW ITEMS ({appendItemsCart.length})</span>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Qty & Rate</span>
+              </div>
+
+              {appendItemsCart.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '12px', padding: '20px 0' }}>
+                  No new items added yet.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {appendItemsCart.map((cartItem, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', flex: 1 }}>{cartItem.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+                        {/* Qty Controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAppendItemQty(idx, -1)}
+                            style={{ width: '24px', height: '24px', background: '#f8fafc', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#64748b' }}
+                          >-</button>
+                          <div style={{ width: '30px', textAlign: 'center', fontSize: '12px', fontWeight: 600, background: '#fff' }}>
+                            {cartItem.qty || 1}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateAppendItemQty(idx, 1)}
+                            style={{ width: '24px', height: '24px', background: '#f8fafc', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#64748b' }}
+                          >+</button>
+                        </div>
+
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', minWidth: '50px', textAlign: 'right' }}>
+                          ₹{(Number(cartItem.price) || 0) * (cartItem.qty || 1)}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItemFromAppendCart(idx)}
+                          style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: '4px' }}
+                        >
+                          <TrashIcon size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Total line */}
+                  {(() => {
+                    const appendSubtotal = appendItemsCart.reduce((sum, i) => sum + (Number(i.price) || 0) * (i.qty || 1), 0);
+                    const appendTax = (appendSubtotal * taxRate) / 100;
+                    const appendTotal = appendSubtotal + appendTax;
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Subtotal:</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>₹{appendSubtotal.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>GST ({taxRate}%):</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>₹{appendTax.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', borderTop: '1px solid #f1f5f9' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#475569' }}>New Additional Cost:</span>
+                          <span style={{ fontSize: '15px', fontWeight: 800, color: '#ea580c' }}>₹{appendTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setAppendingOrder(null)}
+                style={{ padding: '10px 20px', borderRadius: '8px', background: '#fff', border: '1px solid #cbd5e1', color: '#475569', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={appendItemsCart.length === 0}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  background: appendItemsCart.length > 0 ? '#10b981' : '#94a3b8',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: appendItemsCart.length > 0 ? 'pointer' : 'not-allowed',
+                  boxShadow: appendItemsCart.length > 0 ? '0 2px 8px rgba(16, 185, 129, 0.3)' : 'none'
+                }}
+              >
+                Confirm Add Items
               </button>
             </div>
           </form>

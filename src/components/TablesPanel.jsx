@@ -132,10 +132,10 @@ export default function TablesPanel({
     const section = (t.section || '').toLowerCase();
     const matchesSearch = !q || tableIdStr.includes(q) || waiter.includes(q) || section.includes(q);
 
-    const matchesStatus = 
+    const matchesStatus =
       statusFilter === 'All' ? true :
-      statusFilter === 'Free' ? (t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available') :
-      statusFilter === 'Occupied' ? (t.status?.toLowerCase() === 'occupied') : true;
+        statusFilter === 'Free' ? (t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available') :
+          statusFilter === 'Occupied' ? (t.status?.toLowerCase() === 'occupied') : true;
 
     return matchesSearch && matchesStatus;
   });
@@ -241,7 +241,7 @@ export default function TablesPanel({
 
   return (
     <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
-      
+
       {/* 1. TOP HEADER ROW */}
       <div style={{
         display: 'flex',
@@ -256,12 +256,12 @@ export default function TablesPanel({
           <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Table Management
           </h2>
-         
+
         </div>
 
         {/* Header Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button 
+          <button
             type="button"
             onClick={handleBatchPrint}
             style={{
@@ -286,11 +286,11 @@ export default function TablesPanel({
             <PrintIcon size={14} color="#0f172a" /> Print All QR Codes
           </button>
 
-          <button 
+          <button
             type="button"
-            onClick={() => { 
-              if (setAddTableForm) setAddTableForm({ id: '', seats: 4 }); 
-              if (setActivePage) setActivePage('table-form'); 
+            onClick={() => {
+              if (setAddTableForm) setAddTableForm({ id: '', seats: 4 });
+              if (setActivePage) setActivePage('table-form');
             }}
             style={{
               background: 'var(--primary)',
@@ -432,7 +432,7 @@ export default function TablesPanel({
           filteredTables.map((table, index) => {
             const isFree = table.status?.toLowerCase() === 'free' || table.status?.toLowerCase() === 'available';
             const statusText = isFree ? 'FREE' : 'OCCUPIED';
-            
+
             const accentColor = isFree ? '#22c55e' : '#ef4444';
             const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
             const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
@@ -443,7 +443,7 @@ export default function TablesPanel({
             const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
 
             return (
-              <div 
+              <div
                 key={table._id || table.id || index}
                 style={{
                   background: '#ffffff',
@@ -563,7 +563,7 @@ export default function TablesPanel({
                     whiteSpace: 'nowrap'
                   }}>
                     {/* QR Thumbnail */}
-                    <div 
+                    <div
                       onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
                       style={{
                         width: '34px',
@@ -580,10 +580,10 @@ export default function TablesPanel({
                       }}
                       title="Click to expand QR Code"
                     >
-                      <img 
-                        src={qrImgSrc} 
-                        alt={`QR ${tableIdStr}`} 
-                        style={{ width: '30px', height: '30px', display: 'block', borderRadius: '4px' }} 
+                      <img
+                        src={qrImgSrc}
+                        alt={`QR ${tableIdStr}`}
+                        style={{ width: '30px', height: '30px', display: 'block', borderRadius: '4px' }}
                       />
                     </div>
 
@@ -650,7 +650,7 @@ export default function TablesPanel({
 
                 {/* Col 6: Edit & Delete Actions */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, justifyContent: 'flex-end' }}>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       if (setAddTableForm) setAddTableForm(table);
@@ -683,7 +683,7 @@ export default function TablesPanel({
                     <PencilIcon size={15} />
                   </button>
 
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setTableToDelete(table)}
                     style={{
@@ -732,7 +732,7 @@ export default function TablesPanel({
           maxWidth="420px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', paddingTop: '8px' }}>
-            
+
             {/* Standee QR Box preview */}
             <div style={{
               background: '#ffffff',
@@ -759,10 +759,10 @@ export default function TablesPanel({
                 display: 'inline-block',
                 margin: '0 auto 14px auto'
               }}>
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(viewingQrTable.qrUrl)}`} 
-                  alt="QR Standee" 
-                  style={{ width: '180px', height: '180px', display: 'block' }} 
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(viewingQrTable.qrUrl)}`}
+                  alt="QR Standee"
+                  style={{ width: '180px', height: '180px', display: 'block' }}
                 />
               </div>
 
@@ -875,17 +875,17 @@ export default function TablesPanel({
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button 
+            <button
               type="button"
-              className="btn btn-outline" 
+              className="btn btn-outline"
               style={{ padding: '8px 16px', fontSize: '13px' }}
               onClick={() => setTableToDelete(null)}
             >
               Cancel
             </button>
-            <button 
+            <button
               type="button"
-              className="btn btn-black" 
+              className="btn btn-black"
               style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
               onClick={() => {
                 if (tableToDelete && deleteDiningTable) {

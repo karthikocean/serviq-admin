@@ -5,14 +5,12 @@ import BillingApi from '../../api/Billing';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId } = useAppState();
-  
   // States lifted from Panel
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('Today');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('All');
-  
   // Pagination States
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -41,7 +39,6 @@ export default function BillingHistory() {
 
   const fetchHistory = async () => {
     setIsLoading(true);
-    
     const filters = {
       page,
       limit,
@@ -54,12 +51,10 @@ export default function BillingHistory() {
     };
 
     const result = await BillingApi.getBillingHistory(filters);
-    
     if (result.status && result.response.data) {
       const data = result.response.data;
       // Depending on API response, data could be the array directly (if backward compatibility) or {items, summary...}
       const itemsList = Array.isArray(data) ? data : (data.items || []);
-      
       const mappedData = itemsList.map(item => ({
         id: item.invoiceId,
         orderId: item.orderRefId,
@@ -79,7 +74,6 @@ export default function BillingHistory() {
       }));
 
       setHistoryData(mappedData);
-      
       if (!Array.isArray(data)) {
         setTotalItems(data.totalItems || 0);
         if (data.summary) {
@@ -99,7 +93,6 @@ export default function BillingHistory() {
       billingHistory={historyData}
       branches={activeRestaurant.branches || []}
       isLoading={isLoading}
-      
       // Pass down states and setters
       searchTerm={searchTerm}
       setSearchTerm={setSearchTerm}
@@ -112,7 +105,6 @@ export default function BillingHistory() {
       selectedBranchId={selectedBranchId}
       selectedPayment={selectedPayment}
       setSelectedPayment={setSelectedPayment}
-      
       page={page}
       setPage={setPage}
       limit={limit}

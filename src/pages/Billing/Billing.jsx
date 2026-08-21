@@ -24,9 +24,9 @@ export default function Billing() {
 
   const fetchBillingData = async () => {
     setIsLoading(true);
-    
+
     const tablesRes = await BillingApi.getActiveTables({ branchId: selectedBranchId });
-    
+
     let fetchedTables = [];
     if (tablesRes.status && tablesRes.response.data) {
       fetchedTables = tablesRes.response.data;
@@ -39,7 +39,6 @@ export default function Billing() {
     } else if (fetchedTables.length === 0) {
       setSelectedBillingTable('');
     }
-    
     setIsLoading(false);
   };
 

@@ -34,11 +34,11 @@ export default function BillingPanel({
 
   const displayBillingData = billingData || [];
 
-  const selectedBillData = displayBillingData.find(b => b.tableId === selectedBillingTable) || { 
-    tableId: selectedBillingTable, 
-    table: 'Unknown Table', 
-    orders: 0, 
-    total: 0, 
+  const selectedBillData = displayBillingData.find(b => b.tableId === selectedBillingTable) || {
+    tableId: selectedBillingTable,
+    table: 'Unknown Table',
+    orders: 0,
+    total: 0,
     status: 'Paid',
     items: [],
     orderIds: []
@@ -58,7 +58,6 @@ export default function BillingPanel({
 
   const handleMarkAsPaidSubmit = async () => {
     if (!selectedBillingTable) return;
-    
     const response = await BillingApi.processTablePayment({
       branchId: selectedBranchId,
       tableId: selectedBillingTable,
@@ -352,28 +351,6 @@ export default function BillingPanel({
                 Mark as Paid
               </button>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button
-                  className="btn btn-outline"
-                  onClick={() => ShowNotifications.showAlertNotification('PDF invoice downloaded!', true)}
-                  style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
-                >
-                  Print
-                </button>
-                <button
-                  className="btn btn-outline"
-                  onClick={() => ShowNotifications.showAlertNotification('Invoice link copied!', true)}
-                  style={{ padding: '12px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '600' }}
-                >
-                  Share
-                </button>
-              </div>
-
-              <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
-                <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                  <strong style={{ color: 'var(--black)' }}>Billing Tip:</strong> Ensure that tips or service charges are explicitly authorized before processing the transaction.
-                </p>
-              </div>
             </div>
           </div>
         ) : (

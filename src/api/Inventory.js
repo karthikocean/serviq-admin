@@ -1,10 +1,10 @@
 import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
-class MemberApi {
-  async getTables(params = {}) {
+class InventoryApi {
+  async getItems(params = {}) {
     try {
-      const response = await apiClient.get("/tables", { params });
+      const response = await apiClient.get("/inventory/items", { params });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -12,7 +12,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Fetch Tables. Please try again.";
+        "Failed to fetch inventory items.";
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -23,33 +23,17 @@ class MemberApi {
     }
   }
 
-  async getNextTableId(params = {}) {
+  async getItemById(id) {
     try {
-      const response = await apiClient.get("/tables/next-id", { params });
+      const response = await apiClient.get(`/inventory/items/${id}`);
       if (response.status === 200 || response.status === 201) {
-        return { status: true, response: response.data };
-      }
-    } catch (error) {
-      console.error("Failed to fetch next table ID:", error);
-      return { status: false };
-    }
-  }
-
-  async createTable(data) {
-    try {
-      const response = await apiClient.post("/tables", data);
-      if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Table Created Successfully!",
-          true,
-        );
         return { status: true, response: response.data };
       }
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Create Table. Please try again.";
+        "Failed to fetch inventory item details.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -58,17 +42,21 @@ class MemberApi {
     }
   }
 
-  async getTableDetails(id) {
+  async createItem(data) {
     try {
-      const response = await apiClient.get(`/tables/${id}`);
+      const response = await apiClient.post("/inventory/items", data);
       if (response.status === 200 || response.status === 201) {
+        ShowNotifications.showAlertNotification(
+          response.data.message || "Inventory item created successfully!",
+          true
+        );
         return { status: true, response: response.data };
       }
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Get Member Details. Please try again.";
+        "Failed to create inventory item.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -77,13 +65,13 @@ class MemberApi {
     }
   }
 
-  async updateTable(id, data) {
+  async updateItem(id, data) {
     try {
-      const response = await apiClient.patch(`/tables/${id}`, data);
+      const response = await apiClient.put(`/inventory/items/${id}`, data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || "Table Updated Successfully!",
-          true,
+          response.data.message || "Item updated successfully!",
+          true
         );
         return { status: true, response: response.data };
       }
@@ -91,7 +79,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Update Table. Please try again.";
+        "Failed to update inventory item.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -100,13 +88,13 @@ class MemberApi {
     }
   }
 
-  async deleteTable(id) {
+  async deleteItem(id) {
     try {
-      const response = await apiClient.delete(`/tables/${id}`);
+      const response = await apiClient.delete(`/inventory/items/${id}`);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || "Table Deleted Successfully!",
-          true,
+          response.data.message || "Item deleted successfully!",
+          true
         );
         return { status: true, response: response.data };
       }
@@ -114,52 +102,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Delete Table. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
-      return {
-        status: false,
-        response: error?.response?.data || error,
-      };
-    }
-  }
-  async statusUpdate(id, reason) {
-    try {
-      const response = await apiClient.patch(`/tables/${id}/status`, { reason });
-      if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Table Status Updated Successfully!",
-          true,
-        );
-        return { status: true, response: response.data };
-      }
-    } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to Delete Table. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
-      return {
-        status: false,
-      };
-    }
-  }
-
-  async assignWaiter(data) {
-    try {
-      // PUT /api/admin/tables/assign-waiter
-      const response = await apiClient.put(`/tables/assign-waiter`, data);
-      if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Waiter Assigned Successfully!",
-          true,
-        );
-        return { status: true, response: response.data };
-      }
-    } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to Assign Waiter. Please try again.";
+        "Failed to delete inventory item.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -168,6 +111,93 @@ class MemberApi {
     }
   }
 
+  async recordPurchase(data) {
+    try {
+      const response = await apiClient.post("/inventory/purchase", data);
+      if (response.status === 200 || response.status === 201) {
+        ShowNotifications.showAlertNotification(
+          response.data.message || "Purchase recorded successfully!",
+          true
+        );
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to record purchase.";
+      ShowNotifications.showAlertNotification(errorMessage, false);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async reduceStock(data) {
+    try {
+      const response = await apiClient.post("/inventory/reduce", data);
+      if (response.status === 200 || response.status === 201) {
+        ShowNotifications.showAlertNotification(
+          response.data.message || "Stock reduced successfully!",
+          true
+        );
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to reduce stock.";
+      ShowNotifications.showAlertNotification(errorMessage, false);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async getLogs(params = {}) {
+    try {
+      const response = await apiClient.get("/inventory/logs", { params });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to fetch inventory logs.";
+      if (error?.response?.status !== 401) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async getStats(params = {}) {
+    try {
+      const response = await apiClient.get("/inventory/stats", { params });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to fetch inventory stats.";
+      if (error?.response?.status !== 401) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
 }
 
-export default new MemberApi();
+export default new InventoryApi();

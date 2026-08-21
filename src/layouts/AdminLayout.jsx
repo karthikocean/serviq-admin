@@ -54,7 +54,7 @@ export default function AdminLayout() {
   const role = roleStr || 'Admin';
   const userType = (currentUser?.userType || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isAdmin = userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER';
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {
@@ -78,12 +78,12 @@ export default function AdminLayout() {
   };
 
   const isTabAllowed = (permissionKey) => {
-    // If tab is branch-management or plans, ONLY Admin role can view it
+    // If tab is branch-management or plans, ONLY Admin role (RESTAURANT_OWNER/SUPER_ADMIN) can view it
     if (permissionKey === 'branch-management' || permissionKey === 'plans-management') {
       return isAdmin;
     }
 
-    if (isAdmin) return true;
+    if (isAdmin || currentUser?.userType === 'BRANCH_ADMIN') return true;
 
     return hasPermission(permissionKey, 'view');
   };
@@ -298,6 +298,7 @@ export default function AdminLayout() {
 
 
           {/* 9. Roles & Permission */}
+          {/*
           {isTabAllowed('settings') && (
             <li className={`sidebar-item ${isRolesActive ? 'active' : ''}`}>
               <Link to="/roles-permissions">
@@ -308,6 +309,7 @@ export default function AdminLayout() {
               </Link>
             </li>
           )}
+          */}
 
           {/* 10. Billing Dropdown */}
           {isTabAllowed('billing') && (
@@ -354,8 +356,8 @@ export default function AdminLayout() {
           )}
 
           {/* 11.5 Help & Support */}
-          {/* Restricting Help & Support to Restaurant Owner / Admin only */}
-          {isAdmin && (
+          {/* Restricting Help & Support to Restaurant Owner / Admin / Branch Admin only */}
+          {(isAdmin || currentUser?.userType === 'BRANCH_ADMIN') && (
             <li className={`sidebar-item ${isHelpSupportActive ? 'active' : ''}`}>
               <Link to="/help-support">
                 <span className="sidebar-icon-box">

@@ -177,7 +177,7 @@ export default function StaffManagementPanel({
     setEditingUserId(null);
     setUserForm({
       name: '',
-      branchId: '',
+      branchId: (!isAdmin && currentBranchId) ? currentBranchId : '',
       roleId: '',
       status: 'Active',
       dutyStatus: 'ON_DUTY',
@@ -508,7 +508,8 @@ export default function StaffManagementPanel({
                     setUserForm({ ...userForm, branchId: e.target.value });
                     if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                   }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: !isAdmin ? '#f8fafc' : '#ffffff', cursor: !isAdmin ? 'not-allowed' : 'pointer', boxSizing: 'border-box' }}
+                  disabled={!isAdmin}
                 >
                   <option value="" disabled>Select a branch...</option>
                   {apiBranches.map(b => (
@@ -1410,108 +1411,83 @@ export default function StaffManagementPanel({
         <div style={{ padding: '10px 0' }}>
           {kitchenViewState === 'list' ? (
             <>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Filter by Branch
-                </label>
-                <select
-                  value={selectedStationBranchId}
-                  onChange={e => setSelectedStationBranchId(e.target.value)}
-                  disabled={!isAdmin}
-                  style={{
-                    width: '100%', padding: '10px 14px', borderRadius: '8px',
-                    border: '1px solid #cbd5e1', fontSize: '14px', background: !isAdmin ? '#f1f5f9' : '#ffffff', boxSizing: 'border-box'
-                  }}
-                >
-                  {apiBranches.map(b => (
-                    <option key={b._id} value={b._id}>{b.branchName}</option>
-                  ))}
-                </select>
-              </div>
-
               <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '20px', maxHeight: '300px', overflowY: 'auto' }}>
-                {apiStations.filter(s => !selectedStationBranchId || (typeof s.branchId === 'object' ? s.branchId?._id === selectedStationBranchId : s.branchId === selectedStationBranchId)).length === 0 ? (
+                {apiStations.length === 0 ? (
                   <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                    No kitchen station accounts found for this branch.
+                    No kitchen station accounts found.
                   </div>
                 ) : (
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {apiStations
-                      .filter(s => !selectedStationBranchId || (typeof s.branchId === 'object' ? s.branchId?._id === selectedStationBranchId : s.branchId === selectedStationBranchId))
-                      .map((station, idx, arr) => (
-                        <li key={station._id} style={{
-                          padding: '12px 16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          borderBottom: idx !== arr.length - 1 ? '1px solid #e2e8f0' : 'none'
-                        }}>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{station.name}</div>
-                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                              {station.email || 'No email'} • {station.branchId?.branchName || 'Branch'}
-                            </div>
+                    {apiStations.map((station, idx, arr) => (
+                      <li key={station._id} style={{
+                        padding: '12px 16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: idx !== arr.length - 1 ? '1px solid #e2e8f0' : 'none'
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{station.name}</div>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                            {station.email || 'No email'} • {station.branchId?.branchName || 'Branch'}
                           </div>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setChangePasswordUserId(station);
-                                setShowKitchenModal(false);
-                              }}
-                              title="Reset Password"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
-                            >
-                              🔑
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setUserToDelete(station);
-                                setShowKitchenModal(false);
-                              }}
-                              title="Delete Station"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
-                            >
-                              🗑️
-                            </button>
-                          </div>
-                        </li>
-                      ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setChangePasswordUserId(station);
+                              setShowKitchenModal(false);
+                            }}
+                            title="Reset Password"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                          >
+                            🔑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUserToDelete(station);
+                              setShowKitchenModal(false);
+                            }}
+                            title="Delete Station"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </div>
 
-              {!(selectedStationBranchId && !availableBranchesForStation.some(b => b._id === selectedStationBranchId)) && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', alignItems: 'flex-end' }}>
-                  <button
-                    type="button"
-                    disabled={availableBranchesForStation.length === 0}
-                    style={{
-                      background: availableBranchesForStation.length === 0 ? '#94a3b8' : '#111827',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '10px 20px',
-                      fontWeight: 700,
-                      fontSize: '13px',
-                      cursor: availableBranchesForStation.length === 0 ? 'not-allowed' : 'pointer'
-                    }}
-                    onClick={() => {
-                      const defaultBranchId = selectedStationBranchId && availableBranchesForStation.find(b => b._id === selectedStationBranchId)
-                        ? selectedStationBranchId
-                        : (availableBranchesForStation.length > 0 ? availableBranchesForStation[0]._id : '');
-                      setKitchenForm({ branchId: defaultBranchId, email: '', password: '' });
-                      setKitchenViewState('add');
-                    }}
-                  >
-                    + Add New Station
-                  </button>
-                  {availableBranchesForStation.length === 0 && (
-                    <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '6px', fontWeight: 600 }}>All branches already have a Kitchen Station.</span>
-                  )}
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <button
+                  type="button"
+                  disabled={availableBranchesForStation.length === 0}
+                  style={{
+                    background: availableBranchesForStation.length === 0 ? '#94a3b8' : '#111827',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '10px 20px',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: availableBranchesForStation.length === 0 ? 'not-allowed' : 'pointer'
+                  }}
+                  onClick={() => {
+                    const defaultBranchId = availableBranchesForStation.length > 0 ? availableBranchesForStation[0]._id : (apiBranches[0]?._id || '');
+                    setKitchenForm({ branchId: defaultBranchId, email: '', password: '' });
+                    setKitchenViewState('add');
+                  }}
+                >
+                  + Add New Station
+                </button>
+                {availableBranchesForStation.length === 0 && (
+                  <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '6px', fontWeight: 600 }}>All branches already have a Kitchen Station.</span>
+                )}
+              </div>
             </>
           ) : (
             <form onSubmit={handleKitchenStationSubmit}>
