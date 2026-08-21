@@ -430,7 +430,13 @@ export default function Admin() {
   };
 
   const isTabAllowed = (tab) => {
-    if (role === 'Admin') return true;
+    if (tab === 'branch-management' || tab === 'plans-management') {
+      return role === 'Admin' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN';
+    }
+
+    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN') {
+      return true;
+    }
 
     let moduleName = tab;
     if (tab === 'qr-code-config') moduleName = 'tables';
@@ -1698,6 +1704,7 @@ export default function Admin() {
             </li>
           )}
           {/* 9. Roles & Permission */}
+          {/* 
           {isTabAllowed('Settings') && (
             <li className={`sidebar-item ${activeTab === 'roles-permissions' ? 'active' : ''}`} onClick={() => { setActiveTab('roles-permissions'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
@@ -1706,6 +1713,7 @@ export default function Admin() {
               </a>
             </li>
           )}
+          */}
           {/* 9. Billing Dropdown */}
           {isTabAllowed('billing') && (
             <li className={`sidebar-group ${sidebarBillingOpen ? 'open' : ''}`}>

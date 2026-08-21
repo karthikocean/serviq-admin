@@ -10,7 +10,10 @@ export default function TableFormPage() {
   const navigate = useNavigate();
   const { tableId } = useParams();
   const location = useLocation();
-  const { activeRestaurant, selectedBranchId } = useAppState();
+  const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
+
+  const isRestaurantOwner = currentUser?.userType === 'RESTAURANT_OWNER';
+  const isBranchLocked = !isRestaurantOwner;
 
   const [branches, setBranches] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
@@ -249,9 +252,11 @@ export default function TableFormPage() {
                   border: '1px solid #e2e8f0',
                   fontSize: '14px',
                   outline: 'none',
-                  backgroundColor: '#ffffff',
+                  backgroundColor: isBranchLocked ? '#f8fafc' : '#ffffff',
+                  cursor: isBranchLocked ? 'not-allowed' : 'pointer',
                   boxSizing: 'border-box'
                 }}
+                disabled={isBranchLocked}
               >
                 <option value="">Select a Branch</option>
                 {branches.map(b => (
