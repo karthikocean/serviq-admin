@@ -106,6 +106,20 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
             </select>
           </div>
 
+          <div style={{ flex: '1', minWidth: '150px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Branch</label>
+            <select 
+              value={selectedBranch} 
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
+            >
+              <option value="All">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={b.id}>{b.branchName}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
             <button 
               className="btn btn-black" 
@@ -211,6 +225,10 @@ export default function BillingHistoryPanel({ billingHistory = [], branches = []
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Payment Method</label>
             <input type="text" value={selectedPayment === 'All' ? 'All Methods' : selectedPayment} readOnly style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#f8fafc', color: '#64748b' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Branch</label>
+            <input type="text" value={selectedBranch === 'All' ? 'All Branches' : branches.find(b => b.id === selectedBranch)?.branchName || 'All Branches'} readOnly style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#f8fafc', color: '#64748b' }} />
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px' }}>Format</label>

@@ -18,11 +18,11 @@ import StaffFormPage from './pages/WaiterManagement/StaffFormPage';
 import KitchenSettingsPage from './pages/KitchenManagement/KitchenSettingsPage';
 import Users from './pages/Users/Users';
 import RolesPermissions from './pages/RolesPermissions/RolesPermissions';
-import FeedbackManagement from './pages/FeedbackManagement/FeedbackManagement';
 import Billing from './pages/Billing/Billing';
 import BillingHistory from './pages/Billing/BillingHistory';
 import Reports from './pages/Reports/Reports';
 import Settings from './pages/Settings/Settings';
+import HelpSupport from './pages/HelpSupport/HelpSupport';
 
 export default function App() {
   return (
@@ -63,14 +63,6 @@ export default function App() {
         {/* Order Management */}
         <Route path="orders" element={<OrderManagement />} />
 
-        {/* Service Requests Redirects to Staff Management Waiter Requests */}
-        <Route path="service-requests" element={<Navigate to="/staff?tab=requests" replace />} />
-        <Route path="requests" element={<Navigate to="/staff?tab=requests" replace />} />
-
-        {/* Customer Feedback Management */}
-        <Route path="feedback" element={<FeedbackManagement />} />
-        <Route path="feedback-management" element={<Navigate to="/feedback" replace />} />
-
         {/* Staff Management (Combined Waiter List & Kitchen List) */}
         <Route path="staff" element={<StaffManagement />} />
         <Route path="staff/add" element={<StaffFormPage />} />
@@ -102,6 +94,9 @@ export default function App() {
 
         {/* Restaurant Settings */}
         <Route path="settings" element={<Settings />} />
+
+        {/* Help & Support */}
+        <Route path="help-support" element={<HelpSupport />} />
       </Route>
 
       {/* Catch-all route */}

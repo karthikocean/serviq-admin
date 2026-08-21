@@ -7,16 +7,6 @@ import ShowNotifications from '../../helper/ShowNotifications.js';
 import MenuApi from '../../api/Menu.js';
 import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
-import {
-  StarIcon,
-  ChefHatIcon,
-  ClockIcon,
-  VegDietIcon,
-  NonVegDietIcon,
-  CheckCircleIcon,
-  AlertCircleIcon,
-  EditIcon
-} from '../../components/Icons';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -49,11 +39,6 @@ export default function MenuManagement() {
     veg: true,
     available: true,
     bestseller: false,
-    chefSpecial: false,
-    prepTime: 15,
-    allowSpecialInstructions: true,
-    stockQuantity: 50,
-    minStockThreshold: 5,
     branchId: ''
   });
   const [formErrors, setFormErrors] = useState({});
@@ -133,11 +118,6 @@ export default function MenuManagement() {
       veg: true,
       available: true,
       bestseller: false,
-      chefSpecial: false,
-      prepTime: 15,
-      allowSpecialInstructions: true,
-      stockQuantity: 50,
-      minStockThreshold: 5,
       branchId: selectedBranchId || (activeRestaurant.branches?.length > 0 ? activeRestaurant.branches[0]._id : '')
     });
     setFormErrors({});
@@ -161,11 +141,6 @@ export default function MenuManagement() {
       veg: item.veg !== undefined ? item.veg : true,
       available: item.available !== undefined ? item.available : true,
       bestseller: item.bestseller !== undefined ? item.bestseller : false,
-      chefSpecial: item.chefSpecial !== undefined ? item.chefSpecial : false,
-      prepTime: item.prepTime !== undefined ? Number(item.prepTime) : 15,
-      allowSpecialInstructions: item.allowSpecialInstructions !== undefined ? item.allowSpecialInstructions : true,
-      stockQuantity: item.stockQuantity !== undefined ? Number(item.stockQuantity) : 50,
-      minStockThreshold: item.minStockThreshold !== undefined ? Number(item.minStockThreshold) : 5,
       branchId: item.branchId || selectedBranchId
     });
     setFormErrors({});
@@ -216,12 +191,7 @@ export default function MenuManagement() {
       coverImage: menuForm.coverImage,
       available: menuForm.available,
       veg: menuForm.veg,
-      bestseller: !!menuForm.bestseller,
-      chefSpecial: !!menuForm.chefSpecial,
-      prepTime: Number(menuForm.prepTime) || 15,
-      allowSpecialInstructions: !!menuForm.allowSpecialInstructions,
-      stockQuantity: Number(menuForm.stockQuantity) || 0,
-      minStockThreshold: Number(menuForm.minStockThreshold) || 5,
+      bestseller: menuForm.bestseller,
       branchId: menuForm.branchId
     };
 
@@ -579,254 +549,96 @@ export default function MenuManagement() {
                   </div>
                 )}
 
-                {/* Preparation Time & Special Instructions Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      ⏱️ Preparation Time (in Minutes) <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input
-                        type="number"
-                        min="1"
-                        max="180"
-                        value={menuForm.prepTime}
-                        onChange={(e) => setMenuForm({ ...menuForm, prepTime: e.target.value })}
-                        placeholder="e.g. 15"
-                        style={{
-                          width: '120px',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
-                          fontSize: '14px',
-                          fontWeight: 700,
-                          outline: 'none',
-                          background: '#fff'
-                        }}
-                      />
-                      <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>minutes</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      <EditIcon size={14} color="#0284c7" />
-                      Special Cooking Instructions
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setMenuForm({ ...menuForm, allowSpecialInstructions: !menuForm.allowSpecialInstructions })}
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        border: menuForm.allowSpecialInstructions ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
-                        background: menuForm.allowSpecialInstructions ? '#e0f2fe' : '#ffffff',
-                        color: menuForm.allowSpecialInstructions ? '#0369a1' : '#64748b',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <span>{menuForm.allowSpecialInstructions ? 'Allow Cooking Preferences (Spice Level, No Onion, Notes)' : 'Disabled (Fixed Recipe)'}</span>
-                      <span style={{ fontSize: '10px', background: menuForm.allowSpecialInstructions ? '#0284c7' : '#94a3b8', color: '#fff', padding: '2px 6px', borderRadius: '4px' }}>
-                        {menuForm.allowSpecialInstructions ? 'ACTIVE' : 'OFF'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Dietary Type, Best Seller, Chef's Special & Stock Availability */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '14px', marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                {/* Dietary Type, Availability, Bestseller */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px', marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border)' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Food Dietary Type</label>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         type="button"
                         onClick={() => setMenuForm({ ...menuForm, veg: true })}
                         style={{
                           flex: 1,
-                          padding: '8px 8px',
+                          padding: '8px 10px',
                           borderRadius: '8px',
                           border: menuForm.veg ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
                           background: menuForm.veg ? '#dcfce7' : '#ffffff',
                           color: menuForm.veg ? '#166534' : '#64748b',
-                          fontSize: '11px',
+                          fontSize: '12px',
                           fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '5px'
                         }}
                       >
-                        <VegDietIcon size={14} />
-                        Veg
+                        🟢 Veg
                       </button>
                       <button
                         type="button"
                         onClick={() => setMenuForm({ ...menuForm, veg: false })}
                         style={{
                           flex: 1,
-                          padding: '8px 8px',
+                          padding: '8px 10px',
                           borderRadius: '8px',
                           border: !menuForm.veg ? '1.5px solid #ea4335' : '1px solid #cbd5e1',
                           background: !menuForm.veg ? '#fee2e2' : '#ffffff',
                           color: !menuForm.veg ? '#991b1b' : '#64748b',
-                          fontSize: '11px',
+                          fontSize: '12px',
                           fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '5px'
                         }}
                       >
-                        <NonVegDietIcon size={14} />
-                        Non-Veg
+                        🔴 Non-Veg
                       </button>
                     </div>
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Best Seller Tag</label>
-                    <button
-                      type="button"
-                      onClick={() => setMenuForm({ ...menuForm, bestseller: !menuForm.bestseller })}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '8px',
-                        border: menuForm.bestseller ? '1.5px solid #f59e0b' : '1px solid #cbd5e1',
-                        background: menuForm.bestseller ? '#fef3c7' : '#ffffff',
-                        color: menuForm.bestseller ? '#b45309' : '#64748b',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <StarIcon size={13} color={menuForm.bestseller ? '#b45309' : '#94a3b8'} fill={menuForm.bestseller ? '#b45309' : 'none'} />
-                      {menuForm.bestseller ? 'Best Seller' : 'Standard'}
-                    </button>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Chef's Special</label>
-                    <button
-                      type="button"
-                      onClick={() => setMenuForm({ ...menuForm, chefSpecial: !menuForm.chefSpecial })}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        borderRadius: '8px',
-                        border: menuForm.chefSpecial ? '1.5px solid #8b5cf6' : '1px solid #cbd5e1',
-                        background: menuForm.chefSpecial ? '#f3e8ff' : '#ffffff',
-                        color: menuForm.chefSpecial ? '#6d28d9' : '#64748b',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      <ChefHatIcon size={14} color={menuForm.chefSpecial ? '#6d28d9' : '#94a3b8'} />
-                      {menuForm.chefSpecial ? "Chef's Pick" : 'Standard'}
-                    </button>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Stock Status</label>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Stock Availability</label>
                     <button
                       type="button"
                       onClick={() => setMenuForm({ ...menuForm, available: !menuForm.available })}
                       style={{
                         width: '100%',
-                        padding: '8px 10px',
+                        padding: '8px 12px',
                         borderRadius: '8px',
                         border: menuForm.available ? '1.5px solid #16a34a' : '1.5px solid #cbd5e1',
                         background: menuForm.available ? '#f0fdf4' : '#f8fafc',
                         color: menuForm.available ? '#166534' : '#64748b',
-                        fontSize: '11px',
+                        fontSize: '12px',
                         fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '5px'
+                        cursor: 'pointer'
                       }}
                     >
-                      {menuForm.available ? <CheckCircleIcon size={12} color="#166534" /> : <AlertCircleIcon size={12} color="#64748b" />}
-                      {menuForm.available ? 'In Stock' : 'Out of Stock'}
+                      {menuForm.available ? '✓ In Stock (Available)' : '✕ Out of Stock'}
                     </button>
                   </div>
-                </div>
 
-                {/* Inventory Stock Levels & Thresholds */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border)' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Current Stock Portions
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={menuForm.stockQuantity}
-                      onChange={(e) => {
-                        const qty = Number(e.target.value);
-                        setMenuForm({
-                          ...menuForm,
-                          stockQuantity: qty,
-                          available: qty > 0 ? menuForm.available : false
-                        });
-                      }}
-                      placeholder="e.g. 50"
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Featured Tag</label>
+                    <button
+                      type="button"
+                      onClick={() => setMenuForm({ ...menuForm, bestseller: !menuForm.bestseller })}
                       style={{
                         width: '100%',
                         padding: '8px 12px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        background: '#fff'
+                        border: menuForm.bestseller ? '1.5px solid #f59e0b' : '1px solid #cbd5e1',
+                        background: menuForm.bestseller ? '#fef3c7' : '#ffffff',
+                        color: menuForm.bestseller ? '#b45309' : '#64748b',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
                       }}
-                    />
-                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                      Reaching 0 automatically switches to Out of Stock on customer site.
-                    </span>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Low Stock Threshold Alert
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={menuForm.minStockThreshold}
-                      onChange={(e) => setMenuForm({ ...menuForm, minStockThreshold: Number(e.target.value) })}
-                      placeholder="e.g. 5"
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        background: '#fff'
-                      }}
-                    />
-                    <span style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                      Triggers low stock badge and warning notification.
-                    </span>
+                    >
+                      {menuForm.bestseller ? '⭐ Bestseller Item' : 'Standard Item'}
+                    </button>
                   </div>
                 </div>
 

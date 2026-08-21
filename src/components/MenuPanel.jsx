@@ -3,7 +3,6 @@ import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 import CategoryListPanel from './CategoryListPanel';
 import { server } from '../config/index.js';
-import { StarIcon, ChefHatIcon, ClockIcon } from './Icons';
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -293,25 +292,15 @@ export default function MenuPanel({
 
                   {/* 2. Name & description */}
                   <td style={{ padding: '12px 14px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>{item.name}</span>
                       {item.bestseller && (
-                        <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                          <StarIcon size={10} color="#b45309" fill="#b45309" /> BESTSELLER
-                        </span>
-                      )}
-                      {item.chefSpecial && (
-                        <span style={{ background: '#f3e8ff', color: '#6d28d9', fontSize: '9px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px', border: '1px solid #ddd6fe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                          <ChefHatIcon size={11} color="#6d28d9" /> CHEF'S SPECIAL
-                        </span>
-                      )}
-                      {item.prepTime && (
-                        <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', border: '1px solid #bfdbfe', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                          <ClockIcon size={10} color="#1d4ed8" /> {item.prepTime}m
+                        <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '9px', fontWeight: 800, padding: '1px 5px', borderRadius: '4px' }}>
+                          ★ BESTSELLER
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.desc || 'No description provided.'}
                     </div>
                   </td>
@@ -377,10 +366,10 @@ export default function MenuPanel({
                       fontSize: '10px',
                       fontWeight: 800,
                       textTransform: 'uppercase',
-                      background: (item.available && (item.stockQuantity === undefined || item.stockQuantity > 0)) ? '#e6f4ea' : '#fee2e2',
-                      color: (item.available && (item.stockQuantity === undefined || item.stockQuantity > 0)) ? '#16a34a' : '#b91c1c'
+                      background: item.available ? '#e6f4ea' : '#f1f5f9',
+                      color: item.available ? '#16a34a' : '#64748b'
                     }}>
-                      {(item.available && (item.stockQuantity === undefined || item.stockQuantity > 0)) ? 'AVAILABLE' : 'OUT OF STOCK'}
+                      {item.available ? 'AVAILABLE' : 'OUT OF STOCK'}
                     </span>
                   </td>
 
