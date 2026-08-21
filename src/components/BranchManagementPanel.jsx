@@ -539,7 +539,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace' }}>
                   {currentViewBranch?.branchCode || 'BR-CHE-01'}
                 </span>
-                <Badge status={currentViewBranch?.status === 'Active' ? 'Active' : 'Offline'} />
+                <Badge status={currentViewBranch?.status === 'Active' ? 'Active' : 'Inactive'} />
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
                 Location: {currentViewBranch?.address || 'Main Road'}, {currentViewBranch?.city || 'Chennai'}, {currentViewBranch?.state || 'Tamil Nadu'}
@@ -1499,7 +1499,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                     {/* 7. Status */}
                     <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                      <Badge status={b.status === 'Active' ? 'Active' : 'Offline'} />
+                      <Badge status={b.status === 'Active' ? 'Active' : 'Inactive'} />
                     </td>
 
                     {/* 8. Actions */}

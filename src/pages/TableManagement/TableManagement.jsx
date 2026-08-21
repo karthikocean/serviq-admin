@@ -43,11 +43,12 @@ export default function TableManagement() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const tablesRes = await TableApi.getTables();
+      const params = selectedBranchId ? { branchId: selectedBranchId } : { branchId: 'ALL' };
+      const tablesRes = await TableApi.getTables(params);
       if (tablesRes.status && tablesRes.response?.data) {
         setTables(tablesRes.response.data);
       }
-      const staffRes = await StaffApi.getStaff();
+      const staffRes = await StaffApi.getStaff(params.branchId);
       if (staffRes.status && staffRes.response?.data) {
         setStaff(staffRes.response.data);
       }

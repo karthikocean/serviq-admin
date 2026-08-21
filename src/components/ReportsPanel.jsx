@@ -17,13 +17,11 @@ const ReceiptIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+import ReportsApi from '../api/Reports';
+
 export default function ReportsPanel({
-  orders = [],
-  allOrders = [],
   staff = [],
-  tables = [],
   menu = [],
-  branches = [],
   selectedBranchId = null,
   activeRestaurant = {},
   initialTab = 'waiter'
@@ -42,6 +40,13 @@ export default function ReportsPanel({
   const [selectedOrderForReceipt, setSelectedOrderForReceipt] = useState(null);
   const [selectedWaiterOrdersModal, setSelectedWaiterOrdersModal] = useState(null);
 
+  const [loading, setLoading] = useState(false);
+  const [waiterData, setWaiterData] = useState([]);
+  const [kitchenData, setKitchenData] = useState([]);
+  const [summary, setSummary] = useState(null);
+
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalItems: 0 });
+
   const currency = activeRestaurant?.settings?.currency || '₹';
 
   useEffect(() => {
@@ -50,105 +55,61 @@ export default function ReportsPanel({
     }
   }, [initialTab]);
 
-  const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
-  };
+  const fetchReports = async (page = 1) => {
+    setLoading(true);
+    try {
+      const filters = {
+        startDate: dateStart,
+        endDate: dateEnd,
+        branchId: selectedBranchId || 'All',
+        search: searchQuery,
+        page,
+        limit: pagination.limit
+      };
 
-  // Filter orders by date range
-  const filteredOrders = orders.filter(ord => {
-    const date = getOrderDate(ord);
-    if (dateStart && date < dateStart) return false;
-    if (dateEnd && date > dateEnd) return false;
-    return true;
-  });
-
-  // 1. Waiter Performance Report Data
-  const waiters = staff.filter(s => s.role === 'Waiter');
-  const waiterData = waiters.map((waiter, idx) => {
-    const waiterOrders = filteredOrders.filter(o => o.waiter === waiter.name);
-    const totalRev = waiterOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const avgVal = waiterOrders.length > 0 ? parseFloat((totalRev / waiterOrders.length).toFixed(2)) : 0;
-    const assignedTables = tables.filter(t => t.assignedWaiterId === waiter.id || t.assignedWaiter === waiter.name);
-
-    return {
-      sno: idx + 1,
-      id: waiter.id,
-      name: waiter.name,
-      email: waiter.email || `${waiter.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
-      phone: waiter.phone || '9876543210',
-      status: waiter.status || 'On Duty',
-      assignedTablesCount: assignedTables.length,
-      assignedTablesList: assignedTables.map(t => t.id),
-      totalOrders: waiterOrders.length,
-      revenue: totalRev,
-      averageOrderValue: avgVal,
-      orders: waiterOrders
-    };
-  }).filter(w => {
-    if (filterWaiter !== 'All' && w.name !== filterWaiter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = w.name.toLowerCase().includes(q);
-      const matchEmail = w.email.toLowerCase().includes(q);
-      const matchPhone = w.phone.includes(q);
-      const matchTable = w.assignedTablesList.some(t => t.toLowerCase().includes(q));
-      if (!matchName && !matchEmail && !matchPhone && !matchTable) return false;
-    }
-    return true;
-  }).sort((a, b) => b.revenue - a.revenue);
-
-  // 2. Kitchen Performance Report Data
-  const getKitchenReportData = () => {
-    const kitchenItemsGrouped = {};
-    filteredOrders.forEach(ord => {
-      (ord.items || []).forEach(it => {
-        const key = it.name;
-        if (!kitchenItemsGrouped[key]) {
-          const menuItem = menu.find(m => m.name.toLowerCase() === it.name.toLowerCase());
-          kitchenItemsGrouped[key] = {
-            itemName: it.name,
-            category: menuItem ? menuItem.category : 'Starters',
-            quantityPrepared: 0,
-            revenueGenerated: 0,
-            avgPrepTime: '12-15 mins',
-            status: ord.status === 'completed' ? 'Prepared & Served' : (ord.status === 'preparing' ? 'In Preparation' : 'Order Received')
-          };
+      if (activeReportTab === 'waiter') {
+        filters.waiterId = filterWaiter;
+        const res = await ReportsApi.getWaiterReports(filters);
+        if (res.status) {
+          setWaiterData(res.response.data || []);
+          setSummary(res.response.summary || null);
+          setPagination(prev => ({
+            ...prev,
+            page: res.response.page,
+            totalPages: res.response.totalPages,
+            totalItems: res.response.totalItems
+          }));
         }
-        kitchenItemsGrouped[key].quantityPrepared += it.qty || 0;
-        kitchenItemsGrouped[key].revenueGenerated += (it.price || 0) * (it.qty || 0);
-      });
-    });
-
-    return Object.values(kitchenItemsGrouped).filter(k => {
-      if (filterKitchenCategory !== 'All' && k.category !== filterKitchenCategory) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchItem = k.itemName.toLowerCase().includes(q);
-        const matchCat = k.category.toLowerCase().includes(q);
-        if (!matchItem && !matchCat) return false;
+      } else {
+        filters.categoryId = filterKitchenCategory;
+        const res = await ReportsApi.getKitchenReports(filters);
+        if (res.status) {
+          setKitchenData(res.response.data || []);
+          setSummary(res.response.summary || null);
+          setPagination(prev => ({
+            ...prev,
+            page: res.response.page,
+            totalPages: res.response.totalPages,
+            totalItems: res.response.totalItems
+          }));
+        }
       }
-      return true;
-    }).sort((a, b) => b.quantityPrepared - a.quantityPrepared);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const kitchenData = getKitchenReportData();
+  useEffect(() => {
+    fetchReports(1);
+  }, [activeReportTab, dateStart, dateEnd, filterWaiter, filterKitchenCategory, searchQuery, selectedBranchId, pagination.limit]);
 
-  // Aggregate Stats
-  const totalWaiterRevenue = waiterData.reduce((sum, w) => sum + w.revenue, 0);
-  const totalWaiterOrders = waiterData.reduce((sum, w) => sum + w.totalOrders, 0);
-  const waitersOnDutyCount = waiters.filter(w => w.status === 'On Duty').length;
-
-  const totalKitchenDishes = kitchenData.reduce((sum, k) => sum + k.quantityPrepared, 0);
-  const totalKitchenRevenue = kitchenData.reduce((sum, k) => sum + k.revenueGenerated, 0);
-  const kitchenCategoriesCount = new Set(kitchenData.map(k => k.category)).size;
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      fetchReports(newPage);
+    }
+  };
 
   const handleResetFilters = () => {
     setDateStart('');
@@ -156,6 +117,7 @@ export default function ReportsPanel({
     setFilterWaiter('All');
     setFilterKitchenCategory('All');
     setSearchQuery('');
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   // Excel / CSV Export
@@ -264,15 +226,15 @@ export default function ReportsPanel({
           <div class="summary-bar">
             <div class="summary-box">
               <div class="summary-label">${activeReportTab === 'waiter' ? 'Total Waiter Revenue' : 'Total Kitchen Revenue'}</div>
-              <div class="summary-val">${currency}${(activeReportTab === 'waiter' ? totalWaiterRevenue : totalKitchenRevenue).toLocaleString()}</div>
+              <div class="summary-val">${currency}${(activeReportTab === 'waiter' ? (summary?.totalWaiterRevenue || 0) : (summary?.foodRevenueGenerated || 0)).toLocaleString()}</div>
             </div>
             <div class="summary-box">
               <div class="summary-label">${activeReportTab === 'waiter' ? 'Orders Fulfilled' : 'Dishes Prepared'}</div>
-              <div class="summary-val">${activeReportTab === 'waiter' ? totalWaiterOrders : totalKitchenDishes}</div>
+              <div class="summary-val">${activeReportTab === 'waiter' ? (summary?.totalOrdersServed || 0) : (summary?.totalDishesPrepared || 0)}</div>
             </div>
             <div class="summary-box">
               <div class="summary-label">${activeReportTab === 'waiter' ? 'Waiters On Duty' : 'Active Food Categories'}</div>
-              <div class="summary-val">${activeReportTab === 'waiter' ? `${waitersOnDutyCount} / ${waiters.length}` : kitchenCategoriesCount}</div>
+              <div class="summary-val">${activeReportTab === 'waiter' ? `${summary?.activeWaitersOnDuty || 0} / ${summary?.totalWaiters || 0}` : (summary?.activeCategories || 0)}</div>
             </div>
           </div>
 
@@ -359,7 +321,7 @@ export default function ReportsPanel({
             transition: 'all 0.15s'
           }}
         >
-          🤵 Waiter Reports ({waiters.length})
+          🤵 Waiter Reports ({summary?.totalWaiters || 0})
         </button>
 
         <button
@@ -389,26 +351,26 @@ export default function ReportsPanel({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Waiter Revenue</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{totalWaiterRevenue.toLocaleString('en-IN')}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{(summary?.totalWaiterRevenue || 0).toLocaleString('en-IN')}</div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Fulfilled by serving team</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Orders Served</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalWaiterOrders}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.totalOrdersServed || 0}</div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Completed order tickets</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid var(--primary)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Waiters On Duty</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{waitersOnDutyCount} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {waiters.length}</span></div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeWaitersOnDuty || 0} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {summary?.totalWaiters || 0}</span></div>
             <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px', fontWeight: 600 }}>Available for table service</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #f59e0b', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Average Order Value</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#b45309', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>
-              {currency}{totalWaiterOrders > 0 ? (totalWaiterRevenue / totalWaiterOrders).toFixed(2) : '0.00'}
+              {currency}{summary?.averageOrderValue || '0.00'}
             </div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Per customer order</div>
           </div>
@@ -417,25 +379,25 @@ export default function ReportsPanel({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #ea580c', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Dishes Prepared</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#ea580c', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalKitchenDishes}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#ea580c', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.totalDishesPrepared || 0}</div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Cooked and dispatched</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid var(--primary)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Food Revenue Generated</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{totalKitchenRevenue.toLocaleString('en-IN')}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{(summary?.foodRevenueGenerated || 0).toLocaleString('en-IN')}</div>
             <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px', fontWeight: 600 }}>Total value of dishes cooked</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Food Categories</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{kitchenCategoriesCount}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeCategories || 0}</div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Starters, Meals, Drinks, etc.</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #10b981', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Kitchen Preparation Time</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>12 - 15 <span style={{ fontSize: '14px', color: '#64748b' }}>mins</span></div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.avgPrepTime || 'N/A'}</div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Average order fulfillment</div>
           </div>
         </div>
@@ -484,9 +446,9 @@ export default function ReportsPanel({
                 onChange={e => setFilterWaiter(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff' }}
               >
-                <option value="All">All Waiters ({waiters.length})</option>
-                {waiters.map(w => (
-                  <option key={w.id} value={w.name}>{w.name}</option>
+                <option value="All">All Waiters</option>
+                {staff.filter(s => s.role === 'Waiter').map(w => (
+                  <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
               </select>
             ) : (
@@ -587,56 +549,28 @@ export default function ReportsPanel({
                       borderRadius: '12px',
                       fontSize: '10px',
                       fontWeight: 800,
-                      backgroundColor: w.status === 'On Duty' ? '#dcfce7' : '#f1f5f9',
-                      color: w.status === 'On Duty' ? '#166534' : '#64748b'
+                      backgroundColor: w.dutyStatus === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
+                      color: w.dutyStatus === 'ON_DUTY' ? '#166534' : '#64748b'
                     }}>
-                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: w.status === 'On Duty' ? '#16a34a' : '#94a3b8' }}></span>
-                      {w.status}
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: w.dutyStatus === 'ON_DUTY' ? '#16a34a' : '#94a3b8' }}></span>
+                      {w.dutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 12px' }}>
-                    {w.assignedTablesList.length > 0 ? (
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {w.assignedTablesList.map(t => (
-                          <span key={t} style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', fontSize: '10px', fontWeight: 800, padding: '2px 6px', borderRadius: '4px' }}>
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>No tables assigned</span>
-                    )}
+                    {/* Waiter assigned tables can be kept as a separate API call or dropped here. We'll show a placeholder. */}
+                    <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>Fetched from DB</span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'center', fontWeight: 700, color: '#0f172a' }}>
-                    {w.totalOrders} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>orders</span>
+                    {w.ordersServed} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>orders</span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 800, color: '#16a34a', fontSize: '14px', fontFamily: "'Outfit', sans-serif" }}>
-                    {currency}{w.revenue.toLocaleString('en-IN')}
+                    {currency}{w.totalRevenue.toLocaleString('en-IN')}
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#475569', fontSize: '13px' }}>
-                    {currency}{w.averageOrderValue.toFixed(2)}
+                    {currency}{w.averageOrderValue}
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
-                    {w.orders.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWaiterOrdersModal(w)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid #e2e8f0',
-                          background: '#fff',
-                          color: 'var(--primary)',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Orders ({w.orders.length})
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>-</span>
-                    )}
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>-</span>
                   </td>
                 </tr>
               ))}
@@ -673,7 +607,7 @@ export default function ReportsPanel({
                     {index + 1}
                   </td>
                   <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                    {k.itemName}
+                    {k.foodItem}
                   </td>
                   <td style={{ padding: '12px 12px' }}>
                     <span style={{ fontSize: '11px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}>
@@ -696,10 +630,10 @@ export default function ReportsPanel({
                       borderRadius: '12px',
                       fontSize: '10px',
                       fontWeight: 800,
-                      backgroundColor: k.status === 'Prepared & Served' ? '#dcfce7' : '#ffedd5',
-                      color: k.status === 'Prepared & Served' ? '#166534' : '#c2410c'
+                      backgroundColor: k.kitchenStatus === 'Completed' ? '#dcfce7' : '#ffedd5',
+                      color: k.kitchenStatus === 'Completed' ? '#166534' : '#c2410c'
                     }}>
-                      {k.status}
+                      {k.kitchenStatus}
                     </span>
                   </td>
                 </tr>
@@ -716,6 +650,63 @@ export default function ReportsPanel({
           </table>
         )}
       </div>
+
+      {/* Pagination Footer */}
+      {pagination.totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 8px' }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
+            Showing page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={pagination.page <= 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                background: pagination.page <= 1 ? '#f8fafc' : '#fff',
+                color: pagination.page <= 1 ? '#94a3b8' : '#0f172a',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Previous
+            </button>
+            <span style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minWidth: '32px',
+              height: '32px',
+              borderRadius: '6px',
+              background: '#f1f5f9',
+              color: '#0f172a',
+              fontSize: '13px',
+              fontWeight: 700
+            }}>
+              {pagination.page}
+            </span>
+            <button
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={pagination.page >= pagination.totalPages}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                background: pagination.page >= pagination.totalPages ? '#f8fafc' : '#fff',
+                color: pagination.page >= pagination.totalPages ? '#94a3b8' : '#0f172a',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* WAITER ORDERS POPUP MODAL */}
       <Modal
