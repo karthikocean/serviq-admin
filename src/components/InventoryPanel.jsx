@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext';
+import InventoryApi from '../api/Inventory';
+import InventoryCategoryApi from '../api/InventoryCategory';
+import BranchApi from '../api/Branch';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -72,6 +75,12 @@ const HistoryIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const RefreshIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+  </svg>
+);
+
 const ArrowDownLeftIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="17" y1="7" x2="7" y2="17"></line>
@@ -97,22 +106,15 @@ export default function InventoryPanel() {
     selectedBranchId
   } = useAppState();
 
-  const branches = activeRestaurant?.branches || [];
-  const rawInventory = activeRestaurant?.inventory || [];
   const rawLogs = activeRestaurant?.inventoryLogs || [];
   const rawCategories = activeRestaurant?.inventoryCategories || DEFAULT_INVENTORY_CATEGORIES;
 
-  // Filter inventory by branch if a branch is selected in the global header
-  const inventory = selectedBranchId
-    ? rawInventory.filter(item => item.branchId === selectedBranchId || item.branchId === 'ALL')
-    : rawInventory;
-
-  const logs = selectedBranchId
-    ? rawLogs.filter(log => {
-      const matchItem = rawInventory.find(i => i.id === log.itemId);
-      return !matchItem || matchItem.branchId === selectedBranchId || matchItem.branchId === 'ALL';
-    })
-    : rawLogs;
+  // Live API States
+  const [items, setItems] = useState([]);
+  const [liveCategories, setLiveCategories] = useState([]);
+  const [liveBranches, setLiveBranches] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,28 +130,21 @@ export default function InventoryPanel() {
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
-  // Dynamic Unique Categories & Items List for Dropdowns
-  const dynamicCatNames = Array.from(new Set([
-    ...rawCategories.map(c => c.name),
-    ...rawInventory.map(i => i.category)
-  ].filter(Boolean))).sort();
-  const categoriesList = ['All', ...dynamicCatNames];
-
-  const uniqueItemNames = Array.from(new Set(inventory.map(i => i.name).filter(Boolean))).sort();
-
   // Form states for Add / Edit Item
   const [formState, setFormState] = useState({
     id: '',
     name: '',
     sku: '',
-    category: dynamicCatNames[0] || 'Dairy',
-    branchId: selectedBranchId || (branches.length > 0 ? branches[0].id : 'BR-001'),
+    categoryId: '',
+    category: '',
+    branchId: '',
     currentStock: '',
-    minStockLevel: '',
+    minAlertLevel: '',
     unit: 'kg',
     costPerUnit: '',
     supplierName: '',
-    supplierPhone: ''
+    supplierPhone: '',
+    status: 'AVAILABLE'
   });
 
   const [formErrors, setFormErrors] = useState({});
@@ -163,45 +158,246 @@ export default function InventoryPanel() {
   });
   const [adjustErrors, setAdjustErrors] = useState({});
 
+  const [apiStats, setApiStats] = useState(null);
+
+  // 1. Fetch Categories
+  const fetchCategories = useCallback(async () => {
+    try {
+      const params = {};
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      }
+      const res = await InventoryCategoryApi.getCategories(params);
+      if (res?.status) {
+        const rawData = res.response?.data || res.response?.categories || res.response || [];
+        const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
+        setLiveCategories(list);
+      }
+    } catch (err) {
+      console.error("Failed to load inventory categories:", err);
+    }
+  }, [selectedBranchId]);
+
+  // 2. Fetch Branches
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches();
+      if (res?.status) {
+        const rawData = res.response?.data || res.response?.branches || res.response || [];
+        const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
+        setLiveBranches(list);
+      }
+    } catch (err) {
+      console.error("Failed to load branches:", err);
+    }
+  }, []);
+
+  // 3. Fetch Stats from Backend API
+  const fetchStats = useCallback(async () => {
+    try {
+      const params = {};
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      }
+      const res = await InventoryApi.getStats(params);
+      if (res?.status && res.response?.data) {
+        setApiStats(res.response.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch stats:", err);
+    }
+  }, [selectedBranchId]);
+
+  // 4. Fetch Items from Backend API
+  const fetchItems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params = {};
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      }
+      const res = await InventoryApi.getItems(params);
+      if (res?.status) {
+        const rawData = res.response?.data || res.response?.items || res.response || [];
+        const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
+        setItems(list);
+      } else {
+        // Fallback to local context data if API is unreachable
+        if (activeRestaurant?.inventory && items.length === 0) {
+          setItems(activeRestaurant.inventory);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch inventory items:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedBranchId, activeRestaurant, items.length]);
+
+  const [liveLogs, setLiveLogs] = useState([]);
+
+  // 5. Fetch Logs from Backend API
+  const fetchLogs = useCallback(async () => {
+    try {
+      const params = {};
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      }
+      const [purchaseRes, reduceRes] = await Promise.all([
+        InventoryApi.getLogs({ ...params, type: 'purchase' }),
+        InventoryApi.getLogs({ ...params, type: 'reduction' })
+      ]);
+
+      const pList = (purchaseRes?.status && (purchaseRes.response?.data || purchaseRes.response?.logs || [])) || [];
+      const rList = (reduceRes?.status && (reduceRes.response?.data || reduceRes.response?.logs || [])) || [];
+
+      const combined = [
+        ...pList.map(p => ({
+          id: p._id || p.id,
+          date: p.purchaseDate ? new Date(p.purchaseDate).toLocaleString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleString('en-IN') : '—'),
+          rawDate: p.purchaseDate || p.createdAt,
+          itemName: typeof p.itemId === 'object' ? p.itemId?.name : (p.itemName || '—'),
+          type: 'Stock In',
+          quantity: p.purchaseQty !== undefined ? p.purchaseQty : p.quantity,
+          unit: (typeof p.itemId === 'object' && p.itemId?.unit) ? p.itemId.unit : (p.unit || 'unit'),
+          reason: `Supplier: ${p.supplierName || 'Purchase'}`,
+          notes: p.invoiceNumber ? `Invoice: ${p.invoiceNumber}` : '',
+          user: typeof p.addedBy === 'object' ? (p.addedBy?.name || 'Staff') : (p.addedBy || 'Admin')
+        })),
+        ...rList.map(r => ({
+          id: r._id || r.id,
+          date: r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.date || '—'),
+          rawDate: r.createdAt || r.date,
+          itemName: typeof r.itemId === 'object' ? r.itemId?.name : (r.itemName || '—'),
+          type: 'Stock Out',
+          quantity: r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity,
+          unit: (typeof r.itemId === 'object' && r.itemId?.unit) ? r.itemId.unit : (r.unit || 'unit'),
+          reason: r.reason || 'Kitchen Usage',
+          notes: r.details || r.notes || '',
+          user: typeof r.reducedBy === 'object' ? (r.reducedBy?.name || 'Staff') : (r.reducedBy || 'Admin')
+        }))
+      ].sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0));
+
+      if (combined.length > 0) {
+        setLiveLogs(combined);
+      }
+    } catch (err) {
+      console.error("Failed to fetch logs in InventoryPanel:", err);
+    }
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    fetchCategories();
+    fetchBranches();
+    fetchStats();
+    fetchItems();
+    fetchLogs();
+  }, [fetchCategories, fetchBranches, fetchStats, fetchItems, fetchLogs]);
+
+  // Unified available branches list
+  const availableBranches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+  const availableCategories = liveCategories.length > 0 ? liveCategories : rawCategories;
+
+  // Helper to extract category name from item
+  const getCategoryName = (item) => {
+    if (item.categoryId && typeof item.categoryId === 'object') {
+      return item.categoryId.name || 'General';
+    }
+    if (item.categoryId) {
+      const match = liveCategories.find(c => (c._id === item.categoryId || c.id === item.categoryId));
+      if (match) return match.name;
+    }
+    return item.category || 'General';
+  };
+
+  // Helper to get branch label from item
+  const getBranchLabel = (branchId) => {
+    if (!branchId) return 'Main Branch';
+    const match = availableBranches.find(b => (b._id === branchId || b.id === branchId));
+    return match ? (match.branchName || match.name) : branchId;
+  };
+
+  // Dynamic Unique Categories & Items List for Dropdowns
+  const dynamicCatNames = Array.from(new Set([
+    ...availableCategories.map(c => c.name),
+    ...items.map(i => getCategoryName(i))
+  ].filter(Boolean))).sort();
+  const categoriesList = ['All', ...dynamicCatNames];
+
+  const uniqueItemNames = Array.from(new Set(items.map(i => i.name).filter(Boolean))).sort();
+
   // Metrics
-  const totalItemsCount = inventory.length;
-  const lowStockCount = inventory.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock').length;
-  const totalValuation = inventory.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
-  const categoriesCount = new Set(inventory.map(i => i.category)).size;
+  const totalItemsCount = items.length;
+  const lowStockCount = items.filter(i => {
+    const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
+    const cur = Number(i.currentStock) || 0;
+    return cur <= min;
+  }).length;
+  const inStockCount = items.filter(i => {
+    const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
+    const cur = Number(i.currentStock) || 0;
+    return cur > min;
+  }).length;
+  const totalValuation = items.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
+  const categoriesCount = new Set(items.map(i => getCategoryName(i))).size;
+
+  // Logs filtered by selected branch
+  const logs = liveLogs.length > 0
+    ? liveLogs
+    : (selectedBranchId
+      ? rawLogs.filter(log => {
+        const matchItem = items.find(i => (i._id === log.itemId || i.id === log.itemId));
+        return !matchItem || matchItem.branchId === selectedBranchId || matchItem.branchId === 'ALL';
+      })
+      : rawLogs);
 
   // Filter items
-  const filteredInventory = inventory.filter(item => {
+  const filteredInventory = items.filter(item => {
+    const catName = getCategoryName(item);
+    const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
+    const curStock = Number(item.currentStock) || 0;
+
     const matchesSearch = (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.category || '').toLowerCase().includes(searchTerm.toLowerCase());
+      catName.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesItemName = itemNameFilter === 'All' || item.name === itemNameFilter;
-    const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
+    const matchesCategory = categoryFilter === 'All' || catName === categoryFilter;
 
-    const matchesStatus = statusFilter === 'All'
-      ? true
-      : statusFilter === 'Low Stock'
-        ? (item.status === 'Low Stock' || item.status === 'Out of Stock')
-        : item.status === statusFilter;
+    let matchesStatus = true;
+    if (statusFilter === 'Low Stock') {
+      matchesStatus = curStock <= minLevel && curStock > 0;
+    } else if (statusFilter === 'Out of Stock') {
+      matchesStatus = curStock <= 0;
+    } else if (statusFilter === 'In Stock') {
+      matchesStatus = curStock > minLevel;
+    }
 
     return matchesSearch && matchesItemName && matchesCategory && matchesStatus;
   });
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    const defaultCat = availableCategories[0];
+    const defaultBranch = selectedBranchId && selectedBranchId !== 'ALL'
+      ? selectedBranchId
+      : (availableBranches[0]?._id || availableBranches[0]?.id || 'BR-001');
+
     setFormState({
       id: '',
       name: '',
       sku: `ING-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
-      category: 'Dairy',
-      branchId: selectedBranchId || (branches.length > 0 ? branches[0].id : 'BR-001'),
+      categoryId: defaultCat?._id || defaultCat?.id || '',
+      category: defaultCat?.name || 'General',
+      branchId: defaultBranch,
       currentStock: '',
-      minStockLevel: '',
+      minAlertLevel: '',
       unit: 'kg',
       costPerUnit: '',
       supplierName: '',
-      supplierPhone: ''
+      supplierPhone: '',
+      status: 'AVAILABLE'
     });
     setFormErrors({});
     setIsAddEditModalOpen(true);
@@ -209,18 +405,25 @@ export default function InventoryPanel() {
 
   const handleOpenEditModal = (item) => {
     setEditingItem(item);
+    const itemCatId = (item.categoryId && typeof item.categoryId === 'object')
+      ? item.categoryId._id
+      : (item.categoryId || '');
+    const itemCatName = getCategoryName(item);
+
     setFormState({
-      id: item.id,
+      id: item._id || item.id,
       name: item.name || '',
       sku: item.sku || '',
-      category: item.category || 'Dairy',
-      branchId: item.branchId || (selectedBranchId || 'BR-001'),
+      categoryId: itemCatId,
+      category: itemCatName,
+      branchId: item.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (availableBranches[0]?._id || 'BR-001')),
       currentStock: item.currentStock !== undefined ? item.currentStock : '',
-      minStockLevel: item.minStockLevel !== undefined ? item.minStockLevel : '',
+      minAlertLevel: (item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) !== undefined ? (item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) : '',
       unit: item.unit || 'kg',
       costPerUnit: item.costPerUnit !== undefined ? item.costPerUnit : '',
       supplierName: item.supplierName || '',
-      supplierPhone: item.supplierPhone || ''
+      supplierPhone: item.supplierPhone || '',
+      status: item.status || 'AVAILABLE'
     });
     setFormErrors({});
     setIsAddEditModalOpen(true);
@@ -233,8 +436,8 @@ export default function InventoryPanel() {
     if (formState.currentStock === '' || isNaN(Number(formState.currentStock)) || Number(formState.currentStock) < 0) {
       errors.currentStock = 'Please enter a valid stock quantity (0 or more).';
     }
-    if (formState.minStockLevel === '' || isNaN(Number(formState.minStockLevel)) || Number(formState.minStockLevel) < 0) {
-      errors.minStockLevel = 'Please enter a valid min stock threshold (0 or more).';
+    if (formState.minAlertLevel === '' || isNaN(Number(formState.minAlertLevel)) || Number(formState.minAlertLevel) < 0) {
+      errors.minAlertLevel = 'Please enter a valid min alert threshold (0 or more).';
     }
     if (formState.costPerUnit === '' || isNaN(Number(formState.costPerUnit)) || Number(formState.costPerUnit) < 0) {
       errors.costPerUnit = 'Please enter a valid unit cost (0 or more).';
@@ -243,45 +446,65 @@ export default function InventoryPanel() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSaveItem = (e) => {
+  const handleSaveItem = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    if (editingItem) {
-      if (updateInventoryItem && activeRestaurant?.id) {
-        updateInventoryItem(activeRestaurant.id, editingItem.id, {
-          name: formState.name.trim(),
-          sku: formState.sku.trim(),
-          category: formState.category,
-          branchId: formState.branchId,
-          currentStock: Number(formState.currentStock),
-          minStockLevel: Number(formState.minStockLevel),
-          unit: formState.unit,
-          costPerUnit: Number(formState.costPerUnit),
-          supplierName: formState.supplierName.trim(),
-          supplierPhone: formState.supplierPhone.trim()
-        });
-        ShowNotifications.showAlertNotification(`Inventory item "${formState.name}" updated!`, true);
-      }
-    } else {
-      if (addInventoryItem && activeRestaurant?.id) {
-        addInventoryItem(activeRestaurant.id, {
-          name: formState.name.trim(),
-          sku: formState.sku.trim(),
-          category: formState.category,
-          branchId: formState.branchId,
-          currentStock: Number(formState.currentStock),
-          minStockLevel: Number(formState.minStockLevel),
-          unit: formState.unit,
-          costPerUnit: Number(formState.costPerUnit),
-          supplierName: formState.supplierName.trim(),
-          supplierPhone: formState.supplierPhone.trim()
-        });
-        ShowNotifications.showAlertNotification(`New item "${formState.name}" added to inventory!`, true);
-      }
+    setIsSubmitting(true);
+    let resolvedCatId = formState.categoryId;
+    if (!resolvedCatId) {
+      const match = availableCategories.find(c => c.name === formState.category);
+      resolvedCatId = match?._id || match?.id || undefined;
     }
 
-    setIsAddEditModalOpen(false);
+    const payload = {
+      name: formState.name.trim(),
+      sku: formState.sku.trim(),
+      categoryId: resolvedCatId || undefined,
+      currentStock: Number(formState.currentStock),
+      minAlertLevel: Number(formState.minAlertLevel),
+      unit: formState.unit,
+      costPerUnit: Number(formState.costPerUnit),
+      supplierName: formState.supplierName.trim(),
+      supplierPhone: formState.supplierPhone.trim(),
+      status: formState.status || 'AVAILABLE',
+      branchId: formState.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined)
+    };
+
+    try {
+      if (editingItem) {
+        const itemId = editingItem._id || editingItem.id;
+        const res = await InventoryApi.updateItem(itemId, payload);
+        if (res?.status) {
+          await fetchItems();
+          if (updateInventoryItem && activeRestaurant?.id) {
+            updateInventoryItem(activeRestaurant.id, itemId, {
+              ...payload,
+              category: formState.category,
+              minStockLevel: payload.minAlertLevel
+            });
+          }
+          setIsAddEditModalOpen(false);
+        }
+      } else {
+        const res = await InventoryApi.createItem(payload);
+        if (res?.status) {
+          await fetchItems();
+          if (addInventoryItem && activeRestaurant?.id) {
+            addInventoryItem(activeRestaurant.id, {
+              ...(res.response?.data || payload),
+              category: formState.category,
+              minStockLevel: payload.minAlertLevel
+            });
+          }
+          setIsAddEditModalOpen(false);
+        }
+      }
+    } catch (err) {
+      console.error("Save inventory item error:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleOpenAdjustModal = (item, defaultType = 'Stock In') => {
@@ -296,7 +519,7 @@ export default function InventoryPanel() {
     setIsAdjustModalOpen(true);
   };
 
-  const handleSaveAdjustment = (e) => {
+  const handleSaveAdjustment = async (e) => {
     e.preventDefault();
     const qty = Number(adjustState.quantity);
     if (!adjustState.quantity || isNaN(qty) || qty <= 0) {
@@ -304,32 +527,58 @@ export default function InventoryPanel() {
       return;
     }
 
-    if (adjustState.type === 'Stock Out' && qty > adjustTargetItem.currentStock) {
-      setAdjustErrors({ quantity: `Cannot issue more than current available stock (${adjustTargetItem.currentStock} ${adjustTargetItem.unit}).` });
+    const currentStock = Number(adjustTargetItem.currentStock) || 0;
+    if (adjustState.type === 'Stock Out' && qty > currentStock) {
+      setAdjustErrors({ quantity: `Cannot issue more than current available stock (${currentStock} ${adjustTargetItem.unit}).` });
       return;
     }
 
-    if (adjustStock && activeRestaurant?.id && adjustTargetItem) {
-      adjustStock(
-        activeRestaurant.id,
-        adjustTargetItem.id,
-        adjustState.type,
-        qty,
-        adjustState.reason,
-        adjustState.notes
-      );
-      ShowNotifications.showAlertNotification(
-        `${adjustState.type} of ${qty} ${adjustTargetItem.unit} logged for ${adjustTargetItem.name}!`,
-        true
-      );
-      setIsAdjustModalOpen(false);
+    const newStock = adjustState.type === 'Stock In'
+      ? currentStock + qty
+      : Math.max(0, currentStock - qty);
+
+    try {
+      const itemId = adjustTargetItem._id || adjustTargetItem.id;
+      const res = await InventoryApi.updateItem(itemId, {
+        currentStock: newStock
+      });
+      if (res?.status) {
+        if (adjustStock && activeRestaurant?.id) {
+          adjustStock(
+            activeRestaurant.id,
+            itemId,
+            adjustState.type,
+            qty,
+            adjustState.reason,
+            adjustState.notes
+          );
+        }
+        await fetchItems();
+        ShowNotifications.showAlertNotification(
+          `${adjustState.type} of ${qty} ${adjustTargetItem.unit} recorded! New stock: ${newStock} ${adjustTargetItem.unit}`,
+          true
+        );
+        setIsAdjustModalOpen(false);
+      }
+    } catch (err) {
+      console.error("Adjust stock error:", err);
     }
   };
 
-  const handleDeleteConfirm = () => {
-    if (itemToDelete && deleteInventoryItem && activeRestaurant?.id) {
-      deleteInventoryItem(activeRestaurant.id, itemToDelete.id);
-      ShowNotifications.showAlertNotification(`Item "${itemToDelete.name}" removed from inventory.`, true);
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+    const itemId = itemToDelete._id || itemToDelete.id;
+    try {
+      const res = await InventoryApi.deleteItem(itemId);
+      if (res?.status) {
+        await fetchItems();
+        if (deleteInventoryItem && activeRestaurant?.id) {
+          deleteInventoryItem(activeRestaurant.id, itemId);
+        }
+      }
+    } catch (err) {
+      console.error("Delete item error:", err);
+    } finally {
       setItemToDelete(null);
     }
   };
@@ -360,13 +609,38 @@ export default function InventoryPanel() {
                 borderRadius: '6px',
                 letterSpacing: '0.5px'
               }}>
-                PREMIUM
+                LIVE API
               </span>
             </div>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+              Real-time stock tracking, valuation, minimum threshold alerts, and supplier records
+            </p>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/inventory/categories')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#0f172a',
+              fontWeight: 700,
+              padding: '10px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+            }}
+          >
+            <LayersIcon size={16} color="#64748b" />
+            Manage Categories ({availableCategories.length})
+          </button>
+
           <button
             type="button"
             onClick={() => setIsLogsModalOpen(true)}
@@ -387,6 +661,29 @@ export default function InventoryPanel() {
           >
             <HistoryIcon size={16} color="#64748b" />
             Stock Logs ({logs.length})
+          </button>
+
+          <button
+            type="button"
+            onClick={fetchItems}
+            disabled={isLoading}
+            title="Refresh inventory items"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#475569',
+              fontWeight: 700,
+              padding: '10px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <RefreshIcon size={14} color={isLoading ? '#94a3b8' : '#475569'} />
+            Refresh
           </button>
 
           <button
@@ -444,31 +741,31 @@ export default function InventoryPanel() {
           </div>
         </div>
 
-        {/* Card 2: Low Stock Alerts */}
+        {/* Card 2: Low Stock Alert */}
         <div style={{
           background: '#ffffff',
           borderRadius: '14px',
           padding: '20px',
-          border: lowStockCount > 0 ? '1.5px solid #fecaca' : '1px solid #e2e8f0',
+          border: '1px solid #e2e8f0',
           boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
           display: 'flex',
           alignItems: 'center',
           gap: '16px'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: lowStockCount > 0 ? '#fef2f2' : '#f0fdf4', color: lowStockCount > 0 ? '#dc2626' : '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertTriangleIcon size={24} color={lowStockCount > 0 ? '#dc2626' : '#16a34a'} />
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangleIcon size={24} color="#ea580c" />
           </div>
           <div>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Low Stock Alerts
             </span>
             <h3 style={{ fontSize: '24px', fontWeight: 800, color: lowStockCount > 0 ? '#dc2626' : '#0f172a', margin: '4px 0 0 0' }}>
-              {lowStockCount} {lowStockCount > 0 && <span style={{ fontSize: '12px', fontWeight: 700, color: '#dc2626' }}>(Action Required)</span>}
+              {lowStockCount}
             </h3>
           </div>
         </div>
 
-        {/* Card 3: Total Stock Valuation */}
+        {/* Card 3: Stock Valuation */}
         <div style={{
           background: '#ffffff',
           borderRadius: '14px',
@@ -621,7 +918,7 @@ export default function InventoryPanel() {
                 maxWidth: '220px'
               }}
             >
-              <option value="All">All Item Names ({inventory.length})</option>
+              <option value="All">All Item Names ({items.length})</option>
               {uniqueItemNames.map(name => (
                 <option key={name} value={name}>{name}</option>
               ))}
@@ -659,7 +956,7 @@ export default function InventoryPanel() {
           {[
             { id: 'All', label: `All Items (${totalItemsCount})` },
             { id: 'Low Stock', label: `Low Stock (${lowStockCount})` },
-            { id: 'In Stock', label: `In Stock (${inventory.filter(i => i.status === 'In Stock').length})` }
+            { id: 'In Stock', label: `In Stock (${inStockCount})` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -737,20 +1034,32 @@ export default function InventoryPanel() {
               </tr>
             </thead>
             <tbody>
-              {filteredInventory.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600 }}>Loading inventory items from server...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredInventory.length > 0 ? (
                 filteredInventory.map((item, index) => {
-                  const isOut = item.currentStock <= 0;
-                  const isLow = item.currentStock > 0 && item.currentStock <= item.minStockLevel;
+                  const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
+                  const curStock = Number(item.currentStock) || 0;
+                  const isOut = curStock <= 0;
+                  const isLow = curStock > 0 && curStock <= minLevel;
                   const statusBg = isOut ? '#fef2f2' : isLow ? '#fffbeb' : '#f0fdf4';
                   const statusText = isOut ? '#dc2626' : isLow ? '#d97706' : '#16a34a';
                   const statusLabel = isOut ? 'OUT OF STOCK' : isLow ? 'LOW STOCK' : 'IN STOCK';
-                  const itemValue = (Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0);
-                  const progressPct = Math.min(100, Math.round(((item.currentStock || 0) / ((item.minStockLevel || 1) * 2)) * 100));
+                  const itemValue = curStock * (Number(item.costPerUnit) || 0);
+                  const progressPct = Math.min(100, Math.round((curStock / ((minLevel || 1) * 2)) * 100));
+                  const catName = getCategoryName(item);
+                  const branchLabel = getBranchLabel(item.branchId);
 
                   return (
-                    <tr 
-                      key={item.id || index}
-                      style={{ 
+                    <tr
+                      key={item._id || item.id || index}
+                      style={{
                         borderBottom: '1px solid #f1f5f9',
                         transition: 'background 0.15s'
                       }}
@@ -768,7 +1077,7 @@ export default function InventoryPanel() {
                               {item.sku}
                             </span>
                             <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                              ID: {item.id}
+                              ID: {(item._id || item.id || '').substring(0, 8)}...
                             </span>
                           </div>
                         </div>
@@ -778,10 +1087,10 @@ export default function InventoryPanel() {
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                           <span style={{ fontWeight: 700, color: '#334155' }}>
-                            {item.category}
+                            {catName}
                           </span>
                           <span style={{ fontSize: '11px', color: '#64748b' }}>
-                            {item.branchId || 'BR-001'}
+                            {branchLabel}
                           </span>
                         </div>
                       </td>
@@ -791,10 +1100,10 @@ export default function InventoryPanel() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontWeight: 800, color: isOut ? '#dc2626' : '#0f172a', fontSize: '13px' }}>
-                              {item.currentStock} {item.unit}
+                              {curStock} {item.unit}
                             </span>
                             <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              Min: {item.minStockLevel} {item.unit}
+                              Min: {minLevel} {item.unit}
                             </span>
                           </div>
                           {/* Mini Progress Bar */}
@@ -979,7 +1288,7 @@ export default function InventoryPanel() {
       {/* 6. MODAL: ADD / EDIT INVENTORY ITEM */}
       <Modal
         isOpen={isAddEditModalOpen}
-        onClose={() => setIsAddEditModalOpen(false)}
+        onClose={() => !isSubmitting && setIsAddEditModalOpen(false)}
         title={editingItem ? 'Edit Stock Item' : 'Add New Stock Item'}
         maxWidth="600px"
       >
@@ -992,6 +1301,7 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="text"
+                disabled={isSubmitting}
                 value={formState.name}
                 onChange={e => {
                   setFormState({ ...formState, name: e.target.value });
@@ -1021,6 +1331,7 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="text"
+                disabled={isSubmitting}
                 value={formState.sku}
                 onChange={e => {
                   setFormState({ ...formState, sku: e.target.value });
@@ -1052,8 +1363,17 @@ export default function InventoryPanel() {
                 Category
               </label>
               <select
-                value={formState.category}
-                onChange={e => setFormState({ ...formState, category: e.target.value })}
+                disabled={isSubmitting}
+                value={formState.categoryId || ''}
+                onChange={e => {
+                  const selectedId = e.target.value;
+                  const catObj = availableCategories.find(c => (c._id === selectedId || c.id === selectedId));
+                  setFormState({
+                    ...formState,
+                    categoryId: selectedId,
+                    category: catObj ? catObj.name : formState.category
+                  });
+                }}
                 style={{
                   width: '100%',
                   padding: '10px 14px',
@@ -1065,8 +1385,10 @@ export default function InventoryPanel() {
                   boxSizing: 'border-box'
                 }}
               >
-                {categoriesList.filter(c => c !== 'All').map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
+                {availableCategories.map(cat => (
+                  <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                    {cat.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1076,6 +1398,7 @@ export default function InventoryPanel() {
                 Branch Assignment
               </label>
               <select
+                disabled={isSubmitting}
                 value={formState.branchId}
                 onChange={e => setFormState({ ...formState, branchId: e.target.value })}
                 style={{
@@ -1089,14 +1412,16 @@ export default function InventoryPanel() {
                   boxSizing: 'border-box'
                 }}
               >
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.branchName} ({b.branchCode})</option>
+                {availableBranches.map(b => (
+                  <option key={b._id || b.id} value={b._id || b.id}>
+                    {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Row 3: Current Stock, Min Level & Unit */}
+          {/* Row 3: Current Stock, Min Alert Level & Unit */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
@@ -1104,6 +1429,7 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="number"
+                disabled={isSubmitting}
                 step="0.1"
                 min="0"
                 value={formState.currentStock}
@@ -1135,27 +1461,28 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="number"
+                disabled={isSubmitting}
                 step="0.1"
                 min="0"
-                value={formState.minStockLevel}
+                value={formState.minAlertLevel}
                 onChange={e => {
-                  setFormState({ ...formState, minStockLevel: e.target.value });
-                  if (formErrors.minStockLevel) setFormErrors({ ...formErrors, minStockLevel: '' });
+                  setFormState({ ...formState, minAlertLevel: e.target.value });
+                  if (formErrors.minAlertLevel) setFormErrors({ ...formErrors, minAlertLevel: '' });
                 }}
                 placeholder="5"
                 style={{
                   width: '100%',
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  border: formErrors.minStockLevel ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  border: formErrors.minAlertLevel ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '13px',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
               />
-              {formErrors.minStockLevel && (
+              {formErrors.minAlertLevel && (
                 <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.minStockLevel}
+                  {formErrors.minAlertLevel}
                 </span>
               )}
             </div>
@@ -1165,6 +1492,7 @@ export default function InventoryPanel() {
                 Unit of Measure
               </label>
               <select
+                disabled={isSubmitting}
                 value={formState.unit}
                 onChange={e => setFormState({ ...formState, unit: e.target.value })}
                 style={{
@@ -1186,6 +1514,9 @@ export default function InventoryPanel() {
                 <option value="box">box (Boxes)</option>
                 <option value="bag">bag (Bags / Sacks)</option>
                 <option value="pack">pack (Packets)</option>
+                <option value="can">can (Cans)</option>
+                <option value="dozen">dozen (Dozens)</option>
+                <option value="bundle">bundle (Bundles)</option>
               </select>
             </div>
           </div>
@@ -1197,6 +1528,7 @@ export default function InventoryPanel() {
             </label>
             <input
               type="number"
+              disabled={isSubmitting}
               step="0.01"
               min="0"
               value={formState.costPerUnit}
@@ -1230,6 +1562,7 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="text"
+                disabled={isSubmitting}
                 value={formState.supplierName}
                 onChange={e => setFormState({ ...formState, supplierName: e.target.value })}
                 placeholder="e.g. Nandini Dairy Supplies"
@@ -1251,6 +1584,7 @@ export default function InventoryPanel() {
               </label>
               <input
                 type="text"
+                disabled={isSubmitting}
                 value={formState.supplierPhone}
                 onChange={e => setFormState({ ...formState, supplierPhone: e.target.value })}
                 placeholder="e.g. +91 98450 12345"
@@ -1271,6 +1605,7 @@ export default function InventoryPanel() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
             <button
               type="button"
+              disabled={isSubmitting}
               className="btn btn-outline"
               onClick={() => setIsAddEditModalOpen(false)}
             >
@@ -1278,9 +1613,20 @@ export default function InventoryPanel() {
             </button>
             <button
               type="submit"
-              className="btn btn-black"
+              disabled={isSubmitting}
+              style={{
+                background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                padding: '10px 22px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
+              }}
             >
-              {editingItem ? 'Save Changes' : 'Add Item'}
+              {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Item')}
             </button>
           </div>
         </form>
@@ -1548,7 +1894,7 @@ export default function InventoryPanel() {
             Are you sure you want to delete <strong>{itemToDelete?.name}</strong> ({itemToDelete?.sku})?
           </p>
           <p style={{ margin: '8px 0 0 0', color: '#ef4444', fontSize: '12px', fontWeight: 600 }}>
-            This item and its historical metrics will be removed from your stock ledger.
+            This item will be permanently removed from your stock ledger.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
