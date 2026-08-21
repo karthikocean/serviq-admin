@@ -1334,7 +1334,6 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteOrder = async (id, orderId) => {
-    // 1. Optimistic Local State Update
     setRestaurantsData(prev => {
       const rest = prev[id];
       if (!rest) return prev;
@@ -1353,7 +1352,6 @@ export const AppProvider = ({ children }) => {
   };
 
   const updateOrder = async (id, orderId, updatedFields) => {
-    // 1. Optimistic Local State Update
     setRestaurantsData(prev => {
       const rest = prev[id];
       if (!rest) return prev;

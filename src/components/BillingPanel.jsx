@@ -58,7 +58,6 @@ export default function BillingPanel({
 
   const handleMarkAsPaidSubmit = async () => {
     if (!selectedBillingTable) return;
-
     const response = await BillingApi.processTablePayment({
       branchId: selectedBranchId,
       tableId: selectedBillingTable,

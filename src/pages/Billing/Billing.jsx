@@ -39,7 +39,6 @@ export default function Billing() {
     } else if (fetchedTables.length === 0) {
       setSelectedBillingTable('');
     }
-
     setIsLoading(false);
   };
 

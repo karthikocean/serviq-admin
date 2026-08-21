@@ -19,7 +19,7 @@ export default function OrderManagement() {
   const [selectedWaiterFilter, setSelectedWaiterFilter] = useState({ id: 'All Waiters', name: 'All Waiters' });
   const [apiOrders, setApiOrders] = useState([]);
   const [apiStaff, setApiStaff] = useState([]);
-  
+
   // Pagination State
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
@@ -30,7 +30,7 @@ export default function OrderManagement() {
     try {
       let queryStr = selectedBranchId ? `?branchId=${selectedBranchId}` : `?branchId=ALL`;
       queryStr += `&page=${page}&limit=${limit}`;
-      
+
       if (selectedWaiterFilter.id !== 'All Waiters') {
         queryStr += `&waiterId=${selectedWaiterFilter.id}`;
       }
@@ -61,7 +61,7 @@ export default function OrderManagement() {
     setPage(0); // Reset page on filter change
     fetchOrdersAndStaff();
   }, [selectedBranchId, selectedWaiterFilter, orderFilter, limit]);
-  
+
   useEffect(() => {
     fetchOrdersAndStaff();
   }, [page]);
@@ -84,7 +84,7 @@ export default function OrderManagement() {
         selectedBranchId={selectedBranchId}
         updateOrderStatus={updateOrderStatus}
         refreshOrders={fetchOrdersAndStaff}
-        
+
         // Pass pagination state
         page={page}
         setPage={setPage}

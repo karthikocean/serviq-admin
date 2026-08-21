@@ -192,7 +192,6 @@ export default function OrdersPanel({
           apiClient.get(`/tables?branchId=${branchId}`).catch(() => null),
           apiClient.get(`/staff?branchId=${branchId}`).catch(() => null)
         ]);
-
         let fetchedTables = [];
         if (menuRes && menuRes.data?.success) setApiMenuItems(menuRes.data.data);
         if (catRes && catRes.data?.success) setApiCategories(catRes.data.data);
@@ -200,7 +199,6 @@ export default function OrdersPanel({
           fetchedTables = tableRes.data.data;
           setApiTables(fetchedTables);
         }
-
         const firstTable = fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : '');
         setNewOrderTable(firstTable);
 
@@ -230,7 +228,6 @@ export default function OrdersPanel({
     const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
     const targetBranchId = selectedBranchId || defaultBranchId || getFallbackBranchId();
     setModalSelectedBranchId(targetBranchId);
-
     await fetchModalDataForBranch(targetBranchId);
 
     setNewOrderWaiter('Unassigned');
@@ -746,6 +743,13 @@ export default function OrdersPanel({
                     <td style={{ padding: '16px', fontSize: '13px', maxWidth: '300px' }}>
                       <div style={{ fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>
                         {itemSummary}
+                      </div>
+                    </td>
+
+                    {/* NEW DATE COLUMN */}
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                        {dateStr}
                       </div>
                     </td>
 
