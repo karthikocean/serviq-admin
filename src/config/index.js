@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.17:5000/public";
-    BASE_URL = "http://192.168.1.17:5000/api/admin";
-    server = "http://192.168.1.17:5000";
+    IMAGE_BASE_URL = "http://192.168.1.16:5000/public";
+    BASE_URL = "http://192.168.1.16:5000/api/admin";
+    server = "http://192.168.1.16:5000";
     break;
 }
 
@@ -50,7 +50,10 @@ apiClient.interceptors.request.use(
     // Automatically attach branchId to GET requests if a specific branch is selected
     if (config.method?.toLowerCase() === 'get') {
       const branchId = localStorage.getItem("serviq_branch_id");
-      if (branchId && branchId !== 'ALL') {
+      const urlHasBranchId = config.url && config.url.includes('branchId=');
+      const paramsHasBranchId = config.params && config.params.branchId !== undefined;
+      
+      if (branchId && branchId !== 'ALL' && !urlHasBranchId && !paramsHasBranchId) {
         config.params = { ...config.params, branchId };
       }
     }
