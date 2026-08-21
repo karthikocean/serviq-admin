@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.17:5000/public";
-    BASE_URL = "http://192.168.1.17:5000/api/admin";
-    server = "http://192.168.1.17:5000";
+    IMAGE_BASE_URL = "http://192.168.1.13:5000/public";
+    BASE_URL = "http://192.168.1.13:5000/api/admin";
+    server = "http://192.168.1.13:5000";
     break;
 }
 
@@ -37,9 +37,10 @@ apiClient.interceptors.request.use(
   function (config) {
     const token = localStorage.getItem("userToken") || localStorage.getItem("token");
 
-    if (token) {
+    if (token && token !== "null" && token !== "undefined") {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
+
 
     if (config.data instanceof FormData) {
       config.headers["Content-Type"] = "multipart/form-data";
@@ -50,7 +51,10 @@ apiClient.interceptors.request.use(
     // Automatically attach branchId to GET requests if a specific branch is selected
     if (config.method?.toLowerCase() === 'get') {
       const branchId = localStorage.getItem("serviq_branch_id");
-      if (branchId && branchId !== 'ALL') {
+      const urlHasBranchId = config.url && config.url.includes('branchId=');
+      const paramsHasBranchId = config.params && config.params.branchId !== undefined;
+
+      if (branchId && branchId !== 'ALL' && !urlHasBranchId && !paramsHasBranchId) {
         config.params = { ...config.params, branchId };
       }
     }

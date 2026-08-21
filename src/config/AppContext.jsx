@@ -370,7 +370,7 @@ export const AppProvider = ({ children }) => {
               inventory: [],
               inventoryLogs: []
             };
-            
+
             const mappedBranches = branchArray.map(b => ({
               id: b._id,
               branchName: b.branchName,
@@ -467,7 +467,7 @@ export const AppProvider = ({ children }) => {
           try {
             localStorage.setItem('serviq_user', JSON.stringify(user));
             localStorage.setItem('serviq_rest_id', targetRestId);
-          } catch (e) {}
+          } catch (e) { }
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
           return { success: true, user };
@@ -505,7 +505,7 @@ export const AppProvider = ({ children }) => {
         localStorage.setItem('serviq_user', JSON.stringify(user));
         localStorage.setItem('serviq_rest_id', 'rest-1');
         localStorage.removeItem('serviq_branch_id');
-      } catch (e) {}
+      } catch (e) { }
       ShowNotifications.showAlertNotification("Login successful", true);
       return { success: true, user };
     }
@@ -543,7 +543,7 @@ export const AppProvider = ({ children }) => {
           localStorage.setItem('serviq_user', JSON.stringify(user));
           localStorage.setItem('serviq_rest_id', id);
           localStorage.removeItem('serviq_branch_id');
-        } catch (e) {}
+        } catch (e) { }
         if (rest.settings) {
           setAccentColor(rest.settings.accentColor || '#ff7a00');
           setDarkMode(rest.settings.darkMode || false);
@@ -574,15 +574,15 @@ export const AppProvider = ({ children }) => {
         setCurrentRestaurantId(id);
         if (user.branchId && user.branchId !== 'ALL') {
           setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) {}
+          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) { }
         } else {
           setSelectedBranchId(null);
-          try { localStorage.removeItem('serviq_branch_id'); } catch (e) {}
+          try { localStorage.removeItem('serviq_branch_id'); } catch (e) { }
         }
         try {
           localStorage.setItem('serviq_user', JSON.stringify(user));
           localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
+        } catch (e) { }
         ShowNotifications.showAlertNotification("Login successful", true);
         return { success: true, user };
       }
@@ -610,7 +610,7 @@ export const AppProvider = ({ children }) => {
         try {
           localStorage.setItem('serviq_user', JSON.stringify(user));
           localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
+        } catch (e) { }
         ShowNotifications.showAlertNotification("Login successful", true);
         return { success: true, user };
       }
@@ -637,12 +637,12 @@ export const AppProvider = ({ children }) => {
         setCurrentRestaurantId(id);
         if (user.branchId) {
           setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) {}
+          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) { }
         }
         try {
           localStorage.setItem('serviq_user', JSON.stringify(user));
           localStorage.setItem('serviq_rest_id', id);
-        } catch (e) {}
+        } catch (e) { }
         ShowNotifications.showAlertNotification("Login successful", true);
         return { success: true, user };
       }
@@ -661,7 +661,7 @@ export const AppProvider = ({ children }) => {
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
       localStorage.removeItem('serviq_branch_id');
-    } catch (e) {}
+    } catch (e) { }
   };
 
 
@@ -670,9 +670,9 @@ export const AppProvider = ({ children }) => {
     setRestaurantsData(prev => {
       const rest = prev[id];
       if (!rest) return prev;
-      
+
       const flatSettings = settings.settings || {};
-      
+
       const updatedRest = {
         ...rest,
         name: settings.name || rest.name,
@@ -794,7 +794,7 @@ export const AppProvider = ({ children }) => {
     if (updatedFields.seats !== undefined) payload.seatingCapacity = updatedFields.seats;
     if (updatedFields.status !== undefined) payload.status = updatedFields.status === 'Occupied';
     if (updatedFields.isActive !== undefined) payload.isActive = updatedFields.isActive;
-    
+
     // Update local state optimistically
     setRestaurantsData(prev => {
       const restObj = prev[id];
@@ -1245,7 +1245,7 @@ export const AppProvider = ({ children }) => {
             payload.billingStatus = 'paid';
           }
           const idToUpdate = order._id || order.id || order.orderId;
-          await OrderApi.updateOrder(idToUpdate, payload).catch(() => {});
+          await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
       }
     } catch (e) {
@@ -1285,7 +1285,7 @@ export const AppProvider = ({ children }) => {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
           const idToUpdate = order._id || order.id || order.orderId;
-          await OrderApi.updateOrder(idToUpdate, { waiter: waiterName }).catch(() => {});
+          await OrderApi.updateOrder(idToUpdate, { waiter: waiterName }).catch(() => { });
         }
       }
     } catch (e) {
@@ -1293,10 +1293,11 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const addOrder = async (id, newOrderData) => {
+  const addOrder = async (id, newOrderData, skipApiCall = false) => {
     // 1. Optimistic Local State Update
     const orderWithDefaults = {
-      id: newOrderData.id || String(Date.now()).slice(-4),
+      id: newOrderData.orderId || newOrderData.id || `ORD-TMP-${String(Date.now()).slice(-4)}`,
+      orderId: newOrderData.orderId || newOrderData.id || `ORD-TMP-${String(Date.now()).slice(-4)}`,
       table: newOrderData.table || '01',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timeAgo: 'Just now',
@@ -1329,18 +1330,6 @@ export const AppProvider = ({ children }) => {
       };
     });
 
-    // 2. Safe API Sync
-    try {
-      if (OrderApi && OrderApi.createOrder) {
-        await OrderApi.createOrder({
-          restaurantId: id,
-          ...orderWithDefaults
-        }).catch(() => {});
-      }
-    } catch (e) {
-      // Ignore background sync errors
-    }
-
     return orderWithDefaults;
   };
 
@@ -1361,20 +1350,6 @@ export const AppProvider = ({ children }) => {
         }
       };
     });
-
-    // 2. Safe API Sync
-    try {
-      const rest = restaurantsData[id];
-      if (rest) {
-        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
-        if (order) {
-          const idToDelete = order._id || order.id || order.orderId;
-          await OrderApi.deleteOrder(idToDelete).catch(() => {});
-        }
-      }
-    } catch (e) {
-      // Ignore background sync errors
-    }
   };
 
   const updateOrder = async (id, orderId, updatedFields) => {
@@ -1403,19 +1378,7 @@ export const AppProvider = ({ children }) => {
       };
     });
 
-    // 2. Safe API Sync
-    try {
-      const rest = restaurantsData[id];
-      if (rest) {
-        const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
-        if (order) {
-          const idToUpdate = order._id || order.id || order.orderId;
-          await OrderApi.updateOrder(idToUpdate, updatedFields).catch(() => {});
-        }
-      }
-    } catch (e) {
-      // Ignore background sync errors
-    }
+
   };
 
   const markBillAsPaid = async (id, tableLabel) => {
@@ -1448,7 +1411,7 @@ export const AppProvider = ({ children }) => {
 
     // 2. Safe API Sync
     try {
-      await OrderApi.payBill(tableLabel).catch(() => {});
+      await OrderApi.payBill(tableLabel).catch(() => { });
     } catch (e) {
       // Ignore background sync errors
     }
@@ -1753,7 +1716,7 @@ export const AppProvider = ({ children }) => {
         status: (Number(itemData.currentStock) <= 0) ? 'Out of Stock' : (Number(itemData.currentStock) <= Number(itemData.minStockLevel)) ? 'Low Stock' : 'In Stock',
         lastRestocked: itemData.lastRestocked || new Date().toISOString().split('T')[0]
       };
-      
+
       const newLog = {
         id: `LOG-${Date.now().toString().slice(-6)}`,
         itemId: newId,
@@ -2138,7 +2101,7 @@ export const AppProvider = ({ children }) => {
         activeRestaurant,
         selectedBranchId,
         setSelectedBranchId,
-        
+
         login,
         logout,
         saveRestaurantSettings,

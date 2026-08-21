@@ -223,46 +223,23 @@ export default function MenuPanel({
           </select>
         </div>
 
-        {/* Sort Select */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Sort by:</label>
-          <select
-            value={menuSort}
-            onChange={(e) => setMenuSort(e.target.value)}
-            style={{
-              padding: '8px 14px',
-              fontSize: '13px',
-              borderRadius: '8px',
-              border: '1.5px solid var(--border)',
-              backgroundColor: 'var(--bg-secondary)',
-              fontWeight: 600,
-              color: 'var(--text-main)',
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            <option value="name">Name</option>
-            <option value="price-asc">Price: Low to High</option>
-            <option value="price-desc">Price: High to Low</option>
-          </select>
-        </div>
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
       <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table className="menu-items-table" style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+        <table className="menu-items-table" style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th style={{ width: '4%', padding: '14px 12px' }}>S.NO</th>
-              <th style={{ width: '6%', padding: '14px 12px' }}>IMAGE</th>
-              <th style={{ width: '21%', padding: '14px 14px' }}>NAME</th>
-              <th style={{ width: '12%', padding: '14px 12px' }}>CATEGORY</th>
-              <th style={{ width: '10%', padding: '14px 12px', textAlign: 'right' }}>BASE PRICE</th>
-              <th style={{ width: '11%', padding: '14px 12px', textAlign: 'center' }}>GST RATE</th>
-              <th style={{ width: '13%', padding: '14px 12px', textAlign: 'right' }}>TOTAL (INCL. GST)</th>
-              <th style={{ width: '8%', padding: '14px 10px', textAlign: 'center' }}>TYPE</th>
-              <th style={{ width: '9%', padding: '14px 10px', textAlign: 'center' }}>STATUS</th>
-              <th style={{ width: '6%', padding: '14px 12px', textAlign: 'right' }}>ACTIONS</th>
+              <th className="sticky-col-1" style={{ padding: '14px 12px' }}>S.NO</th>
+              <th className="sticky-col-2" style={{ padding: '14px 12px' }}>IMAGE</th>
+              <th className="sticky-col-3" style={{ padding: '14px 14px' }}>NAME</th>
+              <th style={{ width: '150px', padding: '14px 12px' }}>CATEGORY</th>
+              <th style={{ width: '120px', padding: '14px 12px', textAlign: 'right' }}>BASE PRICE</th>
+              <th style={{ width: '130px', padding: '14px 12px', textAlign: 'center' }}>GST RATE</th>
+              <th style={{ width: '160px', padding: '14px 12px', textAlign: 'right' }}>TOTAL (INCL. GST)</th>
+              <th style={{ width: '100px', padding: '14px 10px', textAlign: 'center' }}>TYPE</th>
+              <th style={{ width: '120px', padding: '14px 10px', textAlign: 'center' }}>STATUS</th>
+              <th className="sticky-col-action" style={{ padding: '14px 12px' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -274,9 +251,9 @@ export default function MenuPanel({
 
               return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
-                  <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
+                  <td className="sticky-col-1" style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
                   {/* 1. Image */}
-                  <td style={{ padding: '12px 12px' }}>
+                  <td className="sticky-col-2" style={{ padding: '12px 12px' }}>
                     {item.image ? (
                       <img
                         src={getImageUrl(item.image)}
@@ -291,7 +268,7 @@ export default function MenuPanel({
                   </td>
 
                   {/* 2. Name & description */}
-                  <td style={{ padding: '12px 14px' }}>
+                  <td className="sticky-col-3" style={{ padding: '12px 14px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>{item.name}</span>
                       {item.bestseller && (
@@ -318,17 +295,19 @@ export default function MenuPanel({
                   {/* 5. GST Rate */}
                   <td style={{ padding: '12px 12px', textAlign: 'center' }}>
                     <span style={{
+                      display: 'inline-block',
                       background: '#fff7ed',
                       border: '1px solid #fed7aa',
                       color: '#c2410c',
                       padding: '3px 8px',
                       borderRadius: '6px',
                       fontSize: '11px',
-                      fontWeight: 800
+                      fontWeight: 800,
+                      marginBottom: '4px'
                     }}>
                       {gstRate}% GST
                     </span>
-                    <div style={{ fontSize: '10px', color: '#9a3412', marginTop: '2px', fontWeight: 600 }}>
+                    <div style={{ fontSize: '10px', color: '#9a3412', fontWeight: 600 }}>
                       +₹{gstAmt.toFixed(2)}
                     </div>
                   </td>
@@ -374,7 +353,7 @@ export default function MenuPanel({
                   </td>
 
                   {/* 9. Actions */}
-                  <td style={{ padding: '12px 12px', textAlign: 'right' }}>
+                  <td className="sticky-col-action" style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button
                         type="button"
@@ -427,7 +406,7 @@ export default function MenuPanel({
           >
             Prev
           </button>
-          
+
           <button
             style={{
               minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
