@@ -753,13 +753,6 @@ export default function OrdersPanel({
                       </div>
                     </td>
 
-                    {/* NEW DATE COLUMN */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                        {dateStr}
-                      </div>
-                    </td>
-
                     {/* 4. TIME / ELAPSED */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
