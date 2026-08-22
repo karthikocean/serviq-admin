@@ -105,14 +105,14 @@ export default function HelpSupport() {
           <h3>My Tickets</h3>
         </div>
         <div className="table-responsive">
-          <table className="data-table">
-            <thead style={{ background: '#1c1c1c' }}>
-              <tr>
-                <th style={{ color: '#fff' }}>Ticket No.</th>
-                <th style={{ color: '#fff' }}>Subject</th>
-                <th style={{ color: '#fff' }}>Priority</th>
-                <th style={{ color: '#fff' }}>Status</th>
-                <th style={{ color: '#fff' }}>Action</th>
+          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SUBJECT</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PRIORITY</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>

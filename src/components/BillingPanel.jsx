@@ -212,11 +212,11 @@ export default function BillingPanel({
 
           <table className="bill-items-table" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px' }}>
             <thead>
-              <tr style={{ background: '#111111', color: '#ffffff' }}>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: '700', letterSpacing: '0.5px' }}>ITEM DESCRIPTION</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: '700', letterSpacing: '0.5px' }}>QTY</th>
-                <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '11px', fontWeight: '700', letterSpacing: '0.5px' }}>RATE</th>
-                <th style={{ textAlign: 'right', padding: '12px 16px', fontSize: '11px', fontWeight: '700', letterSpacing: '0.5px' }}>AMOUNT</th>
+              <tr style={{ backgroundColor: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff' }}>ITEM DESCRIPTION</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff' }}>QTY</th>
+                <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff' }}>RATE</th>
+                <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff' }}>AMOUNT</th>
               </tr>
             </thead>
             <tbody>

@@ -992,14 +992,14 @@ export default function InventoryPanel() {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ background: '#0f172a', color: '#ffffff', borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ padding: '14px 18px', fontWeight: 800 }}>ITEM DETAILS</th>
-                <th style={{ padding: '14px 16px', fontWeight: 800 }}>CATEGORY & BRANCH</th>
-                <th style={{ padding: '14px 16px', fontWeight: 800 }}>STOCK LEVEL</th>
-                <th style={{ padding: '14px 16px', fontWeight: 800 }}>STATUS</th>
-                <th style={{ padding: '14px 16px', fontWeight: 800 }}>UNIT COST / VALUE</th>
-                <th style={{ padding: '14px 16px', fontWeight: 800 }}>SUPPLIER</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEM DETAILS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY & BRANCH</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STOCK LEVEL</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UNIT COST / VALUE</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SUPPLIER</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -1796,13 +1796,13 @@ export default function InventoryPanel() {
           {logs.length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569' }}>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>DATE / TIME</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>ITEM NAME</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>TYPE</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>QUANTITY</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>REASON & NOTES</th>
-                  <th style={{ padding: '10px 12px', fontWeight: 800 }}>LOGGED BY</th>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DATE / TIME</th>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEM NAME</th>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>QUANTITY</th>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REASON & NOTES</th>
+                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGGED BY</th>
                 </tr>
               </thead>
               <tbody>
