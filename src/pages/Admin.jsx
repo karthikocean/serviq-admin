@@ -430,7 +430,13 @@ export default function Admin() {
   };
 
   const isTabAllowed = (tab) => {
-    if (role === 'Admin') return true;
+    if (tab === 'branch-management' || tab === 'plans-management') {
+      return role === 'Admin' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN';
+    }
+
+    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN') {
+      return true;
+    }
 
     let moduleName = tab;
     if (tab === 'qr-code-config') moduleName = 'tables';
@@ -720,10 +726,7 @@ export default function Admin() {
   };
 
   const handleDeleteMenu = (itemId) => {
-    if (!hasPermission('menu', 'delete')) {
-      ShowNotifications.showAlertNotification('Action not allowed: You do not have permission to delete menu items.', false);
-      return;
-    }
+
     const item = activeRestaurant.menu.find(m => m.id === itemId);
     setMenuItemToDelete(item || { id: itemId, name: 'this menu item' });
   };
@@ -764,7 +767,7 @@ export default function Admin() {
     if (!tableId) return;
 
     const seats = parseInt(addTableForm.seats) || 4;
-    
+
     if (addTableForm.isEdit) {
       updateDiningTable(activeRestaurant.id, tableId, {
         seats: seats,
@@ -879,7 +882,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-           
+
             <div style={sty.pageCard}>
               <form onSubmit={(e) => {
                 e.preventDefault();
@@ -966,18 +969,18 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            
+
             <div style={sty.pageCard}>
               {/* Order Info Bar */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-                gap: '16px', 
-                padding: '20px 24px', 
-                background: '#f8fafc', 
-                borderRadius: '12px', 
-                border: '1px solid var(--border)', 
-                marginBottom: '28px' 
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '16px',
+                padding: '20px 24px',
+                background: '#f8fafc',
+                borderRadius: '12px',
+                border: '1px solid var(--border)',
+                marginBottom: '28px'
               }}>
                 <div>
                   <span style={{ fontSize: '11px', color: '#64748b', display: 'block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Table Number</span>
@@ -1093,7 +1096,7 @@ export default function Admin() {
       return (
         <section>
           <div style={{ width: '100%' }}>
-            <PageHeader/>
+            <PageHeader />
             <div style={sty.pageCard}>
               <form onSubmit={handleMenuSubmit} style={{ width: '100%' }}>
                 <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
@@ -1101,7 +1104,7 @@ export default function Admin() {
                   <div style={{ flex: '0 0 350px', minWidth: '300px' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Item Image</label>
-                      <div 
+                      <div
                         onClick={() => document.getElementById('menu-item-image-file').click()}
                         style={{ width: '100%', height: '350px', borderRadius: '12px', overflow: 'hidden', position: 'relative', cursor: 'pointer', background: '#f8fafc', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {menuForm.image ? (
@@ -1110,7 +1113,7 @@ export default function Admin() {
                           <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Click to add image</div>
                         )}
                         <div style={{ position: 'absolute', bottom: '16px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.85)', color: '#fff', padding: '8px 18px', borderRadius: '24px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
                           Change Photo
                         </div>
                       </div>
@@ -1137,7 +1140,7 @@ export default function Admin() {
                   <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '16px', minWidth: '300px' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Item Name</label>
-                      <input type="text" value={menuForm.name} onChange={(e) => setMenuForm({...menuForm, name: e.target.value})} placeholder="e.g. Masala Chai" required style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
+                      <input type="text" value={menuForm.name} onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })} placeholder="e.g. Masala Chai" required style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
@@ -1160,14 +1163,14 @@ export default function Admin() {
                       </div>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Price (₹)</label>
-                        <input type="number" value={menuForm.price} onChange={(e) => setMenuForm({...menuForm, price: e.target.value})} required placeholder="40" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
+                        <input type="number" value={menuForm.price} onChange={(e) => setMenuForm({ ...menuForm, price: e.target.value })} required placeholder="40" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Food Type</label>
-                        <select value={menuForm.foodType} onChange={(e) => setMenuForm({...menuForm, foodType: e.target.value})} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
+                        <select value={menuForm.foodType} onChange={(e) => setMenuForm({ ...menuForm, foodType: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
                           <option value="Veg">Veg</option>
                           <option value="Non-Veg">Non-Veg</option>
                           <option value="Egg">Egg</option>
@@ -1176,7 +1179,7 @@ export default function Admin() {
                       </div>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Status</label>
-                        <select value={menuForm.status} onChange={(e) => setMenuForm({...menuForm, status: e.target.value})} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
+                        <select value={menuForm.status} onChange={(e) => setMenuForm({ ...menuForm, status: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
                           <option value="Available">Available</option>
                           <option value="Out of Stock">Out of Stock</option>
                           <option value="Hidden">Hidden</option>
@@ -1186,12 +1189,12 @@ export default function Admin() {
 
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Preparation Time</label>
-                      <input type="text" value={menuForm.prepTime} onChange={(e) => setMenuForm({...menuForm, prepTime: e.target.value})} placeholder="e.g. 15 mins" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
+                      <input type="text" value={menuForm.prepTime} onChange={(e) => setMenuForm({ ...menuForm, prepTime: e.target.value })} placeholder="e.g. 15 mins" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }} />
                     </div>
 
                     <div className="form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Description</label>
-                      <textarea rows="4" value={menuForm.desc} onChange={(e) => setMenuForm({...menuForm, desc: e.target.value})} placeholder="Item description..." style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border)', resize: 'vertical', flex: 1, fontSize: '14px' }}></textarea>
+                      <textarea rows="4" value={menuForm.desc} onChange={(e) => setMenuForm({ ...menuForm, desc: e.target.value })} placeholder="Item description..." style={{ width: '100%', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border)', resize: 'vertical', flex: 1, fontSize: '14px' }}></textarea>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
@@ -1272,7 +1275,7 @@ export default function Admin() {
         <section style={{ width: '100%' }}>
           {/* Header Row matching Image 2 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px' }}>
-            <button 
+            <button
               type="button"
               onClick={() => setActivePage(null)}
               style={{
@@ -1298,7 +1301,7 @@ export default function Admin() {
               <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
                 {addTableForm.isEdit ? 'Edit Dining Table' : 'Add Dining Table'}
               </h2>
-            
+
             </div>
           </div>
 
@@ -1592,7 +1595,7 @@ export default function Admin() {
           {isTabAllowed('overview') && (
             <li className={`sidebar-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => { setActiveTab('overview'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z" /></svg>
                 Dashboard
               </a>
             </li>
@@ -1601,7 +1604,7 @@ export default function Admin() {
           {isTabAllowed('branch-management') && (
             <li className={`sidebar-item ${activeTab === 'branch-management' ? 'active' : ''}`} onClick={() => { setActiveTab('branch-management'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '12px'}}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><path d="M9 22v-4h6v4"></path></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '12px' }}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><path d="M9 22v-4h6v4"></path></svg>
                 Branch Management
               </a>
             </li>
@@ -1610,7 +1613,7 @@ export default function Admin() {
           {isTabAllowed('tables') && (
             <li className={`sidebar-item ${activeTab === 'tables' ? 'active' : ''}`} onClick={() => { setActiveTab('tables'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z" /><path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z" /></svg>
                 Table Management
               </a>
             </li>
@@ -1619,7 +1622,7 @@ export default function Admin() {
           {isTabAllowed('menu') && (
             <li className={`sidebar-item ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => { setActiveTab('menu'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.156 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811zm7.5-.141c.654-.596 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.156 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811zm7.5-.141c.654-.596 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783" /></svg>
                 Menu Management
               </a>
             </li>
@@ -1628,7 +1631,7 @@ export default function Admin() {
           {isTabAllowed('orders') && (
             <li className={`sidebar-item ${activeTab === 'orders' ? 'active' : ''}`} onClick={() => { setActiveTab('orders'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1m3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1m3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z" /></svg>
                 Order management
               </a>
             </li>
@@ -1642,11 +1645,11 @@ export default function Admin() {
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M8 16a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2M8 1.918l-.797.161A4 4 0 0 0 4 6c0 .628-.134 2.197-.459 3.742-.16.767-.376 1.566-.663 2.258h10.244c-.287-.692-.502-1.49-.663-2.258C12.134 8.197 12 6.628 12 6a4 4 0 0 0-3.203-3.92zM14.22 12c.223.447.481.801.78 1H1c.299-.199.557-.553.78-1C2.68 10.2 3 6.88 3 6c0-2.42 1.72-4.44 4.005-4.901a1 1 0 1 1 1.99 0A5 5 0 0 1 13 6c0 .88.32 4.2 1.22 6" /></svg>
                   Waiter Management
-                  {sidebarWaiterOpen ? 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15"/></svg> : 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9"/></svg>
+                  {sidebarWaiterOpen ?
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15" /></svg> :
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9" /></svg>
                   }
                 </a>
               </div>
@@ -1671,11 +1674,11 @@ export default function Admin() {
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '12px'}}><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"></path><line x1="6" y1="17" x2="18" y2="17"></line></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '12px' }}><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"></path><line x1="6" y1="17" x2="18" y2="17"></line></svg>
                   Kitchen Management
-                  {sidebarKitchenOpen ? 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15"/></svg> : 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9"/></svg>
+                  {sidebarKitchenOpen ?
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15" /></svg> :
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9" /></svg>
                   }
                 </a>
               </div>
@@ -1695,20 +1698,22 @@ export default function Admin() {
           {isTabAllowed('Settings') && (
             <li className={`sidebar-item ${activeTab === 'users' ? 'active' : ''}`} onClick={() => { setActiveTab('users'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4" /></svg>
                 User Module
               </a>
             </li>
           )}
           {/* 9. Roles & Permission */}
+          {/* 
           {isTabAllowed('Settings') && (
             <li className={`sidebar-item ${activeTab === 'roles-permissions' ? 'active' : ''}`} onClick={() => { setActiveTab('roles-permissions'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: '12px'}}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '12px' }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
                 Roles & Permission
               </a>
             </li>
           )}
+          */}
           {/* 9. Billing Dropdown */}
           {isTabAllowed('billing') && (
             <li className={`sidebar-group ${sidebarBillingOpen ? 'open' : ''}`}>
@@ -1718,11 +1723,11 @@ export default function Admin() {
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M1.5 2.5a.5.5 0 0 1 .5-.5h12a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5zM2 3v10h12V3zm1.5 1a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1z"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path fillRule="evenodd" d="M1.5 2.5a.5.5 0 0 1 .5-.5h12a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5H2a.5.5 0 0 1-.5-.5zM2 3v10h12V3zm1.5 1a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1zm0 2.5a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1z" /></svg>
                   Billing
-                  {sidebarBillingOpen ? 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15"/></svg> : 
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9"/></svg>
+                  {sidebarBillingOpen ?
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15" /></svg> :
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9" /></svg>
                   }
                 </a>
               </div>
@@ -1742,7 +1747,7 @@ export default function Admin() {
           {isTabAllowed('Reports') && (
             <li className={`sidebar-item ${activeTab === 'Reports' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z" /></svg>
                 Reports
               </a>
             </li>
@@ -1751,7 +1756,7 @@ export default function Admin() {
           {isTabAllowed('Settings') && (
             <li className={`sidebar-item ${activeTab === 'Settings' ? 'active' : ''}`} onClick={() => { setActiveTab('Settings'); setActivePage(null); }}>
               <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{marginRight: '12px'}}><path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/></svg>
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z" /></svg>
                 Settings
               </a>
             </li>
@@ -1788,19 +1793,19 @@ export default function Admin() {
                   <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
                 )}
               </button>
-              
+
               {/* PROFILE DROPDOWN */}
               <div style={{ position: 'relative' }}>
-                <button 
-                  style={{ 
-                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', 
-                    color: 'white', 
-                    border: 'none', 
-                    width: '40px', 
-                    height: '40px', 
-                    borderRadius: '50%', 
-                    fontWeight: 800, 
-                    fontSize: '18px', 
+                <button
+                  style={{
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                    color: 'white',
+                    border: 'none',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    fontWeight: 800,
+                    fontSize: '18px',
                     cursor: 'pointer',
                     boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
                     display: 'flex',
@@ -1811,80 +1816,80 @@ export default function Admin() {
                 >
                   {name.charAt(0).toUpperCase()}
                 </button>
-                
+
                 {isProfileMenuOpen && (
                   <>
                     {/* Invisible overlay to close dropdown when clicking outside */}
-                    <div 
+                    <div
                       style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 999 }}
                       onClick={() => setIsProfileMenuOpen(false)}
                     />
-                    <div style={{ 
-                      position: 'absolute', 
-                      top: '52px', 
-                      right: '0', 
-                      width: '260px', 
+                    <div style={{
+                      position: 'absolute',
+                      top: '52px',
+                      right: '0',
+                      width: '260px',
                       background: '#1e1e1e', // Dark theme look matching the screenshot
-                      borderRadius: '16px', 
-                      boxShadow: '0 10px 40px rgba(0,0,0,0.2)', 
+                      borderRadius: '16px',
+                      boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
                       border: '1px solid #333333',
                       zIndex: 1000,
                       overflow: 'hidden'
                     }}>
-                    <div style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #333333' }}>
-                      <div style={{ 
-                        background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', 
-                        color: 'white', 
-                        width: '48px', 
-                        height: '48px', 
-                        borderRadius: '50%', 
-                        fontWeight: 800, 
-                        fontSize: '22px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        {name.charAt(0).toUpperCase()}
-                      </div>
-                      <div style={{ overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {currentUser?.name || 'Serviq Admin'}
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#a1a1aa', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {currentUser?.email || 'admin@saravana.com'}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div style={{ padding: '8px' }}>
-                      <button 
-                        style={{ 
-                          width: '100%', 
-                          textAlign: 'left', 
-                          background: 'transparent', 
-                          border: 'none', 
-                          padding: '12px 16px', 
-                          color: '#e4e4e7', 
-                          fontSize: '14px', 
-                          fontWeight: 600, 
-                          cursor: 'pointer',
-                          borderRadius: '8px',
+                      <div style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #333333' }}>
+                        <div style={{
+                          background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                          color: 'white',
+                          width: '48px',
+                          height: '48px',
+                          borderRadius: '50%',
+                          fontWeight: 800,
+                          fontSize: '22px',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '10px',
-                          marginTop: '4px'
-                        }}
-                        onMouseEnter={(e) => e.target.style.background = '#27272a'}
-                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
-                        onClick={logout}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#ef4444' }}>
-                          Log Out
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {name.charAt(0).toUpperCase()}
                         </div>
-                      </button>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                            {currentUser?.name || 'Serviq Admin'}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#a1a1aa', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                            {currentUser?.email || 'admin@saravana.com'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '8px' }}>
+                        <button
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '12px 16px',
+                            color: '#e4e4e7',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            marginTop: '4px'
+                          }}
+                          onMouseEnter={(e) => e.target.style.background = '#27272a'}
+                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                          onClick={logout}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#ef4444' }}>
+                            Log Out
+                          </div>
+                        </button>
+                      </div>
                     </div>
-                  </div>
                   </>
                 )}
               </div>
@@ -2179,7 +2184,7 @@ export default function Admin() {
                     </option>
                   ))}
               </select>
-             
+
             </div>
 
             {/* Form Actions */}
@@ -2423,7 +2428,7 @@ export default function Admin() {
                     ShowNotifications.showAlertNotification(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`, true);
                   }}
                 >
-                  Submit 
+                  Submit
                 </button>
               </div>
             </div>
@@ -2675,15 +2680,15 @@ export default function Admin() {
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-                <button 
-                  className="btn btn-outline" 
+                <button
+                  className="btn btn-outline"
                   style={{ padding: '8px 16px', fontSize: '13px' }}
                   onClick={() => setMenuItemToDelete(null)}
                 >
                   Cancel
                 </button>
-                <button 
-                  className="btn btn-black" 
+                <button
+                  className="btn btn-black"
                   style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
                   onClick={() => {
                     if (menuItemToDelete) {

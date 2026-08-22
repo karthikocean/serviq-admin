@@ -177,7 +177,7 @@ export default function StaffManagementPanel({
     setEditingUserId(null);
     setUserForm({
       name: '',
-      branchId: '',
+      branchId: (!isAdmin && currentBranchId) ? currentBranchId : '',
       roleId: '',
       status: 'Active',
       dutyStatus: 'ON_DUTY',
@@ -508,7 +508,8 @@ export default function StaffManagementPanel({
                     setUserForm({ ...userForm, branchId: e.target.value });
                     if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                   }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: !isAdmin ? '#f8fafc' : '#ffffff', cursor: !isAdmin ? 'not-allowed' : 'pointer', boxSizing: 'border-box' }}
+                  disabled={!isAdmin}
                 >
                   <option value="" disabled>Select a branch...</option>
                   {apiBranches.map(b => (

@@ -23,6 +23,18 @@ class MemberApi {
     }
   }
 
+  async getNextTableId(params = {}) {
+    try {
+      const response = await apiClient.get("/tables/next-id", { params });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.error("Failed to fetch next table ID:", error);
+      return { status: false };
+    }
+  }
+
   async createTable(data) {
     try {
       const response = await apiClient.post("/tables", data);

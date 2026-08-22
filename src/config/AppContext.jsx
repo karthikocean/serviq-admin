@@ -1294,6 +1294,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const addOrder = async (id, newOrderData, skipApiCall = false) => {
+    // 1. Optimistic Local State Update
     const orderWithDefaults = {
       id: newOrderData.orderId || newOrderData.id || `ORD-TMP-${String(Date.now()).slice(-4)}`,
       orderId: newOrderData.orderId || newOrderData.id || `ORD-TMP-${String(Date.now()).slice(-4)}`,
@@ -1374,6 +1375,8 @@ export const AppProvider = ({ children }) => {
         }
       };
     });
+
+
   };
 
   const markBillAsPaid = async (id, tableLabel) => {

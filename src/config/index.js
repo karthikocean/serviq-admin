@@ -37,9 +37,10 @@ apiClient.interceptors.request.use(
   function (config) {
     const token = localStorage.getItem("userToken") || localStorage.getItem("token");
 
-    if (token) {
+    if (token && token !== "null" && token !== "undefined") {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
+
 
     if (config.data instanceof FormData) {
       config.headers["Content-Type"] = "multipart/form-data";
@@ -52,7 +53,6 @@ apiClient.interceptors.request.use(
       const branchId = localStorage.getItem("serviq_branch_id");
       const urlHasBranchId = config.url && config.url.includes('branchId=');
       const paramsHasBranchId = config.params && config.params.branchId !== undefined;
-      
       if (branchId && branchId !== 'ALL' && !urlHasBranchId && !paramsHasBranchId) {
         config.params = { ...config.params, branchId };
       }
