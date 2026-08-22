@@ -634,7 +634,7 @@ export default function MenuManagement() {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
                   <button type="button" className="btn btn-outline" style={{ padding: '10px 24px' }} onClick={() => setActivePage(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>Save Changes</button>
+                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>Add item </button>
                 </div>
               </form>
             </div>
