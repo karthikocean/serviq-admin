@@ -47,7 +47,7 @@ export default function OverviewPanel({
   const preparingOrdersCount = orders.filter(o => o.status === 'preparing').length;
   const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
   const pendingOrdersCount = orders.filter(o => o.status === 'new').length;
-  const completedOrdersCount = orders.filter(o => o.status === 'done').length;
+  const completedOrdersCount = orders.filter(o => o.status === 'completed').length;
   const onDutyStaffCount = staff.filter(s => s.status === 'On Duty').length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
 

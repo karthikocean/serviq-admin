@@ -401,7 +401,7 @@ export default function KitchenReportsPanel({
 
               {/* Step 2: Prep Start */}
               {(() => {
-                const isPassed = ['preparing', 'ready', 'done'].includes(selectedTimelineOrder.status);
+                const isPassed = ['preparing', 'ready', 'served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 2) : '--';
                 const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                 return (
@@ -418,7 +418,7 @@ export default function KitchenReportsPanel({
 
               {/* Step 3: Prep End */}
               {(() => {
-                const isPassed = ['ready', 'done'].includes(selectedTimelineOrder.status);
+                const isPassed = ['ready', 'served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 12) : '--';
                 const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                 return (
@@ -435,7 +435,7 @@ export default function KitchenReportsPanel({
 
               {/* Step 4: Food Ready */}
               {(() => {
-                const isPassed = ['ready', 'done'].includes(selectedTimelineOrder.status);
+                const isPassed = ['ready', 'served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 14) : '--';
                 const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                 return (
@@ -452,7 +452,7 @@ export default function KitchenReportsPanel({
 
               {/* Step 5: Waiter Pickup */}
               {(() => {
-                const isPassed = selectedTimelineOrder.status === 'done';
+                const isPassed = ['served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 17) : '--';
                 const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                 return (
@@ -472,13 +472,13 @@ export default function KitchenReportsPanel({
               <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PREPARATION DURATION</span>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', color: 'var(--black)' }}>
-                  {['ready', 'done'].includes(selectedTimelineOrder.status) ? '10 Minutes' : selectedTimelineOrder.status === 'preparing' ? 'In Progress' : '--'}
+                  {['ready', 'served', 'completed'].includes(selectedTimelineOrder.status) ? '10 Minutes' : selectedTimelineOrder.status === 'preparing' ? 'In Progress' : '--'}
                 </div>
               </div>
               <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
-                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PICKUP DELAY DURATION</span>
+                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>Actual Prep Time</div>
                 <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', color: 'var(--black)' }}>
-                  {selectedTimelineOrder.status === 'done' ? '3 Minutes' : '--'}
+                  {['served', 'completed'].includes(selectedTimelineOrder.status) ? '3 Minutes' : '--'}
                 </div>
               </div>
             </div>

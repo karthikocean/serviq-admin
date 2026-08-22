@@ -860,13 +860,13 @@ export const AppProvider = ({ children }) => {
     });
 
     const statuses = updatedItems.map(item => item.status || 'new');
-    const allServed = statuses.every(s => s === 'done' || s === 'served');
-    const allReadyOrServed = statuses.every(s => s === 'ready' || s === 'done' || s === 'served');
+    const allServed = statuses.every(s => s === 'completed' || s === 'served');
+    const allReadyOrServed = statuses.every(s => s === 'ready' || s === 'completed' || s === 'served');
     const anyPreparingOrReady = statuses.some(s => s === 'preparing' || s === 'ready');
 
     let newOrderStatus = order.status;
     if (allServed) {
-      newOrderStatus = 'done';
+      newOrderStatus = 'served';
     } else if (allReadyOrServed) {
       newOrderStatus = 'ready';
     } else if (anyPreparingOrReady) {
@@ -880,9 +880,7 @@ export const AppProvider = ({ children }) => {
       status: newOrderStatus
     };
 
-    if (newOrderStatus === 'done') {
-      payload.billingStatus = 'paid';
-    }
+
 
     try {
       const idToUpdate = order._id || order.id || order.orderId;
@@ -1214,11 +1212,9 @@ export const AppProvider = ({ children }) => {
       const currentOrders = rest.orders || [];
       const updatedOrders = currentOrders.map(o => {
         if (o.id === orderId || o._id === orderId || o.orderId === orderId || String(o.id) === String(orderId)) {
-          const isDone = nextStatus === 'done' || nextStatus === 'served';
           return {
             ...o,
-            status: nextStatus,
-            billingStatus: isDone ? 'paid' : (o.billingStatus || 'unpaid')
+            status: nextStatus
           };
         }
         return o;
@@ -1241,9 +1237,6 @@ export const AppProvider = ({ children }) => {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
           const payload = { status: nextStatus };
-          if (nextStatus === 'done' || nextStatus === 'served') {
-            payload.billingStatus = 'paid';
-          }
           const idToUpdate = order._id || order.id || order.orderId;
           await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
@@ -1391,7 +1384,7 @@ export const AppProvider = ({ children }) => {
           return {
             ...o,
             billingStatus: 'paid',
-            status: 'done'
+            status: 'completed'
           };
         }
         return o;

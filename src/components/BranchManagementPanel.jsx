@@ -79,7 +79,8 @@ const initialBranchState = {
   totalTables: 10,
   username: '',
   gstNumber: '',
-  fssaiNumber: ''
+  fssaiNumber: '',
+  isMainBranch: false
 };
 
 const branchMockData = {
@@ -239,7 +240,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         pincode: b.address?.pincode || '',
         openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : '',
         status: b.status || 'Active',
-        totalTables: 10
+        totalTables: b.totalTables || 0,
+        isMainBranch: b.isMainBranch || false
       }));
       setApiBranches(mappedBranches);
     }
@@ -353,7 +355,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       totalTables: branch.totalTables || 10,
       username: branch.username || '',
       gstNumber: branch.gstNumber || '',
-      fssaiNumber: branch.fssaiNumber || ''
+      fssaiNumber: branch.fssaiNumber || '',
+      isMainBranch: branch.isMainBranch || false
     });
     setFormErrors({});
     setShowPassword(false);
@@ -454,7 +457,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       managerMobile: branchForm.mobileNumber,
       managerEmail: branchForm.email,
       managerPassword: branchForm.password,
-      status: branchForm.status
+      status: branchForm.status,
+      isMainBranch: branchForm.isMainBranch
     };
 
     if (isEditing) {
@@ -996,6 +1000,20 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       <option value="Inactive">Inactive</option>
                     </select>
                   </div>
+
+                  {/* Field 5: Is Main Branch Checkbox */}
+                  <div style={{ display: 'flex', alignItems: 'center', marginTop: '24px' }}>
+                    <input
+                      type="checkbox"
+                      id="isMainBranch"
+                      checked={branchForm.isMainBranch}
+                      onChange={e => setBranchForm({ ...branchForm, isMainBranch: e.target.checked })}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                    />
+                    <label htmlFor="isMainBranch" style={{ marginLeft: '8px', fontSize: '14px', fontWeight: 700, color: '#0f172a', cursor: 'pointer' }}>
+                      Main Branch
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -1467,7 +1485,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                     {/* 2. Branch Name */}
                     <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.branchName}</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {b.branchName}
+                        {b.isMainBranch && (
+                          <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px' }} title="Main Branch">
+                            ★ Main
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.address}</div>
                     </td>
 

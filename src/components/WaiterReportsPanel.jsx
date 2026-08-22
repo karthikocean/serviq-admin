@@ -171,7 +171,7 @@ export default function WaiterReportsPanel({
 
   // Calculate Metrics
   const waiterRevenue = filteredWaiterReports.reduce((sum, o) => sum + (o.total || 0), 0);
-  const waiterOrdersServiced = filteredWaiterReports.filter(o => o.status === 'done').length;
+  const waiterOrdersServiced = filteredWaiterReports.filter(o => o.status === 'completed').length;
   const waiterAvgOrder = filteredWaiterReports.length > 0 ? (waiterRevenue / filteredWaiterReports.length).toFixed(0) : 0;
   const waiterUnpaidCount = filteredWaiterReports.filter(o => o.billingStatus === 'unpaid').length;
 
@@ -191,7 +191,7 @@ export default function WaiterReportsPanel({
     updateOrder(activeRestaurant.id, selectedPaymentOrder.id, { 
       billingStatus: 'paid', 
       paymentMode: offlinePaymentType,
-      status: 'done'
+      status: 'completed'
     });
     setShowPaymentModal(false);
     setSelectedPaymentOrder(null);
@@ -515,7 +515,7 @@ export default function WaiterReportsPanel({
 
               {/* Step 4: Food Ready */}
               {(() => {
-                const isPassed = ['ready', 'done'].includes(selectedTimelineOrder.status);
+                const isPassed = ['ready', 'served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 15) : '--';
                 const dotColor = isPassed ? '#10b981' : '#94a3b8';
                 return (
@@ -532,7 +532,7 @@ export default function WaiterReportsPanel({
 
               {/* Step 5: Food Pickup */}
               {(() => {
-                const isPassed = selectedTimelineOrder.status === 'done';
+                const isPassed = ['served', 'completed'].includes(selectedTimelineOrder.status);
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 17) : '--';
                 const dotColor = isPassed ? '#10b981' : '#94a3b8';
                 return (
@@ -549,7 +549,7 @@ export default function WaiterReportsPanel({
 
               {/* Step 6: Food Served */}
               {(() => {
-                const isPassed = selectedTimelineOrder.status === 'done';
+                const isPassed = selectedTimelineOrder.status === 'completed';
                 const timeStr = isPassed ? addMinutes(selectedTimelineOrder.time, 20) : '--';
                 const dotColor = isPassed ? '#10b981' : '#94a3b8';
                 return (
@@ -573,10 +573,10 @@ export default function WaiterReportsPanel({
                 borderRadius: '20px', 
                 fontSize: '12px', 
                 fontWeight: 700, 
-                backgroundColor: selectedTimelineOrder.status === 'done' ? 'var(--success-light)' : 'var(--warning-light)',
-                color: selectedTimelineOrder.status === 'done' ? 'var(--success)' : 'var(--warning)'
+                backgroundColor: selectedTimelineOrder.status === 'completed' ? 'var(--success-light)' : 'var(--warning-light)',
+                color: selectedTimelineOrder.status === 'completed' ? 'var(--success)' : 'var(--warning)'
               }}>
-                {selectedTimelineOrder.status === 'done' ? '20 Minutes' : 'In Progress'}
+                {selectedTimelineOrder.status === 'completed' ? '20 Minutes' : 'In Progress'}
               </span>
             </div>
 

@@ -1023,7 +1023,13 @@ color: #000000;
   font-weight: 700;
 }
 
-.badge-done {
+.badge-served {
+  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+  color: #096dd9;
+  border: 1px solid #91d5ff;
+}
+
+.badge-completed {
   background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
   color: var(--text-main);
   border: 1px solid #d0d0d0;
