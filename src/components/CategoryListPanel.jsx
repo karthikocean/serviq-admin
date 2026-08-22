@@ -11,6 +11,13 @@ const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M3 6h18" />
@@ -61,7 +68,8 @@ export default function CategoryListPanel({
     }
   };
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
+  const [viewingCategory, setViewingCategory] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -76,7 +84,7 @@ export default function CategoryListPanel({
     setFormStatus('AVAILABLE');
     setFormBranchId(selectedBranchId || (activeRestaurant?.branches?.length > 0 ? activeRestaurant.branches[0]._id : ''));
     setFormErrors({});
-    setIsModalOpen(true);
+    setViewMode('form');
   };
 
   const handleOpenEdit = (item) => {
@@ -86,7 +94,7 @@ export default function CategoryListPanel({
     setFormStatus(item.status || 'AVAILABLE');
     setFormBranchId(item.branchId || selectedBranchId);
     setFormErrors({});
-    setIsModalOpen(true);
+    setViewMode('form');
   };
 
   const handleSave = async (e) => {
@@ -110,6 +118,7 @@ export default function CategoryListPanel({
           ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
           if (refreshCategories) refreshCategories();
           fetchPaginatedCategories();
+          setViewMode('list');
         } else {
           ShowNotifications.showAlertNotification('Failed to update category', false);
         }
@@ -122,12 +131,11 @@ export default function CategoryListPanel({
         ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
         if (refreshCategories) refreshCategories();
         fetchPaginatedCategories();
+        setViewMode('list');
       } else {
         ShowNotifications.showAlertNotification('Failed to create category', false);
       }
     }
-
-    setIsModalOpen(false);
   };
 
   const handleDelete = async (item) => {
@@ -146,6 +154,152 @@ export default function CategoryListPanel({
       }
     }
   };
+
+  if (viewMode === 'form') {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {editingItem ? 'Edit Category' : 'Add Category'}
+            </h2>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>
+              {editingItem ? 'Update category details' : 'Create a new food and beverage menu category'}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                Category Name <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={e => {
+                  setFormName(e.target.value);
+                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                }}
+                placeholder="e.g. Starters, Main Course, Beverages..."
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  color: '#0f172a',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {formErrors.name && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.name}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                Description
+              </label>
+              <textarea
+                rows="4"
+                value={formDesc}
+                onChange={e => setFormDesc(e.target.value)}
+                placeholder="e.g. Appetizers and quick bites"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  color: '#0f172a',
+                  outline: 'none',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                Status
+              </label>
+              <select
+                value={formStatus}
+                onChange={e => setFormStatus(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14px',
+                  color: '#0f172a',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="AVAILABLE">Available</option>
+                <option value="UNAVAILABLE">Unavailable</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setViewMode('list')}
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{
+                  background: '#ff5a1f',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: '700',
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
+                }}
+              >
+                {editingItem ? 'Save Changes' : 'Add Category'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
@@ -298,6 +452,27 @@ export default function CategoryListPanel({
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button
                           type="button"
+                          onClick={() => setViewingCategory(item)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                          title="View Category Details"
+                        >
+                          <EyeIcon size={16} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleOpenEdit(item)}
                           style={{
                             background: 'transparent',
@@ -390,161 +565,68 @@ export default function CategoryListPanel({
         </div>
       </div>
 
-      {/* Add / Edit Category Modal Popup */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingItem ? 'Edit Category' : 'Add Category'}
-        maxWidth="440px"
-      >
-        <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              Category Name <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={formName}
-              onChange={e => {
-                setFormName(e.target.value);
-                if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
-              }}
-              placeholder="e.g. Starters"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                fontSize: '14px',
-                color: '#0f172a',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-            {formErrors.name && (
-              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                {formErrors.name}
-              </span>
-            )}
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              Description
-            </label>
-            <textarea
-              rows="3"
-              value={formDesc}
-              onChange={e => setFormDesc(e.target.value)}
-              placeholder="e.g. Appetizers and quick bites"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '14px',
-                color: '#0f172a',
-                outline: 'none',
-                resize: 'vertical',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-              Status
-            </label>
-            <select
-              value={formStatus}
-              onChange={e => setFormStatus(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '14px',
-                color: '#0f172a',
-                backgroundColor: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            >
-              <option value="AVAILABLE">AVAILABLE</option>
-              <option value="UNAVAILABLE">UNAVAILABLE</option>
-            </select>
-          </div>
-
-          {(currentUser?.role === 'Admin' || currentUser?.role === 'RESTAURANT_OWNER' || currentUser?.userType === 'RESTAURANT_OWNER') && activeRestaurant?.branches?.length > 0 && (
-            <div style={{ marginTop: '16px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Branch
-              </label>
-              <select
-                value={formBranchId}
-                onChange={e => setFormBranchId(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  color: '#0f172a',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {activeRestaurant.branches.map(b => (
-                  <option key={b.id} value={b.id}>{b.branchName}</option>
-                ))}
-              </select>
+      {/* View Category Modal Popup */}
+      {viewingCategory && (
+        <Modal
+          isOpen={!!viewingCategory}
+          onClose={() => setViewingCategory(null)}
+          title="Category Details"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <div>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Category Name</span>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                {viewingCategory.name}
+              </h3>
             </div>
-          )}
 
-          <div style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            gap: '12px',
-            borderTop: '1px solid #f1f5f9',
-            paddingTop: '16px',
-            marginTop: '8px'
-          }}>
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              style={{
-                background: '#ffffff',
-                border: '1px solid #cbd5e1',
-                color: '#0f172a',
-                fontWeight: 700,
-                borderRadius: '8px',
-                padding: '10px 22px',
-                fontSize: '13px',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                background: '#ff5a1f',
-                border: 'none',
-                color: '#ffffff',
-                fontWeight: 700,
-                borderRadius: '8px',
-                padding: '10px 22px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
-              }}
-            >
-              {editingItem ? 'Save Changes' : 'Add Category'}
-            </button>
+            <div>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Description</span>
+              <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
+                {viewingCategory.description || 'No description provided.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Status:</span>
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '11px',
+                fontWeight: '700',
+                backgroundColor: viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? '#e6f4ea' : '#fef2f2',
+                color: viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? '#16a34a' : '#dc2626'
+              }}>
+                {viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? 'AVAILABLE' : 'UNAVAILABLE'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setViewingCategory(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  const cat = viewingCategory;
+                  setViewingCategory(null);
+                  handleOpenEdit(cat);
+                }}
+                style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
+              >
+                Edit Category
+              </button>
+            </div>
           </div>
-        </form>
-      </Modal>
+        </Modal>
+      )}
     </section>
   );
 }

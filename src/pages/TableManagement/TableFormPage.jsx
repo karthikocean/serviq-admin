@@ -259,7 +259,10 @@ export default function TableFormPage() {
                 disabled={isBranchLocked}
               >
                 <option value="">Select a Branch</option>
-                {branches.map(b => (
+                {(selectedBranchId && selectedBranchId !== 'ALL'
+                  ? branches.filter(b => String(b._id || b.id) === String(selectedBranchId))
+                  : branches
+                ).map(b => (
                   <option key={b._id || b.id} value={b._id || b.id}>
                     {b.branchName} ({b.branchCode})
                   </option>

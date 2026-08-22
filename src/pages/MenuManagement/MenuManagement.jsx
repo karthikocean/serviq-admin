@@ -81,9 +81,80 @@ export default function MenuManagement() {
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       setCategories(catArray);
-      if (catArray.length > 0 && !menuForm.category) {
-        setMenuForm(prev => ({ ...prev, category: catArray[0]._id }));
+      const availableOnly = catArray.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
+      if (availableOnly.length > 0 && !menuForm.category) {
+        setMenuForm(prev => ({ ...prev, category: availableOnly[0]._id }));
       }
+    }
+  };
+
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+
+  const handleAddCustomCategory = async () => {
+    const categoryName = customCategoryInput.trim();
+    if (!categoryName) {
+      setCustomCategoryError('Please enter a valid category name.');
+      return;
+    }
+
+    // Check if category already exists
+    const existing = categories.find(c => c.name?.toLowerCase() === categoryName.toLowerCase());
+    if (existing) {
+      setMenuForm(prev => ({ ...prev, category: existing._id || existing.id }));
+      setShowCustomCategoryModal(false);
+      setCustomCategoryInput('');
+      setCustomCategoryError('');
+      ShowNotifications.showAlertNotification(`Category "${existing.name}" is already present and selected.`, true);
+      return;
+    }
+
+    setIsAddingCategory(true);
+    setCustomCategoryError('');
+    try {
+      const payload = {
+        name: categoryName,
+        description: '',
+        status: 'AVAILABLE',
+        branchId: menuForm.branchId || selectedBranchId || (activeRestaurant.branches?.length > 0 ? (activeRestaurant.branches[0]._id || activeRestaurant.branches[0].id) : '')
+      };
+
+      const res = await MenuApi.createCategory(payload);
+      if (res?.status) {
+        ShowNotifications.showAlertNotification(`Category "${categoryName}" created successfully!`, true);
+
+        const createdCat = res.response?.data || res.response || {};
+        const createdId = createdCat._id || createdCat.id || `cat-${Date.now()}`;
+        const newCatItem = {
+          _id: createdId,
+          id: createdId,
+          name: categoryName,
+          description: '',
+          status: 'AVAILABLE',
+          branchId: payload.branchId,
+          ...createdCat
+        };
+
+        // Immediately update categories list and select it in form
+        setCategories(prev => [...prev, newCatItem]);
+        setMenuForm(prev => ({ ...prev, category: createdId }));
+
+        setShowCustomCategoryModal(false);
+        setCustomCategoryInput('');
+        setCustomCategoryError('');
+
+        // Refresh categories from API
+        fetchCategories();
+      } else {
+        const errorMsg = res?.response?.message || res?.response?.data?.message || 'Failed to create category. Please try again.';
+        setCustomCategoryError(errorMsg);
+        ShowNotifications.showAlertNotification(errorMsg, false);
+      }
+    } catch (err) {
+      console.error('Error creating custom category:', err);
+      setCustomCategoryError('An unexpected error occurred while creating category.');
+      ShowNotifications.showAlertNotification('Failed to create category', false);
+    } finally {
+      setIsAddingCategory(false);
     }
   };
 
@@ -462,8 +533,11 @@ export default function MenuManagement() {
                         onChange={(e) => setMenuForm({ ...menuForm, branchId: e.target.value })}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
                       >
-                        {activeRestaurant.branches.map(b => (
-                          <option key={b.id} value={b.id}>{b.branchName}</option>
+                        {(selectedBranchId && selectedBranchId !== 'ALL'
+                          ? activeRestaurant.branches.filter(b => String(b.id || b._id) === String(selectedBranchId))
+                          : activeRestaurant.branches
+                        ).map(b => (
+                          <option key={b.id || b._id} value={b.id || b._id}>{b.branchName}</option>
                         ))}
                       </select>
                     </div>
@@ -477,7 +551,8 @@ export default function MenuManagement() {
                       value={menuForm.category}
                       onChange={(e) => {
                         if (e.target.value === 'custom') {
-                          setPreviousCategory(menuForm.category || (categories[0] ? categories[0]._id : ''));
+                          const availableOnly = categories.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
+                          setPreviousCategory(menuForm.category || (availableOnly[0] ? availableOnly[0]._id : ''));
                           setCustomCategoryInput('');
                           setCustomCategoryError('');
                           setShowCustomCategoryModal(true);
@@ -487,9 +562,12 @@ export default function MenuManagement() {
                       }}
                       style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
                     >
-                      {categories.map(cat => (
-                        <option key={cat._id} value={cat._id}>{cat.name}</option>
-                      ))}
+                      {categories
+                        .filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false)
+                        .map(cat => (
+                          <option key={cat._id} value={cat._id}>{cat.name}</option>
+                        ))
+                      }
                       <option value="custom">+ Add Custom Category...</option>
                     </select>
                   </div>
@@ -634,7 +712,9 @@ export default function MenuManagement() {
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
                   <button type="button" className="btn btn-outline" style={{ padding: '10px 24px' }} onClick={() => setActivePage(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>Add item </button>
+                  <button type="submit" className="btn btn-black" style={{ padding: '10px 24px' }}>
+                    {menuForm._id ? 'Save changes' : 'Add item'}
+                  </button>
                 </div>
               </form>
             </div>
@@ -676,6 +756,12 @@ export default function MenuManagement() {
                 setCustomCategoryInput(e.target.value);
                 if (customCategoryError) setCustomCategoryError('');
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddCustomCategory();
+                }
+              }}
               placeholder="e.g. Rice Platters"
               style={{
                 width: '100%',
@@ -697,6 +783,7 @@ export default function MenuManagement() {
             <button
               type="button"
               className="btn btn-outline"
+              disabled={isAddingCategory}
               style={{ padding: '8px 16px', fontSize: '13px' }}
               onClick={() => {
                 setShowCustomCategoryModal(false);
@@ -708,17 +795,11 @@ export default function MenuManagement() {
             <button
               type="button"
               className="btn btn-black"
-              style={{ padding: '8px 16px', fontSize: '13px' }}
-              onClick={() => {
-                if (customCategoryInput.trim()) {
-                  setMenuForm({ ...menuForm, category: customCategoryInput.trim() });
-                  setShowCustomCategoryModal(false);
-                } else {
-                  setCustomCategoryError('Please enter a valid category name.');
-                }
-              }}
+              disabled={isAddingCategory}
+              style={{ padding: '8px 18px', fontSize: '13px', background: '#000000', color: '#ffffff', fontWeight: 700 }}
+              onClick={handleAddCustomCategory}
             >
-              OK
+              {isAddingCategory ? 'Adding...' : 'OK'}
             </button>
           </div>
         </div>

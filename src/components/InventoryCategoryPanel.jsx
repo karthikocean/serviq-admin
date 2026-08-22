@@ -12,6 +12,13 @@ const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M3 6h18" />
@@ -62,8 +69,9 @@ export default function InventoryCategoryPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // Modal Form States
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // View and Form States
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
+  const [viewingCategory, setViewingCategory] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -121,7 +129,7 @@ export default function InventoryCategoryPanel() {
     setFormDesc('');
     setFormStatus('AVAILABLE');
     setFormErrors({});
-    setIsModalOpen(true);
+    setViewMode('form');
   };
 
   const handleOpenEdit = (cat) => {
@@ -130,7 +138,7 @@ export default function InventoryCategoryPanel() {
     setFormDesc(cat.description || '');
     setFormStatus(cat.status || 'AVAILABLE');
     setFormErrors({});
-    setIsModalOpen(true);
+    setViewMode('form');
   };
 
   const handleSave = async (e) => {
@@ -157,7 +165,8 @@ export default function InventoryCategoryPanel() {
           if (updateInventoryCategory && activeRestaurant?.id) {
             updateInventoryCategory(activeRestaurant.id, catId, payload);
           }
-          setIsModalOpen(false);
+          setViewMode('list');
+          ShowNotifications.showAlertNotification('Category updated successfully!', true);
         }
       } else {
         const res = await InventoryCategoryApi.createCategory(payload);
@@ -166,7 +175,8 @@ export default function InventoryCategoryPanel() {
           if (addInventoryCategory && activeRestaurant?.id) {
             addInventoryCategory(activeRestaurant.id, res.response?.data || payload);
           }
-          setIsModalOpen(false);
+          setViewMode('list');
+          ShowNotifications.showAlertNotification('New category added successfully!', true);
         }
       }
     } catch (err) {
@@ -206,6 +216,152 @@ export default function InventoryCategoryPanel() {
     }
   };
 
+  if (viewMode === 'form') {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
+            </h2>
+            
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="form-group">
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                Category Name <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={e => {
+                  setFormName(e.target.value);
+                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                }}
+                placeholder="e.g. Dairy, Spices, Grains, Vegetables..."
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                  outline: 'none',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {formErrors.name && (
+                <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.name}
+                </span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                Description
+              </label>
+              <textarea
+                rows={4}
+                value={formDesc}
+                onChange={e => setFormDesc(e.target.value)}
+                placeholder="Brief summary of items in this category..."
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  outline: 'none',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                Status
+              </label>
+              <select
+                value={formStatus}
+                onChange={e => setFormStatus(e.target.value)}
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  outline: 'none',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  background: '#ffffff'
+                }}
+              >
+                <option value="AVAILABLE">AVAILABLE (Active)</option>
+                <option value="UNAVAILABLE">UNAVAILABLE (Disabled)</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setViewMode('list')}
+                className="btn btn-outline"
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
+                  color: '#ffffff',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
+                }}
+              >
+                {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Category')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
       {/* 1. TOP HEADER */}
@@ -236,9 +392,7 @@ export default function InventoryCategoryPanel() {
                 LIVE API
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              Manage categorization for raw ingredients, packaging, and supply items
-            </p>
+           
           </div>
         </div>
 
@@ -511,6 +665,26 @@ export default function InventoryCategoryPanel() {
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
                           <button
                             type="button"
+                            onClick={() => setViewingCategory(item)}
+                            title="View Category Details"
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              color: '#64748b',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                          >
+                            <EyeIcon size={14} color="#64748b" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleOpenEdit(item)}
                             title="Edit Category"
                             style={{
@@ -560,128 +734,75 @@ export default function InventoryCategoryPanel() {
         </div>
       </div>
 
-      {/* 4. ADD / EDIT CATEGORY MODAL */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => !isSubmitting && setIsModalOpen(false)}
-        title={editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
-      >
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="form-group">
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>
-              Category Name <span style={{ color: '#dc2626' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={formName}
-              onChange={e => {
-                setFormName(e.target.value);
-                if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
-              }}
-              placeholder="e.g. Dairy, Spices, Grains, Vegetables..."
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: formErrors.name ? '1px solid #dc2626' : '1px solid #cbd5e1',
-                outline: 'none',
-                fontSize: '13px',
-                boxSizing: 'border-box'
-              }}
-            />
-            {formErrors.name && (
-              <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                {formErrors.name}
+      {/* 4. VIEW CATEGORY MODAL POPUP */}
+      {viewingCategory && (
+        <Modal
+          isOpen={!!viewingCategory}
+          onClose={() => setViewingCategory(null)}
+          title="Inventory Category Details"
+          maxWidth="460px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <div>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Category Name</span>
+              <h3 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                {viewingCategory.name}
+              </h3>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Description</span>
+              <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
+                {viewingCategory.description || 'No description provided.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Linked Stock Items:</span>
+              <span style={{ fontWeight: 800, color: '#ff5a1f', fontSize: '14px' }}>
+                {getItemCountForCategory(viewingCategory.name)} items
               </span>
-            )}
-          </div>
+            </div>
 
-          <div className="form-group">
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>
-              Description
-            </label>
-            <textarea
-              rows={3}
-              value={formDesc}
-              onChange={e => setFormDesc(e.target.value)}
-              placeholder="Brief summary of items in this category..."
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                outline: 'none',
-                fontSize: '13px',
-                boxSizing: 'border-box',
-                resize: 'vertical'
-              }}
-            />
-          </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Status:</span>
+              <span style={{
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '11px',
+                fontWeight: '700',
+                backgroundColor: (viewingCategory.status || 'AVAILABLE').toUpperCase() === 'AVAILABLE' ? '#e6f4ea' : '#fef2f2',
+                color: (viewingCategory.status || 'AVAILABLE').toUpperCase() === 'AVAILABLE' ? '#16a34a' : '#dc2626'
+              }}>
+                {(viewingCategory.status || 'AVAILABLE').toUpperCase()}
+              </span>
+            </div>
 
-          <div className="form-group">
-            <label style={{ display: 'block', marginBottom: '6px', fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>
-              Status
-            </label>
-            <select
-              value={formStatus}
-              onChange={e => setFormStatus(e.target.value)}
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                outline: 'none',
-                fontSize: '13px',
-                boxSizing: 'border-box',
-                background: '#ffffff'
-              }}
-            >
-              <option value="AVAILABLE">AVAILABLE (Active)</option>
-              <option value="UNAVAILABLE">UNAVAILABLE (Disabled)</option>
-            </select>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setViewingCategory(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  const cat = viewingCategory;
+                  setViewingCategory(null);
+                  handleOpenEdit(cat);
+                }}
+                style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
+              >
+                Edit Category
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={() => setIsModalOpen(false)}
-              style={{
-                padding: '9px 18px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                background: '#ffffff',
-                color: '#475569',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                padding: '9px 20px',
-                borderRadius: '8px',
-                border: 'none',
-                background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
-                color: '#ffffff',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
-              }}
-            >
-              {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Category')}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        </Modal>
+      )}
     </section>
   );
 }

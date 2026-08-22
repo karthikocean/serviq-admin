@@ -177,9 +177,8 @@ export default function StockReductionPanel() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // Modals state
-  const [isReduceModalOpen, setIsReduceModalOpen] = useState(false);
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  // View and Modals state
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'reduce-form' | 'purchase-form'
   const [selectedItemForReduction, setSelectedItemForReduction] = useState(null);
 
   // Form: Reduce Stock
@@ -219,7 +218,7 @@ export default function StockReductionPanel() {
       notes: '',
       date: new Date().toISOString().slice(0, 16)
     });
-    setIsReduceModalOpen(true);
+    setViewMode('reduce-form');
   };
 
   const handleItemSelectChange = (itemId) => {
@@ -254,13 +253,19 @@ export default function StockReductionPanel() {
     const itemCost = Number(currentItem?.costPerUnit) || 0;
     const reductionValue = qtyNum * itemCost;
 
+    const rawBranch = currentItem?.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+    const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
+
     const payload = {
       itemId: itemId,
+      quantity: qtyNum,
       quantityToReduce: qtyNum,
+      reductionQuantity: qtyNum,
       reason: reduceForm.reason,
       details: reduceForm.notes || '',
+      notes: reduceForm.notes || '',
       value: reductionValue,
-      branchId: currentItem?.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined)
+      branchId: cleanBranchId
     };
 
     try {
@@ -279,7 +284,8 @@ export default function StockReductionPanel() {
             branchId: currentItem?.branchId || selectedBranchId || 'BR-001'
           });
         }
-        setIsReduceModalOpen(false);
+        setViewMode('list');
+        ShowNotifications.showAlertNotification('Stock reduction recorded successfully!', true);
       }
     } catch (err) {
       console.error("Reduce stock error:", err);
@@ -306,7 +312,7 @@ export default function StockReductionPanel() {
       paymentStatus: 'Paid',
       notes: ''
     });
-    setIsPurchaseModalOpen(true);
+    setViewMode('purchase-form');
   };
 
   const handlePurchaseItemSelect = (itemId) => {
@@ -382,7 +388,8 @@ export default function StockReductionPanel() {
             addedBy: currentUser?.name || 'Admin'
           });
         }
-        setIsPurchaseModalOpen(false);
+        setViewMode('list');
+        ShowNotifications.showAlertNotification('Purchase record saved and stock added!', true);
       }
     } catch (err) {
       console.error("Record purchase error:", err);
@@ -532,6 +539,528 @@ export default function StockReductionPanel() {
       </span>
     );
   };
+
+  if (viewMode === 'reduce-form') {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              Reduce Inventory Stock
+            </h2>
+            
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handleReduceSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Select Item */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Select Item <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                disabled={isSubmitting}
+                value={reduceForm.itemId}
+                onChange={e => handleItemSelectChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {inventory.map(item => (
+                  <option key={item._id || item.id} value={item._id || item.id}>
+                    {item.name} ({item.currentStock} {item.unit} available)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Current Stock Banner */}
+            {selectedItemForReduction && (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '16px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Available Stock Balance</span>
+                  <div style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
+                    {selectedItemForReduction.currentStock} {selectedItemForReduction.unit}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Min Threshold Alert</span>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#d97706', marginTop: '2px' }}>
+                    {selectedItemForReduction.minAlertLevel !== undefined ? selectedItemForReduction.minAlertLevel : (selectedItemForReduction.minStockLevel || 5)} {selectedItemForReduction.unit}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quantity */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Reduction Quantity ({selectedItemForReduction?.unit || 'unit'}) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                disabled={isSubmitting}
+                step="0.1"
+                min="0.1"
+                value={reduceForm.quantity}
+                onChange={e => setReduceForm({ ...reduceForm, quantity: e.target.value })}
+                placeholder="e.g. 5"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Reason for Reduction <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                disabled={isSubmitting}
+                value={reduceForm.reason}
+                onChange={e => setReduceForm({ ...reduceForm, reason: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  backgroundColor: '#ffffff',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {REDUCTION_REASONS.map(r => (
+                  <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Reference / Kitchen Notes
+              </label>
+              <input
+                type="text"
+                disabled={isSubmitting}
+                value={reduceForm.notes}
+                onChange={e => setReduceForm({ ...reduceForm, notes: e.target.value })}
+                placeholder="e.g. Biryani preparation batch #12 or Expired batch drop"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                className="btn btn-outline"
+                onClick={() => setViewMode('list')}
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 700,
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 8px rgba(255,90,31,0.25)'
+                }}
+              >
+                {isSubmitting ? 'Reducing...' : 'Confirm Reduction'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  if (viewMode === 'purchase-form') {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              Record Inbound Purchase (Vendor Restock)
+            </h2>
+            
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handlePurchaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Row 1: Item Source Selection */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Inventory Item <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  disabled={isSubmitting}
+                  value={purchaseForm.itemId}
+                  onChange={e => handlePurchaseItemSelect(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    backgroundColor: '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <optgroup label="Select Existing Item">
+                    {inventory.map(item => (
+                      <option key={item._id || item.id} value={item._id || item.id}>
+                        {item.name} ({getCategoryName(item)})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Or Custom Entry">
+                    <option value="CUSTOM">+ New / Unlisted Item</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Item Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting || purchaseForm.itemId !== 'CUSTOM'}
+                  value={purchaseForm.itemName}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
+                  placeholder="e.g. Basmati Rice 25kg"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    backgroundColor: purchaseForm.itemId !== 'CUSTOM' ? '#f8fafc' : '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Supplier Details */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Supplier / Vendor Name
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={purchaseForm.supplierName}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
+                  placeholder="e.g. Metro Cash & Carry"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Supplier Phone Number
+                </label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  inputMode="numeric"
+                  disabled={isSubmitting}
+                  value={purchaseForm.supplierPhone}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                    setPurchaseForm({ ...purchaseForm, supplierPhone: val });
+                  }}
+                  placeholder="10 digit mobile number"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Row 3: Quantity, Unit & Unit Price */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Quantity Received <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  disabled={isSubmitting}
+                  step="0.1"
+                  min="0.1"
+                  value={purchaseForm.quantity}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                  placeholder="10"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Unit
+                </label>
+                <select
+                  disabled={isSubmitting}
+                  value={purchaseForm.unit}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    backgroundColor: '#ffffff',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="kg">kg (Kilogram)</option>
+                  <option value="g">g (Grams)</option>
+                  <option value="L">L (Liter)</option>
+                  <option value="ml">ml (Milliliter)</option>
+                  <option value="pcs">pcs (Pieces)</option>
+                  <option value="box">box (Boxes)</option>
+                  <option value="bag">bag (Bags)</option>
+                  <option value="pack">pack (Packets)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Unit Cost Price (₹) <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  disabled={isSubmitting}
+                  step="0.01"
+                  min="0"
+                  value={purchaseForm.unitPrice}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value })}
+                  placeholder="100"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Row 4: Invoice Number & Date */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Invoice / Bill Number
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={purchaseForm.invoiceNumber}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
+                  placeholder="e.g. INV-90821"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Purchase Date
+                </label>
+                <input
+                  type="date"
+                  disabled={isSubmitting}
+                  value={purchaseForm.purchaseDate}
+                  onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Total Calculation Banner */}
+            <div style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '10px',
+              padding: '16px 20px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#166534' }}>Estimated Invoice Total:</span>
+              <span style={{ fontSize: '20px', fontWeight: 900, color: '#15803d' }}>
+                ₹{((parseFloat(purchaseForm.quantity) || 0) * (parseFloat(purchaseForm.unitPrice) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                className="btn btn-outline"
+                onClick={() => setViewMode('list')}
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  background: isSubmitting ? '#cbd5e1' : '#0f172a',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 700,
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(15,23,42,0.25)'
+                }}
+              >
+                {isSubmitting ? 'Recording...' : 'Record Purchase & Restock'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel-view active" style={{ padding: '0 0 40px 0', width: '100%' }}>
@@ -791,9 +1320,12 @@ export default function StockReductionPanel() {
                 }}
               >
                 <option value="All">All Categories</option>
-                {rawCategories.map(c => (
-                  <option key={c.id || c._id || c.name} value={c.name}>{c.name}</option>
-                ))}
+                {rawCategories
+                  .filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false)
+                  .map(c => (
+                    <option key={c.id || c._id || c.name} value={c.name}>{c.name}</option>
+                  ))
+                }
               </select>
             </div>
 
@@ -1223,456 +1755,6 @@ export default function StockReductionPanel() {
           </div>
         )}
       </div>
-
-      {/* 5. MODAL: REDUCE STOCK */}
-      <Modal
-        isOpen={isReduceModalOpen}
-        onClose={() => !isSubmitting && setIsReduceModalOpen(false)}
-        title="Reduce Inventory Stock"
-        maxWidth="500px"
-      >
-        <form onSubmit={handleReduceSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
-          {/* Select Item */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Select Item <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <select
-              disabled={isSubmitting}
-              value={reduceForm.itemId}
-              onChange={e => handleItemSelectChange(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                backgroundColor: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            >
-              {inventory.map(item => (
-                <option key={item._id || item.id} value={item._id || item.id}>
-                  {item.name} ({item.currentStock} {item.unit} available)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Current Stock Banner */}
-          {selectedItemForReduction && (
-            <div style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Available Ledger Balance</span>
-                <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a' }}>
-                  {selectedItemForReduction.currentStock} {selectedItemForReduction.unit}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Min Alert Threshold</span>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: '#d97706' }}>
-                  {selectedItemForReduction.minAlertLevel !== undefined ? selectedItemForReduction.minAlertLevel : (selectedItemForReduction.minStockLevel || 5)} {selectedItemForReduction.unit}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Quantity */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Reduction Quantity ({selectedItemForReduction?.unit || 'unit'}) <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="number"
-              disabled={isSubmitting}
-              step="0.1"
-              min="0.1"
-              value={reduceForm.quantity}
-              onChange={e => setReduceForm({ ...reduceForm, quantity: e.target.value })}
-              placeholder="e.g. 5"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          {/* Reason */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Reason for Reduction <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <select
-              disabled={isSubmitting}
-              value={reduceForm.reason}
-              onChange={e => setReduceForm({ ...reduceForm, reason: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                backgroundColor: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            >
-              {REDUCTION_REASONS.map(r => (
-                <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Reference / Kitchen Notes
-            </label>
-            <input
-              type="text"
-              disabled={isSubmitting}
-              value={reduceForm.notes}
-              onChange={e => setReduceForm({ ...reduceForm, notes: e.target.value })}
-              placeholder="e.g. Biryani preparation batch #12 or Expired batch drop"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          {/* Modal Footer */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              className="btn btn-outline"
-              onClick={() => setIsReduceModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                padding: '10px 20px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 8px rgba(255,90,31,0.25)'
-              }}
-            >
-              {isSubmitting ? 'Reducing...' : 'Confirm Reduction'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* 6. MODAL: RECORD PURCHASE */}
-      <Modal
-        isOpen={isPurchaseModalOpen}
-        onClose={() => !isSubmitting && setIsPurchaseModalOpen(false)}
-        title="Record Inbound Purchase (Vendor Restock)"
-        maxWidth="600px"
-      >
-        <form onSubmit={handlePurchaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
-          {/* Row 1: Item Source Selection */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Inventory Item <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                disabled={isSubmitting}
-                value={purchaseForm.itemId}
-                onChange={e => handlePurchaseItemSelect(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {inventory.map(item => (
-                  <option key={item._id || item.id} value={item._id || item.id}>
-                    {item.name} ({getCategoryName(item)})
-                  </option>
-                ))}
-                <option value="CUSTOM">+ Add as New Custom Item...</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Item Name <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={purchaseForm.itemName}
-                onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
-                placeholder="e.g. Basmati Rice"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Row 2: Supplier Details */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Supplier / Vendor Name
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={purchaseForm.supplierName}
-                onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
-                placeholder="e.g. Metro Cash & Carry"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Supplier Phone Number
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={purchaseForm.supplierPhone}
-                onChange={e => setPurchaseForm({ ...purchaseForm, supplierPhone: e.target.value })}
-                placeholder="e.g. +91 98765 43210"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Row 3: Quantity, Unit & Unit Price */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Quantity Received <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                disabled={isSubmitting}
-                step="0.1"
-                min="0.1"
-                value={purchaseForm.quantity}
-                onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                placeholder="10"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Unit
-              </label>
-              <select
-                disabled={isSubmitting}
-                value={purchaseForm.unit}
-                onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="kg">kg (Kilogram)</option>
-                <option value="g">g (Grams)</option>
-                <option value="L">L (Liter)</option>
-                <option value="ml">ml (Milliliter)</option>
-                <option value="pcs">pcs (Pieces)</option>
-                <option value="box">box (Boxes)</option>
-                <option value="bag">bag (Bags)</option>
-                <option value="pack">pack (Packets)</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Unit Cost Price (₹) <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                disabled={isSubmitting}
-                step="0.01"
-                min="0"
-                value={purchaseForm.unitPrice}
-                onChange={e => setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value })}
-                placeholder="100"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Row 4: Invoice Number & Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Invoice / Bill Number
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={purchaseForm.invoiceNumber}
-                onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
-                placeholder="e.g. INV-90821"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Purchase Date
-              </label>
-              <input
-                type="date"
-                disabled={isSubmitting}
-                value={purchaseForm.purchaseDate}
-                onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Total Calculation Banner */}
-          <div style={{
-            background: '#f0fdf4',
-            border: '1px solid #bbf7d0',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#166534' }}>Estimated Invoice Total:</span>
-            <span style={{ fontSize: '18px', fontWeight: 900, color: '#15803d' }}>
-              ₹{((parseFloat(purchaseForm.quantity) || 0) * (parseFloat(purchaseForm.unitPrice) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          {/* Modal Footer */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              className="btn btn-outline"
-              onClick={() => setIsPurchaseModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                background: isSubmitting ? '#cbd5e1' : '#0f172a',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                padding: '10px 22px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 6px rgba(15,23,42,0.25)'
-              }}
-            >
-              {isSubmitting ? 'Recording...' : 'Record Purchase & Restock'}
-            </button>
-          </div>
-        </form>
-      </Modal>
     </section>
   );
 }

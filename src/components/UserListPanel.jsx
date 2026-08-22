@@ -4,6 +4,7 @@ import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -164,11 +165,9 @@ export default function UserListPanel() {
       errors.roleId = 'Role selection is required.';
     }
 
-    const phoneTrimmed = (userForm.phone || '').trim();
-    if (!phoneTrimmed) {
-      errors.phone = 'Phone Number is required.';
-    } else if (!/^[0-9+\s\-()]{7,15}$/.test(phoneTrimmed)) {
-      errors.phone = 'Please enter a valid phone number.';
+    const mobileErr = validateMobile(userForm.phone);
+    if (mobileErr) {
+      errors.phone = mobileErr;
     }
 
     const emailTrimmed = (userForm.email || '').trim();
@@ -428,12 +427,15 @@ export default function UserListPanel() {
                 </label>
                 <input
                   type="text"
+                  maxLength={10}
+                  inputMode="numeric"
                   value={userForm.phone}
                   onChange={e => {
-                    setUserForm({ ...userForm, phone: e.target.value });
+                    const val = sanitizeMobile(e.target.value);
+                    setUserForm({ ...userForm, phone: val });
                     if (formErrors.phone) setFormErrors({ ...formErrors, phone: '' });
                   }}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="10 digit mobile number"
                   style={{
                     width: '100%',
                     padding: '10px 14px',

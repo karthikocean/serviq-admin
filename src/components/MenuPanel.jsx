@@ -35,6 +35,13 @@ const SettingsIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <line x1="12" y1="5" x2="12" y2="19" />
@@ -64,6 +71,7 @@ export default function MenuPanel({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
+  const [viewingMenuItem, setViewingMenuItem] = useState(null);
 
   const [menuCategory, setMenuCategory] = useState('All Items');
   const [menuSearch, setMenuSearch] = useState('');
@@ -98,7 +106,7 @@ export default function MenuPanel({
     }
   };
 
-  const combinedCategories = categories;
+  const combinedCategories = (categories || []).filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false);
   const categoriesList = ['All Items', ...combinedCategories.map(c => c._id)];
 
   const [editableCategories, setEditableCategories] = useState(combinedCategories);
@@ -214,7 +222,7 @@ export default function MenuPanel({
               transition: 'border-color 0.2s ease'
             }}
           >
-            <option value="All Items">All Categories ({totalItems})</option>
+            <option value="All Items">All Categories </option>
             {combinedCategories.map(cat => (
               <option key={cat._id} value={cat._id}>
                 {cat.name}
@@ -357,6 +365,16 @@ export default function MenuPanel({
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button
                         type="button"
+                        title="View Details"
+                        style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                        onClick={() => setViewingMenuItem(item)}
+                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                      >
+                        <EyeIcon size={16} />
+                      </button>
+                      <button
+                        type="button"
                         title="Edit Item"
                         style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
                         onClick={() => openEditMenuModal(item)}
@@ -431,55 +449,171 @@ export default function MenuPanel({
         </div>
       </div>
 
-      {/* MANAGE CATEGORIES MODAL */}
-      <Modal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} title="Manage Menu Categories">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px 0 0 0' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="text"
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="Add new category..."
-              style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '8px' }}
-            />
-            <button
-              className="btn btn-black"
-              onClick={() => {
-                if (newCategory.trim() && !editableCategories.includes(newCategory.trim())) {
-                  setEditableCategories([...editableCategories, newCategory.trim()]);
-                  setNewCategory('');
-                }
-              }}
-              style={{ padding: '8px 16px', borderRadius: '8px' }}
-            >
-              Add
-            </button>
-          </div>
+      {/* VIEW MENU ITEM MODAL */}
+      {viewingMenuItem && (
+        <Modal
+          isOpen={!!viewingMenuItem}
+          onClose={() => setViewingMenuItem(null)}
+          title="Menu Item Details"
+          maxWidth="560px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '8px' }}>
+            {/* Images Preview */}
+            <div style={{ position: 'relative', width: '100%', height: '140px', borderRadius: '12px', overflow: 'hidden', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {viewingMenuItem.coverImage ? (
+                <img
+                  src={getImageUrl(viewingMenuItem.coverImage)}
+                  alt={viewingMenuItem.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>No Cover Banner</span>
+              )}
 
-          <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-            {editableCategories.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>No categories found.</div>
-            )}
-            {editableCategories.map((cat, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: idx < editableCategories.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{cat}</span>
-                <button
-                  onClick={() => setEditableCategories(editableCategories.filter(c => c !== cat))}
-                  style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', padding: '4px' }}
-                  title="Remove Category"
-                >
-                  <TrashIcon size={14} color="currentColor" />
-                </button>
+              {/* Float Square Image */}
+              <div style={{
+                position: 'absolute',
+                bottom: '10px',
+                left: '16px',
+                width: '64px',
+                height: '64px',
+                borderRadius: '10px',
+                border: '3px solid #ffffff',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.15)',
+                overflow: 'hidden',
+                background: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {viewingMenuItem.image ? (
+                  <img
+                    src={getImageUrl(viewingMenuItem.image)}
+                    alt={viewingMenuItem.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <span style={{ fontSize: '24px' }}>🍽️</span>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-            <button className="btn btn-outline" onClick={() => setIsCategoryModalOpen(false)} style={{ padding: '8px 16px' }}>Cancel</button>
-            <button className="btn btn-black" onClick={handleSaveCategories} style={{ padding: '8px 16px' }}>Save Categories</button>
+            {/* Title & Badges */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                  {viewingMenuItem.name}
+                </h3>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                  Category: {viewingMenuItem.category?.name || viewingMenuItem.category || 'General'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: viewingMenuItem.veg !== false ? '#dcfce7' : '#fee2e2',
+                  color: viewingMenuItem.veg !== false ? '#166534' : '#991b1b',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: viewingMenuItem.veg !== false ? '#16a34a' : '#ef4444' }}></span>
+                  {viewingMenuItem.veg !== false ? 'Veg' : 'Non-Veg'}
+                </span>
+
+                {viewingMenuItem.bestseller && (
+                  <span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>
+                    ⭐ Bestseller
+                  </span>
+                )}
+
+                <span style={{
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: viewingMenuItem.available !== false ? '#e6f4ea' : '#f1f5f9',
+                  color: viewingMenuItem.available !== false ? '#16a34a' : '#64748b'
+                }}>
+                  {viewingMenuItem.available !== false ? 'AVAILABLE' : 'OUT OF STOCK'}
+                </span>
+              </div>
+            </div>
+
+            {/* Pricing Details Breakdown */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              padding: '14px',
+              background: '#f8fafc',
+              borderRadius: '10px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Base Price</span>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                  ₹{(Number(viewingMenuItem.price) || 0).toFixed(2)}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>
+                  GST ({viewingMenuItem.gst !== undefined ? viewingMenuItem.gst : 5}%)
+                </span>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#ea580c', marginTop: '2px' }}>
+                  ₹{(((Number(viewingMenuItem.price) || 0) * (Number(viewingMenuItem.gst !== undefined ? viewingMenuItem.gst : 5))) / 100).toFixed(2)}
+                </div>
+              </div>
+
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Total Customer Price</span>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--primary)', marginTop: '2px' }}>
+                  ₹{((Number(viewingMenuItem.price) || 0) * (1 + (Number(viewingMenuItem.gst !== undefined ? viewingMenuItem.gst : 5) / 100))).toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            {viewingMenuItem.desc && (
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'block', marginBottom: '4px' }}>Description</span>
+                <p style={{ margin: 0, fontSize: '13px', color: '#475569', lineHeight: '1.5', background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  {viewingMenuItem.desc}
+                </p>
+              </div>
+            )}
+
+            {/* Action Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setViewingMenuItem(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  const itm = viewingMenuItem;
+                  setViewingMenuItem(null);
+                  openEditMenuModal(itm);
+                }}
+                style={{ padding: '8px 18px' }}
+              >
+                Edit Item
+              </button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
     </section>
   );
 }

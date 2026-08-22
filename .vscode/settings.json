@@ -1,4 +1,11 @@
 {
+  "cSpell.enabled": false,
+  "cSpell.checkCommandLine": false,
+  "cSpell.disabledFiletypes": ["*"],
+  "cSpell.enabledFileTypes": [],
+  "editor.wordBasedSuggestions": "off",
+  "editor.wordBasedSuggestionsMode": "off",
+  "terminal.integrated.suggest.enabled": false,
   "cSpell.words": [
     "AAACS",
     "AABCB",

@@ -185,8 +185,8 @@ export default function TableManagement() {
               }}
             >
               <option value="" disabled>Select a Waiter</option>
-              {staff.filter(s => s.role === 'Waiter').map(s => (
-                <option key={s.id} value={s.name}>
+              {staff.filter(s => s.role === 'Waiter').map((s, sIdx) => (
+                <option key={s._id || s.id || `waiter-${sIdx}`} value={s.name}>
                   {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
                 </option>
               ))}
@@ -207,14 +207,16 @@ export default function TableManagement() {
               gap: '10px',
               backgroundColor: 'var(--bg-primary)'
             }}>
-              {tables.map(table => {
-                const isChecked = modalTableIds.includes(table.id);
-                const currentlyAssigned = table.assignedWaiterId ? staff.find(s => s.id === table.assignedWaiterId) : null;
-                const isAssignedToOther = currentlyAssigned && currentlyAssigned.id !== modalWaiterId;
+              {tables.map((table, tIdx) => {
+                const tableKey = table._id || table.id || `table-${tIdx}`;
+                const tableIdent = table.id || table._id || table.tableNumber;
+                const isChecked = modalTableIds.includes(table._id || table.id || tableIdent);
+                const currentlyAssigned = table.assignedWaiterId ? staff.find(s => (s._id || s.id) === table.assignedWaiterId) : null;
+                const isAssignedToOther = currentlyAssigned && (currentlyAssigned._id || currentlyAssigned.id) !== modalWaiterId;
 
                 return (
                   <label
-                    key={table.id}
+                    key={tableKey}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -230,10 +232,11 @@ export default function TableManagement() {
                       type="checkbox"
                       checked={isChecked}
                       onChange={e => {
+                        const targetId = table._id || table.id || tableIdent;
                         if (e.target.checked) {
-                          setModalTableIds([...modalTableIds, table.id]);
+                          setModalTableIds([...modalTableIds, targetId]);
                         } else {
-                          setModalTableIds(modalTableIds.filter(id => id !== table.id));
+                          setModalTableIds(modalTableIds.filter(id => id !== targetId));
                         }
                       }}
                       style={{
@@ -244,7 +247,7 @@ export default function TableManagement() {
                       }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span>{table.id} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({table.seats} seats)</span></span>
+                      <span>{tableIdent} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({table.seats || 4} seats)</span></span>
                       {isAssignedToOther && (
                         <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '500' }}>
                           Assigned: {currentlyAssigned.name}
@@ -279,9 +282,9 @@ export default function TableManagement() {
             >
               <option value="">No Cover Waiter</option>
               {staff
-                .filter(s => s.role === 'Waiter' && s.id !== modalWaiterId)
-                .map(s => (
-                  <option key={s.id} value={s.id}>
+                .filter(s => s.role === 'Waiter' && (s._id || s.id) !== modalWaiterId)
+                .map((s, sIdx) => (
+                  <option key={s._id || s.id || `cover-${sIdx}`} value={s._id || s.id}>
                     {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
                   </option>
                 ))}
