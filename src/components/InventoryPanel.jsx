@@ -819,39 +819,39 @@ export default function InventoryPanel() {
         background: '#ffffff',
         borderRadius: '12px',
         border: '1px solid #e2e8f0',
-        padding: '14px 18px',
+        padding: '12px 18px',
         marginBottom: '18px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '14px'
+        gap: '12px'
       }}>
-        {/* Left Side: Search + Dropdowns */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+        {/* Left Side: Search + Category + Item Name Dropdowns (Single Line) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'nowrap', flexShrink: 0 }}>
           {/* Search Bar */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '6px',
             background: '#f8fafc',
             border: '1px solid #cbd5e1',
             borderRadius: '8px',
-            padding: '8px 12px',
-            minWidth: '220px',
+            padding: '7px 10px',
+            width: '190px',
             boxSizing: 'border-box'
           }}>
-            <SearchIcon size={15} color="#64748b" />
+            <SearchIcon size={14} color="#64748b" />
             <input
               type="text"
-              placeholder="Search items, SKU, suppliers..."
+              placeholder="Search items, SKU..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               style={{
                 border: 'none',
                 background: 'transparent',
                 outline: 'none',
-                fontSize: '13px',
+                fontSize: '12px',
                 width: '100%',
                 color: '#0f172a'
               }}
@@ -860,7 +860,7 @@ export default function InventoryPanel() {
               <button
                 type="button"
                 onClick={() => setSearchTerm('')}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '11px', padding: 0 }}
               >
                 ✕
               </button>
@@ -868,7 +868,7 @@ export default function InventoryPanel() {
           </div>
 
           {/* Category Dropdown Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
               Category:
             </label>
@@ -876,16 +876,16 @@ export default function InventoryPanel() {
               value={categoryFilter}
               onChange={e => setCategoryFilter(e.target.value)}
               style={{
-                padding: '8px 12px',
+                padding: '7px 10px',
                 borderRadius: '8px',
                 border: categoryFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
                 background: categoryFilter !== 'All' ? '#fff7ed' : '#f8fafc',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: categoryFilter !== 'All' ? '#c2410c' : '#0f172a',
                 outline: 'none',
                 cursor: 'pointer',
-                minWidth: '150px'
+                maxWidth: '150px'
               }}
             >
               {categoriesList.map(cat => (
@@ -897,7 +897,7 @@ export default function InventoryPanel() {
           </div>
 
           {/* Item Name Dropdown Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
               Item Name:
             </label>
@@ -905,17 +905,16 @@ export default function InventoryPanel() {
               value={itemNameFilter}
               onChange={e => setItemNameFilter(e.target.value)}
               style={{
-                padding: '8px 12px',
+                padding: '7px 10px',
                 borderRadius: '8px',
                 border: itemNameFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
                 background: itemNameFilter !== 'All' ? '#fff7ed' : '#f8fafc',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: itemNameFilter !== 'All' ? '#c2410c' : '#0f172a',
                 outline: 'none',
                 cursor: 'pointer',
-                minWidth: '160px',
-                maxWidth: '220px'
+                maxWidth: '150px'
               }}
             >
               <option value="All">All Item Names ({items.length})</option>
@@ -939,11 +938,12 @@ export default function InventoryPanel() {
                 background: 'transparent',
                 border: 'none',
                 color: '#ff5a1f',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 700,
                 cursor: 'pointer',
-                padding: '6px 8px',
-                textDecoration: 'underline'
+                padding: '4px 6px',
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap'
               }}
             >
               Reset Filters
@@ -963,7 +963,7 @@ export default function InventoryPanel() {
               type="button"
               onClick={() => setStatusFilter(tab.id)}
               style={{
-                padding: '6px 14px',
+                padding: '6px 12px',
                 borderRadius: '7px',
                 border: 'none',
                 background: statusFilter === tab.id ? '#0f172a' : '#f1f5f9',
@@ -971,45 +971,14 @@ export default function InventoryPanel() {
                 fontSize: '12px',
                 fontWeight: 700,
                 cursor: 'pointer',
-                transition: 'all 0.15s'
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap'
               }}
             >
               {tab.label}
             </button>
           ))}
         </div>
-      </div>
-
-      {/* 4. CATEGORY HORIZONTAL FILTER PILLS */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        overflowX: 'auto',
-        paddingBottom: '12px',
-        marginBottom: '16px'
-      }}>
-        {categoriesList.map(cat => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setCategoryFilter(cat)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '20px',
-              border: categoryFilter === cat ? '1px solid #ff5a1f' : '1px solid #e2e8f0',
-              background: categoryFilter === cat ? '#fff7ed' : '#ffffff',
-              color: categoryFilter === cat ? '#ff5a1f' : '#64748b',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s'
-            }}
-          >
-            {cat}
-          </button>
-        ))}
       </div>
 
       {/* 5. INVENTORY TABLE & LIST */}

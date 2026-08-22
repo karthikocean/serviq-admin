@@ -20,10 +20,10 @@ export default function AdminLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(location.pathname.startsWith('/waiter'));
-  const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(location.pathname.startsWith('/kitchen'));
-  const [sidebarBillingOpen, setSidebarBillingOpen] = useState(location.pathname.startsWith('/billing'));
-  const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(location.pathname.startsWith('/inventory'));
+  const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(false);
+  const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
+  const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
+  const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(false);
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
