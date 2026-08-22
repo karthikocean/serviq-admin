@@ -75,10 +75,6 @@ class MenuApi {
     try {
       const response = await apiClient.post("/menu", data);
       if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Menu item added successfully!",
-          true
-        );
         return { status: true, response: response.data };
       }
     } catch (error) {
@@ -98,10 +94,6 @@ class MenuApi {
     try {
       const response = await apiClient.put(`/menu/${id}`, data);
       if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Menu item updated successfully!",
-          true
-        );
         return { status: true, response: response.data };
       }
     } catch (error) {

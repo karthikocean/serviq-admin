@@ -332,7 +332,8 @@ export default function OrdersPanel({
         total: orderTotal
       };
 
-      const res = await apiClient.put(`/orders/${appendingOrder._id || appendingOrder.id}/items/append`, payload);
+      const branchQuery = appendingOrder.branchId ? `?branchId=${appendingOrder.branchId}` : '';
+      const res = await apiClient.put(`/orders/${appendingOrder._id || appendingOrder.id}/items/append${branchQuery}`, payload);
       if (res.data.success) {
         ShowNotifications.showAlertNotification("Items added successfully!", true);
         setAppendingOrder(null);
@@ -422,10 +423,11 @@ export default function OrdersPanel({
   let filteredOrders = [...sourceOrders];
 
   const handleOrderStatusUpdate = async (orderId, currentStatus, branchId) => {
-    let nextStatus = 'preparing';
+    let nextStatus = currentStatus;
     if (currentStatus === 'new') nextStatus = 'preparing';
     else if (currentStatus === 'preparing') nextStatus = 'ready';
-    else if (currentStatus === 'ready') nextStatus = 'done';
+    else if (currentStatus === 'ready') nextStatus = 'served';
+    else if (currentStatus === 'served') nextStatus = 'completed';
 
     try {
       const branchQuery = branchId ? `?branchId=${branchId}` : '';
@@ -797,9 +799,14 @@ export default function OrdersPanel({
                           Preparing
                         </span>
                       )}
-                      {status === 'done' && (
+                      {status === 'completed' && (
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
-                          Done
+                          Completed
+                        </span>
+                      )}
+                      {status === 'served' && (
+                        <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
+                          Served
                         </span>
                       )}
                       {status === 'ready' && (
@@ -846,34 +853,36 @@ export default function OrdersPanel({
                         </button>
 
                         {/* Trash Icon */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setOrderToDelete(ord);
-                          }}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            color: '#ef4444',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                          title="Delete Order"
-                        >
-                          <TrashIcon size={14} />
-                        </button>
+                        {['ready', 'served', 'completed'].includes(status) ? null : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setOrderToDelete(ord);
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                            title="Delete Order"
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                        )}
 
                         {/* Status Action Trigger */}
-                        {status === 'done' ? (
+                        {status === 'completed' ? (
                           <span style={{
                             fontSize: '11px',
                             color: '#15803d',
@@ -886,25 +895,37 @@ export default function OrdersPanel({
                             alignItems: 'center',
                             gap: '4px'
                           }}>
-                            <CheckIcon size={12} /> Served
+                            <CheckIcon size={12} /> Completed
                           </span>
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleOrderStatusUpdate(ord._id || ord.id, status, ord.branchId)}
+                            onClick={() => {
+                              if (status === 'served' && ord.billingStatus !== 'paid') {
+                                ShowNotifications.showAlertNotification("Order must be paid before completing.", false);
+                                return;
+                              }
+                              handleOrderStatusUpdate(ord._id || ord.id, status, ord.branchId);
+                            }}
                             style={{
                               padding: '5px 12px',
                               borderRadius: '6px',
                               border:
                                 status === 'new' ? '1px solid #ff5a1f' :
-                                  status === 'preparing' ? '1px solid #16a34a' : '1px solid #16a34a',
+                                  status === 'preparing' ? '1px solid #16a34a' :
+                                  status === 'ready' ? '1px solid #16a34a' :
+                                  '1px solid #16a34a',
                               background:
                                 status === 'new' ? '#fff7ed' :
-                                  status === 'preparing' ? '#f0fdf4' : '#f0fdf4',
+                                  status === 'preparing' ? '#f0fdf4' :
+                                  status === 'ready' ? '#f0fdf4' :
+                                  (status === 'served' && ord.billingStatus !== 'paid') ? '#f1f5f9' : '#f0fdf4',
                               color:
                                 status === 'new' ? '#ff5a1f' :
-                                  status === 'preparing' ? '#16a34a' : '#16a34a',
-                              cursor: 'pointer',
+                                  status === 'preparing' ? '#16a34a' :
+                                  status === 'ready' ? '#16a34a' :
+                                  (status === 'served' && ord.billingStatus !== 'paid') ? '#94a3b8' : '#16a34a',
+                              cursor: (status === 'served' && ord.billingStatus !== 'paid') ? 'not-allowed' : 'pointer',
                               fontSize: '11px',
                               fontWeight: 700,
                               display: 'inline-flex',
@@ -912,6 +933,7 @@ export default function OrdersPanel({
                               gap: '4px',
                               transition: 'all 0.15s'
                             }}
+                            title={status === 'served' && ord.billingStatus !== 'paid' ? "Payment required to complete order" : ""}
                           >
                             {status === 'new' && (
                               <>
@@ -926,6 +948,11 @@ export default function OrdersPanel({
                             {status === 'ready' && (
                               <>
                                 <CheckIcon size={11} /> Serve
+                              </>
+                            )}
+                            {status === 'served' && (
+                              <>
+                                <CheckIcon size={11} /> Complete
                               </>
                             )}
                           </button>
@@ -1125,7 +1152,8 @@ export default function OrdersPanel({
                 className="btn btn-black"
                 onClick={async () => {
                   try {
-                    const res = await apiClient.delete(`/orders/${orderToDelete._id || orderToDelete.id}`);
+                    const branchQuery = orderToDelete.branchId ? `?branchId=${orderToDelete.branchId}` : '';
+                    const res = await apiClient.delete(`/orders/${orderToDelete._id || orderToDelete.id}${branchQuery}`);
                     if (res.data?.success) {
                       ShowNotifications.showAlertNotification(`Order deleted successfully`, true);
                       if (refreshOrders) refreshOrders();

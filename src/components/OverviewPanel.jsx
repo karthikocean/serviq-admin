@@ -47,7 +47,7 @@ export default function OverviewPanel({
   const preparingOrdersCount = orders.filter(o => o.status === 'preparing').length;
   const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
   const pendingOrdersCount = orders.filter(o => o.status === 'new').length;
-  const completedOrdersCount = orders.filter(o => o.status === 'done').length;
+  const completedOrdersCount = orders.filter(o => o.status === 'completed').length;
   const onDutyStaffCount = staff.filter(s => s.status === 'On Duty').length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
 
@@ -292,19 +292,19 @@ export default function OverviewPanel({
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--border)' }}>
+          <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)' }}>
             <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid var(--border)', textAlign: 'left' }}>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>BRANCH NAME</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>CODE & LOCATION</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>MANAGER</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>STATUS</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>TABLES OCCUPIED</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>STAFF ON DUTY</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>TODAY ORDERS</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569' }}>REVENUE</th>
-                  <th style={{ padding: '12px 16px', fontWeight: 700, color: '#475569', textAlign: 'center' }}>ACTION</th>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', textAlign: 'left' }}>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH NAME</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CODE & LOCATION</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MANAGER</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLES OCCUPIED</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ON DUTY</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TODAY ORDERS</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REVENUE</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -470,16 +470,16 @@ export default function OverviewPanel({
             </div>
             <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
           </div>
-          <div className="feed-table-wrapper" style={{ borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
             <table className="menu-items-table feed-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>
-                  <th style={{ padding: '12px' }}>ORDER ID</th>
-                  <th style={{ padding: '12px' }}>BRANCH</th>
-                  <th style={{ padding: '12px' }}>TABLE</th>
-                  <th style={{ padding: '12px' }}>ITEMS</th>
-                  <th style={{ padding: '12px' }}>TOTAL</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ORDER ID</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEMS</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
                 </tr>
               </thead>
               <tbody>

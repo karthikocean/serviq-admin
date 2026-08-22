@@ -863,7 +863,7 @@ export default function Admin() {
 
 
     if (activePage === 'order-edit-form' && activeEditOrder) {
-      const activeOrdersForWaiters = orders.filter(o => o.status !== 'done');
+      const activeOrdersForWaiters = orders.filter(o => o.status !== 'completed');
       const getWaiterLabel = (s) => {
         if (s.status === 'Off Duty') {
           return `${s.name} (Off Duty)`;
@@ -2283,7 +2283,7 @@ export default function Admin() {
 
                 {/* Step 4: Food Ready */}
                 {(() => {
-                  const isPassed = ['ready', 'done'].includes(selectedWaiterTimeline.status);
+                  const isPassed = ['ready', 'served', 'completed'].includes(selectedWaiterTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedWaiterTimeline.time, 15) : '--';
                   const dotColor = isPassed ? '#10b981' : '#94a3b8';
                   return (
@@ -2300,7 +2300,7 @@ export default function Admin() {
 
                 {/* Step 5: Food Pickup */}
                 {(() => {
-                  const isPassed = selectedWaiterTimeline.status === 'done';
+                  const isPassed = ['served', 'completed'].includes(selectedWaiterTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedWaiterTimeline.time, 17) : '--';
                   const dotColor = isPassed ? '#10b981' : '#94a3b8';
                   return (
@@ -2317,7 +2317,7 @@ export default function Admin() {
 
                 {/* Step 6: Food Served */}
                 {(() => {
-                  const isPassed = selectedWaiterTimeline.status === 'done';
+                  const isPassed = selectedWaiterTimeline.status === 'completed';
                   const timeStr = isPassed ? addMinutes(selectedWaiterTimeline.time, 20) : '--';
                   const dotColor = isPassed ? '#10b981' : '#94a3b8';
                   return (
@@ -2341,10 +2341,10 @@ export default function Admin() {
                   borderRadius: '20px',
                   fontSize: '12px',
                   fontWeight: 700,
-                  backgroundColor: selectedWaiterTimeline.status === 'done' ? 'var(--success-light)' : 'var(--warning-light)',
-                  color: selectedWaiterTimeline.status === 'done' ? 'var(--success)' : 'var(--warning)'
+                  backgroundColor: selectedWaiterTimeline.status === 'completed' ? 'var(--success-light)' : 'var(--warning-light)',
+                  color: selectedWaiterTimeline.status === 'completed' ? 'var(--success)' : 'var(--warning)'
                 }}>
-                  {selectedWaiterTimeline.status === 'done' ? '20 Minutes' : 'In Progress'}
+                  {selectedWaiterTimeline.status === 'completed' ? '20 Minutes' : 'In Progress'}
                 </span>
               </div>
 
@@ -2421,7 +2421,7 @@ export default function Admin() {
                     updateOrder(activeRestaurant.id, selectedPaymentOrder.id, {
                       billingStatus: 'paid',
                       paymentMode: offlinePaymentType,
-                      status: 'done'
+                      status: 'completed'
                     });
                     setShowOfflinePaymentModal(false);
                     setSelectedPaymentOrder(null);
@@ -2477,7 +2477,7 @@ export default function Admin() {
 
                 {/* Step 2: Prep Start */}
                 {(() => {
-                  const isPassed = ['preparing', 'ready', 'done'].includes(selectedKitchenTimeline.status);
+                  const isPassed = ['preparing', 'ready', 'served', 'completed'].includes(selectedKitchenTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedKitchenTimeline.time, 2) : '--';
                   const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                   return (
@@ -2494,7 +2494,7 @@ export default function Admin() {
 
                 {/* Step 3: Prep End */}
                 {(() => {
-                  const isPassed = ['ready', 'done'].includes(selectedKitchenTimeline.status);
+                  const isPassed = ['ready', 'served', 'completed'].includes(selectedKitchenTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedKitchenTimeline.time, 12) : '--';
                   const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                   return (
@@ -2511,7 +2511,7 @@ export default function Admin() {
 
                 {/* Step 4: Food Ready */}
                 {(() => {
-                  const isPassed = ['ready', 'done'].includes(selectedKitchenTimeline.status);
+                  const isPassed = ['ready', 'served', 'completed'].includes(selectedKitchenTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedKitchenTimeline.time, 14) : '--';
                   const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                   return (
@@ -2528,7 +2528,7 @@ export default function Admin() {
 
                 {/* Step 5: Waiter Pickup */}
                 {(() => {
-                  const isPassed = selectedKitchenTimeline.status === 'done';
+                  const isPassed = ['served', 'completed'].includes(selectedKitchenTimeline.status);
                   const timeStr = isPassed ? addMinutes(selectedKitchenTimeline.time, 17) : '--';
                   const dotColor = isPassed ? '#ff7a00' : '#94a3b8';
                   return (
@@ -2543,19 +2543,18 @@ export default function Admin() {
                   );
                 })()}
               </div>
-
               {/* Durations list */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
                 <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
                   <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PREPARATION DURATION</span>
                   <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', color: 'var(--black)' }}>
-                    {['ready', 'done'].includes(selectedKitchenTimeline.status) ? '10 Minutes' : selectedKitchenTimeline.status === 'preparing' ? 'In Progress' : '--'}
+                    {['ready', 'served', 'completed'].includes(selectedKitchenTimeline.status) ? '10 Minutes' : selectedKitchenTimeline.status === 'preparing' ? 'In Progress' : '--'}
                   </div>
                 </div>
                 <div style={{ backgroundColor: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px' }}>
                   <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>PICKUP DELAY DURATION</span>
                   <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '4px', color: 'var(--black)' }}>
-                    {selectedKitchenTimeline.status === 'done' ? '3 Minutes' : '--'}
+                    {['served', 'completed'].includes(selectedKitchenTimeline.status) ? '3 Minutes' : '--'}
                   </div>
                 </div>
               </div>

@@ -759,7 +759,7 @@ export default function StaffManagementPanel({
               background: '#fff'
             }}
           >
-            <TableAssignIcon size={15} color="var(--primary)" />
+           
             Assign Tables
           </button>
 
@@ -932,19 +932,19 @@ export default function StaffManagementPanel({
       </div>
 
       {/* Staff Unified Table */}
-      <div style={{ overflowX: 'auto', borderRadius: '12px 12px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+      <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
         <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-              <th style={{ width: '4%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>S.NO</th>
-              <th style={{ width: '18%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#111d2eff', textTransform: 'uppercase' }}>STAFF MEMBER</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>TYPE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>ROLE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>BRANCH</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>PHONE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>STATION/TABLES</th>
-              <th style={{ width: '8%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>DUTY STATUS</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'right' }}>ACTIONS</th>
+            <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+              <th style={{ width: '4%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+              <th style={{ width: '18%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
+              <th style={{ width: '8%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -1096,28 +1096,6 @@ export default function StaffManagementPanel({
                   {/* 8. Actions */}
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      {isWaiter && (
-                        <button
-                          type="button"
-                          title="Assign Dining Tables"
-                          onClick={() => openAssignTablesModal(user._id)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--primary)',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.backgroundColor = '#fff7ed'; }}
-                          onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                        >
-                          <TableAssignIcon size={16} />
-                        </button>
-                      )}
-
                       <button
                         type="button"
                         title="Edit Staff Member"

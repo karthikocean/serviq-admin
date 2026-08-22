@@ -495,15 +495,15 @@ export default function ReportsPanel({
         {activeReportTab === 'waiter' && (
           <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-                <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>S.NO</th>
-                <th style={{ width: '22%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>WAITER NAME</th>
-                <th style={{ width: '11%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>DUTY STATUS</th>
-                <th style={{ width: '16%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>ASSIGNED TABLES</th>
-                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>ORDERS SERVED</th>
-                <th style={{ width: '14%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'right' }}>TOTAL REVENUE</th>
-                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'right' }}>AVG ORDER VALUE</th>
-                <th style={{ width: '8%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+                <th style={{ width: '22%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>WAITER NAME</th>
+                <th style={{ width: '11%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+                <th style={{ width: '16%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSIGNED TABLES</th>
+                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ORDERS SERVED</th>
+                <th style={{ width: '14%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>TOTAL REVENUE</th>
+                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>AVG ORDER VALUE</th>
+                <th style={{ width: '8%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -590,14 +590,14 @@ export default function ReportsPanel({
         {activeReportTab === 'kitchen' && (
           <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
-                <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>S.NO</th>
-                <th style={{ width: '25%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>FOOD ITEM</th>
-                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>CATEGORY</th>
-                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>QUANTITY PREPARED</th>
-                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>AVG PREP TIME</th>
-                <th style={{ width: '13%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'right' }}>REVENUE GENERATED</th>
-                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>KITCHEN STATUS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+                <th style={{ width: '25%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>FOOD ITEM</th>
+                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY</th>
+                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>QUANTITY PREPARED</th>
+                <th style={{ width: '15%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>AVG PREP TIME</th>
+                <th style={{ width: '13%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>REVENUE GENERATED</th>
+                <th style={{ width: '12%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>KITCHEN STATUS</th>
               </tr>
             </thead>
             <tbody>
