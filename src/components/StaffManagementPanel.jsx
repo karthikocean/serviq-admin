@@ -6,6 +6,7 @@ import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -65,6 +66,9 @@ export default function StaffManagementPanel({
 }) {
   const { currentUser: user, selectedBranchId } = useContext(AppContext);
   const currentBranchId = typeof user?.branchId === 'object' ? user?.branchId?._id : user?.branchId;
+  const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? selectedBranchId
+    : currentBranchId;
   const isAdmin = user?.userType === 'RESTAURANT_OWNER' || user?.userType === 'SUPER_ADMIN';
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
@@ -95,6 +99,25 @@ export default function StaffManagementPanel({
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const limit = 10;
+
+  const [showKitchenModal, setShowKitchenModal] = useState(false);
+  const [kitchenViewState, setKitchenViewState] = useState('list'); // 'list' or 'add'
+  const [selectedStationBranchId, setSelectedStationBranchId] = useState(activeFilteredBranchId || '');
+  const [kitchenForm, setKitchenForm] = useState({ branchId: '', email: '', password: '' });
+  const [kitchenFormErrors, setKitchenFormErrors] = useState({});
+
+  useEffect(() => {
+    if (apiBranches.length > 0 && !selectedStationBranchId) {
+      setSelectedStationBranchId(activeFilteredBranchId || apiBranches[0]._id);
+    }
+  }, [apiBranches, selectedStationBranchId, activeFilteredBranchId]);
+
+  const availableBranchesForStation = (activeFilteredBranchId
+    ? apiBranches.filter(b => b._id === activeFilteredBranchId)
+    : apiBranches
+  ).filter(b =>
+    !apiStations.some(s => (typeof s.branchId === 'object' ? s.branchId?._id === b._id : s.branchId === b._id))
+  );
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -157,22 +180,6 @@ export default function StaffManagementPanel({
   });
   const [formErrors, setFormErrors] = useState({});
 
-  const [showKitchenModal, setShowKitchenModal] = useState(false);
-  const [kitchenViewState, setKitchenViewState] = useState('list'); // 'list' or 'add'
-  const [selectedStationBranchId, setSelectedStationBranchId] = useState(currentBranchId || '');
-  const [kitchenForm, setKitchenForm] = useState({ branchId: '', email: '', password: '' });
-  const [kitchenFormErrors, setKitchenFormErrors] = useState({});
-
-  useEffect(() => {
-    if (apiBranches.length > 0 && !selectedStationBranchId) {
-      setSelectedStationBranchId(currentBranchId || apiBranches[0]._id);
-    }
-  }, [apiBranches, selectedStationBranchId, currentBranchId]);
-
-  const availableBranchesForStation = apiBranches.filter(b =>
-    !apiStations.some(s => (typeof s.branchId === 'object' ? s.branchId?._id === b._id : s.branchId === b._id))
-  );
-
   const openAddUser = () => {
     setEditingUserId(null);
     setUserForm({
@@ -222,11 +229,9 @@ export default function StaffManagementPanel({
       errors.roleId = 'Role selection is required.';
     }
 
-    const phoneTrimmed = (userForm.phone || '').trim();
-    if (!phoneTrimmed) {
-      errors.phone = 'Phone Number is required.';
-    } else if (!/^[0-9+\s\-()]{7,15}$/.test(phoneTrimmed)) {
-      errors.phone = 'Please enter a valid phone number.';
+    const mobileErr = validateMobile(userForm.phone);
+    if (mobileErr) {
+      errors.phone = mobileErr;
     }
 
     const roleName = apiRoles.find(r => r._id === userForm.roleId)?.roleName || '';
@@ -573,12 +578,15 @@ export default function StaffManagementPanel({
                 </label>
                 <input
                   type="text"
+                  maxLength={10}
+                  inputMode="numeric"
                   value={userForm.phone}
                   onChange={e => {
-                    setUserForm({ ...userForm, phone: e.target.value });
+                    const val = sanitizeMobile(e.target.value);
+                    setUserForm({ ...userForm, phone: val });
                     if (formErrors.phone) setFormErrors({ ...formErrors, phone: '' });
                   }}
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="10 digit mobile number"
                   style={{
                     width: '100%',
                     padding: '10px 14px',
@@ -1483,7 +1491,10 @@ export default function StaffManagementPanel({
                   }}
                 >
                   <option value="" disabled>Select Branch</option>
-                  {apiBranches.map(b => (
+                  {(activeFilteredBranchId
+                    ? apiBranches.filter(b => b._id === activeFilteredBranchId)
+                    : apiBranches
+                  ).map(b => (
                     <option key={b._id} value={b._id}>{b.branchName}</option>
                   ))}
                 </select>

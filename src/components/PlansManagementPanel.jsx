@@ -477,26 +477,27 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
 
         {/* History Table */}
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: '780px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
-            <colgroup>
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '28%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '12%' }} />
-              <col style={{ width: '14%' }} />
-            </colgroup>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>
-                <th style={{ padding: '14px 16px', textAlign: 'left' }}>Recharge Date</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left' }}>Invoice #</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left' }}>Plan & Recharge Item</th>
-                <th style={{ padding: '14px 16px', textAlign: 'left' }}>Amount Paid</th>
-                <th style={{ padding: '14px 16px', textAlign: 'center' }}>Status</th>
-                <th style={{ padding: '14px 16px', textAlign: 'center' }}>Receipt</th>
-              </tr>
-            </thead>
+        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: '850px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <colgroup>
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '28%' }} />
+                <col style={{ width: '14%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '14%' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Recharge Date</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Invoice #</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Plan & Recharge Item</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Amount Paid</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Status</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Receipt</th>
+                </tr>
+              </thead>
             <tbody>
               {filteredInvoices.length === 0 ? (
                 <tr>
@@ -564,6 +565,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 

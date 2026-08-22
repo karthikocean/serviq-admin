@@ -422,6 +422,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       }
     }
 
+    // Address (Street Address) - Required
+    const addressErr = validateRequired(branchForm.address, 'Address');
+    if (addressErr) errors.address = addressErr;
+
     // City & State (characters only if provided)
     if (branchForm.city && !/^[a-zA-Z\s]+$/.test(branchForm.city.trim())) {
       errors.city = 'City must contain letters only';
@@ -571,8 +575,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)', color: '#fff', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {(currentViewBranch?.branchManager || 'M').charAt(0).toUpperCase()}
+              <div style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)', color: '#fff', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>
+                {(currentViewBranch?.branchManager && currentViewBranch.branchManager.trim() ? currentViewBranch.branchManager.trim().charAt(0) : 'U').toUpperCase()}
               </div>
               <div>
                 <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Branch Manager</span>
@@ -704,26 +708,27 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {opData.orders.filter(o => o.status !== 'served').length} Orders Processing
                 </div>
               </div>
-              <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
-                <table style={{ width: '100%', minWidth: '800px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <colgroup>
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '40%' }} />
-                    <col style={{ width: '12%' }} />
-                    <col style={{ width: '14%' }} />
-                    <col style={{ width: '12%' }} />
-                  </colgroup>
-                  <thead>
-                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>
-                      <th style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>Order ID</th>
-                      <th style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>Table</th>
-                      <th style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>Ordered Items</th>
-                      <th style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>Amount</th>
-                      <th style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>Time Elapsed</th>
-                      <th style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>Status</th>
-                    </tr>
-                  </thead>
+              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                <div style={{ width: '100%', overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: '800px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <colgroup>
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '40%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '14%' }} />
+                      <col style={{ width: '12%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Order ID</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Table</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Ordered Items</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Amount</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Time Elapsed</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', verticalAlign: 'middle' }}>Status</th>
+                      </tr>
+                    </thead>
                   <tbody>
                     {opData.orders.length === 0 ? (
                       <tr>
@@ -774,7 +779,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       })
                     )}
                   </tbody>
-                </table>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1229,14 +1235,31 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>Street Address</label>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Street Address <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. 12 Connaught Place, T. Nagar"
                       value={branchForm.address}
-                      onChange={e => setBranchForm({ ...branchForm, address: e.target.value })}
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }}
+                      onChange={e => {
+                        setBranchForm({ ...branchForm, address: e.target.value });
+                        if (formErrors.address) setFormErrors({ ...formErrors, address: '' });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: formErrors.address ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
                     />
+                    {formErrors.address && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.address}
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
@@ -1440,132 +1463,163 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       </div>
 
       {/* 4. Branch List Table */}
-      <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: '1000px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '14px' }}>
-            <colgroup>
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '23%' }} />
-              <col style={{ width: '17%' }} />
-              <col style={{ width: '15%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '10%' }} />
-              <col style={{ width: '10%' }} />
-            </colgroup>
-            <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)', color: '#475569', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Branch Code</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Branch Name</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Location</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Manager</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Contact</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Tables</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'left', verticalAlign: 'middle' }}>Status</th>
-                <th style={{ padding: '14px 16px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>Actions</th>
+      <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <table style={{ width: '100%', minWidth: '1050px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+              <th style={{ width: '11%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>
+              <th style={{ width: '21%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Name</th>
+              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Location</th>
+              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Manager</th>
+              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Contact</th>
+              <th style={{ width: '6%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Tables</th>
+              <th style={{ width: '7%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Status</th>
+              <th style={{ width: '10%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredBranches.length === 0 ? (
+              <tr>
+                <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                  No branches found matching your search.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filteredBranches.length === 0 ? (
-                <tr>
-                  <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                    No branches found matching your search.
+            ) : (
+              filteredBranches.map(b => (
+                <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  
+                  {/* 1. Branch Code */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', display: 'inline-block' }}>
+                      {b.branchCode}
+                    </span>
                   </td>
-                </tr>
-              ) : (
-                filteredBranches.map(b => (
-                  <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    
-                    {/* 1. Branch Code */}
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--primary)', verticalAlign: 'middle' }}>
-                      <span style={{ background: 'var(--primary-light)', padding: '4px 10px', borderRadius: '6px', fontSize: '13px', fontFamily: 'monospace' }}>
-                        {b.branchCode}
-                      </span>
-                    </td>
 
-                    {/* 2. Branch Name */}
-                    <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {b.branchName}
+                  {/* 2. Branch Name */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.branchName}</span>
                         {b.isMainBranch && (
-                          <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px' }} title="Main Branch">
+                          <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px', border: '1px solid #fde68a', flexShrink: 0 }} title="Main Branch">
                             ★ Main
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{b.address}</div>
-                    </td>
+                      <div style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.address}>
+                        {b.address || 'No address provided'}
+                      </div>
+                    </div>
+                  </td>
 
-                    {/* 3. Location */}
-                    <td style={{ padding: '14px 16px', color: '#334155', fontWeight: 600, verticalAlign: 'middle', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {/* 3. Location */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ color: '#334155', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.city ? `${b.city}, ${b.state || 'Tamil Nadu'}` : 'Not Specified'}>
                       {b.city ? `${b.city}, ${b.state || 'Tamil Nadu'}` : 'Not Specified'}
-                    </td>
+                    </div>
+                  </td>
 
-                    {/* 4. Manager */}
-                    <td style={{ padding: '14px 16px', verticalAlign: 'middle', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <div style={{ fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#e0e7ff', color: '#4338ca', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800 }}>
-                          {(b.branchManager || 'M').charAt(0).toUpperCase()}
-                        </span>
+                  {/* 4. Manager */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <span style={{
+                        width: '28px',
+                        height: '28px',
+                        minWidth: '28px',
+                        minHeight: '28px',
+                        borderRadius: '50%',
+                        background: '#e0e7ff',
+                        color: '#4338ca',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        flexShrink: 0,
+                        lineHeight: 1
+                      }}>
+                        {(b.branchManager && b.branchManager.trim() ? b.branchManager.trim().charAt(0) : 'U').toUpperCase()}
+                      </span>
+                      <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.branchManager || 'Unassigned'}>
                         {b.branchManager || 'Unassigned'}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* 5. Contact */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {b.mobileNumber || 'N/A'}
                       </div>
-                    </td>
+                      <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.email || ''}>
+                        {b.email || '—'}
+                      </div>
+                    </div>
+                  </td>
 
-                    {/* 5. Contact */}
-                    <td style={{ padding: '14px 16px', fontSize: '13px', verticalAlign: 'middle', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <div style={{ fontWeight: 600, color: '#334155' }}>{b.mobileNumber || 'N/A'}</div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>{b.email || ''}</div>
-                    </td>
+                  {/* 6. Tables */}
+                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, minWidth: '28px', textAlign: 'center', display: 'inline-block' }}>
+                        {b.totalTables || 0}
+                      </span>
+                    </div>
+                  </td>
 
-                    {/* 6. Tables */}
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a', verticalAlign: 'middle' }}>
-                      {b.totalTables} Tables
-                    </td>
-
-                    {/* 7. Status */}
-                    <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                  {/* 7. Status */}
+                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Badge status={b.status === 'Active' ? 'Active' : 'Inactive'} />
-                    </td>
+                    </div>
+                  </td>
 
-                    {/* 8. Actions */}
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        
+                  {/* 8. Actions */}
+                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        title="View Operational Details"
+                        onClick={() => handleOpenHierarchy(b)}
+                        style={{ border: 'none', background: '#eff6ff', color: '#2563eb', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                      >
+                        <EyeIcon size={14} />
+                      </button>
+
+                      {hasPermission('branch-management', 'edit') && (
                         <button
-                          title="View Operational Details"
-                          onClick={() => handleOpenHierarchy(b)}
-                          style={{ border: 'none', background: '#eff6ff', color: '#2563eb', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
+                          type="button"
+                          title="Edit Branch"
+                          onClick={() => handleOpenEditForm(b)}
+                          style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.background = '#e2e8f0'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.background = '#f1f5f9'; }}
                         >
-                          <EyeIcon size={16} />
+                          <PencilIcon size={14} />
                         </button>
+                      )}
 
-                        {hasPermission('branch-management', 'edit') && (
-                          <button
-                            title="Edit Branch"
-                            onClick={() => handleOpenEditForm(b)}
-                            style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                          >
-                            <PencilIcon size={16} />
-                          </button>
-                        )}
-
-                        {hasPermission('branch-management', 'delete') && (
-                          <button
-                            title="Delete Branch"
-                            onClick={() => handleDeleteBranchClick(b)}
-                            style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-                          >
-                            <TrashIcon size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                      {hasPermission('branch-management', 'delete') && (
+                        <button
+                          type="button"
+                          title="Delete Branch"
+                          onClick={() => handleDeleteBranchClick(b)}
+                          style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                        >
+                          <TrashIcon size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* 5. DELETE CONFIRMATION MODAL */}

@@ -2,13 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
+import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
   const { staffId } = useParams();
   const { activeRestaurant, addStaff, updateStaff, selectedBranchId } = useAppState();
 
-  const branches = activeRestaurant?.branches || [];
+  const rawBranches = activeRestaurant?.branches || [];
+  const branches = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? rawBranches.filter(b => String(b.id || b._id) === String(selectedBranchId))
+    : rawBranches;
   const isEdit = !!staffId;
   const existingStaff = isEdit && activeRestaurant?.staff
     ? activeRestaurant.staff.find(s => s.id === staffId || s.id === parseInt(staffId))
@@ -16,7 +20,7 @@ export default function StaffFormPage() {
 
   const [form, setForm] = useState({
     name: '',
-    branchId: selectedBranchId || (branches.length > 0 ? branches[0].id : 'BR-001'),
+    branchId: (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (branches.length > 0 ? (branches[0].id || branches[0]._id) : 'BR-001'),
     role: 'Waiter',
     phone: '',
     email: '',
@@ -48,10 +52,9 @@ export default function StaffFormPage() {
       errors.name = 'Full Name should contain letters only.';
     }
 
-    if (!form.phone.trim()) {
-      errors.phone = 'Phone Number is required.';
-    } else if (!/^[0-9+\s\-()]{7,15}$/.test(form.phone.trim())) {
-      errors.phone = 'Please enter a valid phone number.';
+    const mobileErr = validateMobile(form.phone);
+    if (mobileErr) {
+      errors.phone = mobileErr;
     }
 
     if (!form.email.trim()) {
@@ -208,12 +211,15 @@ export default function StaffFormPage() {
               </label>
               <input
                 type="text"
+                maxLength={10}
+                inputMode="numeric"
                 value={form.phone}
                 onChange={(e) => {
-                  setForm({ ...form, phone: e.target.value });
+                  const val = sanitizeMobile(e.target.value);
+                  setForm({ ...form, phone: val });
                   if (formErrors.phone) setFormErrors({ ...formErrors, phone: '' });
                 }}
-                placeholder="e.g. 9876543210"
+                placeholder="10 digit mobile number"
                 style={{
                   width: '100%',
                   padding: '12px 16px',

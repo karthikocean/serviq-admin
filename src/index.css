@@ -3275,12 +3275,12 @@ body.dark-theme .dining-table-card.active {
 
 .modal-card {
   background-color: var(--bg-secondary);
-  border: 2px solid #ff7a00;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
-  padding: 32px;
+  padding: 28px;
   width: 100%;
   max-width: 420px;
-  box-shadow: 0 20px 25px -5px rgba(255, 122, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.04);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--text-main);
 }
@@ -3289,19 +3289,17 @@ body.dark-theme .dining-table-card.active {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #ff7a00;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .modal-header-flex h3 {
   font-family: 'Outfit', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(90deg, #000000 0%, #ff7a00 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
 }
 
 .modal-close {

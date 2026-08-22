@@ -68,6 +68,13 @@ const TrashIcon = ({ size = 15, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const HistoryIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"></circle>
@@ -122,8 +129,9 @@ export default function InventoryPanel() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Low Stock' | 'Out of Stock' | 'In Stock'
 
-  // Modals state
-  const [isAddEditModalOpen, setIsAddEditModalOpen] = useState(false);
+  // Modals and View state
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
+  const [viewingItem, setViewingItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [adjustTargetItem, setAdjustTargetItem] = useState(null);
@@ -294,9 +302,13 @@ export default function InventoryPanel() {
     fetchLogs();
   }, [fetchCategories, fetchBranches, fetchStats, fetchItems, fetchLogs]);
 
-  // Unified available branches list
-  const availableBranches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
-  const availableCategories = liveCategories.length > 0 ? liveCategories : rawCategories;
+  // Unified available branches list - if filtered by header, show only that branch
+  const allBranchesList = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+  const availableBranches = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? allBranchesList.filter(b => String(b._id || b.id) === String(selectedBranchId))
+    : allBranchesList;
+  const allRawCategories = liveCategories.length > 0 ? liveCategories : rawCategories;
+  const availableCategories = allRawCategories.filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false);
 
   // Helper to extract category name from item
   const getCategoryName = (item) => {
@@ -328,10 +340,14 @@ export default function InventoryPanel() {
 
   // Metrics
   const totalItemsCount = items.length;
+  const outOfStockCount = items.filter(i => {
+    const cur = Number(i.currentStock) || 0;
+    return cur <= 0;
+  }).length;
   const lowStockCount = items.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
     const cur = Number(i.currentStock) || 0;
-    return cur <= min;
+    return cur > 0 && cur <= min;
   }).length;
   const inStockCount = items.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
@@ -400,7 +416,7 @@ export default function InventoryPanel() {
       status: 'AVAILABLE'
     });
     setFormErrors({});
-    setIsAddEditModalOpen(true);
+    setViewMode('form');
   };
 
   const handleOpenEditModal = (item) => {
@@ -426,7 +442,7 @@ export default function InventoryPanel() {
       status: item.status || 'AVAILABLE'
     });
     setFormErrors({});
-    setIsAddEditModalOpen(true);
+    setViewMode('form');
   };
 
   const validateForm = () => {
@@ -440,22 +456,22 @@ export default function InventoryPanel() {
       errors.minAlertLevel = 'Please enter a valid min alert threshold (0 or more).';
     }
     if (formState.costPerUnit === '' || isNaN(Number(formState.costPerUnit)) || Number(formState.costPerUnit) < 0) {
-      errors.costPerUnit = 'Please enter a valid unit cost (0 or more).';
+      errors.costPerUnit = 'Please enter a valid cost per unit (0 or more).';
     }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
   const handleSaveItem = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
 
     setIsSubmitting(true);
-    let resolvedCatId = formState.categoryId;
-    if (!resolvedCatId) {
-      const match = availableCategories.find(c => c.name === formState.category);
-      resolvedCatId = match?._id || match?.id || undefined;
-    }
+
+    const resolvedCatId = formState.categoryId || availableCategories[0]?._id || availableCategories[0]?.id;
 
     const payload = {
       name: formState.name.trim(),
@@ -484,7 +500,8 @@ export default function InventoryPanel() {
               minStockLevel: payload.minAlertLevel
             });
           }
-          setIsAddEditModalOpen(false);
+          setViewMode('list');
+          ShowNotifications.showAlertNotification('Inventory item updated successfully!', true);
         }
       } else {
         const res = await InventoryApi.createItem(payload);
@@ -497,7 +514,8 @@ export default function InventoryPanel() {
               minStockLevel: payload.minAlertLevel
             });
           }
-          setIsAddEditModalOpen(false);
+          setViewMode('list');
+          ShowNotifications.showAlertNotification('New inventory item added successfully!', true);
         }
       }
     } catch (err) {
@@ -583,6 +601,611 @@ export default function InventoryPanel() {
     }
   };
 
+  if (viewMode === 'form') {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%' }}>
+        {/* Header with Back button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {editingItem ? 'Edit Stock Item' : 'Add New Stock Item'}
+            </h2>
+            
+          </div>
+        </div>
+
+        {/* Card Form */}
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handleSaveItem} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Row 1: Name & SKU */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Item Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={formState.name}
+                  onChange={e => {
+                    setFormState({ ...formState, name: e.target.value });
+                    if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                  }}
+                  placeholder="e.g. Fresh Paneer"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.name && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.name}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  SKU / Item Code <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={formState.sku}
+                  onChange={e => {
+                    setFormState({ ...formState, sku: e.target.value });
+                    if (formErrors.sku) setFormErrors({ ...formErrors, sku: '' });
+                  }}
+                  placeholder="e.g. ING-PNR-01"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.sku ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.sku && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.sku}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Category & Branch Assignment */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Category
+                </label>
+                <select
+                  disabled={isSubmitting}
+                  value={formState.categoryId || ''}
+                  onChange={e => {
+                    const selectedId = e.target.value;
+                    const catObj = availableCategories.find(c => (c._id === selectedId || c.id === selectedId));
+                    setFormState({
+                      ...formState,
+                      categoryId: selectedId,
+                      category: catObj ? catObj.name : formState.category
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {availableCategories.map(cat => (
+                    <option key={cat._id || cat.id} value={cat._id || cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Branch Assignment
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  readOnly
+                  value={(() => {
+                    const assigned = allBranchesList.find(b => (b._id === formState.branchId || b.id === formState.branchId)) || availableBranches[0];
+                    return assigned ? `${assigned.branchName || assigned.name}${assigned.branchCode ? ` (${assigned.branchCode})` : ''}` : 'Main Branch';
+                  })()}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    backgroundColor: '#f8fafc',
+                    color: '#64748b',
+                    cursor: 'not-allowed',
+                    fontWeight: 600,
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Row 3: Current Stock, Min Alert Level & Unit */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Current Stock <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  disabled={isSubmitting}
+                  step="0.1"
+                  min="0"
+                  value={formState.currentStock}
+                  onChange={e => {
+                    setFormState({ ...formState, currentStock: e.target.value });
+                    if (formErrors.currentStock) setFormErrors({ ...formErrors, currentStock: '' });
+                  }}
+                  placeholder="10"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.currentStock ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.currentStock && (
+                  <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.currentStock}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Min Alert Level <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  disabled={isSubmitting}
+                  step="0.1"
+                  min="0"
+                  value={formState.minAlertLevel}
+                  onChange={e => {
+                    setFormState({ ...formState, minAlertLevel: e.target.value });
+                    if (formErrors.minAlertLevel) setFormErrors({ ...formErrors, minAlertLevel: '' });
+                  }}
+                  placeholder="5"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.minAlertLevel ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.minAlertLevel && (
+                  <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.minAlertLevel}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Unit of Measure
+                </label>
+                <select
+                  disabled={isSubmitting}
+                  value={formState.unit}
+                  onChange={e => setFormState({ ...formState, unit: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="kg">kg (Kilogram)</option>
+                  <option value="g">g (Grams)</option>
+                  <option value="L">L (Liter)</option>
+                  <option value="ml">ml (Milliliter)</option>
+                  <option value="pcs">pcs (Pieces)</option>
+                  <option value="box">box (Boxes)</option>
+                  <option value="bag">bag (Bags / Sacks)</option>
+                  <option value="pack">pack (Packets)</option>
+                  <option value="can">can (Cans)</option>
+                  <option value="dozen">dozen (Dozens)</option>
+                  <option value="bundle">bundle (Bundles)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Row 4: Cost per Unit */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Cost per Unit (₹) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                disabled={isSubmitting}
+                step="0.01"
+                min="0"
+                value={formState.costPerUnit}
+                onChange={e => {
+                  setFormState({ ...formState, costPerUnit: e.target.value });
+                  if (formErrors.costPerUnit) setFormErrors({ ...formErrors, costPerUnit: '' });
+                }}
+                placeholder="e.g. 320"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: formErrors.costPerUnit ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {formErrors.costPerUnit && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.costPerUnit}
+                </span>
+              )}
+            </div>
+
+            {/* Row 5: Supplier Name & Contact */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Supplier / Vendor Name
+                </label>
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={formState.supplierName}
+                  onChange={e => setFormState({ ...formState, supplierName: e.target.value })}
+                  placeholder="e.g. Nandini Dairy Supplies"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Supplier Phone Number
+                </label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  inputMode="numeric"
+                  disabled={isSubmitting}
+                  value={formState.supplierPhone}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                    setFormState({ ...formState, supplierPhone: val });
+                  }}
+                  placeholder="10 digit mobile number"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                className="btn btn-outline"
+                onClick={() => setViewMode('list')}
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                style={{
+                  background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 700,
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
+                }}
+              >
+                {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Item')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  // 2. PAGE FORM: QUICK STOCK IN / STOCK OUT ADJUSTMENT
+  if (isAdjustModalOpen) {
+    return (
+      <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
+          <button
+            type="button"
+            onClick={() => setIsAdjustModalOpen(false)}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {adjustState.type === 'Stock In' ? `Stock In (Receive Purchase): ${adjustTargetItem?.name}` : `Stock Out (Issue / Usage): ${adjustTargetItem?.name}`}
+            </h2>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>
+              Record inbound restock or outbound kitchen deduction for inventory tracking
+            </span>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+          <form onSubmit={handleSaveAdjustment} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Current Stock Banner */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '16px 20px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>Current Available Stock:</span>
+              <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>
+                {adjustTargetItem?.currentStock} {adjustTargetItem?.unit}
+              </span>
+            </div>
+
+            {/* Adjustment Type Switch */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                Adjustment Type
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <button
+                  type="button"
+                  onClick={() => setAdjustState({ ...adjustState, type: 'Stock In', reason: 'Supplier Purchase' })}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: adjustState.type === 'Stock In' ? '2px solid #10b981' : '1px solid #cbd5e1',
+                    background: adjustState.type === 'Stock In' ? '#ecfdf5' : '#ffffff',
+                    color: adjustState.type === 'Stock In' ? '#065f46' : '#475569',
+                    fontWeight: 800,
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  + Stock In (Add)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdjustState({ ...adjustState, type: 'Stock Out', reason: 'Kitchen Issue' })}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: adjustState.type === 'Stock Out' ? '2px solid #ef4444' : '1px solid #cbd5e1',
+                    background: adjustState.type === 'Stock Out' ? '#fef2f2' : '#ffffff',
+                    color: adjustState.type === 'Stock Out' ? '#991b1b' : '#475569',
+                    fontWeight: 800,
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  - Stock Out (Deduct)
+                </button>
+              </div>
+            </div>
+
+            {/* Quantity */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Quantity ({adjustTargetItem?.unit}) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0.1"
+                value={adjustState.quantity}
+                onChange={e => {
+                  setAdjustState({ ...adjustState, quantity: e.target.value });
+                  if (adjustErrors.quantity) setAdjustErrors({ ...adjustErrors, quantity: '' });
+                }}
+                placeholder={`e.g. 5 ${adjustTargetItem?.unit || ''}`}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: adjustErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+              {adjustErrors.quantity && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {adjustErrors.quantity}
+                </span>
+              )}
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Reason / Movement Purpose
+              </label>
+              <select
+                value={adjustState.reason}
+                onChange={e => setAdjustState({ ...adjustState, reason: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  backgroundColor: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
+              >
+                {adjustState.type === 'Stock In' ? (
+                  <>
+                    <option value="Supplier Purchase">Supplier Purchase / Inbound Shipment</option>
+                    <option value="Branch Transfer In">Branch Transfer In</option>
+                    <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (+)</option>
+                    <option value="Returned Items">Customer / Kitchen Return</option>
+                  </>
+                ) : (
+                  <>
+                    <option value="Kitchen Issue">Kitchen Production / Daily Usage</option>
+                    <option value="Wastage / Spoilage">Spoilage / Expired / Damaged</option>
+                    <option value="Branch Transfer Out">Branch Transfer Out</option>
+                    <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (-)</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* Notes / Invoice Ref */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Reference / Invoice / Notes
+              </label>
+              <input
+                type="text"
+                value={adjustState.notes}
+                onChange={e => setAdjustState({ ...adjustState, notes: e.target.value })}
+                placeholder="e.g. Invoice #NDS-9912 or Chef Suresh issue"
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Footer Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsAdjustModalOpen(false)}
+                style={{ padding: '10px 24px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                style={{
+                  background: adjustState.type === 'Stock In' ? '#10b981' : '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 800,
+                  padding: '10px 26px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  boxShadow: adjustState.type === 'Stock In' ? '0 2px 8px rgba(16, 185, 129, 0.3)' : '0 2px 8px rgba(239, 68, 68, 0.3)'
+                }}
+              >
+                Confirm {adjustState.type}
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="panel-view active" style={{ padding: '0 0 32px 0', width: '100%' }}>
       {/* 1. TOP HEADER ACTION ROW */}
@@ -612,9 +1235,7 @@ export default function InventoryPanel() {
                 LIVE API
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              Real-time stock tracking, valuation, minimum threshold alerts, and supplier records
-            </p>
+            
           </div>
         </div>
 
@@ -917,7 +1538,7 @@ export default function InventoryPanel() {
                 maxWidth: '150px'
               }}
             >
-              <option value="All">All Item Names ({items.length})</option>
+              <option value="All">All Item Names </option>
               {uniqueItemNames.map(name => (
                 <option key={name} value={name}>{name}</option>
               ))}
@@ -954,9 +1575,10 @@ export default function InventoryPanel() {
         {/* Right Side: Status Filter Pills */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[
-            { id: 'All', label: `All Items (${totalItemsCount})` },
+            { id: 'All', label: `All (${totalItemsCount})` },
+            { id: 'In Stock', label: `In Stock (${inStockCount})` },
             { id: 'Low Stock', label: `Low Stock (${lowStockCount})` },
-            { id: 'In Stock', label: `In Stock (${inStockCount})` }
+            { id: 'Out of Stock', label: `Out of Stock (${outOfStockCount})` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -966,7 +1588,9 @@ export default function InventoryPanel() {
                 padding: '6px 12px',
                 borderRadius: '7px',
                 border: 'none',
-                background: statusFilter === tab.id ? '#0f172a' : '#f1f5f9',
+                background: statusFilter === tab.id
+                  ? (tab.id === 'Out of Stock' ? '#dc2626' : tab.id === 'Low Stock' ? '#d97706' : tab.id === 'In Stock' ? '#16a34a' : '#0f172a')
+                  : '#f1f5f9',
                 color: statusFilter === tab.id ? '#ffffff' : '#475569',
                 fontSize: '12px',
                 fontWeight: 700,
@@ -1045,8 +1669,8 @@ export default function InventoryPanel() {
                             <span style={{ fontSize: '11px', fontFamily: 'monospace', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
                               {item.sku}
                             </span>
-                            <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                              ID: {(item._id || item.id || '').substring(0, 8)}...
+                            <span style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
+                              ID: {item._id || item.id || ''}
                             </span>
                           </div>
                         </div>
@@ -1178,6 +1802,26 @@ export default function InventoryPanel() {
                             Out
                           </button>
 
+                          {/* View Item Details */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingItem(item)}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              color: '#475569',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="View Item Details"
+                          >
+                            <EyeIcon size={14} />
+                          </button>
+
                           {/* Edit Item */}
                           <button
                             type="button"
@@ -1254,536 +1898,115 @@ export default function InventoryPanel() {
         </div>
       </div>
 
-      {/* 6. MODAL: ADD / EDIT INVENTORY ITEM */}
-      <Modal
-        isOpen={isAddEditModalOpen}
-        onClose={() => !isSubmitting && setIsAddEditModalOpen(false)}
-        title={editingItem ? 'Edit Stock Item' : 'Add New Stock Item'}
-        maxWidth="600px"
-      >
-        <form onSubmit={handleSaveItem} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
-          {/* Row 1: Name & SKU */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Item Name <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={formState.name}
-                onChange={e => {
-                  setFormState({ ...formState, name: e.target.value });
-                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
-                }}
-                placeholder="e.g. Fresh Paneer"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.name && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.name}
-                </span>
-              )}
+      {/* 6. MODAL: VIEW INVENTORY ITEM DETAILS */}
+      {viewingItem && (
+        <Modal
+          isOpen={!!viewingItem}
+          onClose={() => setViewingItem(null)}
+          title="Inventory Item Details"
+          maxWidth="560px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
+                  {viewingItem.name}
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px', fontFamily: 'monospace', background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                    SKU: {viewingItem.sku}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
+                    ID: {viewingItem._id || viewingItem.id || '—'}
+                  </span>
+                </div>
+              </div>
+
+              {(() => {
+                const min = Number(viewingItem.minAlertLevel !== undefined ? viewingItem.minAlertLevel : viewingItem.minStockLevel) || 0;
+                const cur = Number(viewingItem.currentStock) || 0;
+                const isOut = cur <= 0;
+                const isLow = cur > 0 && cur <= min;
+                const bg = isOut ? '#fef2f2' : isLow ? '#fffbeb' : '#f0fdf4';
+                const color = isOut ? '#dc2626' : isLow ? '#d97706' : '#16a34a';
+                const label = isOut ? 'OUT OF STOCK' : isLow ? 'LOW STOCK' : 'IN STOCK';
+                return (
+                  <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 800, background: bg, color: color }}>
+                    {label}
+                  </span>
+                );
+              })()}
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                SKU / Item Code <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={formState.sku}
-                onChange={e => {
-                  setFormState({ ...formState, sku: e.target.value });
-                  if (formErrors.sku) setFormErrors({ ...formErrors, sku: '' });
-                }}
-                placeholder="e.g. ING-PNR-01"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.sku ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.sku && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.sku}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Row 2: Category & Branch */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Category
-              </label>
-              <select
-                disabled={isSubmitting}
-                value={formState.categoryId || ''}
-                onChange={e => {
-                  const selectedId = e.target.value;
-                  const catObj = availableCategories.find(c => (c._id === selectedId || c.id === selectedId));
-                  setFormState({
-                    ...formState,
-                    categoryId: selectedId,
-                    category: catObj ? catObj.name : formState.category
-                  });
-                }}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {availableCategories.map(cat => (
-                  <option key={cat._id || cat.id} value={cat._id || cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+            {/* Quick Stats Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Current Stock</span>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                  {viewingItem.currentStock} {viewingItem.unit}
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Min Threshold</span>
+                <div style={{ fontSize: '16px', fontWeight: 800, color: '#ea580c', marginTop: '2px' }}>
+                  {viewingItem.minAlertLevel !== undefined ? viewingItem.minAlertLevel : viewingItem.minStockLevel} {viewingItem.unit}
+                </div>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Unit Cost</span>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>
+                  ₹{(Number(viewingItem.costPerUnit) || 0).toFixed(2)}
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Branch Assignment
-              </label>
-              <select
-                disabled={isSubmitting}
-                value={formState.branchId}
-                onChange={e => setFormState({ ...formState, branchId: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {availableBranches.map(b => (
-                  <option key={b._id || b.id} value={b._id || b.id}>
-                    {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 3: Current Stock, Min Alert Level & Unit */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Current Stock <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                disabled={isSubmitting}
-                step="0.1"
-                min="0"
-                value={formState.currentStock}
-                onChange={e => {
-                  setFormState({ ...formState, currentStock: e.target.value });
-                  if (formErrors.currentStock) setFormErrors({ ...formErrors, currentStock: '' });
-                }}
-                placeholder="10"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.currentStock ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.currentStock && (
-                <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.currentStock}
-                </span>
-              )}
+            {/* Information Rows */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Category:</span>
+                <strong style={{ color: '#0f172a' }}>{getCategoryName(viewingItem)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Branch Assignment:</span>
+                <strong style={{ color: '#0f172a' }}>{getBranchLabel(viewingItem.branchId)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Total Inventory Valuation:</span>
+                <strong style={{ color: '#059669', fontWeight: 800 }}>
+                  ₹{((Number(viewingItem.currentStock) || 0) * (Number(viewingItem.costPerUnit) || 0)).toFixed(2)}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '8px' }}>
+                <span style={{ color: '#64748b', fontWeight: 600 }}>Supplier:</span>
+                <strong style={{ color: '#0f172a' }}>{viewingItem.supplierName || 'Direct Local Purchase'} ({viewingItem.supplierPhone || 'No Phone'})</strong>
+              </div>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Min Alert Level <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                disabled={isSubmitting}
-                step="0.1"
-                min="0"
-                value={formState.minAlertLevel}
-                onChange={e => {
-                  setFormState({ ...formState, minAlertLevel: e.target.value });
-                  if (formErrors.minAlertLevel) setFormErrors({ ...formErrors, minAlertLevel: '' });
-                }}
-                placeholder="5"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: formErrors.minAlertLevel ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.minAlertLevel && (
-                <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.minAlertLevel}
-                </span>
-              )}
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Unit of Measure
-              </label>
-              <select
-                disabled={isSubmitting}
-                value={formState.unit}
-                onChange={e => setFormState({ ...formState, unit: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="kg">kg (Kilogram)</option>
-                <option value="g">g (Grams)</option>
-                <option value="L">L (Liter)</option>
-                <option value="ml">ml (Milliliter)</option>
-                <option value="pcs">pcs (Pieces)</option>
-                <option value="box">box (Boxes)</option>
-                <option value="bag">bag (Bags / Sacks)</option>
-                <option value="pack">pack (Packets)</option>
-                <option value="can">can (Cans)</option>
-                <option value="dozen">dozen (Dozens)</option>
-                <option value="bundle">bundle (Bundles)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Row 4: Cost per Unit */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Cost per Unit (₹) <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="number"
-              disabled={isSubmitting}
-              step="0.01"
-              min="0"
-              value={formState.costPerUnit}
-              onChange={e => {
-                setFormState({ ...formState, costPerUnit: e.target.value });
-                if (formErrors.costPerUnit) setFormErrors({ ...formErrors, costPerUnit: '' });
-              }}
-              placeholder="e.g. 320"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: formErrors.costPerUnit ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                fontSize: '13px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-            {formErrors.costPerUnit && (
-              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                {formErrors.costPerUnit}
-              </span>
-            )}
-          </div>
-
-          {/* Row 5: Supplier Name & Contact */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Supplier / Vendor Name
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={formState.supplierName}
-                onChange={e => setFormState({ ...formState, supplierName: e.target.value })}
-                placeholder="e.g. Nandini Dairy Supplies"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Supplier Phone Number
-              </label>
-              <input
-                type="text"
-                disabled={isSubmitting}
-                value={formState.supplierPhone}
-                onChange={e => setFormState({ ...formState, supplierPhone: e.target.value })}
-                placeholder="e.g. +91 98450 12345"
-                style={{
-                  width: '100%',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Footer Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
-            <button
-              type="button"
-              disabled={isSubmitting}
-              className="btn btn-outline"
-              onClick={() => setIsAddEditModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                background: isSubmitting ? '#cbd5e1' : '#ff5a1f',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                padding: '10px 22px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
-              }}
-            >
-              {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Item')}
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* 7. MODAL: QUICK STOCK IN / STOCK OUT ADJUSTMENT */}
-      <Modal
-        isOpen={isAdjustModalOpen}
-        onClose={() => setIsAdjustModalOpen(false)}
-        title={adjustState.type === 'Stock In' ? `Stock In (Receive Purchase): ${adjustTargetItem?.name}` : `Stock Out (Issue / Usage): ${adjustTargetItem?.name}`}
-        maxWidth="460px"
-      >
-        <form onSubmit={handleSaveAdjustment} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
-          {/* Current Stock Banner */}
-          <div style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            padding: '12px 16px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <span style={{ fontSize: '13px', color: '#64748b' }}>Current Available Stock:</span>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-              {adjustTargetItem?.currentStock} {adjustTargetItem?.unit}
-            </span>
-          </div>
-
-          {/* Adjustment Type Switch */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Adjustment Type
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"
-                onClick={() => setAdjustState({ ...adjustState, type: 'Stock In', reason: 'Supplier Purchase' })}
-                style={{
-                  padding: '8px',
-                  borderRadius: '8px',
-                  border: adjustState.type === 'Stock In' ? '1.5px solid #10b981' : '1px solid #cbd5e1',
-                  background: adjustState.type === 'Stock In' ? '#ecfdf5' : '#ffffff',
-                  color: adjustState.type === 'Stock In' ? '#065f46' : '#475569',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer'
-                }}
+                className="btn btn-outline"
+                onClick={() => setViewingItem(null)}
+                style={{ padding: '8px 18px' }}
               >
-                + Stock In (Add)
+                Close
               </button>
               <button
                 type="button"
-                onClick={() => setAdjustState({ ...adjustState, type: 'Stock Out', reason: 'Kitchen Issue' })}
-                style={{
-                  padding: '8px',
-                  borderRadius: '8px',
-                  border: adjustState.type === 'Stock Out' ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  background: adjustState.type === 'Stock Out' ? '#fef2f2' : '#ffffff',
-                  color: adjustState.type === 'Stock Out' ? '#991b1b' : '#475569',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer'
+                className="btn btn-black"
+                onClick={() => {
+                  const itm = viewingItem;
+                  setViewingItem(null);
+                  handleOpenEditModal(itm);
                 }}
+                style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
               >
-                - Stock Out (Deduct)
+                Edit Item
               </button>
             </div>
           </div>
-
-          {/* Quantity */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Quantity ({adjustTargetItem?.unit}) <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              value={adjustState.quantity}
-              onChange={e => {
-                setAdjustState({ ...adjustState, quantity: e.target.value });
-                if (adjustErrors.quantity) setAdjustErrors({ ...adjustErrors, quantity: '' });
-              }}
-              placeholder={`e.g. 5 ${adjustTargetItem?.unit || ''}`}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: adjustErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-            {adjustErrors.quantity && (
-              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                {adjustErrors.quantity}
-              </span>
-            )}
-          </div>
-
-          {/* Reason */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Reason / Movement Purpose
-            </label>
-            <select
-              value={adjustState.reason}
-              onChange={e => setAdjustState({ ...adjustState, reason: e.target.value })}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                outline: 'none',
-                backgroundColor: '#ffffff',
-                boxSizing: 'border-box'
-              }}
-            >
-              {adjustState.type === 'Stock In' ? (
-                <>
-                  <option value="Supplier Purchase">Supplier Purchase / Inbound Shipment</option>
-                  <option value="Branch Transfer In">Branch Transfer In</option>
-                  <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (+)</option>
-                  <option value="Returned Items">Customer / Kitchen Return</option>
-                </>
-              ) : (
-                <>
-                  <option value="Kitchen Issue">Kitchen Production / Daily Usage</option>
-                  <option value="Wastage / Spoilage">Spoilage / Expired / Damaged</option>
-                  <option value="Branch Transfer Out">Branch Transfer Out</option>
-                  <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (-)</option>
-                </>
-              )}
-            </select>
-          </div>
-
-          {/* Notes / Invoice Ref */}
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-              Reference / Invoice / Notes
-            </label>
-            <input
-              type="text"
-              value={adjustState.notes}
-              onChange={e => setAdjustState({ ...adjustState, notes: e.target.value })}
-              placeholder="e.g. Invoice #NDS-9912 or Chef Suresh issue"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '13px',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
-
-          {/* Footer Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setIsAdjustModalOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                background: adjustState.type === 'Stock In' ? '#10b981' : '#ef4444',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                padding: '10px 20px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                cursor: 'pointer'
-              }}
-            >
-              Confirm {adjustState.type}
-            </button>
-          </div>
-        </form>
-      </Modal>
+        </Modal>
+      )}
 
       {/* 8. MODAL: STOCK MOVEMENT & AUDIT LOGS */}
       <Modal

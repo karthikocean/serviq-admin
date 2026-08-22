@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { apiClient } from '../config/index';
+import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
 
 // Shared Styles
 const cardStyle = {
@@ -69,6 +70,9 @@ const InputField = ({ label, field, required = false, onChangeOverride, onBlurOv
     </label>
     <input
       type="text"
+      maxLength={field === 'phone' ? 10 : undefined}
+      inputMode={field === 'phone' ? 'numeric' : undefined}
+      placeholder={field === 'phone' ? '10 digit mobile number' : undefined}
       style={{
         ...inputStyle,
         borderColor: formErrors[field] ? '#ef4444' : '#e2e8f0'
@@ -78,7 +82,8 @@ const InputField = ({ label, field, required = false, onChangeOverride, onBlurOv
           if (onChangeOverride) {
               onChangeOverride(e);
           } else {
-              setFormData({ ...formData, [field]: e.target.value });
+              const val = field === 'phone' ? sanitizeMobile(e.target.value) : e.target.value;
+              setFormData({ ...formData, [field]: val });
               if (formErrors[field]) setFormErrors({ ...formErrors, [field]: '' });
           }
       }}
@@ -166,7 +171,8 @@ export default function SettingsPanel() {
     const errors = {};
     if (!formData.name.trim()) errors.name = 'Restaurant Name is required.';
     if (!formData.ownerName?.trim()) errors.ownerName = 'Owner Name is required.';
-    if (!formData.phone?.trim()) errors.phone = 'Contact Number is required.';
+    const mobileErr = validateMobile(formData.phone);
+    if (mobileErr) errors.phone = mobileErr;
     if (!formData.email?.trim()) {
       errors.email = 'Email Address is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {

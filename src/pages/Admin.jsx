@@ -1250,9 +1250,23 @@ export default function Admin() {
                       type="button"
                       className="btn btn-black"
                       style={{ padding: '8px 16px', fontSize: '13px' }}
-                      onClick={() => {
-                        if (customCategoryInput.trim()) {
-                          setMenuForm({ ...menuForm, category: customCategoryInput.trim() });
+                      onClick={async () => {
+                        const catName = customCategoryInput.trim();
+                        if (catName) {
+                          try {
+                            const res = await MenuApi.createCategory({
+                              name: catName,
+                              description: '',
+                              status: 'AVAILABLE',
+                              branchId: selectedBranchId || (activeRestaurant?.branches?.length > 0 ? (activeRestaurant.branches[0]._id || activeRestaurant.branches[0].id) : '')
+                            });
+                            if (res?.status) {
+                              ShowNotifications.showAlertNotification(`Category "${catName}" created successfully!`, true);
+                            }
+                          } catch (err) {
+                            console.error('Failed to create category:', err);
+                          }
+                          setMenuForm({ ...menuForm, category: catName });
                           setShowCustomCategoryModal(false);
                         } else {
                           ShowNotifications.showAlertNotification('Please enter a valid category name.', false);
@@ -1513,7 +1527,18 @@ export default function Admin() {
 
                 <div className="form-group" style={{ marginBottom: '16px', marginTop: '16px' }}>
                   <label>Phone Number</label>
-                  <input type="tel" value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} required placeholder="e.g. 9876543210" />
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    inputMode="numeric"
+                    value={staffForm.phone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
+                      setStaffForm({ ...staffForm, phone: val });
+                    }}
+                    required
+                    placeholder="10 digit mobile number"
+                  />
                 </div>
 
                 <div style={sty.formGrid2}>
