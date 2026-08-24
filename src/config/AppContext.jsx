@@ -456,7 +456,7 @@ export const AppProvider = ({ children }) => {
             role: userTypeUpper === 'RESTAURANT_OWNER' ? 'RESTAURANT_OWNER' : (apiUser.role || 'Admin'),
             restaurantId: apiUser.restaurantId || currentRestaurantId || 'rest-1',
             activeBranchId: apiUser.activeBranchId || 'ALL',
-            branchId: userTypeUpper === 'RESTAURANT_OWNER' ? 'ALL' : (apiUser.activeBranchId || 'ALL')
+            branchId: apiUser.activeBranchId || 'ALL'
           };
 
           setCurrentUser(user);
