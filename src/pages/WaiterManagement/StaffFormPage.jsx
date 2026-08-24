@@ -7,7 +7,16 @@ import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
 export default function StaffFormPage() {
   const navigate = useNavigate();
   const { staffId } = useParams();
-  const { activeRestaurant, addStaff, updateStaff, selectedBranchId } = useAppState();
+  const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser } = useAppState();
+
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   const rawBranches = activeRestaurant?.branches || [];
   const branches = (selectedBranchId && selectedBranchId !== 'ALL')
@@ -175,17 +184,58 @@ export default function StaffFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                value={form.branchId}
-                onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-              >
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.branchName} ({b.branchCode})
-                  </option>
-                ))}
-              </select>
+              {isAdminOrOwner ? (
+                <select
+                  value={form.branchId || ''}
+                  onChange={e => setForm({ ...form, branchId: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    cursor: 'pointer',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="">-- Select Branch --</option>
+                  {(rawBranches || []).map(b => (
+                    <option key={b._id || b.id} value={b._id || b.id}>
+                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={(() => {
+                    const bObj = (branches || []).find(b => String(b.id || b._id) === String(form.branchId))
+                      || (branches && branches.length > 0 ? branches[0] : null);
+                    return bObj
+                      ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}`
+                      : (selectedBranchId || 'Default Branch');
+                  })()}
+                  readOnly
+                  disabled
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#f8fafc',
+                    color: '#64748b',
+                    cursor: 'not-allowed',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              )}
             </div>
           </div>
 

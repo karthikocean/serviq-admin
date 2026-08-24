@@ -48,6 +48,16 @@ export default function BillingPanel({
   const billingItems = selectedBillData.items || [];
   const orderIdDisplay = selectedBillData.orderId ? `#${selectedBillData.orderId}` : '';
 
+  // Pagination for bill items
+  const [itemsPage, setItemsPage] = React.useState(1);
+  const itemsPerPage = 6;
+  const totalItemsPages = Math.ceil(billingItems.length / itemsPerPage) || 1;
+  const paginatedBillingItems = billingItems.slice((itemsPage - 1) * itemsPerPage, itemsPage * itemsPerPage);
+
+  React.useEffect(() => {
+    setItemsPage(1);
+  }, [selectedBillingTable]);
+
   const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
   const serviceRate = activeRestaurant.settings?.serviceChargeRate || 0;
 
@@ -220,7 +230,7 @@ export default function BillingPanel({
               </tr>
             </thead>
             <tbody>
-              {billingItems.map((item, idx) => (
+              {paginatedBillingItems.map((item, idx) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <td style={{ padding: '16px', textAlign: 'left' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -245,6 +255,73 @@ export default function BillingPanel({
               )}
             </tbody>
           </table>
+
+          {billingItems.length > itemsPerPage && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              padding: '8px 12px',
+              background: '#f8fafc',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                Showing {(itemsPage - 1) * itemsPerPage + 1} to {Math.min(itemsPage * itemsPerPage, billingItems.length)} of {billingItems.length} items
+              </span>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setItemsPage(p => Math.max(1, p - 1))}
+                  disabled={itemsPage <= 1}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: itemsPage <= 1 ? '#f1f5f9' : '#ffffff',
+                    color: itemsPage <= 1 ? '#94a3b8' : '#0f172a',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: itemsPage <= 1 ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Prev
+                </button>
+                <span style={{
+                  minWidth: '24px',
+                  height: '24px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: '#000000',
+                  color: '#ffffff'
+                }}>
+                  {itemsPage}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setItemsPage(p => Math.min(totalItemsPages, p + 1))}
+                  disabled={itemsPage >= totalItemsPages}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    background: itemsPage >= totalItemsPages ? '#f1f5f9' : '#ffffff',
+                    color: itemsPage >= totalItemsPages ? '#94a3b8' : '#0f172a',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: itemsPage >= totalItemsPages ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
 
           {subtotal > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '14px', color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: '20px', marginBottom: '20px' }}>

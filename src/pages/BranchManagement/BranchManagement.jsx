@@ -9,9 +9,14 @@ export default function BranchManagement() {
 
   if (!activeRestaurant) return null;
 
-  const userType = (currentUser?.userType || currentUser?.role || '').toUpperCase();
-  const userRoleLower = (currentUser?.role || '').toLowerCase();
-  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userRoleLower === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   // Strict check: Only Admin role can access branch management
   if (!isAdmin) {

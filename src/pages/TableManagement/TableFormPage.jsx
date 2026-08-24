@@ -12,8 +12,15 @@ export default function TableFormPage() {
   const location = useLocation();
   const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
 
-  const isRestaurantOwner = currentUser?.userType === 'RESTAURANT_OWNER';
-  const isBranchLocked = !isRestaurantOwner;
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isBranchLocked = !isAdminOrOwner;
 
   const [branches, setBranches] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
@@ -226,48 +233,59 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                value={form.branchId}
-                onChange={async (e) => {
-                  const newBranchId = e.target.value;
-                  setForm({ ...form, branchId: newBranchId });
-                  
-                  // Auto-fetch next table ID when branch changes
-                  if (!isEdit && newBranchId) {
-                    try {
-                      const res = await TableApi.getNextTableId({ branchId: newBranchId });
-                      if (res.status && res.response?.data?.nextId) {
-                        setForm(prev => ({ ...prev, id: res.response.data.nextId, branchId: newBranchId }));
-                        if (formErrors.id) setFormErrors(prev => ({ ...prev, id: '' }));
-                      }
-                    } catch (err) {
-                      console.error("Failed to fetch next table ID on branch change", err);
-                    }
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: isBranchLocked ? '#f8fafc' : '#ffffff',
-                  cursor: isBranchLocked ? 'not-allowed' : 'pointer',
-                  boxSizing: 'border-box'
-                }}
-                disabled={isBranchLocked}
-              >
-                <option value="">Select a Branch</option>
-                {(selectedBranchId && selectedBranchId !== 'ALL'
-                  ? branches.filter(b => String(b._id || b.id) === String(selectedBranchId))
-                  : branches
-                ).map(b => (
-                  <option key={b._id || b.id} value={b._id || b.id}>
-                    {b.branchName} ({b.branchCode})
-                  </option>
-                ))}
-              </select>
+              {isAdminOrOwner ? (
+                <select
+                  value={form.branchId || ''}
+                  onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    cursor: 'pointer',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="">-- Select Branch --</option>
+                  {(branches || []).map(b => (
+                    <option key={b._id || b.id} value={b._id || b.id}>
+                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={(() => {
+                    const bObj = (branches || []).find(b => String(b._id || b.id) === String(form.branchId))
+                      || (branches || []).find(b => String(b._id || b.id) === String(selectedBranchId))
+                      || (branches && branches.length > 0 ? branches[0] : null);
+                    return bObj
+                      ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}`
+                      : (selectedBranchId || 'Default Branch');
+                  })()}
+                  readOnly
+                  disabled
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#f8fafc',
+                    color: '#64748b',
+                    cursor: 'not-allowed',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              )}
             </div>
 
             <div>

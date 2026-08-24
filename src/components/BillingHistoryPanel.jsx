@@ -20,6 +20,21 @@ export default function BillingHistoryPanel({
   summary
 }) {
 
+  const totalPages = Math.ceil((totalItems || 0) / (limit || 10)) || 1;
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   // State for Modals
   const [selectedInvoice, setSelectedInvoice] = useState(null); // For Invoice View Modal
   const [isExporting, setIsExporting] = useState(false);
@@ -260,38 +275,54 @@ export default function BillingHistoryPanel({
         {/* Pagination Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: '13px', color: '#64748b' }}>
-            Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+            Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
+              type="button"
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               style={{
-                padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-                border: '1px solid #e2e8f0', background: '#fff',
-                color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+                padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
+                color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
               Prev
             </button>
 
-            <button
-              style={{
-                minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: '6px', fontSize: '13px', fontWeight: 700,
-                border: 'none', background: '#000', color: '#fff', cursor: 'default'
-              }}
-            >
-              {page}
-            </button>
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
 
             <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={page * limit >= totalItems}
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
               style={{
-                padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-                border: '1px solid #e2e8f0', background: '#fff',
-                color: page * limit >= totalItems ? '#cbd5e1' : '#64748b', cursor: page * limit >= totalItems ? 'not-allowed' : 'pointer'
+                padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                border: '1px solid #e2e8f0', background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
               Next

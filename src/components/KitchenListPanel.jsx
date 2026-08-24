@@ -88,7 +88,26 @@ export default function KitchenListPanel({
   openEditStaffModal
 }) {
   const [staffToDelete, setStaffToDelete] = React.useState(null);
+  const [page, setPage] = React.useState(1);
+  const limit = 10;
+
   const kitchenStaff = staff.filter(s => s.role === 'Kitchen');
+  const totalPages = Math.ceil(kitchenStaff.length / limit) || 1;
+  const paginatedStaff = kitchenStaff.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const handleToggleDuty = (staffMember) => {
     const nextStatus = staffMember.status === 'On Duty' ? 'Off Duty' : 'On Duty';
@@ -111,57 +130,76 @@ export default function KitchenListPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
           <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr>
-                <th style={{ padding: '16px 14px' }}>S.NO.</th>
-                <th style={{ padding: '16px 14px' }}>KITCHEN STAFF NAME</th>
-                <th style={{ padding: '16px 14px' }}>PHONE NUMBER</th>
-                <th style={{ padding: '16px 14px' }}>EMAIL ADDRESS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ACTIVE ORDERS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>COMPLETED ORDERS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>KITCHEN STAFF NAME</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE NUMBER</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>EMAIL ADDRESS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACTIVE ORDERS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>COMPLETED ORDERS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>DUTY STATUS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {kitchenStaff.map((s, index) => {
-                const activeOrdersCount = index === 0 ? 3 : index === 1 ? 2 : index + 1;
-                const completedOrdersCount = index === 0 ? 0 : index === 1 ? 1 : index;
+              {paginatedStaff.map((s, index) => {
+                const globalIndex = (page - 1) * limit + index;
+                const activeOrdersCount = globalIndex === 0 ? 3 : globalIndex === 1 ? 2 : globalIndex + 1;
+                const completedOrdersCount = globalIndex === 0 ? 0 : globalIndex === 1 ? 1 : globalIndex;
                 const isActive = s.status === 'On Duty' || s.status === 'Active';
 
                 return (
-                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>{index + 1}</td>
-                    <td style={{ padding: '18px 14px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
+                  <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}>
+                    <td style={{ padding: '16px 14px', fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                      {globalIndex + 1}
+                    </td>
+                    <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'flex', alignItems: 'center' }}>
                       <KitchenAvatarIcon />
                       {s.name}
                     </td>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
-                    <td style={{ padding: '18px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
+                    <td style={{ padding: '16px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
+                    <td style={{ padding: '16px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
+                    <td style={{ padding: '16px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
                       {activeOrdersCount}
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ padding: '16px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
                       {completedOrdersCount}
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center' }}>
-                      <span 
+                    <td style={{ padding: '16px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      <button
+                        type="button"
                         onClick={() => handleToggleDuty(s)}
+                        title="Click to toggle duty status"
                         style={{
-                          display: 'inline-block',
-                          padding: '4px 16px',
-                          border: isActive ? '1.5px solid #10b981' : '1.5px solid #ef4444',
-                          color: isActive ? '#10b981' : '#ef4444',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '6px 14px',
                           borderRadius: '20px',
                           fontSize: '11px',
-                          fontWeight: '700',
+                          fontWeight: 800,
+                          letterSpacing: '0.3px',
+                          color: isActive ? '#166534' : '#64748b',
+                          background: isActive ? '#dcfce7' : '#f1f5f9',
+                          border: isActive ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
                           cursor: 'pointer',
-                          backgroundColor: '#ffffff'
+                          minWidth: '95px',
+                          transition: 'all 0.15s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                         }}
                       >
-                        {isActive ? 'Active' : 'Inactive'}
-                      </span>
+                        <span style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: isActive ? '#16a34a' : '#94a3b8',
+                          display: 'inline-block'
+                        }}></span>
+                        {isActive ? 'ON DUTY' : 'OFF DUTY'}
+                      </button>
                     </td>
-                    <td style={{ padding: '18px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '16px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <IconBtn icon={<PencilIcon size={16} />} tooltip="Edit Kitchen Staff" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
                     </td>
                   </tr>
@@ -176,6 +214,83 @@ export default function KitchenListPanel({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid #f1f5f9',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {kitchenStaff.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, kitchenStaff.length)} of {kitchenStaff.length} entries
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page === 1 ? '#f8fafc' : '#ffffff',
+                color: page === 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
       <Modal

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext';
 import InventoryCategoryApi from '../api/InventoryCategory';
+import InventoryApi from '../api/Inventory';
+import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -51,6 +53,7 @@ const RefreshIcon = ({ size = 16, color = 'currentColor' }) => (
 export default function InventoryCategoryPanel() {
   const navigate = useNavigate();
   const {
+    currentUser,
     activeRestaurant,
     selectedBranchId,
     addInventoryCategory,
@@ -58,10 +61,30 @@ export default function InventoryCategoryPanel() {
     deleteInventoryCategory
   } = useAppState();
 
-  const inventoryItems = activeRestaurant?.inventory || [];
+  // Determine user role / permissions safely
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isRestaurantOwner =
+    userTypeStr === 'RESTAURANT_OWNER' ||
+    roleStr === 'RESTAURANT_OWNER' ||
+    userType === 'RESTAURANT_OWNER' ||
+    userType === 'SUPER ADMIN' ||
+    userType === 'SUPER_ADMIN' ||
+    userType === 'OWNER' ||
+    userRoleLower === 'owner' ||
+    userRoleLower === 'super admin' ||
+    userRoleLower === 'restaurant_owner' ||
+    userRoleLower === 'restaurant owner';
 
   // API State
   const [categories, setCategories] = useState([]);
+  const [liveItems, setLiveItems] = useState([]);
+  const [liveBranches, setLiveBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -76,19 +99,47 @@ export default function InventoryCategoryPanel() {
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formStatus, setFormStatus] = useState('AVAILABLE');
+  const [formBranchId, setFormBranchId] = useState('');
   const [formErrors, setFormErrors] = useState({});
 
-  // Fetch Categories from Backend API
-  const fetchCategories = useCallback(async () => {
+  // Fetch Branches from API
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches();
+      if (res?.status) {
+        const rawBranches = res.response?.data || (Array.isArray(res.response) ? res.response : []);
+        setLiveBranches(rawBranches);
+      } else if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    } catch (e) {
+      if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    }
+  }, [activeRestaurant]);
+
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
+  const branches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+
+  // Fetch Categories and Live Items from Backend API
+  const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = {};
+      const params = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
-      const res = await InventoryCategoryApi.getCategories(params);
-      if (res?.status) {
-        const rawData = res.response?.data || res.response?.categories || res.response || [];
+      const [catsRes, itemsRes] = await Promise.all([
+        InventoryCategoryApi.getCategories(params),
+        InventoryApi.getItems(params)
+      ]);
+
+      if (catsRes?.status) {
+        const rawData = catsRes.response?.data || catsRes.response?.categories || catsRes.response || [];
         const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
         setCategories(list);
       } else {
@@ -97,16 +148,48 @@ export default function InventoryCategoryPanel() {
           setCategories(activeRestaurant.inventoryCategories);
         }
       }
+
+      if (itemsRes?.status) {
+        const rawData = itemsRes.response?.data || itemsRes.response?.items || itemsRes.response || [];
+        const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
+        setLiveItems(list);
+      } else if (activeRestaurant?.inventory) {
+        setLiveItems(activeRestaurant.inventory);
+      }
     } catch (error) {
-      console.error("Failed to fetch inventory categories:", error);
+      console.error("Failed to fetch inventory category data:", error);
     } finally {
       setIsLoading(false);
     }
   }, [selectedBranchId, activeRestaurant]);
 
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    fetchAllData();
+  }, [fetchAllData]);
+
+  const fetchCategories = fetchAllData;
+
+  const allInventoryItems = liveItems.length > 0 ? liveItems : (activeRestaurant?.inventory || []);
+
+  const getItemsForCategory = (category) => {
+    if (!category) return [];
+    const catId = category._id || category.id;
+    const catName = (category.name || '').toLowerCase().trim();
+
+    return allInventoryItems.filter(i => {
+      const iCatId = typeof i.categoryId === 'object' ? (i.categoryId?._id || i.categoryId?.id) : i.categoryId;
+      const iCatName = (typeof i.categoryId === 'object' ? (i.categoryId?.name || '') : (i.category || '')).toLowerCase().trim();
+      
+      const matchesId = catId && iCatId && String(iCatId) === String(catId);
+      const matchesName = catName && iCatName && (iCatName === catName || iCatName.includes(catName) || catName.includes(iCatName));
+      
+      return matchesId || matchesName;
+    });
+  };
+
+  const getItemCountForCategory = (category) => {
+    return getItemsForCategory(category).length;
+  };
 
   // Client-side search and status filtering
   const filteredCategories = categories.filter(c => {
@@ -119,15 +202,39 @@ export default function InventoryCategoryPanel() {
     return matchesSearch && matchesStatus;
   });
 
-  const getItemCountForCategory = (catName) => {
-    return inventoryItems.filter(i => (i.category || '').toLowerCase() === (catName || '').toLowerCase()).length;
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const totalPages = Math.ceil(filteredCategories.length / limit) || 1;
+  const paginatedCategories = filteredCategories.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
   };
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
     setFormName('');
     setFormDesc('');
     setFormStatus('AVAILABLE');
+    const defaultBranch = (selectedBranchId && selectedBranchId !== 'ALL')
+      ? selectedBranchId
+      : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : ''));
+    setFormBranchId(defaultBranch || '');
     setFormErrors({});
     setViewMode('form');
   };
@@ -137,23 +244,40 @@ export default function InventoryCategoryPanel() {
     setFormName(cat.name || '');
     setFormDesc(cat.description || '');
     setFormStatus(cat.status || 'AVAILABLE');
+    const catBranch = cat.branchId?._id || cat.branchId?.id || cat.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
+    setFormBranchId(catBranch || '');
     setFormErrors({});
     setViewMode('form');
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    const errors = {};
     if (!formName.trim()) {
-      setFormErrors({ name: 'Category Name is required.' });
+      errors.name = 'Category Name is required.';
+    } else if (formName.trim().length < 2) {
+      errors.name = 'Category Name must be at least 2 characters.';
+    }
+
+    if (isRestaurantOwner) {
+      if (!formBranchId) {
+        errors.branchId = 'Branch selection is required.';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
       return;
     }
 
     setIsSubmitting(true);
+    const finalBranchId = formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || undefined));
     const payload = {
       name: formName.trim(),
       description: formDesc.trim(),
       status: formStatus || 'AVAILABLE',
-      branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+      branchId: finalBranchId
     };
 
     try {
@@ -161,7 +285,7 @@ export default function InventoryCategoryPanel() {
         const catId = editingItem._id || editingItem.id;
         const res = await InventoryCategoryApi.updateCategory(catId, payload);
         if (res?.status) {
-          await fetchCategories();
+          await fetchAllData();
           if (updateInventoryCategory && activeRestaurant?.id) {
             updateInventoryCategory(activeRestaurant.id, catId, payload);
           }
@@ -171,7 +295,7 @@ export default function InventoryCategoryPanel() {
       } else {
         const res = await InventoryCategoryApi.createCategory(payload);
         if (res?.status) {
-          await fetchCategories();
+          await fetchAllData();
           if (addInventoryCategory && activeRestaurant?.id) {
             addInventoryCategory(activeRestaurant.id, res.response?.data || payload);
           }
@@ -188,7 +312,7 @@ export default function InventoryCategoryPanel() {
 
   const handleDelete = async (cat) => {
     const catId = cat._id || cat.id;
-    const count = getItemCountForCategory(cat.name);
+    const count = getItemCountForCategory(cat);
     const msg = count > 0
       ? `Are you sure you want to delete category "${cat.name}"? It is currently used by ${count} inventory item(s).`
       : `Are you sure you want to delete category "${cat.name}"?`;
@@ -196,7 +320,7 @@ export default function InventoryCategoryPanel() {
     if (window.confirm(msg)) {
       const res = await InventoryCategoryApi.deleteCategory(catId);
       if (res?.status) {
-        await fetchCategories();
+        await fetchAllData();
         if (deleteInventoryCategory && activeRestaurant?.id) {
           deleteInventoryCategory(activeRestaurant.id, catId);
         }
@@ -278,6 +402,80 @@ export default function InventoryCategoryPanel() {
                 <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {formErrors.name}
                 </span>
+              )}
+            </div>
+
+            {/* Branch Assignment Field */}
+            <div className="form-group">
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
+                Branch <span style={{ color: '#dc2626' }}>*</span>
+              </label>
+              {isRestaurantOwner ? (
+                <div>
+                  <select
+                    value={formBranchId}
+                    onChange={e => {
+                      setFormBranchId(e.target.value);
+                      if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                    }}
+                    disabled={isSubmitting}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: formErrors.branchId ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                      outline: 'none',
+                      fontSize: '14px',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      boxSizing: 'border-box',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    <option value="">-- Select Branch --</option>
+                    {branches.map(b => (
+                      <option key={b._id || b.id} value={b._id || b.id}>
+                        {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.branchId && (
+                    <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                      {formErrors.branchId}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="text"
+                    value={(() => {
+                      const assignedBranch = (branches || []).find(b => String(b._id || b.id) === String(formBranchId || currentUser?.activeBranchId || currentUser?.branchId || selectedBranchId))
+                        || (branches && branches.length > 0 ? branches[0] : null);
+                      return assignedBranch
+                        ? `${assignedBranch.branchName || assignedBranch.name || 'Branch'}${assignedBranch.branchCode ? ` (${assignedBranch.branchCode})` : ''}`
+                        : (selectedBranchId || 'Assigned Branch');
+                    })()}
+                    disabled
+                    readOnly
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '14px',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed',
+                      fontWeight: 600,
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    Branch is assigned to your current role.
+                  </span>
+                </div>
               )}
             </div>
 
@@ -421,7 +619,7 @@ export default function InventoryCategoryPanel() {
 
           <button
             type="button"
-            onClick={fetchCategories}
+            onClick={fetchAllData}
             disabled={isLoading}
             title="Refresh list from server"
             style={{
@@ -497,7 +695,15 @@ export default function InventoryCategoryPanel() {
               type="text"
               placeholder="Search inventory categories..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+              }}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -599,21 +805,21 @@ export default function InventoryCategoryPanel() {
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((item, index) => {
+                paginatedCategories.map((item, index) => {
                   const isAvailable = (item.status || 'AVAILABLE').toUpperCase() !== 'UNAVAILABLE';
-                  const itemCount = getItemCountForCategory(item.name);
+                  const itemCount = getItemCountForCategory(item);
                   return (
                     <tr
                       key={item._id || item.id || index}
                       style={{
-                        borderBottom: index < filteredCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
                         transition: 'background 0.15s'
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       <td style={{ padding: '14px 20px', fontSize: '13px', fontWeight: '700', color: '#64748b' }}>
-                        {index + 1}
+                        {(page - 1) * limit + index + 1}
                       </td>
                       <td style={{ padding: '14px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -626,12 +832,16 @@ export default function InventoryCategoryPanel() {
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                         <span style={{
-                          background: '#f1f5f9',
-                          color: '#0f172a',
+                          background: itemCount > 0 ? '#fff7ed' : '#f1f5f9',
+                          color: itemCount > 0 ? '#ea580c' : '#64748b',
+                          border: itemCount > 0 ? '1px solid #fed7aa' : '1px solid #e2e8f0',
                           fontSize: '12px',
                           fontWeight: 700,
                           padding: '4px 10px',
-                          borderRadius: '12px'
+                          borderRadius: '12px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
                         }}>
                           {itemCount} {itemCount === 1 ? 'item' : 'items'}
                         </span>
@@ -734,6 +944,88 @@ export default function InventoryCategoryPanel() {
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      {filteredCategories.length > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredCategories.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredCategories.length)} of {filteredCategories.length} categories
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page <= 1 ? '#f8fafc' : '#ffffff',
+                color: page <= 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 4. VIEW CATEGORY MODAL POPUP */}
       {viewingCategory && (
         <Modal
@@ -757,12 +1049,43 @@ export default function InventoryCategoryPanel() {
               </p>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Linked Stock Items:</span>
-              <span style={{ fontWeight: 800, color: '#ff5a1f', fontSize: '14px' }}>
-                {getItemCountForCategory(viewingCategory.name)} items
-              </span>
-            </div>
+            {/* Linked Stock Items */}
+            {(() => {
+              const categoryItems = getItemsForCategory(viewingCategory);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      Linked Stock Items ({categoryItems.length})
+                    </span>
+                    <span style={{ fontWeight: 800, color: '#ff5a1f', fontSize: '13px' }}>
+                      {categoryItems.length} items
+                    </span>
+                  </div>
+                  {categoryItems.length > 0 ? (
+                    <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                      {categoryItems.map((ci, idx) => (
+                        <div key={ci._id || ci.id || idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff', border: '1px solid #e2e8f0', padding: '8px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                          <div>
+                            <strong style={{ color: '#0f172a' }}>{ci.name || ci.itemName}</strong>
+                            <span style={{ marginLeft: '6px', fontSize: '10px', color: '#64748b', fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
+                              SKU: {ci.sku || 'N/A'}
+                            </span>
+                          </div>
+                          <div style={{ fontWeight: 700, color: (Number(ci.currentStock) || 0) <= 0 ? '#dc2626' : '#059669' }}>
+                            {ci.currentStock} {ci.unit || 'unit'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', marginTop: '4px' }}>
+                      No inventory stock items currently linked to this category.
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Status:</span>

@@ -111,6 +111,21 @@ export default function ReportsPanel({
     }
   };
 
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const total = pagination.totalPages || 1;
+    let startPage = Math.max(1, pagination.page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(total, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   const handleResetFilters = () => {
     setDateStart('');
     setDateEnd('');
@@ -471,7 +486,15 @@ export default function ReportsPanel({
               type="text"
               placeholder={activeReportTab === 'waiter' ? 'Search waiter, table...' : 'Search food item...'}
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchQuery(val);
+              }}
               style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', backgroundColor: '#f8fafc' }}
             />
           </div>
@@ -510,7 +533,7 @@ export default function ReportsPanel({
               {waiterData.map((w, index) => (
                 <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {index + 1}
+                    {(pagination.page - 1) * pagination.limit + index + 1}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -604,7 +627,7 @@ export default function ReportsPanel({
               {kitchenData.map((k, index) => (
                 <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {index + 1}
+                    {(pagination.page - 1) * pagination.limit + index + 1}
                   </td>
                   <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
                     {k.foodItem}
@@ -652,54 +675,79 @@ export default function ReportsPanel({
       </div>
 
       {/* Pagination Footer */}
-      {pagination.totalPages > 1 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 8px' }}>
-          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.totalItems} total)
+      {(pagination.totalPages > 1 || pagination.totalItems > 0) && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {pagination.totalItems === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalItems)} of {pagination.totalItems} records
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
+              type="button"
               onClick={() => handlePageChange(pagination.page - 1)}
               disabled={pagination.page <= 1}
               style={{
                 padding: '6px 14px',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: pagination.page <= 1 ? '#f8fafc' : '#fff',
-                color: pagination.page <= 1 ? '#94a3b8' : '#0f172a',
+                background: pagination.page <= 1 ? '#f8fafc' : '#ffffff',
+                color: pagination.page <= 1 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer'
+                cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
-              Previous
+              Prev
             </button>
-            <span style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: '32px',
-              height: '32px',
-              borderRadius: '6px',
-              background: '#f1f5f9',
-              color: '#0f172a',
-              fontSize: '13px',
-              fontWeight: 700
-            }}>
-              {pagination.page}
-            </span>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => handlePageChange(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: pagination.page === pageNum ? 700 : 500,
+                  border: pagination.page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: pagination.page === pageNum ? '#000000' : '#ffffff',
+                  color: pagination.page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
             <button
+              type="button"
               onClick={() => handlePageChange(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages}
+              disabled={pagination.page >= pagination.totalPages || pagination.totalPages === 0}
               style={{
                 padding: '6px 14px',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: pagination.page >= pagination.totalPages ? '#f8fafc' : '#fff',
-                color: pagination.page >= pagination.totalPages ? '#94a3b8' : '#0f172a',
+                background: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: pagination.page >= pagination.totalPages ? 'not-allowed' : 'pointer'
+                cursor: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
               Next
