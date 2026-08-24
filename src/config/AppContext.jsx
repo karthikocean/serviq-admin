@@ -1496,9 +1496,14 @@ export const AppProvider = ({ children }) => {
   };
 
   const checkIsAdmin = () => {
-    const userRole = (currentUser?.role || '').toLowerCase();
-    const userType = (currentUser?.userType || '').toUpperCase();
-    return userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+    const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+      ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+      : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+    const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+    const userRole = (roleStr || '').toLowerCase();
+    const userType = (userTypeStr || '').toUpperCase();
+    return userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
   };
 
   const addBranch = (restaurantId, branchData) => {

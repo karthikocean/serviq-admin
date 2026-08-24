@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -139,6 +139,30 @@ export default function TablesPanel({
 
     return matchesSearch && matchesStatus;
   });
+
+  // Pagination for tables (10 tables per page)
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const totalPages = Math.ceil(filteredTables.length / limit) || 1;
+  const paginatedTables = filteredTables.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
 
   const totalCount = displayTables.length;
   const occupiedCount = displayTables.filter(t => t.status?.toLowerCase() === 'occupied').length;
@@ -376,7 +400,15 @@ export default function TablesPanel({
             type="text"
             placeholder="Search by table #, waiter, section..."
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === ' ' && !e.currentTarget.value) {
+                e.preventDefault();
+              }
+            }}
+            onChange={e => {
+              const val = e.target.value.replace(/^\s+/, '');
+              setSearchTerm(val);
+            }}
             style={{
               border: 'none',
               background: 'transparent',
@@ -426,302 +458,360 @@ export default function TablesPanel({
         </div>
       </div>
 
-      {/* 4. UNIFIED TABLE LIST CARDS (INTEGRATED WITH QR CODES) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-        {filteredTables.length > 0 ? (
-          filteredTables.map((table, index) => {
-            const isFree = table.status?.toLowerCase() === 'free' || table.status?.toLowerCase() === 'available';
-            const statusText = isFree ? 'FREE' : 'OCCUPIED';
+      {/* 4. UNIFIED MODULAR TABLE VIEW */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '14px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
+        overflow: 'hidden',
+        width: '100%'
+      }}>
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE & SECTION</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>SEATING CAPACITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSIGNED WAITER</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>QR CODE</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTables.length > 0 ? (
+                paginatedTables.map((table, index) => {
+                  const isFree = table.status?.toLowerCase() === 'free' || table.status?.toLowerCase() === 'available';
+                  const statusText = isFree ? 'FREE' : 'OCCUPIED';
 
-            const accentColor = isFree ? '#22c55e' : '#ef4444';
-            const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
-            const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
+                  const accentColor = isFree ? '#22c55e' : '#ef4444';
+                  const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
+                  const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
 
-            const tableIdStr = table.tableNumber || table.tableNum || `T-${String(index + 1).padStart(2, '0')}`;
-            const waiterName = getWaiterName(table);
-            const qrUrl = table.qrUrl || '';
-            const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
+                  const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.name || (table.id && String(table.id).startsWith('T-') ? table.id : null) || table.id || `T-${String((page - 1) * limit + index + 1).padStart(2, '0')}`;
+                  const waiterName = getWaiterName(table);
+                  const qrUrl = table.qrUrl || '';
+                  const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
 
-            return (
-              <div
-                key={table._id || table.id || index}
-                style={{
-                  background: '#ffffff',
-                  borderRadius: '14px',
-                  border: '1px solid #e2e8f0',
-                  borderLeft: `5px solid ${accentColor}`,
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.02)',
-                  padding: '16px 20px',
-                  display: 'grid',
-                  gridTemplateColumns: 'minmax(180px, 1.4fr) 120px 100px minmax(140px, 1.2fr) auto auto',
-                  alignItems: 'center',
-                  gap: '16px',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  transition: 'transform 0.15s, box-shadow 0.15s'
-                }}
-              >
-                {/* Col 1: Table ID & Section */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '160px' }}>
-                  <div style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '10px',
-                    background: bgBadgeColor,
-                    color: textBadgeColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                  }}>
-                    <TableIcon size={20} color={textBadgeColor} />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
-                        {tableIdStr}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b', whiteSpace: 'nowrap' }}>
-                      {table.section || 'Main Dining'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Col 2: Status Badge */}
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '5px 12px',
-                    borderRadius: '20px',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    backgroundColor: bgBadgeColor,
-                    color: textBadgeColor,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: textBadgeColor,
-                      display: 'inline-block'
-                    }}></span>
-                    {statusText}
-                  </span>
-                </div>
-
-                {/* Col 3: Seating Capacity */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  color: '#475569',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap'
-                }}>
-                  <UsersGroupIcon size={15} color="#64748b" />
-                  <span>{table.seatingCapacity ?? table.seats ?? 4} seats</span>
-                </div>
-
-                {/* Col 4: Assigned Waiter */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '13px',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {waiterName ? (
-                    <>
-                      <UserIcon size={14} color="#0f172a" />
-                      <span style={{ fontWeight: 700, color: '#0f172a' }}>
-                        {waiterName}
-                      </span>
-                    </>
-                  ) : (
-                    <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
-                      Unassigned
-                    </span>
-                  )}
-                </div>
-
-                {/* Col 5: Integrated QR Code Module Box */}
-                {table.qrUrl || table.assignedQrId ? (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    background: '#f8fafc',
-                    padding: '6px 12px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {/* QR Thumbnail */}
-                    <div
-                      onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                  return (
+                    <tr
+                      key={table._id || table.id || index}
                       style={{
-                        width: '34px',
-                        height: '34px',
-                        background: '#ffffff',
-                        borderRadius: '6px',
-                        border: '1px solid #cbd5e1',
-                        padding: '2px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
+                        borderBottom: '1px solid #f1f5f9',
+                        transition: 'background 0.15s ease'
                       }}
-                      title="Click to expand QR Code"
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <img
-                        src={qrImgSrc}
-                        alt={`QR ${tableIdStr}`}
-                        style={{ width: '30px', height: '30px', display: 'block', borderRadius: '4px' }}
-                      />
-                    </div>
+                      {/* S.NO */}
+                      <td style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
+                        {(page - 1) * limit + index + 1}
+                      </td>
 
-                    {/* QR Meta */}
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a' }}>
-                          QR Active
-                        </span>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }}></span>
-                      </div>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>
-                        Scan to Order
-                      </span>
-                    </div>
+                      {/* 1. Table ID & Section */}
+                      <td style={{ padding: '14px 18px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '10px',
+                            background: bgBadgeColor,
+                            color: textBadgeColor,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <TableIcon size={18} color={textBadgeColor} />
+                          </div>
 
-                    {/* QR Quick Action Icons */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
-                      <button
-                        type="button"
-                        onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--primary)',
-                          cursor: 'pointer',
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          display: 'flex',
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                              {tableIdStr}
+                            </span>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b' }}>
+                              {table.section || 'Main Dining'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 2. Seating Capacity */}
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        <div style={{
+                          display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 700
-                        }}
-                        title="View & Print QR Code"
-                      >
-                        <QrIcon size={16} /> View QR
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    background: '#fef2f2',
-                    padding: '6px 12px',
-                    borderRadius: '10px',
-                    border: '1px dashed #fca5a5',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#dc2626' }}>
-                          No QR Generated
+                          color: '#475569',
+                          fontSize: '13px',
+                          fontWeight: 600
+                        }}>
+                          <UsersGroupIcon size={14} color="#64748b" />
+                          <span>{table.seatingCapacity ?? table.seats ?? 4} seats</span>
+                        </div>
+                      </td>
+
+                      {/* 3. Assigned Waiter */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {waiterName ? (
+                            <>
+                              <UserIcon size={14} color="#0f172a" />
+                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                                {waiterName}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 4. Status Badge */}
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '5px 12px',
+                          borderRadius: '20px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          backgroundColor: bgBadgeColor,
+                          color: textBadgeColor,
+                          whiteSpace: 'nowrap'
+                        }}>
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: textBadgeColor,
+                            display: 'inline-block'
+                          }}></span>
+                          {statusText}
                         </span>
-                      </div>
-                      <span style={{ fontSize: '11px', color: '#ef4444' }}>
-                        Click generate above
-                      </span>
-                    </div>
-                  </div>
-                )}
+                      </td>
 
-                {/* Col 6: Edit & Delete Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, justifyContent: 'flex-end' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (setAddTableForm) setAddTableForm(table);
-                      if (setActivePage) setActivePage('table-form');
-                    }}
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #cbd5e1',
-                      color: '#475569',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = '#0f172a';
-                      e.currentTarget.style.color = '#ffffff';
-                      e.currentTarget.style.borderColor = '#0f172a';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = '#f8fafc';
-                      e.currentTarget.style.color = '#475569';
-                      e.currentTarget.style.borderColor = '#cbd5e1';
-                    }}
-                    title="Edit Table"
-                  >
-                    <PencilIcon size={15} />
-                  </button>
+                      {/* 5. QR Code */}
+                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                        {table.qrUrl || table.assignedQrId ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <div
+                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                background: '#ffffff',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                padding: '2px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              title="Click to expand QR Code"
+                            >
+                              <img
+                                src={qrImgSrc}
+                                alt={`QR ${tableIdStr}`}
+                                style={{ width: '26px', height: '26px', display: 'block', borderRadius: '4px' }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                              style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                color: '#ff5a1f',
+                                cursor: 'pointer',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '11px',
+                                fontWeight: 700
+                              }}
+                            >
+                              <QrIcon size={13} /> View
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>
+                            No QR
+                          </span>
+                        )}
+                      </td>
 
-                  <button
-                    type="button"
-                    onClick={() => setTableToDelete(table)}
-                    style={{
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
-                      color: '#dc2626',
-                      cursor: 'pointer',
-                      padding: '8px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = '#dc2626';
-                      e.currentTarget.style.color = '#ffffff';
-                      e.currentTarget.style.borderColor = '#dc2626';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = '#fef2f2';
-                      e.currentTarget.style.color = '#dc2626';
-                      e.currentTarget.style.borderColor = '#fecaca';
-                    }}
-                    title="Delete Table"
-                  >
-                    <TrashIcon size={15} />
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#64748b' }}>
-            No dining tables match your current filter "{searchTerm}".
-          </div>
-        )}
+                      {/* 6. Actions */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (setAddTableForm) setAddTableForm(table);
+                              if (setActivePage) setActivePage('table-form');
+                            }}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              color: '#475569',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = '#0f172a';
+                              e.currentTarget.style.color = '#ffffff';
+                              e.currentTarget.style.borderColor = '#0f172a';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = '#f8fafc';
+                              e.currentTarget.style.color = '#475569';
+                              e.currentTarget.style.borderColor = '#cbd5e1';
+                            }}
+                            title="Edit Table"
+                          >
+                            <PencilIcon size={14} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setTableToDelete(table)}
+                            style={{
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = '#dc2626';
+                              e.currentTarget.style.color = '#ffffff';
+                              e.currentTarget.style.borderColor = '#dc2626';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = '#fef2f2';
+                              e.currentTarget.style.color = '#dc2626';
+                              e.currentTarget.style.borderColor = '#fecaca';
+                            }}
+                            title="Delete Table"
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                    No dining tables match your current filter "{searchTerm}".
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Pagination Controls */}
+      {filteredTables.length > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredTables.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredTables.length)} of {filteredTables.length} tables
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page <= 1 ? '#f8fafc' : '#ffffff',
+                color: page <= 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* MODAL: VIEW & PRINT TABLE QR CODE */}
       {viewingQrTable && (

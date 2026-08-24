@@ -86,6 +86,8 @@ export default function WaiterReportsPanel({
   const [filterPaymentMode, setFilterPaymentMode] = useState('All');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('All');
   const [filterOrderStatus, setFilterOrderStatus] = useState('All');
+  const [page, setPage] = useState(1);
+  const limit = 10;
 
   // Modals local states
   const [showTimelineModal, setShowTimelineModal] = useState(false);
@@ -175,6 +177,23 @@ export default function WaiterReportsPanel({
   const waiterAvgOrder = filteredWaiterReports.length > 0 ? (waiterRevenue / filteredWaiterReports.length).toFixed(0) : 0;
   const waiterUnpaidCount = filteredWaiterReports.filter(o => o.billingStatus === 'unpaid').length;
 
+  const totalPages = Math.ceil(filteredWaiterReports.length / limit) || 1;
+  const paginatedWaiterReports = filteredWaiterReports.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   const handleResetFilters = () => {
     setDateStart('');
     setDateEnd('');
@@ -184,6 +203,7 @@ export default function WaiterReportsPanel({
     setFilterPaymentMode('All');
     setFilterPaymentStatus('All');
     setFilterOrderStatus('All');
+    setPage(1);
   };
 
   const handleRecordPayment = () => {
@@ -361,7 +381,7 @@ export default function WaiterReportsPanel({
                   </td>
                 </tr>
               ) : (
-                filteredWaiterReports.map(ord => {
+                paginatedWaiterReports.map(ord => {
                   const date = getOrderDate(ord);
                   const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
                   const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
@@ -440,6 +460,83 @@ export default function WaiterReportsPanel({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid #f1f5f9',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredWaiterReports.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredWaiterReports.length)} of {filteredWaiterReports.length} records
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page === 1 ? '#f8fafc' : '#ffffff',
+                color: page === 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

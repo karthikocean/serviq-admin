@@ -79,6 +79,22 @@ export default function OrdersPanel({
   totalPages = 1,
   totalCount = 0
 }) {
+  const getOrderPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = page + 1;
+    const total = Math.max(1, totalPages || 1);
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(total, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   const [waiterDropdownOpen, setWaiterDropdownOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
@@ -663,35 +679,34 @@ export default function OrdersPanel({
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Modal Branch Selection */}
-            {activeRestaurant?.branches?.length > 1 && (
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Branch <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <select
-                  value={modalSelectedBranchId}
-                  onChange={handleModalBranchChange}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    color: '#0f172a',
-                    background: isBranchLocked ? '#f8fafc' : '#fff',
-                    cursor: isBranchLocked ? 'not-allowed' : 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                  disabled={isBranchLocked}
-                >
-                  {activeRestaurant.branches.map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>{b.branchName || b.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Stable Branch Display */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={(() => {
+                  const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId)) 
+                    || (activeRestaurant?.branches || [])[0];
+                  return bObj ? (bObj.branchName || bObj.name || 'Serviq Branch') : 'Serviq Branch';
+                })()}
+                readOnly
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'not-allowed',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
 
             {/* Row 1: Table & Waiter Assignment */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -817,7 +832,15 @@ export default function OrdersPanel({
                   <input
                     type="text"
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === ' ' && !e.currentTarget.value) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onChange={e => {
+                      const val = e.target.value.replace(/^\s+/, '');
+                      setSearchQuery(val);
+                    }}
                     placeholder="Search dishes..."
                     style={{
                       width: '100%',
@@ -1116,7 +1139,15 @@ export default function OrdersPanel({
                 <input
                   type="text"
                   value={editSearchQuery}
-                  onChange={e => setEditSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === ' ' && !e.currentTarget.value) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={e => {
+                    const val = e.target.value.replace(/^\s+/, '');
+                    setEditSearchQuery(val);
+                  }}
                   placeholder="Search to add more items..."
                   style={{
                     flex: 1,
@@ -1314,7 +1345,15 @@ export default function OrdersPanel({
                   type="text"
                   placeholder="Search dishes to add..."
                   value={appendSearchQuery}
-                  onChange={(e) => setAppendSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === ' ' && !e.currentTarget.value) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/^\s+/, '');
+                    setAppendSearchQuery(val);
+                  }}
                   style={{
                     flex: 1,
                     padding: '10px 14px',
@@ -1981,42 +2020,79 @@ export default function OrdersPanel({
         </div>
 
         {/* PAGINATION UI */}
-        {totalCount > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff' }}>
-            <div style={{ fontSize: '13px', color: '#64748b' }}>
-              Showing {page * limit + (totalCount > 0 ? 1 : 0)} to {Math.min((page + 1) * limit, totalCount)} of {totalCount} entries
+        {(totalCount > 0 || (orders && orders.length > 0)) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '20px',
+            padding: '12px 20px',
+            background: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+              Showing {totalCount === 0 && (!orders || orders.length === 0) ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalCount || orders.length)} of {totalCount || orders.length} entries
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <button
+                type="button"
                 onClick={() => setPage(page - 1)}
                 disabled={page === 0}
                 style={{
-                  padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-                  border: '1px solid #e2e8f0', background: '#fff',
-                  color: page === 0 ? '#cbd5e1' : '#64748b', cursor: page === 0 ? 'not-allowed' : 'pointer'
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: page === 0 ? '#f8fafc' : '#ffffff',
+                  color: page === 0 ? '#cbd5e1' : '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: page === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Prev
               </button>
 
-              <button
-                type="button"
-                style={{
-                  minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: '6px', fontSize: '13px', fontWeight: 700,
-                  border: 'none', background: '#000', color: '#fff', cursor: 'default'
-                }}
-              >
-                {page + 1}
-              </button>
+              {getOrderPageNumbers().map(pageNum => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setPage(pageNum - 1)}
+                  style={{
+                    minWidth: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: (page + 1) === pageNum ? 700 : 500,
+                    border: (page + 1) === pageNum ? 'none' : '1px solid #e2e8f0',
+                    background: (page + 1) === pageNum ? '#000000' : '#ffffff',
+                    color: (page + 1) === pageNum ? '#ffffff' : '#334155',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
 
               <button
+                type="button"
                 onClick={() => setPage(page + 1)}
                 disabled={page >= totalPages - 1}
                 style={{
-                  padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-                  border: '1px solid #e2e8f0', background: '#fff',
-                  color: page >= totalPages - 1 ? '#cbd5e1' : '#64748b', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer'
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
+                  color: page >= totalPages - 1 ? '#cbd5e1' : '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Next
@@ -2275,35 +2351,34 @@ export default function OrdersPanel({
         >
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
 
-            {/* Modal Branch Selection */}
-            {activeRestaurant?.branches?.length > 1 && (
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Branch <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <select
-                  value={modalSelectedBranchId}
-                  onChange={handleModalBranchChange}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#0f172a',
-                    background: isBranchLocked ? '#f8fafc' : '#fff',
-                    cursor: isBranchLocked ? 'not-allowed' : 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                  disabled={isBranchLocked}
-                >
-                  {activeRestaurant.branches.map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>{b.branchName || b.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Stable Branch Display */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={(() => {
+                  const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId)) 
+                    || (activeRestaurant?.branches || [])[0];
+                  return bObj ? (bObj.branchName || bObj.name || 'Serviq Branch') : 'Serviq Branch';
+                })()}
+                readOnly
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'not-allowed',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
 
             {/* Row 1: Table & Waiter Assignment */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -2428,7 +2503,15 @@ export default function OrdersPanel({
                   type="text"
                   placeholder="Search menu items..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === ' ' && !e.currentTarget.value) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/^\s+/, '');
+                    setSearchQuery(val);
+                  }}
                   style={{
                     width: '100%',
                     padding: '10px 12px 10px 36px',
