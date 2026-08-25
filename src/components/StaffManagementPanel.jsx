@@ -180,24 +180,30 @@ export default function StaffManagementPanel({
     branchId: '',
     roleId: '',
     status: 'Active',
-    dutyStatus: 'On Duty',
+    dutyStatus: 'ON_DUTY',
     phone: '',
     email: '',
-    password: ''
+    password: '',
+    assignedTableIds: []
   });
   const [formErrors, setFormErrors] = useState({});
 
   const openAddUser = () => {
     setEditingUserId(null);
+    const initialBranchId = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : ((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (apiBranches[0]?._id || ''));
+    const waiterRole = apiRoles.find(r => r.roleName.toLowerCase().includes('waiter'));
     setUserForm({
       name: '',
-      branchId: (!isAdmin && currentBranchId) ? currentBranchId : '',
-      roleId: '',
+      branchId: initialBranchId,
+      roleId: waiterRole ? waiterRole._id : (apiRoles[0]?._id || ''),
       status: 'Active',
       dutyStatus: 'ON_DUTY',
       phone: '',
       email: '',
-      password: 'user' + Math.floor(100 + Math.random() * 900)
+      password: 'user' + Math.floor(100 + Math.random() * 900),
+      assignedTableIds: []
     });
     setFormErrors({});
     setViewState('form');
@@ -205,15 +211,24 @@ export default function StaffManagementPanel({
 
   const openEditUser = (user) => {
     setEditingUserId(user._id);
+    const userBranchId = (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : '');
+    const userAssignedTableIds = apiTables
+      .filter(t => {
+        const wId = t.assignedWaiterId || (typeof t.assignedWaiter === 'object' ? t.assignedWaiter?._id : t.assignedWaiter);
+        return String(wId) === String(user._id);
+      })
+      .map(t => t._id || t.id);
+
     setUserForm({
       name: user.name || '',
-      branchId: (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : ''),
+      branchId: userBranchId,
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
       status: user.isActive ? 'Active' : 'Inactive',
       dutyStatus: user.dutyStatus || 'ON_DUTY',
       phone: user.phoneNumber || '',
       email: user.email || '',
-      password: ''
+      password: '',
+      assignedTableIds: userAssignedTableIds
     });
     setFormErrors({});
     setViewState('form');
@@ -289,6 +304,21 @@ export default function StaffManagementPanel({
     }
 
     if (res.status) {
+      const savedUserId = editingUserId || res.response?.data?._id || res.response?.data?.id;
+      const isWaiter = roleName.toLowerCase().includes('waiter');
+      if (savedUserId && isWaiter) {
+        try {
+          await TableApi.assignWaiter({
+            waiterId: savedUserId,
+            tableIds: userForm.assignedTableIds || []
+          });
+          if (assignTablesToWaiter && activeRestaurant?.id) {
+            assignTablesToWaiter(activeRestaurant.id, savedUserId, userForm.assignedTableIds || []);
+          }
+        } catch (tableErr) {
+          console.error("Table assignment error:", tableErr);
+        }
+      }
       setViewState('list');
       fetchData();
     }
@@ -416,7 +446,8 @@ export default function StaffManagementPanel({
       const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
       const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
       const uRole = u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-      const uBranch = u.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+      const branchObj = u.branchId?.branchName ? u.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+      const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
       return [
         `"${u.name}"`,
         `"${uBranch}"`,
@@ -443,27 +474,46 @@ export default function StaffManagementPanel({
 
   if (viewState === 'form') {
     return (
-      <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <button
-            type="button"
-            onClick={() => setViewState('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#0f172a'
-            }}
-          >
-            <ArrowLeftIcon size={14} /> Back to Staff List
-          </button>
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewState('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                {editingUserId ? 'Edit Staff Member' : 'Add Staff Member'}
+              </h2>
+            </div>
+          </div>
         </div>
 
         <div style={{
@@ -475,11 +525,6 @@ export default function StaffManagementPanel({
           width: '100%',
           boxSizing: 'border-box'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUserId ? 'Edit Staff Member' : 'Add Staff Member'}
-          </h2>
-        <br></br>
-
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
@@ -514,22 +559,57 @@ export default function StaffManagementPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  value={userForm.branchId}
-                  onChange={e => {
-                    setUserForm({ ...userForm, branchId: e.target.value });
-                    if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                  }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: !isAdmin ? '#f8fafc' : '#ffffff', cursor: !isAdmin ? 'not-allowed' : 'pointer', boxSizing: 'border-box' }}
-                  disabled={!isAdmin}
-                >
-                  <option value="" disabled>Select a branch...</option>
-                  {apiBranches.map(b => (
-                    <option key={b._id} value={b._id}>
-                      {b.branchName} ({b.branchCode})
-                    </option>
-                  ))}
-                </select>
+                {(() => {
+                  const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
+                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                    : null;
+                  const currentBranchObj = headerBranchObj 
+                    || allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId))
+                    || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))
+                    || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                  const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
+
+                  return (
+                    <>
+                      <select
+                        value={effectiveVal}
+                        onChange={e => {
+                          setUserForm({ ...userForm, branchId: e.target.value });
+                          if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          background: isLocked ? '#f8fafc' : '#ffffff',
+                          color: isLocked ? '#64748b' : '#0f172a',
+                          cursor: isLocked ? 'not-allowed' : 'pointer',
+                          boxSizing: 'border-box'
+                        }}
+                        disabled={isLocked}
+                      >
+                        {allBranchesList.length === 0 ? (
+                          <option value="">Main Branch</option>
+                        ) : (
+                          allBranchesList.map(b => (
+                            <option key={b._id || b.id} value={b._id || b.id}>
+                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      {isLocked && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                          Branch is locked to currently selected branch.
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
                 {formErrors.branchId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.branchId}
@@ -671,6 +751,203 @@ export default function StaffManagementPanel({
                 )}
               </div>
             )}
+
+            {/* Table Assigning Option (Visible when Role is Waiter) */}
+            {(() => {
+              const selectedRole = apiRoles.find(r => r._id === userForm.roleId);
+              const isWaiter = selectedRole?.roleName?.toLowerCase().includes('waiter');
+              if (!isWaiter) return null;
+
+              const branchTables = apiTables.filter(t => {
+                const tBranchId = typeof t.branchId === 'object' ? t.branchId?._id : t.branchId;
+                return !userForm.branchId || !tBranchId || tBranchId === userForm.branchId;
+              });
+
+              return (
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        background: '#ffedd5',
+                        color: '#ea580c',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <TableAssignIcon size={18} color="#ea580c" />
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                          Assign Tables to Waiter
+                        </h4>
+                        <span style={{ fontSize: '12px', color: '#64748b' }}>
+                          Select dining tables assigned to this waiter for active service
+                        </span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        background: (userForm.assignedTableIds?.length || 0) > 0 ? '#ffedd5' : '#f1f5f9',
+                        color: (userForm.assignedTableIds?.length || 0) > 0 ? '#ea580c' : '#64748b',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        padding: '4px 10px',
+                        borderRadius: '20px'
+                      }}>
+                        {userForm.assignedTableIds?.length || 0} Table{(userForm.assignedTableIds?.length || 0) === 1 ? '' : 's'} Selected
+                      </span>
+                      {branchTables.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allIds = branchTables.map(t => t._id || t.id);
+                              setUserForm(prev => ({ ...prev, assignedTableIds: allIds }));
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#0f172a',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Select All
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUserForm(prev => ({ ...prev, assignedTableIds: [] }))}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              color: '#64748b',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Clear
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {branchTables.length === 0 ? (
+                    <div style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px dashed #cbd5e1',
+                      color: '#64748b',
+                      fontSize: '13px'
+                    }}>
+                      No tables found for this branch. Please create tables in Table Management first.
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                      gap: '12px',
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      padding: '4px'
+                    }}>
+                      {branchTables.map(table => {
+                        const tId = table._id || table.id;
+                        const isSelected = (userForm.assignedTableIds || []).includes(tId);
+                        const assignedUser = table.assignedWaiterId
+                          ? apiUsers.find(s => s._id === table.assignedWaiterId)
+                          : (table.assignedWaiter ? (typeof table.assignedWaiter === 'object' ? table.assignedWaiter : apiUsers.find(s => s._id === table.assignedWaiter)) : null);
+                        const isAssignedToOther = assignedUser && assignedUser._id !== editingUserId;
+
+                        return (
+                          <div
+                            key={tId}
+                            onClick={() => {
+                              const current = userForm.assignedTableIds || [];
+                              const updated = isSelected
+                                ? current.filter(id => id !== tId)
+                                : [...current, tId];
+                              setUserForm(prev => ({ ...prev, assignedTableIds: updated }));
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              padding: '12px 14px',
+                              borderRadius: '10px',
+                              background: isSelected ? '#fff7ed' : '#ffffff',
+                              border: isSelected ? '1.5px solid #ff5a1f' : '1px solid #e2e8f0',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                              boxShadow: isSelected ? '0 2px 8px rgba(255,90,31,0.12)' : 'none'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              style={{
+                                accentColor: '#ff5a1f',
+                                width: '18px',
+                                height: '18px',
+                                cursor: 'pointer'
+                              }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 800, color: isSelected ? '#ea580c' : '#0f172a' }}>
+                                  Table {table.tableNo || table.tableNumber || tId}
+                                </span>
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: table.status === 'Occupied' ? '#dc2626' : '#16a34a',
+                                  background: table.status === 'Occupied' ? '#fee2e2' : '#dcfce7',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px'
+                                }}>
+                                  {table.status || 'Free'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '11px', color: '#64748b' }}>
+                                <span>{table.section || table.area || 'Main Hall'}</span>
+                                <span>•</span>
+                                <span>{table.seats || table.seatingCapacity || 4} Seats</span>
+                              </div>
+                              {isAssignedToOther && (
+                                <div style={{ marginTop: '4px', fontSize: '10px', fontWeight: 600, color: '#d97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                  <span>⚠️ Currently: {assignedUser.name}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
               <button
@@ -976,7 +1253,8 @@ export default function StaffManagementPanel({
               const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
               const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
               const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-              const uBranchName = user.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+              const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+              const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
@@ -1512,10 +1790,10 @@ export default function StaffManagementPanel({
                 <input
                   type="text"
                   value={(() => {
-                    const bObj = (apiBranches || []).find(b => b._id === kitchenForm.branchId)
-                      || (activeFilteredBranchId ? (apiBranches || []).find(b => b._id === activeFilteredBranchId) : null)
+                    const bObj = (apiBranches || []).find(b => b._id === kitchenForm.branchId || b.id === kitchenForm.branchId)
+                      || (activeFilteredBranchId ? (apiBranches || []).find(b => b._id === activeFilteredBranchId || b.id === activeFilteredBranchId) : null)
                       || (apiBranches && apiBranches.length > 0 ? apiBranches[0] : null);
-                    return bObj ? bObj.branchName : 'Default Branch';
+                    return bObj ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Main Branch';
                   })()}
                   readOnly
                   disabled

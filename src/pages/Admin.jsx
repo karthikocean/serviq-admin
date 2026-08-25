@@ -1322,10 +1322,10 @@ export default function Admin() {
           {/* Form Card matching Image 2 */}
           <div style={{ background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
             <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
-              {/* Field 1: Table Number / ID */}
+              {/* Field 1: Table Number  */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                  Table Number / ID
+                  Table Number 
                 </label>
                 <input
                   type="text"
@@ -1931,10 +1931,14 @@ export default function Admin() {
                   activeRestaurant={activeRestaurant}
                   orders={filteredOrders}
                   tables={filteredTables}
+                  staff={staff}
                   todayRevenue={todayRevenue}
                   pendingOrdersCount={pendingOrdersCount}
                   occupiedTablesCount={occupiedTablesCount}
                   setActiveTab={setActiveTab}
+                  selectedBranchId={selectedBranchId}
+                  onSelectBranch={setSelectedBranchId}
+                  branches={branches}
                 />
               )}
               {activeTab === 'branch-management' && (
@@ -1958,6 +1962,7 @@ export default function Admin() {
                   activeRestaurant={activeRestaurant}
                   updateOrderStatus={updateOrderStatus}
                   plan={plan}
+                  currentUser={currentUser}
                 />
               )}
               {activeTab === 'menu' && (

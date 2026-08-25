@@ -7,7 +7,7 @@ import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
 export default function StaffFormPage() {
   const navigate = useNavigate();
   const { staffId } = useParams();
-  const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser, assignTablesToWaiter } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -27,6 +27,8 @@ export default function StaffFormPage() {
     ? activeRestaurant.staff.find(s => s.id === staffId || s.id === parseInt(staffId))
     : null;
 
+  const allTables = activeRestaurant?.tables || [];
+
   const [form, setForm] = useState({
     name: '',
     branchId: (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (branches.length > 0 ? (branches[0].id || branches[0]._id) : 'BR-001'),
@@ -34,13 +36,18 @@ export default function StaffFormPage() {
     phone: '',
     email: '',
     password: '',
-    status: 'On Duty'
+    status: 'On Duty',
+    assignedTableIds: []
   });
 
   const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     if (existingStaff) {
+      const staffAssignedTables = allTables
+        .filter(t => t.assignedWaiterId === existingStaff.id || t.assignedWaiterId === staffId)
+        .map(t => t.id);
+
       setForm({
         name: existingStaff.name || '',
         branchId: existingStaff.branchId || (selectedBranchId || 'BR-001'),
@@ -48,7 +55,8 @@ export default function StaffFormPage() {
         phone: existingStaff.phone || '',
         email: existingStaff.email || '',
         password: existingStaff.password || '',
-        status: existingStaff.status || 'On Duty'
+        status: existingStaff.status || 'On Duty',
+        assignedTableIds: staffAssignedTables
       });
     }
   }, [existingStaff, selectedBranchId]);
@@ -86,20 +94,28 @@ export default function StaffFormPage() {
     e.preventDefault();
     if (!validate()) return;
 
+    const targetStaffId = existingStaff ? existingStaff.id : (isEdit ? staffId : `ST-${Date.now()}`);
+
     if (isEdit) {
       if (updateStaff) {
         updateStaff(activeRestaurant.id, {
-          id: existingStaff ? existingStaff.id : staffId,
+          id: targetStaffId,
           ...form
         });
+      }
+      if (assignTablesToWaiter && form.role === 'Waiter') {
+        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
       }
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" updated successfully.`, true);
     } else {
       if (addStaff) {
         addStaff(activeRestaurant.id, {
-          id: `ST-${Date.now()}`,
+          id: targetStaffId,
           ...form
         });
+      }
+      if (assignTablesToWaiter && form.role === 'Waiter') {
+        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
       }
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" created successfully.`, true);
     }
@@ -125,23 +141,25 @@ export default function StaffFormPage() {
             type="button"
             onClick={() => navigate('/staff')}
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px',
-              borderRadius: '50%',
-              color: '#0f172a'
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            ←
           </button>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               {isEdit ? 'Edit Staff Member' : 'Add New Staff Member'}
             </h2>
           </div>
@@ -184,58 +202,56 @@ export default function StaffFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              {isAdminOrOwner ? (
-                <select
-                  value={form.branchId || ''}
-                  onChange={e => setForm({ ...form, branchId: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="">-- Select Branch --</option>
-                  {(rawBranches || []).map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>
-                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={(() => {
-                    const bObj = (branches || []).find(b => String(b.id || b._id) === String(form.branchId))
-                      || (branches && branches.length > 0 ? branches[0] : null);
-                    return bObj
-                      ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}`
-                      : (selectedBranchId || 'Default Branch');
-                  })()}
-                  readOnly
-                  disabled
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              )}
+              {(() => {
+                const allBranchesList = (rawBranches && rawBranches.length > 0) ? rawBranches : (activeRestaurant?.branches || []);
+                const isLocked = !isAdminOrOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b.id || b._id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b.id || b._id) === String(form.branchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (form.branchId || '');
+
+                return (
+                  <div>
+                    <select
+                      value={effectiveVal}
+                      onChange={e => setForm({ ...form, branchId: e.target.value })}
+                      disabled={isLocked}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        outline: 'none',
+                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
+                        color: isLocked ? '#64748b' : '#0f172a',
+                        cursor: isLocked ? 'not-allowed' : 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {allBranchesList.length === 0 ? (
+                        <option value="">Main Branch</option>
+                      ) : (
+                        allBranchesList.map(b => (
+                          <option key={b._id || b.id} value={b._id || b.id}>
+                            {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -348,7 +364,7 @@ export default function StaffFormPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: '32px' }}>
+          <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
               Duty Status
             </label>
@@ -361,6 +377,185 @@ export default function StaffFormPage() {
               <option value="Off Duty">Off Duty</option>
             </select>
           </div>
+
+          {/* Table Assigning Option for Waiters */}
+          {form.role === 'Waiter' && (
+            <div style={{
+              background: '#f8fafc',
+              border: '1.5px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '20px 24px',
+              marginBottom: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                    Assign Tables to Waiter
+                  </h4>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Select the dining tables assigned to this waiter
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    background: (form.assignedTableIds?.length || 0) > 0 ? '#ffedd5' : '#f1f5f9',
+                    color: (form.assignedTableIds?.length || 0) > 0 ? '#ea580c' : '#64748b',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    padding: '4px 10px',
+                    borderRadius: '20px'
+                  }}>
+                    {form.assignedTableIds?.length || 0} Table{(form.assignedTableIds?.length || 0) === 1 ? '' : 's'} Selected
+                  </span>
+                  {allTables.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const branchTables = allTables.filter(t => !form.branchId || String(t.branchId) === String(form.branchId));
+                          setForm(prev => ({ ...prev, assignedTableIds: branchTables.map(t => t.id) }));
+                        }}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#0f172a',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, assignedTableIds: [] }))}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#64748b',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {(() => {
+                const branchTables = allTables.filter(t => !form.branchId || String(t.branchId) === String(form.branchId));
+                if (branchTables.length === 0) {
+                  return (
+                    <div style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      background: '#ffffff',
+                      borderRadius: '8px',
+                      border: '1px dashed #cbd5e1',
+                      color: '#64748b',
+                      fontSize: '13px'
+                    }}>
+                      No tables found for this branch. Please create tables in Table Management first.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: '12px',
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                    padding: '4px'
+                  }}>
+                    {branchTables.map(table => {
+                      const tId = table.id;
+                      const isSelected = (form.assignedTableIds || []).includes(tId);
+                      const currentStaffList = activeRestaurant?.staff || [];
+                      const currentlyAssignedStaff = table.assignedWaiterId ? currentStaffList.find(s => s.id === table.assignedWaiterId) : null;
+                      const isAssignedToOther = currentlyAssignedStaff && currentlyAssignedStaff.id !== (existingStaff?.id || staffId);
+
+                      return (
+                        <div
+                          key={tId}
+                          onClick={() => {
+                            const current = form.assignedTableIds || [];
+                            const updated = isSelected
+                              ? current.filter(id => id !== tId)
+                              : [...current, tId];
+                            setForm(prev => ({ ...prev, assignedTableIds: updated }));
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background: isSelected ? '#fff7ed' : '#ffffff',
+                            border: isSelected ? '1.5px solid #ff5a1f' : '1px solid #e2e8f0',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            boxShadow: isSelected ? '0 2px 8px rgba(255,90,31,0.12)' : 'none'
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {}}
+                            style={{
+                              accentColor: '#ff5a1f',
+                              width: '18px',
+                              height: '18px',
+                              cursor: 'pointer'
+                            }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 800, color: isSelected ? '#ea580c' : '#0f172a' }}>
+                                Table {table.id}
+                              </span>
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: table.status === 'Occupied' ? '#dc2626' : '#16a34a',
+                                background: table.status === 'Occupied' ? '#fee2e2' : '#dcfce7',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                              }}>
+                                {table.status || 'Free'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '11px', color: '#64748b' }}>
+                              <span>{table.section || 'Main Hall'}</span>
+                              <span>•</span>
+                              <span>{table.seats || 4} Seats</span>
+                            </div>
+                            {isAssignedToOther && (
+                              <div style={{ marginTop: '4px', fontSize: '10px', fontWeight: 600, color: '#d97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                <span>⚠️ Currently: {currentlyAssignedStaff.name}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button

@@ -21,9 +21,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.16:5000/public";
-    BASE_URL = "http://192.168.1.16:5000/api/admin";
-    server = "http://192.168.1.16:5000";
+    IMAGE_BASE_URL = "http://192.168.88.21:5000/public";
+    BASE_URL = "http://192.168.88.21:5000/api/admin";
+    server = "http://192.168.88.21:5000";
     break;
 }
 
@@ -35,27 +35,16 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   function (config) {
-    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token") || sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
 
     if (token && token !== "null" && token !== "undefined") {
       config.headers["Authorization"] = `Bearer ${token}`;
     }
 
-
     if (config.data instanceof FormData) {
       config.headers["Content-Type"] = "multipart/form-data";
     } else {
       config.headers["Content-Type"] = "application/json";
-    }
-
-    // Automatically attach branchId to GET requests if a specific branch is selected
-    if (config.method?.toLowerCase() === 'get') {
-      const branchId = localStorage.getItem("serviq_branch_id");
-      const urlHasBranchId = config.url && config.url.includes('branchId=');
-      const paramsHasBranchId = config.params && config.params.branchId !== undefined;
-      if (branchId && branchId !== 'ALL' && !urlHasBranchId && !paramsHasBranchId) {
-        config.params = { ...config.params, branchId };
-      }
     }
 
     return config;
@@ -70,7 +59,7 @@ apiClient.interceptors.response.use(
     return response;
   },
   function (error) {
-    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token") || sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
     const isMock = token && token.startsWith("mock_");
 
     // Only redirect if explicitly unauthorized on critical authentication routes,
@@ -81,9 +70,8 @@ apiClient.interceptors.response.use(
       !error.config?.url?.includes("/login") &&
       !window.location.pathname.includes("/login")
     ) {
-      localStorage.removeItem("userToken");
-      localStorage.removeItem("token");
-      localStorage.removeItem("serviq_user");
+      localStorage.clear();
+      try { sessionStorage.clear(); } catch (e) { }
       window.location.href = "/login";
     }
     return Promise.reject(error);

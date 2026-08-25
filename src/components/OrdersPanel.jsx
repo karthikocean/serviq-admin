@@ -77,7 +77,8 @@ export default function OrdersPanel({
   limit = 10,
   setLimit = () => { },
   totalPages = 1,
-  totalCount = 0
+  totalCount = 0,
+  currentUser = null
 }) {
   const getOrderPageNumbers = () => {
     const pages = [];
@@ -119,9 +120,16 @@ export default function OrdersPanel({
   const [appendSelectedCategory, setAppendSelectedCategory] = useState('All');
 
   // Check branch lock
-  const localUser = JSON.parse(localStorage.getItem('serviq_user') || '{}');
-  const isRestaurantOwner = localUser?.userType === 'RESTAURANT_OWNER';
-  const isBranchLocked = !isRestaurantOwner;
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isBranchLocked = !isAdmin;
+  const canChooseBranchInOrder = isAdmin && (!selectedBranchId || selectedBranchId === 'ALL');
 
   // Waiters list
   const staffWaiters = staff.filter(s => {
@@ -225,14 +233,9 @@ export default function OrdersPanel({
   });
 
   const getFallbackBranchId = () => {
-    try {
-      const userStr = localStorage.getItem('serviq_user');
-      if (userStr) {
-        const userObj = JSON.parse(userStr);
-        if (userObj.activeBranchId) return userObj.activeBranchId;
-      }
-    } catch (e) { }
-    return localStorage.getItem('serviq_branch_id') || '';
+    if (currentUser?.activeBranchId) return currentUser.activeBranchId;
+    if (currentUser?.branchId) return currentUser.branchId;
+    return activeRestaurant?.branches?.[0]?._id || activeRestaurant?.branches?.[0]?.id || '';
   };
 
   const fetchModalDataForBranch = async (branchId) => {
@@ -278,7 +281,7 @@ export default function OrdersPanel({
 
   const handleOpenCreateOrderModal = async () => {
     const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
-    const targetBranchId = selectedBranchId || defaultBranchId || getFallbackBranchId();
+    const targetBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (modalSelectedBranchId || defaultBranchId || getFallbackBranchId());
     setModalSelectedBranchId(targetBranchId);
     await fetchModalDataForBranch(targetBranchId);
 
@@ -647,65 +650,104 @@ export default function OrdersPanel({
   if (isCreateOrderModalOpen) {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setIsCreateOrderModalOpen(false)}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Place New Order
-            </h2>
-           
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setIsCreateOrderModalOpen(false)}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                Place New Order
+              </h2>
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Stable Branch Display */}
+            {/* Branch Assignment Field */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Branch <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                value={(() => {
-                  const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId)) 
-                    || (activeRestaurant?.branches || [])[0];
-                  return bObj ? (bObj.branchName || bObj.name || 'Serviq Branch') : 'Serviq Branch';
-                })()}
-                readOnly
-                disabled
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#0f172a',
-                  backgroundColor: '#f8fafc',
-                  cursor: 'not-allowed',
-                  boxSizing: 'border-box'
-                }}
-              />
+              {(() => {
+                const allBranchesList = activeRestaurant?.branches || [];
+                const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
+
+                return (
+                  <div>
+                    <select
+                      value={effectiveVal}
+                      onChange={handleModalBranchChange}
+                      disabled={isLocked}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        outline: 'none',
+                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
+                        color: isLocked ? '#64748b' : '#0f172a',
+                        cursor: isLocked ? 'not-allowed' : 'pointer',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {allBranchesList.length === 0 ? (
+                        <option value="">Main Branch</option>
+                      ) : (
+                        allBranchesList.map(b => (
+                          <option key={b._id || b.id} value={b._id || b.id}>
+                            {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Row 1: Table & Waiter Assignment */}
@@ -1005,11 +1047,8 @@ export default function OrdersPanel({
           </button>
           <div>
             <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Edit Order: #ORD-{editingOrder.id || editingOrder._id}
+              Edit Order
             </h2>
-            <span style={{ fontSize: '13px', color: '#64748b' }}>
-              Modify table assignment, waiter, status, items, or instructions
-            </span>
           </div>
         </div>
 
@@ -2351,33 +2390,60 @@ export default function OrdersPanel({
         >
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
 
-            {/* Stable Branch Display */}
+            {/* Branch Selection Field */}
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Branch <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                value={(() => {
-                  const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId)) 
-                    || (activeRestaurant?.branches || [])[0];
-                  return bObj ? (bObj.branchName || bObj.name || 'Serviq Branch') : 'Serviq Branch';
-                })()}
-                readOnly
-                disabled
-                style={{
-                  width: '100%',
-                  padding: '9px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#0f172a',
-                  backgroundColor: '#f8fafc',
-                  cursor: 'not-allowed',
-                  boxSizing: 'border-box'
-                }}
-              />
+              {canChooseBranchInOrder ? (
+                <select
+                  value={modalSelectedBranchId || ''}
+                  onChange={handleModalBranchChange}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    cursor: 'pointer',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="" disabled>-- Select Branch --</option>
+                  {(activeRestaurant?.branches || []).map(b => (
+                    <option key={b._id || b.id} value={b._id || b.id}>
+                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={(() => {
+                    const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
+                      || (activeRestaurant?.branches || [])[0];
+                    return bObj ? `${bObj.branchName || bObj.name || 'Serviq Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Serviq Branch';
+                  })()}
+                  readOnly
+                  disabled
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#64748b',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'not-allowed',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              )}
             </div>
 
             {/* Row 1: Table & Waiter Assignment */}

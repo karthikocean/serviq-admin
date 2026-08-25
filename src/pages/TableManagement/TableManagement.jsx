@@ -67,12 +67,19 @@ export default function TableManagement() {
     // We will override the context update with API later
   };
 
-  const handleDeleteDiningTable = async (id) => {
-    if (window.confirm("Are you sure you want to delete this table?")) {
-      const res = await TableApi.deleteTable(id);
-      if (res.status) {
-        fetchData();
-      }
+  const handleDeleteDiningTable = async (tableOrId, maybeId) => {
+    const targetId = (typeof tableOrId === 'object' && tableOrId !== null)
+      ? (tableOrId._id || tableOrId.id)
+      : (tableOrId && tableOrId !== 'undefined' ? tableOrId : maybeId);
+
+    if (!targetId || targetId === 'undefined') {
+      console.error("Delete table called without a valid _id:", tableOrId, maybeId);
+      return;
+    }
+
+    const res = await TableApi.deleteTable(targetId);
+    if (res.status) {
+      fetchData();
     }
   };
 

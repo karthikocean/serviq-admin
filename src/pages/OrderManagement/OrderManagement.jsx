@@ -12,7 +12,8 @@ export default function OrderManagement() {
     updateOrder,
     deleteOrder,
     updateOrderStatus,
-    selectedBranchId
+    selectedBranchId,
+    currentUser
   } = useAppState();
 
   const [orderFilter, setOrderFilter] = useState('All');
@@ -28,39 +29,30 @@ export default function OrderManagement() {
 
   const fetchOrdersAndStaff = async () => {
     try {
-      let queryStr = selectedBranchId ? `?branchId=${selectedBranchId}` : `?branchId=ALL`;
-      queryStr += `&page=${page}&limit=${limit}`;
-
-      if (selectedWaiterFilter.id !== 'All Waiters') {
-        queryStr += `&waiterId=${selectedWaiterFilter.id}`;
-      }
-      if (orderFilter && orderFilter !== 'All') {
-        queryStr += `&status=${orderFilter.toLowerCase()}`;
-      }
-      const [ordersRes, staffRes] = await Promise.all([
-        apiClient.get(`/orders${queryStr}`).catch(() => ({ data: { success: false } })),
-        apiClient.get(`/staff${queryStr}`).catch(() => ({ data: { success: false } }))
+      const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? `?branchId=${selectedBranchId}` : '';
+      const [orderRes, staffRes] = await Promise.all([
+        apiClient.get(`/orders?page=${page + 1}&limit=${limit}${selectedBranchId && selectedBranchId !== 'ALL' ? `&branchId=${selectedBranchId}` : ''}`).catch(() => null),
+        apiClient.get(`/staff${branchParam}`).catch(() => null)
       ]);
 
-      if (ordersRes.data?.success) {
-        setApiOrders(ordersRes.data.data);
-        if (ordersRes.data.totalPages !== undefined) {
-          setTotalPages(ordersRes.data.totalPages);
-          setTotalCount(ordersRes.data.total);
+      if (orderRes && orderRes.data?.success) {
+        setApiOrders(orderRes.data.data?.orders || orderRes.data.data || []);
+        if (orderRes.data.data?.pagination) {
+          setTotalPages(orderRes.data.data.pagination.totalPages || 1);
+          setTotalCount(orderRes.data.data.pagination.totalOrders || 0);
         }
       }
-      if (staffRes.data?.success) {
-        setApiStaff(staffRes.data.data);
+      if (staffRes && staffRes.data?.success) {
+        setApiStaff(staffRes.data.data || []);
       }
-    } catch (error) {
-      console.error("Failed to fetch data:", error);
+    } catch (e) {
+      console.error("Failed to fetch fresh orders/staff:", e);
     }
   };
 
   useEffect(() => {
-    setPage(0); // Reset page on filter change
     fetchOrdersAndStaff();
-  }, [selectedBranchId, selectedWaiterFilter, orderFilter, limit]);
+  }, [selectedBranchId, page, limit]);
 
   useEffect(() => {
     fetchOrdersAndStaff();
@@ -84,6 +76,7 @@ export default function OrderManagement() {
         selectedBranchId={selectedBranchId}
         updateOrderStatus={updateOrderStatus}
         refreshOrders={fetchOrdersAndStaff}
+        currentUser={currentUser}
 
         // Pass pagination state
         page={page}

@@ -219,6 +219,7 @@ export default function StockReductionPanel() {
     notes: '',
     date: new Date().toISOString().slice(0, 16)
   });
+  const [reduceErrors, setReduceErrors] = useState({});
 
   // Form: New Purchase Record
   const [purchaseForm, setPurchaseForm] = useState({
@@ -236,6 +237,7 @@ export default function StockReductionPanel() {
     paymentStatus: 'Paid',
     notes: ''
   });
+  const [purchaseErrors, setPurchaseErrors] = useState({});
 
   // Handlers for Reduce Stock Modal
   const handleOpenReduceModal = (item = null) => {
@@ -248,6 +250,7 @@ export default function StockReductionPanel() {
       notes: '',
       date: new Date().toISOString().slice(0, 16)
     });
+    setReduceErrors({});
     setViewMode('reduce-form');
   };
 
@@ -255,29 +258,39 @@ export default function StockReductionPanel() {
     const item = inventory.find(i => (i._id === itemId || i.id === itemId));
     setSelectedItemForReduction(item || null);
     setReduceForm(prev => ({ ...prev, itemId }));
+    if (reduceErrors.itemId) setReduceErrors(prev => ({ ...prev, itemId: '' }));
   };
 
   const handleReduceSubmit = async (e) => {
     if (e) e.preventDefault();
+    const errors = {};
+
     if (!reduceForm.itemId) {
-      ShowNotifications.showAlertNotification("Please select an inventory item.", false);
-      return;
+      errors.itemId = 'Please select an inventory item.';
     }
 
     const currentItem = inventory.find(i => (i._id === reduceForm.itemId || i.id === reduceForm.itemId));
     const qtyNum = parseFloat(reduceForm.quantity);
 
-    if (isNaN(qtyNum) || qtyNum <= 0) {
-      ShowNotifications.showAlertNotification("Please enter a valid reduction quantity greater than 0.", false);
+    if (!reduceForm.quantity || isNaN(qtyNum) || qtyNum <= 0) {
+      errors.quantity = 'Please enter a valid reduction quantity greater than 0.';
+    } else {
+      const availableStock = Number(currentItem?.currentStock) || 0;
+      if (currentItem && qtyNum > availableStock) {
+        errors.quantity = `Reduction quantity (${qtyNum} ${currentItem.unit || 'unit'}) exceeds available stock (${availableStock} ${currentItem.unit || 'unit'})!`;
+      }
+    }
+
+    if (!reduceForm.reason) {
+      errors.reason = 'Please select a reason for reduction.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setReduceErrors(errors);
       return;
     }
 
-    const availableStock = Number(currentItem?.currentStock) || 0;
-    if (currentItem && qtyNum > availableStock) {
-      ShowNotifications.showAlertNotification(`Reduction quantity (${qtyNum} ${currentItem.unit}) exceeds available stock (${availableStock} ${currentItem.unit})!`, false);
-      return;
-    }
-
+    setReduceErrors({});
     setIsSubmitting(true);
     const itemId = currentItem?._id || currentItem?.id || reduceForm.itemId;
     const itemCost = Number(currentItem?.costPerUnit) || 0;
@@ -301,6 +314,11 @@ export default function StockReductionPanel() {
     try {
       const res = await InventoryApi.reduceStock(payload);
       if (res?.status) {
+        if (itemId) {
+          await InventoryApi.updateItem(itemId, {
+            currentStock: Math.max(0, (Number(currentItem?.currentStock) || 0) - qtyNum)
+          }).catch(() => {});
+        }
         await fetchAllData();
         if (reduceInventoryStock && activeRestaurant?.id) {
           reduceInventoryStock(activeRestaurant.id, {
@@ -316,9 +334,16 @@ export default function StockReductionPanel() {
         }
         setViewMode('list');
         ShowNotifications.showAlertNotification('Stock reduction recorded successfully!', true);
+      } else {
+        setReduceErrors({
+          general: res?.response?.message || 'Failed to record stock reduction.'
+        });
       }
     } catch (err) {
       console.error("Reduce stock error:", err);
+      setReduceErrors({
+        general: 'Failed to record stock reduction. Please check connection and try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -342,6 +367,7 @@ export default function StockReductionPanel() {
       paymentStatus: 'Paid',
       notes: ''
     });
+    setPurchaseErrors({});
     setViewMode('purchase-form');
   };
 
@@ -370,43 +396,94 @@ export default function StockReductionPanel() {
         }));
       }
     }
+    setPurchaseErrors(prev => ({ ...prev, itemId: '', itemName: '' }));
   };
 
   const handlePurchaseSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!purchaseForm.itemName.trim()) {
-      ShowNotifications.showAlertNotification("Please enter or select an item name.", false);
-      return;
+    const errors = {};
+
+    if (!purchaseForm.itemName || !purchaseForm.itemName.trim()) {
+      errors.itemName = 'Please enter or select an item name.';
+    }
+
+    if (purchaseForm.supplierPhone && purchaseForm.supplierPhone.trim()) {
+      if (!/^\d{10}$/.test(purchaseForm.supplierPhone.trim())) {
+        errors.supplierPhone = 'Please enter a valid 10-digit phone number.';
+      }
     }
 
     const qtyNum = parseFloat(purchaseForm.quantity);
-    const rateNum = parseFloat(purchaseForm.unitPrice) || 0;
-    const totalAmt = qtyNum * rateNum;
+    if (!purchaseForm.quantity || isNaN(qtyNum) || qtyNum <= 0) {
+      errors.quantity = 'Please enter a valid quantity greater than 0.';
+    }
 
-    if (isNaN(qtyNum) || qtyNum <= 0) {
-      ShowNotifications.showAlertNotification("Please enter a valid purchase quantity greater than 0.", false);
+    const rateNum = parseFloat(purchaseForm.unitPrice);
+    if (purchaseForm.unitPrice === '' || isNaN(rateNum) || rateNum < 0) {
+      errors.unitPrice = 'Please enter a valid unit cost price (0 or greater).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPurchaseErrors(errors);
       return;
     }
 
+    setPurchaseErrors({});
     setIsSubmitting(true);
-    const currentItem = inventory.find(i => (i._id === purchaseForm.itemId || i.id === purchaseForm.itemId || i.name.toLowerCase() === purchaseForm.itemName.toLowerCase()));
-    const itemId = currentItem?._id || currentItem?.id || purchaseForm.itemId;
+
+    const totalAmt = qtyNum * (rateNum || 0);
+    let currentItem = inventory.find(i => (i._id === purchaseForm.itemId || i.id === purchaseForm.itemId || i.name.toLowerCase() === purchaseForm.itemName.toLowerCase()));
+    let itemId = currentItem?._id || currentItem?.id;
+
+    // If custom entry and item does not exist, create the item first
+    if ((!itemId || purchaseForm.itemId === 'CUSTOM') && purchaseForm.itemName.trim()) {
+      try {
+        const rawBranch = selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined;
+        const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
+        
+        const createRes = await InventoryApi.createItem({
+          name: purchaseForm.itemName.trim(),
+          category: purchaseForm.category || 'General',
+          unit: purchaseForm.unit || 'kg',
+          costPerUnit: rateNum || 0,
+          currentStock: 0,
+          minStockThreshold: 5,
+          idealStockLevel: 50,
+          supplierName: purchaseForm.supplierName.trim() || undefined,
+          supplierPhone: purchaseForm.supplierPhone.trim() || undefined,
+          branchId: cleanBranchId
+        });
+        if (createRes?.status && createRes?.response?.data) {
+          itemId = createRes.response.data._id || createRes.response.data.id;
+        }
+      } catch (createErr) {
+        console.error("Auto create item error:", createErr);
+      }
+    }
+
+    const rawBranch = currentItem?.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+    const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
 
     const payload = {
-      itemId: itemId && itemId !== 'CUSTOM' ? itemId : undefined,
-      supplierName: purchaseForm.supplierName.trim(),
+      itemId: itemId || undefined,
+      supplierName: purchaseForm.supplierName.trim() || 'Direct Vendor',
       supplierPhone: purchaseForm.supplierPhone.trim(),
       purchaseQty: qtyNum,
       unitPrice: rateNum,
       totalAmount: totalAmt,
-      invoiceNumber: purchaseForm.invoiceNumber || `INV-${Date.now().toString().slice(-5)}`,
+      invoiceNumber: purchaseForm.invoiceNumber.trim() || `INV-${Date.now().toString().slice(-5)}`,
       purchaseDate: purchaseForm.purchaseDate ? new Date(purchaseForm.purchaseDate).toISOString() : new Date().toISOString(),
-      branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentItem?.branchId || undefined)
+      branchId: cleanBranchId
     };
 
     try {
       const res = await InventoryApi.recordPurchase(payload);
       if (res?.status) {
+        if (itemId) {
+          await InventoryApi.updateItem(itemId, {
+            currentStock: (Number(currentItem?.currentStock) || 0) + qtyNum
+          }).catch(() => {});
+        }
         await fetchAllData();
         if (addPurchaseRecord && activeRestaurant?.id) {
           addPurchaseRecord(activeRestaurant.id, {
@@ -420,9 +497,16 @@ export default function StockReductionPanel() {
         }
         setViewMode('list');
         ShowNotifications.showAlertNotification('Purchase record saved and stock added!', true);
+      } else {
+        setPurchaseErrors({
+          general: res?.response?.message || 'Failed to record purchase. Please check the entered values.'
+        });
       }
     } catch (err) {
       console.error("Record purchase error:", err);
+      setPurchaseErrors({
+        general: 'Failed to record purchase. Please check connection and try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -590,38 +674,55 @@ export default function StockReductionPanel() {
   if (viewMode === 'reduce-form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Reduce Inventory Stock
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                Reduce Inventory Stock
+              </h2>
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-          <form onSubmit={handleReduceSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handleReduceSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {reduceErrors.general && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                {reduceErrors.general}
+              </div>
+            )}
+
             {/* Select Item */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
@@ -635,7 +736,7 @@ export default function StockReductionPanel() {
                   width: '100%',
                   padding: '12px 16px',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: reduceErrors.itemId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '14px',
                   backgroundColor: '#ffffff',
                   outline: 'none',
@@ -648,6 +749,11 @@ export default function StockReductionPanel() {
                   </option>
                 ))}
               </select>
+              {reduceErrors.itemId && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.itemId}
+                </span>
+              )}
             </div>
 
             {/* Current Stock Banner */}
@@ -687,18 +793,26 @@ export default function StockReductionPanel() {
                 step="0.1"
                 min="0.1"
                 value={reduceForm.quantity}
-                onChange={e => setReduceForm({ ...reduceForm, quantity: e.target.value })}
+                onChange={e => {
+                  setReduceForm({ ...reduceForm, quantity: e.target.value });
+                  if (reduceErrors.quantity) setReduceErrors(prev => ({ ...prev, quantity: '' }));
+                }}
                 placeholder="e.g. 5"
                 style={{
                   width: '100%',
                   padding: '12px 16px',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: reduceErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '14px',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
               />
+              {reduceErrors.quantity && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.quantity}
+                </span>
+              )}
             </div>
 
             {/* Reason */}
@@ -709,12 +823,15 @@ export default function StockReductionPanel() {
               <select
                 disabled={isSubmitting}
                 value={reduceForm.reason}
-                onChange={e => setReduceForm({ ...reduceForm, reason: e.target.value })}
+                onChange={e => {
+                  setReduceForm({ ...reduceForm, reason: e.target.value });
+                  if (reduceErrors.reason) setReduceErrors(prev => ({ ...prev, reason: '' }));
+                }}
                 style={{
                   width: '100%',
                   padding: '12px 16px',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: reduceErrors.reason ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '14px',
                   backgroundColor: '#ffffff',
                   outline: 'none',
@@ -725,6 +842,11 @@ export default function StockReductionPanel() {
                   <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>
                 ))}
               </select>
+              {reduceErrors.reason && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.reason}
+                </span>
+              )}
             </div>
 
             {/* Notes */}
@@ -788,38 +910,55 @@ export default function StockReductionPanel() {
   if (viewMode === 'purchase-form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Record Inbound Purchase (Vendor Restock)
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                Record Inbound Purchase (Vendor Restock)
+              </h2>
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-          <form onSubmit={handlePurchaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handlePurchaseSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {purchaseErrors.general && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                {purchaseErrors.general}
+              </div>
+            )}
+
             {/* Row 1: Item Source Selection */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
@@ -834,7 +973,7 @@ export default function StockReductionPanel() {
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: (purchaseErrors.itemId || purchaseErrors.itemName) ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     backgroundColor: '#ffffff',
                     outline: 'none',
@@ -852,6 +991,11 @@ export default function StockReductionPanel() {
                     <option value="CUSTOM">+ New / Unlisted Item</option>
                   </optgroup>
                 </select>
+                {(purchaseErrors.itemId || purchaseErrors.itemName) && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.itemId || purchaseErrors.itemName}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -862,19 +1006,27 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting || purchaseForm.itemId !== 'CUSTOM'}
                   value={purchaseForm.itemName}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, itemName: e.target.value });
+                    if (purchaseErrors.itemName) setPurchaseErrors(prev => ({ ...prev, itemName: '' }));
+                  }}
                   placeholder="e.g. Basmati Rice 25kg"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.itemName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     backgroundColor: purchaseForm.itemId !== 'CUSTOM' ? '#f8fafc' : '#ffffff',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.itemName && purchaseForm.itemId === 'CUSTOM' && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.itemName}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -888,18 +1040,26 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting}
                   value={purchaseForm.supplierName}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, supplierName: e.target.value });
+                    if (purchaseErrors.supplierName) setPurchaseErrors(prev => ({ ...prev, supplierName: '' }));
+                  }}
                   placeholder="e.g. Metro Cash & Carry"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.supplierName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.supplierName && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.supplierName}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -915,18 +1075,24 @@ export default function StockReductionPanel() {
                   onChange={e => {
                     const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
                     setPurchaseForm({ ...purchaseForm, supplierPhone: val });
+                    if (purchaseErrors.supplierPhone) setPurchaseErrors(prev => ({ ...prev, supplierPhone: '' }));
                   }}
                   placeholder="10 digit mobile number"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.supplierPhone ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.supplierPhone && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.supplierPhone}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -942,18 +1108,26 @@ export default function StockReductionPanel() {
                   step="0.1"
                   min="0.1"
                   value={purchaseForm.quantity}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, quantity: e.target.value });
+                    if (purchaseErrors.quantity) setPurchaseErrors(prev => ({ ...prev, quantity: '' }));
+                  }}
                   placeholder="10"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.quantity && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.quantity}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -996,18 +1170,26 @@ export default function StockReductionPanel() {
                   step="0.01"
                   min="0"
                   value={purchaseForm.unitPrice}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value });
+                    if (purchaseErrors.unitPrice) setPurchaseErrors(prev => ({ ...prev, unitPrice: '' }));
+                  }}
                   placeholder="100"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.unitPrice ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.unitPrice && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.unitPrice}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1021,18 +1203,26 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting}
                   value={purchaseForm.invoiceNumber}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value });
+                    if (purchaseErrors.invoiceNumber) setPurchaseErrors(prev => ({ ...prev, invoiceNumber: '' }));
+                  }}
                   placeholder="e.g. INV-90821"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.invoiceNumber ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.invoiceNumber && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.invoiceNumber}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1043,18 +1233,26 @@ export default function StockReductionPanel() {
                   type="date"
                   disabled={isSubmitting}
                   value={purchaseForm.purchaseDate}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value });
+                    if (purchaseErrors.purchaseDate) setPurchaseErrors(prev => ({ ...prev, purchaseDate: '' }));
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.purchaseDate ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.purchaseDate && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.purchaseDate}
+                  </span>
+                )}
               </div>
             </div>
 

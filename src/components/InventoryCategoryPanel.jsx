@@ -73,9 +73,11 @@ export default function InventoryCategoryPanel() {
     userTypeStr === 'RESTAURANT_OWNER' ||
     roleStr === 'RESTAURANT_OWNER' ||
     userType === 'RESTAURANT_OWNER' ||
+    userType === 'ADMIN' ||
     userType === 'SUPER ADMIN' ||
     userType === 'SUPER_ADMIN' ||
     userType === 'OWNER' ||
+    userRoleLower === 'admin' ||
     userRoleLower === 'owner' ||
     userRoleLower === 'super admin' ||
     userRoleLower === 'restaurant_owner' ||
@@ -267,7 +269,6 @@ export default function InventoryCategoryPanel() {
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
       return;
     }
 
@@ -343,33 +344,44 @@ export default function InventoryCategoryPanel() {
   if (viewMode === 'form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              {editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                {editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
+              </h2>
+            </div>
           </div>
         </div>
 
@@ -408,75 +420,65 @@ export default function InventoryCategoryPanel() {
             {/* Branch Assignment Field */}
             <div className="form-group">
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
-                Branch <span style={{ color: '#dc2626' }}>*</span>
+                Branch Assignment <span style={{ color: '#dc2626' }}>*</span>
               </label>
-              {isRestaurantOwner ? (
-                <div>
-                  <select
-                    value={formBranchId}
-                    onChange={e => {
-                      setFormBranchId(e.target.value);
-                      if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                    }}
-                    disabled={isSubmitting}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: formErrors.branchId ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                      outline: 'none',
-                      fontSize: '14px',
-                      backgroundColor: '#ffffff',
-                      color: '#0f172a',
-                      boxSizing: 'border-box',
-                      cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <option value="">-- Select Branch --</option>
-                    {branches.map(b => (
-                      <option key={b._id || b.id} value={b._id || b.id}>
-                        {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.branchId && (
-                    <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                      {formErrors.branchId}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="text"
-                    value={(() => {
-                      const assignedBranch = (branches || []).find(b => String(b._id || b.id) === String(formBranchId || currentUser?.activeBranchId || currentUser?.branchId || selectedBranchId))
-                        || (branches && branches.length > 0 ? branches[0] : null);
-                      return assignedBranch
-                        ? `${assignedBranch.branchName || assignedBranch.name || 'Branch'}${assignedBranch.branchCode ? ` (${assignedBranch.branchCode})` : ''}`
-                        : (selectedBranchId || 'Assigned Branch');
-                    })()}
-                    disabled
-                    readOnly
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '14px',
-                      outline: 'none',
-                      backgroundColor: '#f8fafc',
-                      color: '#64748b',
-                      cursor: 'not-allowed',
-                      fontWeight: 600,
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                    Branch is assigned to your current role.
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const allBranchesList = (liveBranches && liveBranches.length > 0) ? liveBranches : (branches && branches.length > 0 ? branches : (activeRestaurant?.branches || []));
+                const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(formBranchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
+
+                return (
+                  <div>
+                    <select
+                      value={effectiveVal}
+                      onChange={e => {
+                        setFormBranchId(e.target.value);
+                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                      }}
+                      disabled={isSubmitting || isLocked}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: formErrors.branchId ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                        outline: 'none',
+                        fontSize: '14px',
+                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
+                        color: isLocked ? '#64748b' : '#0f172a',
+                        boxSizing: 'border-box',
+                        cursor: (isLocked || isSubmitting) ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {allBranchesList.length === 0 ? (
+                        <option value="">Main Branch</option>
+                      ) : (
+                        allBranchesList.map(b => (
+                          <option key={b._id || b.id} value={b._id || b.id}>
+                            {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                    {formErrors.branchId && (
+                      <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.branchId}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="form-group">
@@ -782,7 +784,7 @@ export default function InventoryCategoryPanel() {
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -871,8 +873,8 @@ export default function InventoryCategoryPanel() {
                           {isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
                         </button>
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
                             onClick={() => setViewingCategory(item)}

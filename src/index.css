@@ -1425,26 +1425,92 @@ color: #000000;
   background: #94a3b8;
 }
 
-.menu-items-table, .admin-table, .data-table {
+/* ==========================================================================
+   GLOBAL ADMIN TABLE & HEADER SIGNATURE SHADOW STYLING
+   ========================================================================== */
+
+.menu-items-table, .admin-table, .data-table, .custom-table, .panel-view table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
 }
 
-.menu-items-table thead th, .admin-table thead th, .data-table thead th {
-  background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%) !important;
-  color: #ffffff !important;
-  padding: 14px 16px !important;
-  font-weight: 800;
-  font-size: 11px;
-  text-transform: uppercase;
-  border-bottom: 3px solid #ff5a1f;
-  letter-spacing: 0.6px;
-  white-space: nowrap;
-  vertical-align: middle;
+.menu-table-wrapper,
+.table-responsive,
+.admin-table-container,
+.table-container {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
 }
 
-.menu-items-table tbody td, .admin-table tbody td, .data-table tbody td {
+.menu-items-table thead,
+.admin-table thead,
+.data-table thead,
+.custom-table thead,
+.panel-view table thead,
+table thead {
+  background: #000000;
+}
+
+.menu-items-table thead tr,
+.admin-table thead tr,
+.data-table thead tr,
+.custom-table thead tr,
+.panel-view table thead tr,
+table thead tr {
+  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
+  border-bottom: 3px solid #ff5a1f !important;
+}
+
+.menu-items-table thead th,
+.admin-table thead th,
+.data-table thead th,
+.custom-table thead th,
+.panel-view table thead th,
+table thead th {
+  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
+  color: #ffffff !important;
+  padding: 14px 16px !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  border-bottom: 3px solid #ff5a1f !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  letter-spacing: 0.6px !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+}
+
+.menu-items-table thead th:last-child,
+.admin-table thead th:last-child,
+.data-table thead th:last-child,
+.custom-table thead th:last-child,
+.panel-view table thead th:last-child,
+table thead th:last-child {
+  border-right: none !important;
+}
+
+.menu-items-table thead tr:first-child th:first-child,
+.admin-table thead tr:first-child th:first-child,
+.data-table thead tr:first-child th:first-child,
+.panel-view table thead tr:first-child th:first-child {
+  border-top-left-radius: 12px;
+}
+
+.menu-items-table thead tr:first-child th:last-child,
+.admin-table thead tr:first-child th:last-child,
+.data-table thead tr:first-child th:last-child,
+.panel-view table thead tr:first-child th:last-child {
+  border-top-right-radius: 12px;
+}
+
+.menu-items-table tbody td, .admin-table tbody td, .data-table tbody td, .panel-view table tbody td {
   padding: 14px 16px;
   font-size: 13px;
   vertical-align: middle;
@@ -1452,11 +1518,11 @@ color: #000000;
   color: var(--text-main, #0f172a);
 }
 
-.menu-items-table tbody tr, .admin-table tbody tr, .data-table tbody tr {
+.menu-items-table tbody tr, .admin-table tbody tr, .data-table tbody tr, .panel-view table tbody tr {
   transition: background-color 0.15s ease;
 }
 
-.menu-items-table tbody tr:hover, .admin-table tbody tr:hover, .data-table tbody tr:hover {
+.menu-items-table tbody tr:hover, .admin-table tbody tr:hover, .data-table tbody tr:hover, .panel-view table tbody tr:hover {
   background-color: #fff8f3 !important;
 }
 
@@ -3960,6 +4026,21 @@ body.dark-theme .premium-filter-count-badge {
   box-shadow: 0 2px 8px rgba(255, 122, 0, 0.12);
 }
 
+.branch-search-trigger.disabled,
+.branch-search-trigger:disabled {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  cursor: not-allowed !important;
+  opacity: 0.75;
+  box-shadow: none !important;
+}
+
+.branch-search-trigger.disabled:hover,
+.branch-search-trigger:disabled:hover {
+  border-color: #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
 .branch-search-trigger-content {
   display: flex;
   align-items: center;
@@ -4218,6 +4299,21 @@ body.dark-theme .branch-search-trigger {
 body.dark-theme .branch-search-trigger:hover,
 body.dark-theme .branch-search-trigger.active {
   border-color: var(--primary);
+}
+
+body.dark-theme .branch-search-trigger.disabled,
+body.dark-theme .branch-search-trigger:disabled {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  cursor: not-allowed !important;
+  opacity: 0.75;
+  box-shadow: none !important;
+}
+
+body.dark-theme .branch-search-trigger.disabled:hover,
+body.dark-theme .branch-search-trigger:disabled:hover {
+  border-color: #334155 !important;
+  box-shadow: none !important;
 }
 
 body.dark-theme .branch-search-value {

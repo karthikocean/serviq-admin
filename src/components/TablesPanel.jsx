@@ -960,7 +960,7 @@ export default function TablesPanel({
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '15px' }}>Delete Dining Table</p>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                Are you sure you want to delete Table {tableToDelete?.id}? This will also delete its linked QR ordering configuration.
+                Are you sure you want to delete Table {tableToDelete?.name || tableToDelete?.tableNumber || tableToDelete?.id || tableToDelete?._id}? This will also delete its linked QR ordering configuration.
               </p>
             </div>
           </div>
@@ -979,7 +979,8 @@ export default function TablesPanel({
               style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
               onClick={() => {
                 if (tableToDelete && deleteDiningTable) {
-                  deleteDiningTable(activeRestaurant.id, tableToDelete.id);
+                  const targetTableId = tableToDelete._id || tableToDelete.id;
+                  deleteDiningTable(targetTableId, tableToDelete);
                   setTableToDelete(null);
                 }
               }}

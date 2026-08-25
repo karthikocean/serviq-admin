@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Badge } from './Badge';
 import { useNavigate } from 'react-router-dom';
+import { useAppState } from '../config/AppContext';
+import DashboardApi from '../api/Dashboard.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -39,11 +41,99 @@ export default function OverviewPanel({
   activeRestaurant = {}
 }) {
   const navigate = useNavigate();
+  const { currentUser } = useAppState();
 
-  const selectedBranch = branches.find(b => b.id === selectedBranchId);
-  const isAllBranches = !selectedBranchId;
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  // Counts
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+
+  const selectedBranch = branches.find(b => b.id === selectedBranchId || b._id === selectedBranchId);
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+
+  // Live Dashboard API Stats State
+  const [statsData, setStatsData] = useState(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+  // Live Dashboard Revenue Growth State
+  const [revenueGrowthData, setRevenueGrowthData] = useState(null);
+  const [isLoadingGrowth, setIsLoadingGrowth] = useState(false);
+
+  // Live Dashboard Order Breakdown State
+  const [orderBreakdownData, setOrderBreakdownData] = useState(null);
+  const [isLoadingBreakdown, setIsLoadingBreakdown] = useState(false);
+
+  // Live Dashboard Live Orders State
+  const [liveOrdersData, setLiveOrdersData] = useState([]);
+  const [isLoadingLiveOrders, setIsLoadingLiveOrders] = useState(false);
+
+  // Live Dashboard Live Tables State
+  const [liveTablesData, setLiveTablesData] = useState(null);
+  const [isLoadingLiveTables, setIsLoadingLiveTables] = useState(false);
+
+  const fetchDashboardStats = async () => {
+    setIsLoadingStats(true);
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const res = await DashboardApi.getDashboardStats(branchParam);
+    if (res && res.status && res.response?.data) {
+      setStatsData(res.response.data);
+    }
+    setIsLoadingStats(false);
+  };
+
+  const fetchRevenueGrowth = async () => {
+    setIsLoadingGrowth(true);
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const res = await DashboardApi.getRevenueGrowth(branchParam);
+    if (res && res.status && res.response?.data) {
+      setRevenueGrowthData(res.response.data);
+    }
+    setIsLoadingGrowth(false);
+  };
+
+  const fetchOrderBreakdown = async () => {
+    setIsLoadingBreakdown(true);
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const res = await DashboardApi.getOrderBreakdown(branchParam);
+    if (res && res.status && res.response?.data) {
+      setOrderBreakdownData(res.response.data);
+    }
+    setIsLoadingBreakdown(false);
+  };
+
+  const fetchLiveOrders = async () => {
+    setIsLoadingLiveOrders(true);
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId, limit: 5 } : { limit: 5 };
+    const res = await DashboardApi.getLiveOrders(branchParam);
+    if (res && res.status && res.response?.data) {
+      setLiveOrdersData(Array.isArray(res.response.data) ? res.response.data : (res.response.data?.orders || []));
+    }
+    setIsLoadingLiveOrders(false);
+  };
+
+  const fetchLiveTables = async () => {
+    setIsLoadingLiveTables(true);
+    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const res = await DashboardApi.getLiveTables(branchParam);
+    if (res && res.status && res.response?.data) {
+      setLiveTablesData(res.response.data);
+    }
+    setIsLoadingLiveTables(false);
+  };
+
+  useEffect(() => {
+    fetchDashboardStats();
+    fetchRevenueGrowth();
+    fetchOrderBreakdown();
+    fetchLiveOrders();
+    fetchLiveTables();
+  }, [selectedBranchId]);
+
+  // Fallback Counts
   const preparingOrdersCount = orders.filter(o => o.status === 'preparing').length;
   const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
   const pendingOrdersCount = orders.filter(o => o.status === 'new').length;
@@ -54,7 +144,7 @@ export default function OverviewPanel({
   // Calculate dynamic monthly sales
   const monthlySales = todayRevenue + (isAllBranches ? 85400 : 28500);
 
-  // Top ordered menu item
+  // Top ordered menu item fallback
   const getTopOrderedItem = () => {
     const itemCounts = {};
     orders.forEach(order => {
@@ -73,7 +163,7 @@ export default function OverviewPanel({
     return topItemName;
   };
 
-  const topItem = getTopOrderedItem();
+  const topItemFallback = getTopOrderedItem();
 
   // Branch statistics computation for All Branches view
   const branchAnalytics = branches.map(branch => {
@@ -142,32 +232,42 @@ export default function OverviewPanel({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-outline"
-            style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px', background: '#ffffff' }}
-            onClick={() => onSelectBranch(null)}
-          >
-            ← View All Branches
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px', background: '#ffffff' }}
+              onClick={() => onSelectBranch(null)}
+            >
+              ← View All Branches
+            </button>
+          )}
         </div>
       )}
 
       {/* 8 STATS CARDS GRID (2 Rows of 4 Cards) */}
       <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' }}>
         
-        {/* Card 1: Total Branches (if All Branches) or Branch Today Orders */}
+        {/* Card 1: Today's Orders / Total Branches */}
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {isAllBranches ? 'Total Branches' : "Today's Orders"}
+                {statsData?.todayOrders?.label || (isAllBranches ? 'Total Branches' : "Today's Orders")}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                {isAllBranches ? `${branches.length} Outlets` : orders.length}
+                {statsData?.todayOrders
+                  ? (isAllBranches && statsData.todayOrders.totalBranches > 0
+                      ? `${statsData.todayOrders.totalBranches} Outlets`
+                      : (statsData.todayOrders.count !== undefined ? statsData.todayOrders.count : orders.length))
+                  : (isAllBranches ? `${branches.length} Outlets` : orders.length)}
               </h3>
               <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
-                {isAllBranches ? `${activeBranchesCount} Active Locations` : 'Orders received today'}
+                {statsData?.todayOrders
+                  ? (isAllBranches && statsData.todayOrders.activeBranches > 0
+                      ? `${statsData.todayOrders.activeBranches} Active Locations`
+                      : (statsData.todayOrders.subLabel || 'Orders received today'))
+                  : (isAllBranches ? `${activeBranchesCount} Active Locations` : 'Orders received today')}
               </div>
             </div>
           </div>
@@ -178,13 +278,17 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {isAllBranches ? 'Occupied Tables' : 'Active Tables'}
+                {statsData?.activeTables?.label || (isAllBranches ? 'Occupied Tables' : 'Active Tables')}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                {occupiedTablesCount} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>/ {tables.length} Total</span>
+                {statsData?.activeTables?.display
+                  ? statsData.activeTables.display
+                  : (statsData?.activeTables?.occupied !== undefined
+                      ? `${statsData.activeTables.occupied} / ${statsData.activeTables.total ?? tables.length} Total`
+                      : `${occupiedTablesCount} / ${tables.length} Total`)}
               </h3>
               <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {isAllBranches ? 'Across all branches' : 'In this branch'}
+                {statsData?.activeTables?.subLabel || (isAllBranches ? 'Across all branches' : 'In this branch')}
               </div>
             </div>
           </div>
@@ -195,13 +299,20 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {isAllBranches ? 'Org Revenue Today' : 'Branch Revenue Today'}
+                {statsData?.todayRevenue?.label || (isAllBranches ? 'Org Revenue Today' : 'Branch Revenue Today')}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                ₹{todayRevenue.toLocaleString('en-IN')}
+                {statsData?.todayRevenue?.formatted || `₹${(statsData?.todayRevenue?.amount ?? todayRevenue).toLocaleString('en-IN')}`}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
-                +14.2% vs yesterday
+              <div
+                className="stat-sub-label"
+                style={{
+                  fontSize: '11px',
+                  color: (statsData?.todayRevenue?.percentageChange !== undefined && statsData.todayRevenue.percentageChange < 0) ? '#ef4444' : 'var(--success)',
+                  fontWeight: 600
+                }}
+              >
+                {statsData?.todayRevenue?.subLabel || (statsData?.todayRevenue?.percentageChange !== undefined ? `${statsData.todayRevenue.percentageChange >= 0 ? '+' : ''}${statsData.todayRevenue.percentageChange}% vs yesterday` : '+14.2% vs yesterday')}
               </div>
             </div>
           </div>
@@ -211,11 +322,15 @@ export default function OverviewPanel({
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
-              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Revenue This Month</div>
+              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                {statsData?.monthRevenue?.label || 'Revenue This Month'}
+              </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                ₹{monthlySales.toLocaleString('en-IN')}
+                {statsData?.monthRevenue?.formatted || `₹${(statsData?.monthRevenue?.amount ?? monthlySales).toLocaleString('en-IN')}`}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Monthly sales target</div>
+              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                {statsData?.monthRevenue?.subLabel || (statsData?.monthRevenue?.formattedTarget ? `Target: ${statsData.monthRevenue.formattedTarget}` : 'Monthly sales target')}
+              </div>
             </div>
           </div>
         </div>
@@ -224,12 +339,18 @@ export default function OverviewPanel({
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
-              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Staff On Duty</div>
+              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                {statsData?.staffOnDuty?.label || 'Staff On Duty'}
+              </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                {onDutyStaffCount} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>/ {staff.length} Total</span>
+                {statsData?.staffOnDuty?.display
+                  ? statsData.staffOnDuty.display
+                  : (statsData?.staffOnDuty?.onDuty !== undefined
+                      ? `${statsData.staffOnDuty.onDuty} / ${statsData.staffOnDuty.total ?? staff.length} Total`
+                      : `${onDutyStaffCount} / ${staff.length} Total`)}
               </h3>
               <div className="stat-sub-label" style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
-                Waiters & Kitchen Staff
+                {statsData?.staffOnDuty?.subLabel || 'Waiters & Kitchen Staff'}
               </div>
             </div>
           </div>
@@ -239,9 +360,15 @@ export default function OverviewPanel({
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
-              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Pending Orders</div>
-              <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>{pendingOrdersCount}</h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>Awaiting kitchen prep</div>
+              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                {statsData?.pendingOrders?.label || 'Pending Orders'}
+              </div>
+              <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
+                {statsData?.pendingOrders?.count !== undefined ? statsData.pendingOrders.count : pendingOrdersCount}
+              </h3>
+              <div className="stat-sub-label" style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>
+                {statsData?.pendingOrders?.subLabel || 'Awaiting kitchen prep'}
+              </div>
             </div>
           </div>
         </div>
@@ -250,9 +377,15 @@ export default function OverviewPanel({
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
-              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Completed Orders</div>
-              <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>{completedOrdersCount}</h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>Fulfilled & served</div>
+              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                {statsData?.completedOrders?.label || 'Completed Orders'}
+              </div>
+              <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
+                {statsData?.completedOrders?.count !== undefined ? statsData.completedOrders.count : completedOrdersCount}
+              </h3>
+              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
+                {statsData?.completedOrders?.subLabel || 'Fulfilled & served'}
+              </div>
             </div>
           </div>
         </div>
@@ -261,11 +394,17 @@ export default function OverviewPanel({
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
-              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Top Item</div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '6px 0', color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={topItem}>
-                {topItem}
+              <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
+                {statsData?.topItem?.label || 'Top Item'}
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '6px 0', color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={statsData?.topItem?.name || topItemFallback}>
+                {statsData?.topItem?.name || topItemFallback}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Highest seller</div>
+              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                {statsData?.topItem
+                  ? (statsData.topItem.quantitySold ? `${statsData.topItem.quantitySold} sold • ₹${statsData.topItem.revenue || 0}` : (statsData.topItem.subLabel || 'Highest seller'))
+                  : 'Highest seller'}
+              </div>
             </div>
           </div>
         </div>
@@ -350,14 +489,18 @@ export default function OverviewPanel({
                       ₹{b.revenue.toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        className="btn btn-outline"
-                        style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700 }}
-                        onClick={() => onSelectBranch(b.id)}
-                      >
-                        Drill Down
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700 }}
+                          onClick={() => onSelectBranch(b.id)}
+                        >
+                          Drill Down
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -373,85 +516,154 @@ export default function OverviewPanel({
         {/* Revenue Growth Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>
-              {isAllBranches ? 'Branch Revenue Comparison (₹)' : 'Revenue Growth'}
-            </h3>
-            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Last 6 Months</span>
+            <div>
+              <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>
+                {revenueGrowthData?.title || (isAllBranches ? 'Branch Revenue Comparison (₹)' : 'Revenue Growth')}
+              </h3>
+              <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                {revenueGrowthData?.subtitle || 'Last 6 Months'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '11px', background: 'rgba(255, 122, 0, 0.1)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '12px', fontWeight: 700 }}>
+                {revenueGrowthData?.subtitle || 'Last 6 Months'}
+              </span>
+            </div>
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', height: '180px', padding: '0 10px', marginTop: '20px' }}>
-            {isAllBranches ? (
-              branchAnalytics.map(b => {
-                const maxRev = Math.max(...branchAnalytics.map(x => x.revenue), 1000);
-                const pct = Math.max(20, Math.round((b.revenue / maxRev) * 100));
+            {isAllBranches && revenueGrowthData?.branchComparison && revenueGrowthData.branchComparison.length > 0 ? (
+              revenueGrowthData.branchComparison.map((b, idx) => {
+                const maxRev = Math.max(...revenueGrowthData.branchComparison.map(x => x.revenue || 0), 1000);
+                const pct = Math.max(15, Math.min(100, b.percentage !== undefined ? b.percentage : Math.round(((b.revenue || 0) / maxRev) * 100)));
+                const hasRevenue = (b.revenue || 0) > 0;
                 return (
-                  <div key={b.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
-                      ₹{(b.revenue / 1000).toFixed(1)}k
+                  <div key={b.branchId || b.id || b.branchCode || idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: hasRevenue ? 'var(--primary)' : 'var(--text-main)', marginBottom: '8px' }}>
+                      {b.formattedRevenue || `₹${b.revenue || 0}`}
                     </span>
                     <div style={{ height: '110px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '8px' }}>
-                      <div style={{ 
-                        width: '36px', 
-                        height: `${pct}%`, 
-                        background: 'linear-gradient(180deg, var(--primary) 0%, rgba(255, 122, 0, 0.15) 100%)', 
-                        borderRadius: '6px 6px 0 0',
-                        transition: 'height 0.3s ease'
-                      }}></div>
+                      <div
+                        title={`${b.branchName || b.branchCode}: ${b.formattedRevenue || `₹${b.revenue || 0}`} (${b.ordersCount || 0} orders)`}
+                        style={{ 
+                          width: '36px', 
+                          height: `${pct}%`, 
+                          background: hasRevenue
+                            ? 'linear-gradient(180deg, #ff7a00 0%, rgba(255, 122, 0, 0.2) 100%)'
+                            : 'linear-gradient(180deg, #cbd5e1 0%, rgba(203, 213, 225, 0.25) 100%)', 
+                          borderRadius: '6px 6px 0 0',
+                          transition: 'height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                          boxShadow: hasRevenue ? '0 2px 8px rgba(255, 122, 0, 0.25)' : 'none',
+                          cursor: 'pointer'
+                        }}
+                      ></div>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'center', maxWidth: '80px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.branchName}>
-                      {b.branchCode}
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, textAlign: 'center', maxWidth: '80px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.branchName || b.branchCode}>
+                      {b.branchCode || b.branchName}
                     </span>
                   </div>
                 );
               })
             ) : (
-              [
-                { month: 'Jan', val: '₹12k', pct: 25 },
-                { month: 'Feb', val: '₹15k', pct: 32 },
-                { month: 'Mar', val: '₹23k', pct: 48 },
-                { month: 'Apr', val: '₹32k', pct: 65 },
-                { month: 'May', val: '₹45k', pct: 82 },
-                { month: 'Jun', val: '₹65k', pct: 98 }
-              ].map(item => (
-                <div key={item.month} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
-                  <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>{item.val}</span>
-                  <div style={{ height: '110px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '8px' }}>
-                    <div style={{ 
-                      width: '32px', 
-                      height: `${item.pct}%`, 
-                      background: 'linear-gradient(180deg, var(--primary) 0%, rgba(255, 122, 0, 0.15) 100%)', 
-                      borderRadius: '6px 6px 0 0',
-                      transition: 'height 0.3s ease'
-                    }}></div>
+              (revenueGrowthData?.data && revenueGrowthData.data.length > 0
+                ? revenueGrowthData.data
+                : (isAllBranches
+                    ? branchAnalytics.map(b => ({ label: b.branchCode, formattedRevenue: `₹${(b.revenue / 1000).toFixed(1)}k`, percentage: Math.max(20, Math.round((b.revenue / Math.max(...branchAnalytics.map(x => x.revenue), 1000)) * 100)), revenue: b.revenue }))
+                    : [
+                        { label: 'Mar', month: 'Mar', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
+                        { label: 'Apr', month: 'Apr', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
+                        { label: 'May', month: 'May', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
+                        { label: 'Jun', month: 'Jun', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
+                        { label: 'Jul', month: 'Jul', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
+                        { label: 'Aug', month: 'Aug', formattedRevenue: '₹262.5', percentage: 26, revenue: 262.5 }
+                      ]
+                  )
+              ).map((item, idx) => {
+                const pct = Math.max(12, Math.min(100, item.percentage !== undefined ? item.percentage : 15));
+                const hasRevenue = (item.revenue || 0) > 0;
+                return (
+                  <div key={item.label || item.month || idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: hasRevenue ? 'var(--primary)' : 'var(--text-main)', marginBottom: '8px' }}>
+                      {item.formattedRevenue || (item.revenue !== undefined ? `₹${item.revenue}` : item.val)}
+                    </span>
+                    <div style={{ height: '110px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '8px' }}>
+                      <div
+                        title={`${item.label || item.month} ${item.year || ''}: ${item.formattedRevenue || `₹${item.revenue || 0}`} • ${item.ordersCount || 0} Orders`}
+                        style={{ 
+                          width: '32px', 
+                          height: `${pct}%`, 
+                          background: hasRevenue
+                            ? 'linear-gradient(180deg, #ff7a00 0%, rgba(255, 122, 0, 0.2) 100%)'
+                            : 'linear-gradient(180deg, #e2e8f0 0%, rgba(226, 232, 240, 0.3) 100%)', 
+                          borderRadius: '6px 6px 0 0',
+                          transition: 'height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'pointer',
+                          boxShadow: hasRevenue ? '0 2px 8px rgba(255, 122, 0, 0.25)' : 'none'
+                        }}
+                      ></div>
+                    </div>
+                    <span style={{ fontSize: '12px', color: hasRevenue ? 'var(--black)' : 'var(--text-muted)', fontWeight: hasRevenue ? 700 : 600 }}>
+                      {item.label || item.month}
+                    </span>
                   </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{item.month}</span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
 
         {/* Order Breakdown Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
-          <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--black)' }}>Order Breakdown</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
+            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+              {orderBreakdownData?.totalItemsSold !== undefined ? `${orderBreakdownData.totalItemsSold} Items Sold` : 'Category Share'}
+            </span>
+          </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-            {[
-              { name: 'Starters', pct: 45, color: 'var(--primary)' },
-              { name: 'Main Course', pct: 30, color: '#3b82f6' },
-              { name: 'Beverages', pct: 15, color: '#10b981' },
-              { name: 'Desserts', pct: 10, color: '#8b5cf6' }
-            ].map(cat => (
-              <div key={cat.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600 }}>
-                  <span style={{ color: 'var(--text-main)' }}>{cat.name}</span>
-                  <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{cat.pct}%</span>
+            {orderBreakdownData?.categories && orderBreakdownData.categories.length > 0 ? (
+              orderBreakdownData.categories.map((cat, idx) => {
+                const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
+                const itemColor = cat.color || defaultColors[idx % defaultColors.length];
+                const pct = cat.percentage ?? 0;
+                return (
+                  <div key={cat.categoryId || cat.name || idx} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600 }}>
+                      <span style={{ color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: itemColor, display: 'inline-block' }}></span>
+                        {cat.name}
+                        {cat.count !== undefined && (
+                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                            ({cat.count} {cat.count === 1 ? 'item' : 'items'} • ₹{cat.revenue || 0})
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{pct}%</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.max(3, pct)}%`, height: '100%', background: itemColor, borderRadius: '4px', transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}></div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              [
+                { name: 'Main Course', pct: 40, color: '#ff7a00' },
+                { name: 'Chicken', pct: 40, color: '#3b82f6' },
+                { name: 'Desserts', pct: 20, color: '#10b981' }
+              ].map(cat => (
+                <div key={cat.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--text-main)' }}>{cat.name}</span>
+                    <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{cat.pct}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${cat.pct}%`, height: '100%', background: cat.color, borderRadius: '4px' }}></div>
+                  </div>
                 </div>
-                <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${cat.pct}%`, height: '100%', background: cat.color, borderRadius: '4px' }}></div>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -483,31 +695,48 @@ export default function OverviewPanel({
                 </tr>
               </thead>
               <tbody>
-                {orders.slice(-5).reverse().map(ord => {
-                  const itemSummary = (ord.items || []).map(i => `${i.name} x ${i.qty}`).join(', ');
-                  const branchInfo = branches.find(b => b.id === ord.branchId);
+                {(liveOrdersData && liveOrdersData.length > 0 ? liveOrdersData : orders.slice(-5).reverse()).map((ord, idx) => {
+                  const itemSummary = ord.itemsSummary || (ord.items || []).map(i => `${i.name} x ${i.qty || 1}`).join(', ') || 'Items';
+                  const branchInfo = branches.find(b => b.id === ord.branchId || b._id === ord.branchId);
+                  const branchCode = ord.branch?.code || (branchInfo ? branchInfo.branchCode : (ord.branchId ? ord.branchId.slice(-6).toUpperCase() : 'BR-001'));
+                  const tableDisplay = ord.tableNumber || (ord.table ? `Table ${ord.table}` : 'Takeaway');
+                  const orderIdDisplay = ord.orderId || (ord.id ? `#${ord.id}` : `#ORD-${idx + 1}`);
+
                   return (
-                    <tr key={ord.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>#{ord.id}</td>
+                    <tr key={ord.id || ord.orderId || idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
+                        <div>{orderIdDisplay}</div>
+                        {ord.time && <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>{ord.time}</div>}
+                      </td>
                       <td style={{ padding: '12px' }}>
                         <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                          {branchInfo ? branchInfo.branchCode : (ord.branchId || 'BR-001')}
+                          {branchCode}
                         </span>
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>Table {ord.table}</td>
+                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
+                        <div>{tableDisplay}</div>
+                        {ord.section && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{ord.section}</span>}
+                      </td>
                       <td className="items-cell" style={{ padding: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' }} title={itemSummary}>
                         {itemSummary}
                       </td>
                       <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>
-                        ₹{ord.total}
+                        <div>₹{ord.total}</div>
+                        {ord.billingStatus && (
+                          <span style={{ fontSize: '10px', textTransform: 'uppercase', color: ord.billingStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
+                            {ord.billingStatus}
+                          </span>
+                        )}
                       </td>
-                      <td style={{ padding: '12px' }}><Badge status={ord.status} /></td>
+                      <td style={{ padding: '12px' }}><Badge status={ord.status || 'new'} /></td>
                     </tr>
                   );
                 })}
-                {orders.length === 0 && (
+                {(!liveOrdersData || liveOrdersData.length === 0) && orders.length === 0 && (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>No live orders found for this branch selection.</td>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                      No live orders found for this branch selection.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -516,51 +745,101 @@ export default function OverviewPanel({
         </div>
 
         {/* Dining Tables Grid */}
-        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
-              Live Tables Status
-            </h2>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>
-              {occupiedTablesCount} Occupied
-            </span>
+        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
+                Live Tables Status
+              </h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', background: '#fef2f2', color: '#ef4444', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #fecaca' }}>
+                {liveTablesData?.summary?.occupiedTables !== undefined ? liveTablesData.summary.occupiedTables : occupiedTablesCount} Occupied
+              </span>
+              <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0' }}>
+                {liveTablesData?.summary?.totalTables !== undefined ? liveTablesData.summary.totalTables : tables.length} Total
+              </span>
+            </div>
           </div>
-          <div className="tables-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-            {tables.slice(0, 6).map(table => (
-              <div 
-                key={table.id} 
-                style={{ 
-                  background: 'var(--bg-secondary)', 
-                  border: '1.5px solid var(--border)', 
-                  borderTop: table.status === 'Occupied' ? '4px solid #ef4444' : '4px solid var(--success)',
-                  borderRadius: '8px', 
-                  padding: '12px 8px', 
-                  textAlign: 'center',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.01)',
-                  transition: 'transform 0.2s'
-                }}
-              >
-                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '2px' }}>
-                  {table.id}
-                </div>
-                {table.branchId && (
-                  <div style={{ fontSize: '9px', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>
-                    {table.branchId}
+
+          <div
+            className="tables-status-grid"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '12px',
+              maxHeight: '440px',
+              overflowY: 'auto',
+              paddingRight: '4px'
+            }}
+          >
+            {((liveTablesData?.tables && liveTablesData.tables.length > 0) ? liveTablesData.tables : tables).map((table, idx) => {
+              const isOccupied = String(table.status || '').toLowerCase() === 'occupied';
+              const isReserved = String(table.status || '').toLowerCase() === 'reserved';
+              const tableNum = table.tableNumber || table.id || `T-${idx + 1}`;
+              const seats = table.seatingCapacity ?? table.seats ?? 4;
+              const section = table.section || 'Main Dining';
+              const waiterName = table.assignedWaiter?.name;
+
+              return (
+                <div 
+                  key={table.id || table.tableNumber || idx} 
+                  style={{ 
+                    background: '#ffffff', 
+                    border: '1.5px solid var(--border)', 
+                    borderTop: isOccupied ? '4px solid #ef4444' : (isReserved ? '4px solid #f59e0b' : '4px solid #10b981'),
+                    borderRadius: '10px', 
+                    padding: '12px 10px', 
+                    textAlign: 'center',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-main)' }}>
+                        {tableNum}
+                      </span>
+                      <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                        🪑 {seats}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 500, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={section}>
+                      {section}
+                    </div>
+
+                    {waiterName && (
+                      <div style={{ fontSize: '10px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`Waiter: ${waiterName}`}>
+                        🤵 {waiterName}
+                      </div>
+                    )}
                   </div>
-                )}
-                <span style={{ 
-                  fontSize: '9px', 
-                  fontWeight: 700, 
-                  textTransform: 'uppercase',
-                  color: table.status === 'Occupied' ? '#ef4444' : 'var(--success)'
-                }}>
-                  {table.status === 'Occupied' ? 'OCCUPIED' : 'FREE'}
-                </span>
-              </div>
-            ))}
-            {tables.length === 0 && (
-              <div style={{ gridColumn: 'span 2', textAlign: 'center', color: '#94a3b8', padding: '16px', fontSize: '12px' }}>
-                No tables configured.
+
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #f1f5f9' }}>
+                    <span style={{ 
+                      fontSize: '9px', 
+                      fontWeight: 800, 
+                      letterSpacing: '0.5px',
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: isOccupied ? '#fef2f2' : (isReserved ? '#fffbeb' : '#f0fdf4'),
+                      color: isOccupied ? '#ef4444' : (isReserved ? '#f59e0b' : '#10b981')
+                    }}>
+                      {isOccupied ? 'OCCUPIED' : (isReserved ? 'RESERVED' : 'FREE')}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {(!liveTablesData?.tables || liveTablesData.tables.length === 0) && tables.length === 0 && (
+              <div style={{ gridColumn: 'span 2', textAlign: 'center', color: '#94a3b8', padding: '24px', fontSize: '12px' }}>
+                No tables configured for this branch.
               </div>
             )}
           </div>

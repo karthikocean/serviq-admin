@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
+import BranchApi from '../api/Branch.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -58,26 +59,90 @@ const TableIcon = ({ size = 11, color = '#64748b' }) => (
   </svg>
 );
 
+const LockIcon = ({ size = 12, color = '#94a3b8' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+  </svg>
+);
+
 export default function BranchSearchDropdown() {
-  const { activeRestaurant, currentUser, selectedBranchId, setSelectedBranchId } = useAppState();
+  const { activeRestaurant, currentUser, selectedBranchId, setSelectedBranchId, fetchBranches: contextFetchBranches } = useAppState();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  const branches = activeRestaurant?.branches || [];
+  // Fetch branches from API
+  const loadBranches = async () => {
+    try {
+      if (contextFetchBranches) {
+        await contextFetchBranches();
+      }
+      const res = await BranchApi.getBranches();
+      if (res && res.status && res.response) {
+        const branchArray = Array.isArray(res.response) 
+          ? res.response 
+          : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
+        if (Array.isArray(branchArray) && branchArray.length > 0) {
+          const mapped = branchArray.map(b => ({
+            id: b._id || b.id,
+            _id: b._id || b.id,
+            branchName: b.branchName || b.name,
+            branchCode: b.branchCode || b.code,
+            branchManager: b.managerName || b.branchManager || '',
+            mobileNumber: b.contactNumber || b.mobileNumber || '',
+            email: b.email || '',
+            address: b.address?.street || b.address || '',
+            city: b.address?.city || b.city || '',
+            state: b.address?.state || b.state || '',
+            status: b.status || 'Active',
+            totalTables: b.totalTables || 10
+          }));
+          setLocalBranches(mapped);
+        }
+      }
+    } catch (e) {
+      console.warn("Branch fetch error in dropdown:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadBranches();
+  }, []);
+
+  const rawBranches = (activeRestaurant?.branches && activeRestaurant.branches.length > 0)
+    ? activeRestaurant.branches
+    : localBranches;
+
+  const branches = rawBranches.map(b => ({
+    ...b,
+    id: b._id || b.id,
+    _id: b._id || b.id,
+    branchName: b.branchName || b.name,
+    branchCode: b.branchCode || b.code
+  }));
   
-  // Check if user is Admin or Restaurant Owner
+  // Check if user is Restaurant Owner ONLY
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
-  const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
-  const isBranchLocked = !isAdminOrOwner;
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // Automatically lock branch if user is branch-scoped
+  // ONLY Restaurant Owner can allow and use the branch dropdown filter at the header
+  const isRestaurantOwner =
+    userType === 'RESTAURANT_OWNER' ||
+    userType === 'OWNER' ||
+    userRole === 'restaurant_owner' ||
+    userRole === 'restaurant owner' ||
+    userRole === 'owner';
+
+  const isBranchLocked = !isRestaurantOwner;
+
+  // Automatically lock branch if user is Branch Admin / branch-scoped
   useEffect(() => {
     if (isBranchLocked) {
       const lockId = currentUser?.activeBranchId || (typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId);
@@ -98,7 +163,10 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedBranch = branches.find(b => b.id === selectedBranchId);
+  const selectedBranch = branches.find(b => 
+    String(b.id || b._id) === String(selectedBranchId) || 
+    String(b.branchCode) === String(selectedBranchId)
+  );
 
   const filteredBranches = branches.filter(b => {
     const query = searchQuery.toLowerCase().trim();
@@ -124,36 +192,48 @@ export default function BranchSearchDropdown() {
       {/* TRIGGER BUTTON */}
       <button
         type="button"
-        className={`branch-search-trigger ${isOpen ? 'active' : ''}`}
+        disabled={isBranchLocked}
+        className={`branch-search-trigger ${isOpen ? 'active' : ''} ${isBranchLocked ? 'disabled' : ''}`}
         onClick={() => {
-          if (!isBranchLocked) setIsOpen(!isOpen);
+          if (!isBranchLocked) {
+            setIsOpen(!isOpen);
+            if (!isOpen && branches.length === 0) {
+              loadBranches();
+            }
+          }
         }}
-        title={isBranchLocked ? `Assigned to ${selectedBranch?.branchName || 'Branch'}` : "Filter modules by branch"}
-        style={isBranchLocked ? { cursor: 'default', opacity: 0.9 } : {}}
+        title={isBranchLocked ? `Branch selection is disabled for your role (Locked to ${selectedBranch?.branchName || 'Assigned Branch'})` : "Filter modules by branch"}
+        style={isBranchLocked ? { cursor: 'not-allowed', opacity: 0.75, background: '#f8fafc', borderColor: '#e2e8f0' } : {}}
       >
         <div className="branch-search-trigger-content">
           <div style={{
             width: '28px',
             height: '28px',
             borderRadius: '6px',
-            background: selectedBranchId ? 'rgba(255, 122, 0, 0.1)' : '#f1f5f9',
+            background: isBranchLocked ? '#f1f5f9' : (selectedBranchId ? 'rgba(255, 122, 0, 0.1)' : '#f1f5f9'),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: selectedBranchId ? 'var(--primary)' : '#64748b'
+            color: isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')
           }}>
-            <StoreFrontIcon size={15} color={selectedBranchId ? 'var(--primary)' : '#64748b'} />
+            <StoreFrontIcon size={15} color={isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')} />
           </div>
           <div className="branch-search-trigger-text">
             <span className="branch-search-label">
               {isBranchLocked ? 'Assigned Branch' : 'Branch Filter'}
             </span>
             <span className="branch-search-value">
-              {selectedBranch ? selectedBranch.branchName : 'All Branches'}
+              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : 'All Branches'}
             </span>
           </div>
         </div>
-        {!isBranchLocked && <ChevronDownIcon size={12} color="#94a3b8" />}
+        {isBranchLocked ? (
+          <div title="Branch locked for non-admin" style={{ display: 'flex', alignItems: 'center', marginLeft: '4px' }}>
+            <LockIcon size={13} color="#94a3b8" />
+          </div>
+        ) : (
+          <ChevronDownIcon size={12} color="#94a3b8" />
+        )}
       </button>
 
       {/* DROPDOWN POPUP */}
@@ -204,11 +284,11 @@ export default function BranchSearchDropdown() {
             {/* ALL BRANCHES OPTION */}
             {(!searchQuery || 'all branches'.includes(searchQuery.toLowerCase())) && (
               <div
-                className={`branch-search-option ${selectedBranchId === null ? 'selected' : ''}`}
+                className={`branch-search-option ${selectedBranchId === null || selectedBranchId === 'ALL' ? 'selected' : ''}`}
                 onClick={() => handleSelectBranch(null)}
               >
                 <div className="branch-option-left-icon">
-                  <StoreFrontIcon size={16} color={selectedBranchId === null ? 'var(--primary)' : '#64748b'} />
+                  <StoreFrontIcon size={16} color={selectedBranchId === null || selectedBranchId === 'ALL' ? 'var(--primary)' : '#64748b'} />
                 </div>
                 <div className="branch-option-info">
                   <div className="branch-option-title-row">
@@ -218,7 +298,7 @@ export default function BranchSearchDropdown() {
                   <span className="branch-option-subtext">Aggregated data across all active outlets</span>
                 </div>
                 <div className="branch-option-action">
-                  {selectedBranchId === null && <CheckIcon size={15} color="var(--primary)" />}
+                  {(selectedBranchId === null || selectedBranchId === 'ALL') && <CheckIcon size={15} color="var(--primary)" />}
                 </div>
               </div>
             )}
@@ -226,13 +306,14 @@ export default function BranchSearchDropdown() {
             {/* INDIVIDUAL BRANCHES */}
             {filteredBranches.length > 0 ? (
               filteredBranches.map((branch) => {
-                const isSelected = selectedBranchId === branch.id;
+                const branchId = branch._id || branch.id;
+                const isSelected = String(selectedBranchId) === String(branchId) || String(selectedBranchId) === String(branch.branchCode);
                 const isActive = branch.status === 'Active';
                 return (
                   <div
-                    key={branch.id}
+                    key={branchId}
                     className={`branch-search-option ${isSelected ? 'selected' : ''}`}
-                    onClick={() => handleSelectBranch(branch.id)}
+                    onClick={() => handleSelectBranch(branchId)}
                   >
                     <div className="branch-option-left-icon">
                       <StoreFrontIcon size={16} color={isSelected ? 'var(--primary)' : '#64748b'} />
@@ -240,7 +321,7 @@ export default function BranchSearchDropdown() {
                     <div className="branch-option-info">
                       {/* Top title and badges row */}
                       <div className="branch-option-title-row">
-                        <span className="branch-option-name">{branch.branchName}</span>
+                        <span className="branch-option-name">{branch.branchName || branch.name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                           {branch.branchCode && (
                             <span className="branch-option-code">{branch.branchCode}</span>

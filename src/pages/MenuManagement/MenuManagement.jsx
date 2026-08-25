@@ -543,11 +543,23 @@ export default function MenuManagement() {
                         const userType = (userTypeStr || '').toUpperCase();
                         const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
-                        if (isAdminOrOwner) {
-                          return (
+                        const allBranchesList = activeRestaurant?.branches || [];
+                        const isLocked = !isAdminOrOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                        const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                          ? allBranchesList.find(b => String(b.id || b._id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                          : null;
+                        const currentBranchObj = headerBranchObj 
+                          || allBranchesList.find(b => String(b.id || b._id) === String(menuForm.branchId))
+                          || allBranchesList.find(b => String(b.branchCode) === String(menuForm.branchId))
+                          || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                        const effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (menuForm.branchId || '');
+
+                        return (
+                          <div>
                             <select
-                              value={menuForm.branchId || ''}
+                              value={effectiveVal}
                               onChange={e => setMenuForm({ ...menuForm, branchId: e.target.value })}
+                              disabled={isLocked}
                               style={{
                                 width: '100%',
                                 padding: '10px 12px',
@@ -555,44 +567,28 @@ export default function MenuManagement() {
                                 border: '1px solid var(--border)',
                                 fontSize: '13px',
                                 fontWeight: 600,
-                                background: '#fff',
-                                color: '#0f172a',
-                                cursor: 'pointer'
+                                background: isLocked ? '#f8fafc' : '#fff',
+                                color: isLocked ? '#64748b' : '#0f172a',
+                                cursor: isLocked ? 'not-allowed' : 'pointer',
+                                boxSizing: 'border-box'
                               }}
                             >
-                              <option value="">-- Select Branch --</option>
-                              {(activeRestaurant?.branches || []).map(b => (
-                                <option key={b._id || b.id} value={b._id || b.id}>
-                                  {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                                </option>
-                              ))}
+                              {allBranchesList.length === 0 ? (
+                                <option value="">Main Branch</option>
+                              ) : (
+                                allBranchesList.map(b => (
+                                  <option key={b._id || b.id} value={b._id || b.id}>
+                                    {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                                  </option>
+                                ))
+                              )}
                             </select>
-                          );
-                        }
-
-                        const bObj = (activeRestaurant?.branches || []).find(b => String(b.id || b._id) === String(menuForm.branchId))
-                          || (selectedBranchId && selectedBranchId !== 'ALL' ? (activeRestaurant?.branches || []).find(b => String(b.id || b._id) === String(selectedBranchId)) : null)
-                          || (activeRestaurant?.branches || [])[0];
-
-                        return (
-                          <input
-                            type="text"
-                            value={bObj ? bObj.branchName : 'Serviq Branch'}
-                            readOnly
-                            disabled
-                            style={{
-                              width: '100%',
-                              padding: '10px 12px',
-                              borderRadius: '8px',
-                              border: '1px solid var(--border)',
-                              fontSize: '13px',
-                              fontWeight: 600,
-                              color: '#64748b',
-                              backgroundColor: '#f8fafc',
-                              cursor: 'not-allowed',
-                              boxSizing: 'border-box'
-                            }}
-                          />
+                            {isLocked && (
+                              <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                                Branch is locked to currently selected branch.
+                              </span>
+                            )}
+                          </div>
                         );
                       })()}
                     </div>

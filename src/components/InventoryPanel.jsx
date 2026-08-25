@@ -898,69 +898,63 @@ export default function InventoryPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                {isRestaurantOwner ? (
-                  <div>
-                    <select
-                      disabled={isSubmitting}
-                      value={formState.branchId || ''}
-                      onChange={e => {
-                        setFormState({ ...formState, branchId: e.target.value });
-                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        outline: 'none',
-                        backgroundColor: '#ffffff',
-                        boxSizing: 'border-box',
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      <option value="">-- Select Branch --</option>
-                      {(allBranchesList || []).map(b => (
-                        <option key={b._id || b.id} value={b._id || b.id}>
-                          {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.branchId && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.branchId}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <input
-                      type="text"
-                      disabled
-                      readOnly
-                      value={(() => {
-                        const assigned = allBranchesList.find(b => (String(b._id || b.id) === String(formState.branchId || selectedBranchId))) || availableBranches[0];
-                        return assigned ? `${assigned.branchName || assigned.name}${assigned.branchCode ? ` (${assigned.branchCode})` : ''}` : 'Main Branch';
-                      })()}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        outline: 'none',
-                        backgroundColor: '#f8fafc',
-                        color: '#64748b',
-                        cursor: 'not-allowed',
-                        fontWeight: 600,
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                    <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                      Branch is assigned to your current role.
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const branchesArr = (allBranchesList && allBranchesList.length > 0) ? allBranchesList : (availableBranches || []);
+                  const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                    ? branchesArr.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                    : null;
+                  const currentBranchObj = headerBranchObj 
+                    || branchesArr.find(b => String(b._id || b.id) === String(formState.branchId))
+                    || branchesArr.find(b => String(b.branchCode) === String(formState.branchId))
+                    || (branchesArr.length > 0 ? branchesArr[0] : null);
+                  const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formState.branchId || '');
+
+                  return (
+                    <div>
+                      <select
+                        disabled={isSubmitting || isLocked}
+                        value={effectiveVal}
+                        onChange={e => {
+                          setFormState({ ...formState, branchId: e.target.value });
+                          if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '8px',
+                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          outline: 'none',
+                          backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
+                          color: isLocked ? '#64748b' : '#0f172a',
+                          boxSizing: 'border-box',
+                          cursor: (isLocked || isSubmitting) ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {branchesArr.length === 0 ? (
+                          <option value="">Main Branch</option>
+                        ) : (
+                          branchesArr.map(b => (
+                            <option key={b._id || b.id} value={b._id || b.id}>
+                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      {isLocked && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                          Branch is locked to currently selected branch.
+                        </span>
+                      )}
+                      {formErrors.branchId && (
+                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {formErrors.branchId}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2106,7 +2100,7 @@ export default function InventoryPanel() {
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px', verticalAlign: 'middle' }}>STATUS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '120px', verticalAlign: 'middle' }}>UNIT COST / VALUE</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '140px', verticalAlign: 'middle' }}>SUPPLIER</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', minWidth: '210px', verticalAlign: 'middle' }}>ACTIONS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '220px', verticalAlign: 'middle' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -2272,8 +2266,8 @@ export default function InventoryPanel() {
                       </td>
 
                       {/* 7. Quick Actions */}
-                      <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
                           {/* Stock In Button */}
                           <button
                             type="button"

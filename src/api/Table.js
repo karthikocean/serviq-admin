@@ -37,6 +37,9 @@ class MemberApi {
 
   async createTable(data) {
     try {
+      const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+      const isMock = token && token.startsWith("mock_");
+
       const response = await apiClient.post("/tables", data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
@@ -46,13 +49,14 @@ class MemberApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to Create Table. Please try again.";
+      const is401 = error?.response?.status === 401;
+      const errorMessage = is401
+        ? "Authentication required or session expired. Please log in again."
+        : (error?.response?.data?.message || error?.message || "Failed to Create Table. Please try again.");
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
+        is401,
         response: error?.response?.data || error,
       };
     }

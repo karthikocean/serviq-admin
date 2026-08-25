@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAppState } from '../config/AppContext';
 import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
@@ -43,6 +44,20 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 export default function UserListPanel() {
+  const { currentUser, selectedBranchId } = useAppState();
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const currentBranchId = typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId;
+  const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? selectedBranchId
+    : currentBranchId;
+
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
@@ -120,9 +135,12 @@ export default function UserListPanel() {
 
   const openAddUser = () => {
     setEditingUserId(null);
+    const defaultBranch = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : (activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     setUserForm({
       name: '',
-      branchId: '',
+      branchId: defaultBranch || '',
       roleId: '',
       status: 'Active',
       phone: '',
@@ -135,9 +153,10 @@ export default function UserListPanel() {
 
   const openEditUser = (user) => {
     setEditingUserId(user._id);
+    const userBranch = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
     setUserForm({
       name: user.name || '',
-      branchId: (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : ''),
+      branchId: (!isAdmin && currentBranchId) ? currentBranchId : (userBranch || (apiBranches.length > 0 ? apiBranches[0]._id : '')),
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
       status: user.isActive ? 'Active' : 'Inactive',
       phone: user.phoneNumber || '',
@@ -259,7 +278,8 @@ export default function UserListPanel() {
       const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
       const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
       const uRole = u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-      const uBranch = u.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+      const branchObj = u.branchId?.branchName ? u.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+      const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
       return [
         `"${u.name}"`,
         `"${uBranch}"`,
@@ -284,27 +304,46 @@ export default function UserListPanel() {
 
   if (viewState === 'form') {
     return (
-      <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <button 
-            type="button"
-            onClick={() => setViewState('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#0f172a'
-            }}
-          >
-            <ArrowLeftIcon size={14} /> Back to Users List
-          </button>
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewState('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                {editingUserId ? 'Edit User Account' : 'Create User Account'}
+              </h2>
+            </div>
+          </div>
         </div>
 
         <div style={{
@@ -316,13 +355,6 @@ export default function UserListPanel() {
           width: '100%',
           boxSizing: 'border-box'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUserId ? 'Edit User Account' : 'Create User Account'}
-          </h2>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px 0' }}>
-            {editingUserId ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
-          </p>
-
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
@@ -357,21 +389,57 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  value={userForm.branchId}
-                  onChange={e => {
-                    setUserForm({ ...userForm, branchId: e.target.value });
-                    if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                  }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="" disabled>Select a branch...</option>
-                  {apiBranches.map(b => (
-                    <option key={b._id} value={b._id}>
-                      {b.branchName} ({b.branchCode})
-                    </option>
-                  ))}
-                </select>
+                {(() => {
+                  const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
+                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                    : null;
+                  const currentBranchObj = headerBranchObj 
+                    || allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId))
+                    || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))
+                    || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                  const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
+
+                  return (
+                    <>
+                      <select
+                        value={effectiveVal}
+                        onChange={e => {
+                          setUserForm({ ...userForm, branchId: e.target.value });
+                          if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                        }}
+                        disabled={isLocked}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                          fontSize: '14px',
+                          background: isLocked ? '#f8fafc' : '#ffffff',
+                          color: isLocked ? '#64748b' : '#0f172a',
+                          cursor: isLocked ? 'not-allowed' : 'pointer',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        {allBranchesList.length === 0 ? (
+                          <option value="">Main Branch</option>
+                        ) : (
+                          allBranchesList.map(b => (
+                            <option key={b._id || b.id} value={b._id || b.id}>
+                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      {isLocked && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                          Branch is locked to currently selected branch.
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
                 {formErrors.branchId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.branchId}
@@ -697,7 +765,8 @@ export default function UserListPanel() {
                 const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
                 const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-                const uBranchName = user.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+                const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+                const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
                 
                 let roleBadgeStyle = {
                   display: 'inline-block',
