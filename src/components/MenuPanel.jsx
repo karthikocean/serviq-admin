@@ -78,38 +78,105 @@ export default function MenuPanel({
   const [menuSort, setMenuSort] = useState('name');
 
   const [paginatedMenu, setPaginatedMenu] = useState([]);
+  const [liveCategories, setLiveCategories] = useState(Array.isArray(categories) ? categories : []);
   const [totalItems, setTotalItems] = useState(0);
   const [page, setPage] = useState(1);
   const limit = 10;
   const [totalPages, setTotalPages] = useState(1);
 
+  const activeCategoryList = liveCategories.length > 0 ? liveCategories : (Array.isArray(categories) ? categories : []);
+  const combinedCategories = activeCategoryList.filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false && !c.isDelete);
+  const categoriesList = ['All Items', ...combinedCategories.map(c => c._id || c.id)];
+
+  const [editableCategories, setEditableCategories] = useState(combinedCategories);
+
+  const fetchLiveCategories = React.useCallback(async () => {
+    if (!activeRestaurant) return;
+    try {
+      const params = { limit: 1000 };
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      } else {
+        params.branchId = 'all';
+      }
+      const res = await MenuApi.getCategories(params);
+      if (res?.status && res.response) {
+        const catArray = Array.isArray(res.response.data)
+          ? res.response.data
+          : (Array.isArray(res.response.data?.items)
+              ? res.response.data.items
+              : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
+        const cleanList = catArray.filter(c => !c?.isDelete);
+        setLiveCategories(cleanList);
+      } else if (Array.isArray(categories) && categories.length > 0) {
+        setLiveCategories(categories);
+      }
+    } catch (err) {
+      console.error("Failed to fetch menu categories:", err);
+      if (Array.isArray(categories) && categories.length > 0) {
+        setLiveCategories(categories);
+      }
+    }
+  }, [activeRestaurant, selectedBranchId, categories]);
+
+  React.useEffect(() => {
+    fetchLiveCategories();
+  }, [fetchLiveCategories, refreshTrigger]);
+
   React.useEffect(() => {
     fetchPaginatedMenu();
-  }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId]);
+  }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId, liveCategories]);
 
   const fetchPaginatedMenu = async () => {
     if (!activeRestaurant) return;
+    const trimmed = (menuSearch || '').trim();
+
+    // Check if the search term matches any category name
+    const matchedCategory = combinedCategories.find(c =>
+      (c.name || '').toLowerCase().includes(trimmed.toLowerCase())
+    );
+
     const params = {
       page,
       limit,
-      search: menuSearch || undefined,
-      category: menuCategory === 'All Items' ? undefined : menuCategory,
+      search: trimmed || undefined,
     };
-    if (selectedBranchId) {
+
+    if (matchedCategory && trimmed.length > 0) {
+      params.categoryId = matchedCategory._id || matchedCategory.id;
+    }
+
+    if (selectedBranchId && selectedBranchId !== 'ALL') {
       params.branchId = selectedBranchId;
     }
     const res = await MenuApi.getMenuItems(params);
     if (res?.status && res.response) {
-      setPaginatedMenu(res.response.data || []);
-      setTotalItems(res.response.total || 0);
-      setTotalPages(res.response.totalPages || 1);
+      if (res.response.data && res.response.data.items) {
+        setPaginatedMenu(res.response.data.items);
+        setTotalItems(res.response.data.total || 0);
+        setTotalPages(Math.ceil((res.response.data.total || 0) / limit) || 1);
+      } else {
+        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        setPaginatedMenu(arr);
+        setTotalItems(res.response.total || arr.length);
+        setTotalPages(res.response.totalPages || Math.ceil(arr.length / limit) || 1);
+      }
     }
   };
 
-  const combinedCategories = (categories || []).filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false);
-  const categoriesList = ['All Items', ...combinedCategories.map(c => c._id)];
-
-  const [editableCategories, setEditableCategories] = useState(combinedCategories);
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const handleOpenCategoriesModal = () => {
     if (onOpenCategoriesPage) {
@@ -177,10 +244,16 @@ export default function MenuPanel({
         <div style={{ marginTop: '20px', maxWidth: '320px' }} className="menu-search-wrapper">
           <input
             type="text"
-            placeholder="Search menu items..."
+            placeholder="Search menu items or categories..."
             value={menuSearch}
+            onKeyDown={(e) => {
+              if (e.key === ' ' && !e.currentTarget.value) {
+                e.preventDefault();
+              }
+            }}
             onChange={(e) => {
-              setMenuSearch(e.target.value);
+              const val = e.target.value.replace(/^\s+/, '');
+              setMenuSearch(val);
               setPage(1);
             }}
             style={{
@@ -195,42 +268,6 @@ export default function MenuPanel({
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </span>
         </div>
-      </div>
-
-      {/* FILTER DROPDOWN AND SORT BY ROW */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        {/* Category Filter Dropdown */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>Category:</label>
-          <select
-            value={menuCategory}
-            onChange={(e) => {
-              setMenuCategory(e.target.value);
-              setPage(1); // Reset page on filter
-            }}
-            style={{
-              padding: '8px 14px',
-              fontSize: '13px',
-              borderRadius: '8px',
-              border: '1.5px solid var(--border)',
-              backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-main)',
-              fontWeight: 600,
-              cursor: 'pointer',
-              minWidth: '180px',
-              outline: 'none',
-              transition: 'border-color 0.2s ease'
-            }}
-          >
-            <option value="All Items">All Categories </option>
-            {combinedCategories.map(cat => (
-              <option key={cat._id} value={cat._id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
@@ -259,7 +296,9 @@ export default function MenuPanel({
 
               return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
-                  <td className="sticky-col-1" style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>{index + 1}</td>
+                  <td className="sticky-col-1" style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
+                    {(page - 1) * limit + index + 1}
+                  </td>
                   {/* 1. Image */}
                   <td className="sticky-col-2" style={{ padding: '12px 12px' }}>
                     {item.image ? (
@@ -292,7 +331,14 @@ export default function MenuPanel({
 
                   {/* 3. Category */}
                   <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
-                    {item.category?.name || item.category || 'Unknown'}
+                    {(() => {
+                      if (item.category && typeof item.category === 'object') {
+                        return item.category.name || item.category.categoryName || 'General';
+                      }
+                      const foundCat = combinedCategories.find(c => (c._id === item.category || c.id === item.category));
+                      if (foundCat) return foundCat.name;
+                      return item.category || 'General';
+                    })()}
                   </td>
 
                   {/* 4. Base Price */}
@@ -410,38 +456,54 @@ export default function MenuPanel({
       {/* Pagination Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: '13px', color: '#64748b' }}>
-          Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+          Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
+            type="button"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
             style={{
-              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: '#fff',
-              color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+              padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
+              color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             Prev
           </button>
 
-          <button
-            style={{
-              minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: '6px', fontSize: '13px', fontWeight: 700,
-              border: 'none', background: '#000', color: '#fff', cursor: 'default'
-            }}
-          >
-            {page}
-          </button>
+          {getPageNumbers().map(pageNum => (
+            <button
+              key={pageNum}
+              type="button"
+              onClick={() => setPage(pageNum)}
+              style={{
+                minWidth: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: page === pageNum ? 700 : 500,
+                border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                background: page === pageNum ? '#000000' : '#ffffff',
+                color: page === pageNum ? '#ffffff' : '#334155',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {pageNum}
+            </button>
+          ))}
 
           <button
+            type="button"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages || totalPages === 0}
             style={{
-              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: '#fff',
-              color: page === totalPages || totalPages === 0 ? '#cbd5e1' : '#64748b', cursor: page === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer'
+              padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: (page === totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+              color: (page === totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             Next

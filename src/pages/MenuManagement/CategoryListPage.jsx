@@ -10,7 +10,7 @@ export default function CategoryListPage() {
   const [categories, setCategories] = useState([]);
 
   const fetchCategories = async () => {
-    const res = await MenuApi.getCategories();
+    const res = await MenuApi.getCategories({ limit: 1000 });
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       setCategories(catArray);

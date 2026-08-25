@@ -68,6 +68,41 @@ export default function CategoryListPanel({
     }
   };
 
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isRestaurantOwner =
+    userTypeStr === 'RESTAURANT_OWNER' ||
+    roleStr === 'RESTAURANT_OWNER' ||
+    userType === 'RESTAURANT_OWNER' ||
+    userType === 'SUPER ADMIN' ||
+    userType === 'SUPER_ADMIN' ||
+    userType === 'OWNER' ||
+    userRoleLower === 'owner' ||
+    userRoleLower === 'super admin' ||
+    userRoleLower === 'restaurant_owner' ||
+    userRoleLower === 'restaurant owner';
+
+  const branches = activeRestaurant?.branches || [];
+
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -82,7 +117,10 @@ export default function CategoryListPanel({
     setFormName('');
     setFormDesc('');
     setFormStatus('AVAILABLE');
-    setFormBranchId(selectedBranchId || (activeRestaurant?.branches?.length > 0 ? activeRestaurant.branches[0]._id : ''));
+    const defaultBranch = (selectedBranchId && selectedBranchId !== 'ALL')
+      ? selectedBranchId
+      : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : ''));
+    setFormBranchId(defaultBranch || '');
     setFormErrors({});
     setViewMode('form');
   };
@@ -92,15 +130,28 @@ export default function CategoryListPanel({
     setFormName(item.name);
     setFormDesc(item.description);
     setFormStatus(item.status || 'AVAILABLE');
-    setFormBranchId(item.branchId || selectedBranchId);
+    const itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || (selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
+    setFormBranchId(itemBranch || '');
     setFormErrors({});
     setViewMode('form');
   };
 
   const handleSave = async (e) => {
     e?.preventDefault();
+    const errors = {};
     if (!formName.trim()) {
-      setFormErrors({ name: 'Category Name is required.' });
+      errors.name = 'Category Name is required.';
+    } else if (formName.trim().length < 2) {
+      errors.name = 'Category Name must be at least 2 characters.';
+    }
+
+    if (isRestaurantOwner && !formBranchId) {
+      errors.branchId = 'Branch selection is required.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      ShowNotifications.showAlertNotification('Please fix errors before submitting.', false);
       return;
     }
 
@@ -108,7 +159,7 @@ export default function CategoryListPanel({
       name: formName.trim(),
       description: formDesc.trim(),
       status: formStatus,
-      branchId: formBranchId
+      branchId: formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined)
     };
 
     if (editingItem) {
@@ -219,6 +270,79 @@ export default function CategoryListPanel({
                 <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {formErrors.name}
                 </span>
+              )}
+            </div>
+
+            {/* Branch Assignment Field */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              {isRestaurantOwner ? (
+                <div>
+                  <select
+                    value={formBranchId}
+                    onChange={e => {
+                      setFormBranchId(e.target.value);
+                      if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                      fontSize: '14px',
+                      color: '#0f172a',
+                      outline: 'none',
+                      backgroundColor: '#ffffff',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="">-- Select Branch --</option>
+                    {branches.map(b => (
+                      <option key={b._id || b.id} value={b._id || b.id}>
+                        {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.branchId && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                      {formErrors.branchId}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="text"
+                    value={(() => {
+                      const assignedBranch = (branches || []).find(b => String(b._id || b.id) === String(formBranchId || currentUser?.activeBranchId || currentUser?.branchId || selectedBranchId))
+                        || (branches && branches.length > 0 ? branches[0] : null);
+                      return assignedBranch
+                        ? `${assignedBranch.branchName || assignedBranch.name || 'Branch'}${assignedBranch.branchCode ? ` (${assignedBranch.branchCode})` : ''}`
+                        : (selectedBranchId || 'Assigned Branch');
+                    })()}
+                    disabled
+                    readOnly
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '14px',
+                      outline: 'none',
+                      backgroundColor: '#f8fafc',
+                      color: '#64748b',
+                      cursor: 'not-allowed',
+                      fontWeight: 600,
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    Branch is assigned to your current role.
+                  </span>
+                </div>
               )}
             </div>
 
@@ -526,38 +650,54 @@ export default function CategoryListPanel({
       {/* Pagination Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: '13px', color: '#64748b' }}>
-          Showing {(page - 1) * limit + (totalItems > 0 ? 1 : 0)} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+          Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
+            type="button"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
             style={{
-              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: '#fff',
-              color: page === 1 ? '#cbd5e1' : '#64748b', cursor: page === 1 ? 'not-allowed' : 'pointer'
+              padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
+              color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             Prev
           </button>
 
-          <button
-            style={{
-              minWidth: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: '6px', fontSize: '13px', fontWeight: 700,
-              border: 'none', background: '#000', color: '#fff', cursor: 'default'
-            }}
-          >
-            {page}
-          </button>
+          {getPageNumbers().map(pageNum => (
+            <button
+              key={pageNum}
+              type="button"
+              onClick={() => setPage(pageNum)}
+              style={{
+                minWidth: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: page === pageNum ? 700 : 500,
+                border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                background: page === pageNum ? '#000000' : '#ffffff',
+                color: page === pageNum ? '#ffffff' : '#334155',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {pageNum}
+            </button>
+          ))}
 
           <button
+            type="button"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages || totalPages === 0}
             style={{
-              padding: '6px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: '#fff',
-              color: page === totalPages || totalPages === 0 ? '#cbd5e1' : '#64748b', cursor: page === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer'
+              padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+              border: '1px solid #e2e8f0', background: (page === totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+              color: (page === totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             Next

@@ -66,14 +66,21 @@ export default function BranchSearchDropdown() {
 
   const branches = activeRestaurant?.branches || [];
   
-  // Check if user is locked to a specific branch
-  const isRestaurantOwner = currentUser?.userType === 'RESTAURANT_OWNER';
-  const isBranchLocked = !isRestaurantOwner;
+  // Check if user is Admin or Restaurant Owner
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isBranchLocked = !isAdminOrOwner;
 
   // Automatically lock branch if user is branch-scoped
   useEffect(() => {
     if (isBranchLocked) {
-      const lockId = currentUser?.activeBranchId || currentUser?.branchId;
+      const lockId = currentUser?.activeBranchId || (typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId);
       if (lockId && selectedBranchId !== lockId) {
         setSelectedBranchId(lockId);
       }
@@ -160,7 +167,15 @@ export default function BranchSearchDropdown() {
               className="branch-search-input"
               placeholder="Search branch by name, code or city..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={(e) => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchQuery(val);
+              }}
               autoFocus
             />
             {searchQuery && (

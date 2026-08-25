@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext';
 import InventoryApi from '../api/Inventory';
@@ -50,6 +50,12 @@ const SearchIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"></circle>
     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
+);
+
+const ChevronDownIcon = ({ size = 12, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polyline points="6 9 12 15 18 9"></polyline>
   </svg>
 );
 
@@ -105,6 +111,7 @@ const ArrowUpRightIcon = ({ size = 14, color = 'currentColor' }) => (
 export default function InventoryPanel() {
   const navigate = useNavigate();
   const {
+    currentUser,
     activeRestaurant,
     addInventoryItem,
     updateInventoryItem,
@@ -112,6 +119,27 @@ export default function InventoryPanel() {
     adjustStock,
     selectedBranchId
   } = useAppState();
+
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isRestaurantOwner =
+    userTypeStr === 'RESTAURANT_OWNER' ||
+    roleStr === 'RESTAURANT_OWNER' ||
+    userType === 'RESTAURANT_OWNER' ||
+    userType === 'ADMIN' ||
+    userType === 'SUPER ADMIN' ||
+    userType === 'SUPER_ADMIN' ||
+    userType === 'OWNER' ||
+    userRoleLower === 'admin' ||
+    userRoleLower === 'owner' ||
+    userRoleLower === 'super admin' ||
+    userRoleLower === 'restaurant_owner' ||
+    userRoleLower === 'restaurant owner';
 
   const rawLogs = activeRestaurant?.inventoryLogs || [];
   const rawCategories = activeRestaurant?.inventoryCategories || DEFAULT_INVENTORY_CATEGORIES;
@@ -137,6 +165,32 @@ export default function InventoryPanel() {
   const [adjustTargetItem, setAdjustTargetItem] = useState(null);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [logFilterItemName, setLogFilterItemName] = useState('All');
+  const [logFilterType, setLogFilterType] = useState('All'); // 'All' | 'Stock In' | 'Stock Out'
+  const [logSearchTerm, setLogSearchTerm] = useState('');
+
+  // Custom Scrollable Dropdown states
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [catDropdownSearch, setCatDropdownSearch] = useState('');
+  const catDropdownRef = useRef(null);
+
+  const [isItemDropdownOpen, setIsItemDropdownOpen] = useState(false);
+  const [itemDropdownSearch, setItemDropdownSearch] = useState('');
+  const itemDropdownRef = useRef(null);
+
+  // Close custom dropdowns on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (catDropdownRef.current && !catDropdownRef.current.contains(event.target)) {
+        setIsCategoryDropdownOpen(false);
+      }
+      if (itemDropdownRef.current && !itemDropdownRef.current.contains(event.target)) {
+        setIsItemDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Form states for Add / Edit Item
   const [formState, setFormState] = useState({
@@ -171,7 +225,7 @@ export default function InventoryPanel() {
   // 1. Fetch Categories
   const fetchCategories = useCallback(async () => {
     try {
-      const params = {};
+      const params = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
@@ -220,7 +274,7 @@ export default function InventoryPanel() {
   const fetchItems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = {};
+      const params = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
@@ -231,7 +285,7 @@ export default function InventoryPanel() {
         setItems(list);
       } else {
         // Fallback to local context data if API is unreachable
-        if (activeRestaurant?.inventory && items.length === 0) {
+        if (activeRestaurant?.inventory) {
           setItems(activeRestaurant.inventory);
         }
       }
@@ -240,7 +294,7 @@ export default function InventoryPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId, activeRestaurant, items.length]);
+  }, [selectedBranchId]);
 
   const [liveLogs, setLiveLogs] = useState([]);
 
@@ -264,7 +318,8 @@ export default function InventoryPanel() {
           id: p._id || p.id,
           date: p.purchaseDate ? new Date(p.purchaseDate).toLocaleString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleString('en-IN') : '—'),
           rawDate: p.purchaseDate || p.createdAt,
-          itemName: typeof p.itemId === 'object' ? p.itemId?.name : (p.itemName || '—'),
+          itemId: typeof p.itemId === 'object' ? (p.itemId?._id || p.itemId?.id) : p.itemId,
+          rawItemName: typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : p.itemName,
           type: 'Stock In',
           quantity: p.purchaseQty !== undefined ? p.purchaseQty : p.quantity,
           unit: (typeof p.itemId === 'object' && p.itemId?.unit) ? p.itemId.unit : (p.unit || 'unit'),
@@ -276,7 +331,8 @@ export default function InventoryPanel() {
           id: r._id || r.id,
           date: r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.date || '—'),
           rawDate: r.createdAt || r.date,
-          itemName: typeof r.itemId === 'object' ? r.itemId?.name : (r.itemName || '—'),
+          itemId: typeof r.itemId === 'object' ? (r.itemId?._id || r.itemId?.id) : r.itemId,
+          rawItemName: typeof r.itemId === 'object' ? (r.itemId?.name || r.itemId?.itemName) : r.itemName,
           type: 'Stock Out',
           quantity: r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity,
           unit: (typeof r.itemId === 'object' && r.itemId?.unit) ? r.itemId.unit : (r.unit || 'unit'),
@@ -286,9 +342,7 @@ export default function InventoryPanel() {
         }))
       ].sort((a, b) => new Date(b.rawDate || 0) - new Date(a.rawDate || 0));
 
-      if (combined.length > 0) {
-        setLiveLogs(combined);
-      }
+      setLiveLogs(combined);
     } catch (err) {
       console.error("Failed to fetch logs in InventoryPanel:", err);
     }
@@ -300,7 +354,7 @@ export default function InventoryPanel() {
     fetchStats();
     fetchItems();
     fetchLogs();
-  }, [fetchCategories, fetchBranches, fetchStats, fetchItems, fetchLogs]);
+  }, [selectedBranchId, fetchCategories, fetchBranches, fetchStats, fetchItems, fetchLogs]);
 
   // Unified available branches list - if filtered by header, show only that branch
   const allBranchesList = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
@@ -309,6 +363,33 @@ export default function InventoryPanel() {
     : allBranchesList;
   const allRawCategories = liveCategories.length > 0 ? liveCategories : rawCategories;
   const availableCategories = allRawCategories.filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false);
+
+  // Helper to check if a string is a raw MongoDB ObjectId or UUID
+  const isMongoId = (str) => {
+    if (!str || typeof str !== 'string') return false;
+    return /^[a-fA-F0-9]{24}$/.test(str.trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+  };
+
+  // Helper to get clean human-readable item name (never shows raw backend _id)
+  const getItemDisplayName = (rawName, itemId) => {
+    if (rawName && typeof rawName === 'string' && !isMongoId(rawName) && rawName !== '—') {
+      return rawName;
+    }
+    const targetId = itemId || (isMongoId(rawName) ? rawName : null);
+    if (targetId) {
+      const matched = items.find(i => (
+        (i._id && String(i._id) === String(targetId)) ||
+        (i.id && String(i.id) === String(targetId)) ||
+        (i.sku && String(i.sku) === String(targetId))
+      ));
+      if (matched) {
+        if (matched.name && !isMongoId(matched.name)) return matched.name;
+        if (matched.itemName && !isMongoId(matched.itemName)) return matched.itemName;
+        if (matched.sku) return `Item (${matched.sku})`;
+      }
+    }
+    return 'Item';
+  };
 
   // Helper to extract category name from item
   const getCategoryName = (item) => {
@@ -336,7 +417,9 @@ export default function InventoryPanel() {
   ].filter(Boolean))).sort();
   const categoriesList = ['All', ...dynamicCatNames];
 
-  const uniqueItemNames = Array.from(new Set(items.map(i => i.name).filter(Boolean))).sort();
+  const uniqueItemNames = Array.from(new Set(
+    items.map(i => getItemDisplayName(i.name || i.itemName, i._id || i.id)).filter(name => name && !isMongoId(name))
+  )).sort();
 
   // Metrics
   const totalItemsCount = items.length;
@@ -357,8 +440,8 @@ export default function InventoryPanel() {
   const totalValuation = items.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
   const categoriesCount = new Set(items.map(i => getCategoryName(i))).size;
 
-  // Logs filtered by selected branch
-  const logs = liveLogs.length > 0
+  // Logs filtered by selected branch with clean resolved item names
+  const baseLogs = liveLogs.length > 0
     ? liveLogs
     : (selectedBranchId
       ? rawLogs.filter(log => {
@@ -367,18 +450,24 @@ export default function InventoryPanel() {
       })
       : rawLogs);
 
+  const logs = baseLogs.map(log => ({
+    ...log,
+    itemName: getItemDisplayName(log.rawItemName || log.itemName, log.itemId)
+  }));
+
   // Filter items
   const filteredInventory = items.filter(item => {
+    const itemName = getItemDisplayName(item.name || item.itemName, item._id || item.id);
     const catName = getCategoryName(item);
     const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
     const curStock = Number(item.currentStock) || 0;
 
-    const matchesSearch = (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (itemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       catName.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesItemName = itemNameFilter === 'All' || item.name === itemNameFilter;
+    const matchesItemName = itemNameFilter === 'All' || itemName === itemNameFilter;
     const matchesCategory = categoryFilter === 'All' || catName === categoryFilter;
 
     let matchesStatus = true;
@@ -392,6 +481,30 @@ export default function InventoryPanel() {
 
     return matchesSearch && matchesItemName && matchesCategory && matchesStatus;
   });
+
+  // Pagination for inventory items
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const totalPages = Math.ceil(filteredInventory.length / limit) || 1;
+  const paginatedInventory = filteredInventory.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, itemNameFilter, categoryFilter, statusFilter]);
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
@@ -449,6 +562,9 @@ export default function InventoryPanel() {
     const errors = {};
     if (!formState.name.trim()) errors.name = 'Item Name is required.';
     if (!formState.sku.trim()) errors.sku = 'SKU code is required.';
+    if (isRestaurantOwner && !formState.branchId) {
+      errors.branchId = 'Branch selection is required.';
+    }
     if (formState.currentStock === '' || isNaN(Number(formState.currentStock)) || Number(formState.currentStock) < 0) {
       errors.currentStock = 'Please enter a valid stock quantity (0 or more).';
     }
@@ -537,6 +653,13 @@ export default function InventoryPanel() {
     setIsAdjustModalOpen(true);
   };
 
+  const handleOpenItemLogs = (item) => {
+    setLogFilterItemName(item.name);
+    setLogFilterType('All');
+    setLogSearchTerm('');
+    setIsLogsModalOpen(true);
+  };
+
   const handleSaveAdjustment = async (e) => {
     e.preventDefault();
     const qty = Number(adjustState.quantity);
@@ -557,29 +680,62 @@ export default function InventoryPanel() {
 
     try {
       const itemId = adjustTargetItem._id || adjustTargetItem.id;
-      const res = await InventoryApi.updateItem(itemId, {
+      const rawBranch = adjustTargetItem?.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+      const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
+
+      if (adjustState.type === 'Stock In') {
+        const payload = {
+          itemId: itemId,
+          supplierName: adjustTargetItem.supplierName || 'Direct Purchase',
+          supplierPhone: adjustTargetItem.supplierPhone || '',
+          purchaseQty: qty,
+          unitPrice: Number(adjustTargetItem.costPerUnit) || 0,
+          totalAmount: qty * (Number(adjustTargetItem.costPerUnit) || 0),
+          invoiceNumber: adjustState.notes ? adjustState.notes : `STOCK-IN-${Date.now().toString().slice(-4)}`,
+          purchaseDate: new Date().toISOString(),
+          branchId: cleanBranchId
+        };
+        await InventoryApi.recordPurchase(payload);
+      } else {
+        // Stock Out
+        const payload = {
+          itemId: itemId,
+          quantity: qty,
+          quantityToReduce: qty,
+          reductionQuantity: qty,
+          reason: adjustState.reason || 'Kitchen Usage',
+          details: adjustState.notes || '',
+          notes: adjustState.notes || '',
+          value: qty * (Number(adjustTargetItem.costPerUnit) || 0),
+          branchId: cleanBranchId
+        };
+        await InventoryApi.reduceStock(payload);
+      }
+
+      await InventoryApi.updateItem(itemId, {
         currentStock: newStock
       });
-      if (res?.status) {
-        if (adjustStock && activeRestaurant?.id) {
-          adjustStock(
-            activeRestaurant.id,
-            itemId,
-            adjustState.type,
-            qty,
-            adjustState.reason,
-            adjustState.notes
-          );
-        }
-        await fetchItems();
-        ShowNotifications.showAlertNotification(
-          `${adjustState.type} of ${qty} ${adjustTargetItem.unit} recorded! New stock: ${newStock} ${adjustTargetItem.unit}`,
-          true
+
+      if (adjustStock && activeRestaurant?.id) {
+        adjustStock(
+          activeRestaurant.id,
+          itemId,
+          adjustState.type,
+          qty,
+          adjustState.reason,
+          adjustState.notes
         );
-        setIsAdjustModalOpen(false);
       }
+
+      await Promise.all([fetchItems(), fetchLogs(), fetchStats()]);
+      ShowNotifications.showAlertNotification(
+        `${adjustState.type} of ${qty} ${adjustTargetItem.unit} recorded! New stock: ${newStock} ${adjustTargetItem.unit}`,
+        true
+      );
+      setIsAdjustModalOpen(false);
     } catch (err) {
       console.error("Adjust stock error:", err);
+      ShowNotifications.showAlertNotification('Failed to record stock adjustment', false);
     }
   };
 
@@ -740,30 +896,71 @@ export default function InventoryPanel() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Branch Assignment
+                  Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="text"
-                  disabled
-                  readOnly
-                  value={(() => {
-                    const assigned = allBranchesList.find(b => (b._id === formState.branchId || b.id === formState.branchId)) || availableBranches[0];
-                    return assigned ? `${assigned.branchName || assigned.name}${assigned.branchCode ? ` (${assigned.branchCode})` : ''}` : 'Main Branch';
-                  })()}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed',
-                    fontWeight: 600,
-                    boxSizing: 'border-box'
-                  }}
-                />
+                {isRestaurantOwner ? (
+                  <div>
+                    <select
+                      disabled={isSubmitting}
+                      value={formState.branchId || ''}
+                      onChange={e => {
+                        setFormState({ ...formState, branchId: e.target.value });
+                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        outline: 'none',
+                        backgroundColor: '#ffffff',
+                        boxSizing: 'border-box',
+                        cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <option value="">-- Select Branch --</option>
+                      {(allBranchesList || []).map(b => (
+                        <option key={b._id || b.id} value={b._id || b.id}>
+                          {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.branchId && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.branchId}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      disabled
+                      readOnly
+                      value={(() => {
+                        const assigned = allBranchesList.find(b => (String(b._id || b.id) === String(formState.branchId || selectedBranchId))) || availableBranches[0];
+                        return assigned ? `${assigned.branchName || assigned.name}${assigned.branchCode ? ` (${assigned.branchCode})` : ''}` : 'Main Branch';
+                      })()}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '14px',
+                        outline: 'none',
+                        backgroundColor: '#f8fafc',
+                        color: '#64748b',
+                        cursor: 'not-allowed',
+                        fontWeight: 600,
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                      Branch is assigned to your current role.
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1467,7 +1664,15 @@ export default function InventoryPanel() {
               type="text"
               placeholder="Search items, SKU..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+              }}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -1488,61 +1693,338 @@ export default function InventoryPanel() {
             )}
           </div>
 
-          {/* Category Dropdown Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          {/* Custom Stylized Scrollable Category Dropdown Filter */}
+          <div ref={catDropdownRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
               Category:
             </label>
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
+            <button
+              type="button"
+              onClick={() => {
+                setIsCategoryDropdownOpen(prev => !prev);
+                setIsItemDropdownOpen(false);
+                setCatDropdownSearch('');
+              }}
               style={{
-                padding: '7px 10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '7px 12px',
                 borderRadius: '8px',
                 border: categoryFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
                 background: categoryFilter !== 'All' ? '#fff7ed' : '#f8fafc',
                 fontSize: '12px',
                 fontWeight: 600,
                 color: categoryFilter !== 'All' ? '#c2410c' : '#0f172a',
-                outline: 'none',
                 cursor: 'pointer',
-                maxWidth: '150px'
+                minWidth: '150px',
+                maxWidth: '200px',
+                boxSizing: 'border-box',
+                transition: 'all 0.15s ease'
               }}
             >
-              {categoriesList.map(cat => (
-                <option key={cat} value={cat}>
-                  {cat === 'All' ? `All Categories (${categoriesList.length - 1})` : cat}
-                </option>
-              ))}
-            </select>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {categoryFilter === 'All' ? `All Categories (${dynamicCatNames.length})` : categoryFilter}
+              </span>
+              <ChevronDownIcon size={12} color={categoryFilter !== 'All' ? '#c2410c' : '#64748b'} />
+            </button>
+
+            {/* Scrollable Category Dropdown Menu */}
+            {isCategoryDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                left: '60px',
+                minWidth: '220px',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                zIndex: 1000,
+                padding: '8px',
+                boxSizing: 'border-box'
+              }}>
+                {dynamicCatNames.length > 5 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    padding: '5px 8px',
+                    marginBottom: '6px'
+                  }}>
+                    <SearchIcon size={12} color="#94a3b8" />
+                    <input
+                      type="text"
+                      placeholder="Search categories..."
+                      value={catDropdownSearch}
+                      onChange={e => setCatDropdownSearch(e.target.value)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        fontSize: '11px',
+                        width: '100%',
+                        color: '#0f172a'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                <div style={{
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  scrollbarWidth: 'thin'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCategoryFilter('All');
+                      setIsCategoryDropdownOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '7px 10px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: categoryFilter === 'All' ? '#fff7ed' : 'transparent',
+                      color: categoryFilter === 'All' ? '#ea580c' : '#334155',
+                      fontSize: '12px',
+                      fontWeight: categoryFilter === 'All' ? 700 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.1s'
+                    }}
+                    onMouseEnter={e => { if (categoryFilter !== 'All') e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={e => { if (categoryFilter !== 'All') e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span>All Categories</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
+                      {items.length}
+                    </span>
+                  </button>
+
+                  {dynamicCatNames
+                    .filter(cat => !catDropdownSearch || cat.toLowerCase().includes(catDropdownSearch.toLowerCase().trim()))
+                    .map(cat => {
+                      const count = items.filter(i => getCategoryName(i) === cat).length;
+                      const isSelected = categoryFilter === cat;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setCategoryFilter(cat);
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '7px 10px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: isSelected ? '#fff7ed' : 'transparent',
+                            color: isSelected ? '#ea580c' : '#334155',
+                            fontSize: '12px',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.1s'
+                          }}
+                          onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                            {cat}
+                          </span>
+                          <span style={{ fontSize: '11px', color: isSelected ? '#ea580c' : '#94a3b8', background: isSelected ? '#fed7aa' : '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })
+                  }
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Item Name Dropdown Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          {/* Custom Stylized Scrollable Item Name Dropdown Filter */}
+          <div ref={itemDropdownRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
               Item Name:
             </label>
-            <select
-              value={itemNameFilter}
-              onChange={e => setItemNameFilter(e.target.value)}
+            <button
+              type="button"
+              onClick={() => {
+                setIsItemDropdownOpen(prev => !prev);
+                setIsCategoryDropdownOpen(false);
+                setItemDropdownSearch('');
+              }}
               style={{
-                padding: '7px 10px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '7px 12px',
                 borderRadius: '8px',
                 border: itemNameFilter !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
                 background: itemNameFilter !== 'All' ? '#fff7ed' : '#f8fafc',
                 fontSize: '12px',
                 fontWeight: 600,
                 color: itemNameFilter !== 'All' ? '#c2410c' : '#0f172a',
-                outline: 'none',
                 cursor: 'pointer',
-                maxWidth: '150px'
+                minWidth: '150px',
+                maxWidth: '200px',
+                boxSizing: 'border-box',
+                transition: 'all 0.15s ease'
               }}
             >
-              <option value="All">All Item Names </option>
-              {uniqueItemNames.map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {itemNameFilter === 'All' ? `All Item Names (${uniqueItemNames.length})` : itemNameFilter}
+              </span>
+              <ChevronDownIcon size={12} color={itemNameFilter !== 'All' ? '#c2410c' : '#64748b'} />
+            </button>
+
+            {/* Scrollable Item Name Dropdown Menu */}
+            {isItemDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                left: '70px',
+                minWidth: '220px',
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                zIndex: 1000,
+                padding: '8px',
+                boxSizing: 'border-box'
+              }}>
+                {uniqueItemNames.length > 5 && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    padding: '5px 8px',
+                    marginBottom: '6px'
+                  }}>
+                    <SearchIcon size={12} color="#94a3b8" />
+                    <input
+                      type="text"
+                      placeholder="Search item names..."
+                      value={itemDropdownSearch}
+                      onChange={e => setItemDropdownSearch(e.target.value)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        outline: 'none',
+                        fontSize: '11px',
+                        width: '100%',
+                        color: '#0f172a'
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                )}
+
+                <div style={{
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '2px',
+                  scrollbarWidth: 'thin'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setItemNameFilter('All');
+                      setIsItemDropdownOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '7px 10px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: itemNameFilter === 'All' ? '#fff7ed' : 'transparent',
+                      color: itemNameFilter === 'All' ? '#ea580c' : '#334155',
+                      fontSize: '12px',
+                      fontWeight: itemNameFilter === 'All' ? 700 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background 0.1s'
+                    }}
+                    onMouseEnter={e => { if (itemNameFilter !== 'All') e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={e => { if (itemNameFilter !== 'All') e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span>All Item Names</span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
+                      {items.length}
+                    </span>
+                  </button>
+
+                  {uniqueItemNames
+                    .filter(name => !itemDropdownSearch || name.toLowerCase().includes(itemDropdownSearch.toLowerCase().trim()))
+                    .map(name => {
+                      const isSelected = itemNameFilter === name;
+                      const matchItem = items.find(i => i.name === name);
+                      return (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            setItemNameFilter(name);
+                            setIsItemDropdownOpen(false);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '7px 10px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: isSelected ? '#fff7ed' : 'transparent',
+                            color: isSelected ? '#ea580c' : '#334155',
+                            fontSize: '12px',
+                            fontWeight: isSelected ? 700 : 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.1s'
+                          }}
+                          onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                          onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                            {name}
+                          </span>
+                          {matchItem && (
+                            <span style={{ fontSize: '10px', color: isSelected ? '#ea580c' : '#94a3b8', background: isSelected ? '#fed7aa' : '#f1f5f9', padding: '1px 5px', borderRadius: '8px' }}>
+                              {matchItem.currentStock} {matchItem.unit}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  }
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Reset Filters button if any filter is applied */}
@@ -1613,30 +2095,31 @@ export default function InventoryPanel() {
         boxShadow: '0 2px 10px rgba(0, 0, 0, 0.02)',
         overflow: 'hidden'
       }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <div style={{ width: '100%', overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: '1060px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEM DETAILS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY & BRANCH</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STOCK LEVEL</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UNIT COST / VALUE</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SUPPLIER</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '50px', verticalAlign: 'middle' }}>S.NO.</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '170px', verticalAlign: 'middle' }}>ITEM DETAILS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '140px', verticalAlign: 'middle' }}>CATEGORY & BRANCH</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '130px', verticalAlign: 'middle' }}>STOCK LEVEL</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px', verticalAlign: 'middle' }}>STATUS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '120px', verticalAlign: 'middle' }}>UNIT COST / VALUE</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '140px', verticalAlign: 'middle' }}>SUPPLIER</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', minWidth: '210px', verticalAlign: 'middle' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '14px', fontWeight: 600 }}>Loading inventory items from server...</span>
                     </div>
                   </td>
                 </tr>
               ) : filteredInventory.length > 0 ? (
-                filteredInventory.map((item, index) => {
+                paginatedInventory.map((item, index) => {
                   const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
                   const curStock = Number(item.currentStock) || 0;
                   const isOut = curStock <= 0;
@@ -1648,114 +2131,149 @@ export default function InventoryPanel() {
                   const progressPct = Math.min(100, Math.round((curStock / ((minLevel || 1) * 2)) * 100));
                   const catName = getCategoryName(item);
                   const branchLabel = getBranchLabel(item.branchId);
+                  const displayName = getItemDisplayName(item.name || item.itemName, item._id || item.id);
 
                   return (
                     <tr
                       key={item._id || item.id || index}
                       style={{
                         borderBottom: '1px solid #f1f5f9',
-                        transition: 'background 0.15s'
+                        transition: 'background 0.15s ease'
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      {/* 1. Item Name & SKU */}
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
-                            {item.name}
-                          </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                            <span style={{ fontSize: '11px', fontFamily: 'monospace', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                              {item.sku}
+                      {/* S.NO */}
+                      <td style={{ padding: '14px 12px', fontWeight: 700, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', verticalAlign: 'middle' }}>
+                        {(page - 1) * limit + index + 1}
+                      </td>
+
+                      {/* 1. Item Details */}
+                      <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            background: '#fff7ed',
+                            color: '#ff5a1f',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            fontSize: '13px',
+                            flexShrink: 0,
+                            border: '1px solid #fed7aa'
+                          }}>
+                            {displayName ? displayName.charAt(0).toUpperCase() : 'I'}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+                              {displayName}
                             </span>
-                            <span style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
-                              ID: {item._id || item.id || ''}
+                            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', marginTop: '3px', width: 'fit-content', whiteSpace: 'nowrap' }}>
+                              SKU: {item.sku || 'N/A'}
                             </span>
                           </div>
                         </div>
                       </td>
 
                       {/* 2. Category & Branch */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          <span style={{ fontWeight: 700, color: '#334155' }}>
+                          <span style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            color: '#334155',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            width: 'fit-content',
+                            whiteSpace: 'nowrap'
+                          }}>
                             {catName}
                           </span>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>
-                            {branchLabel}
+                          <span style={{ fontSize: '11px', color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
+                            📍 {branchLabel}
                           </span>
                         </div>
                       </td>
 
-                      {/* 3. Stock Level & Progress */}
-                      <td style={{ padding: '14px 16px', minWidth: '140px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 800, color: isOut ? '#dc2626' : '#0f172a', fontSize: '13px' }}>
-                              {curStock} {item.unit}
+                      {/* 3. Stock Level & Mini Progress Bar */}
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                            <span style={{ fontWeight: 800, fontSize: '14px', color: isOut ? '#dc2626' : '#0f172a' }}>
+                              {curStock}
                             </span>
-                            <span style={{ fontSize: '11px', color: '#64748b' }}>
-                              Min: {minLevel} {item.unit}
+                            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+                              {item.unit}
                             </span>
                           </div>
-                          {/* Mini Progress Bar */}
-                          <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                          {/* Progress bar to visual threshold */}
+                          <div style={{ width: '100px', height: '5px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
                             <div style={{
                               width: `${progressPct}%`,
                               height: '100%',
-                              background: isOut ? '#dc2626' : isLow ? '#f59e0b' : '#16a34a',
-                              borderRadius: '3px'
-                            }}></div>
+                              background: isOut ? '#ef4444' : isLow ? '#f59e0b' : '#10b981',
+                              borderRadius: '4px'
+                            }} />
                           </div>
+                          <span style={{ fontSize: '10px', color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                            Min alert: {minLevel} {item.unit}
+                          </span>
                         </div>
                       </td>
 
                       {/* 4. Status Badge */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '6px',
+                          gap: '5px',
                           padding: '4px 10px',
                           borderRadius: '20px',
                           fontSize: '11px',
                           fontWeight: 800,
-                          backgroundColor: statusBg,
-                          color: statusText
+                          background: statusBg,
+                          color: statusText,
+                          letterSpacing: '0.3px',
+                          whiteSpace: 'nowrap'
                         }}>
                           <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusText }}></span>
                           {statusLabel}
                         </span>
                       </td>
 
-                      {/* 5. Cost & Valuation */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                      {/* 5. Unit Cost / Value */}
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
                             ₹{itemValue.toLocaleString('en-IN')}
                           </span>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>
                             ₹{item.costPerUnit} / {item.unit}
                           </span>
                         </div>
                       </td>
 
                       {/* 6. Supplier */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
                             {item.supplierName || 'Direct Local Purchase'}
                           </span>
-                          <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>
                             {item.supplierPhone || '—'}
                           </span>
                         </div>
                       </td>
 
                       {/* 7. Quick Actions */}
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px' }}>
                           {/* Stock In Button */}
                           <button
                             type="button"
@@ -1769,7 +2287,7 @@ export default function InventoryPanel() {
                               padding: '5px 8px',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px'
                             }}
@@ -1792,7 +2310,7 @@ export default function InventoryPanel() {
                               padding: '5px 8px',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px'
                             }}
@@ -1800,6 +2318,26 @@ export default function InventoryPanel() {
                           >
                             <ArrowUpRightIcon size={12} color="#ea580c" />
                             Out
+                          </button>
+
+                          {/* View Item History */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenItemLogs(item)}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              color: '#334155',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="View Stock Out & Stock In History"
+                          >
+                            <HistoryIcon size={14} color="#334155" />
                           </button>
 
                           {/* View Item Details */}
@@ -1813,7 +2351,7 @@ export default function InventoryPanel() {
                               padding: '6px',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}
@@ -1833,7 +2371,7 @@ export default function InventoryPanel() {
                               padding: '6px',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}
@@ -1853,7 +2391,7 @@ export default function InventoryPanel() {
                               padding: '6px',
                               borderRadius: '6px',
                               cursor: 'pointer',
-                              display: 'flex',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}
@@ -1898,6 +2436,88 @@ export default function InventoryPanel() {
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      {filteredInventory.length > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredInventory.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredInventory.length)} of {filteredInventory.length} items
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page <= 1 ? '#f8fafc' : '#ffffff',
+                color: page <= 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 6. MODAL: VIEW INVENTORY ITEM DETAILS */}
       {viewingItem && (
         <Modal
@@ -1910,14 +2530,11 @@ export default function InventoryPanel() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                  {viewingItem.name}
+                  {getItemDisplayName(viewingItem.name || viewingItem.itemName, viewingItem._id || viewingItem.id)}
                 </h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                   <span style={{ fontSize: '11px', fontFamily: 'monospace', background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
-                    SKU: {viewingItem.sku}
-                  </span>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
-                    ID: {viewingItem._id || viewingItem.id || '—'}
+                    SKU: {viewingItem.sku || 'N/A'}
                   </span>
                 </div>
               </div>
@@ -1982,6 +2599,90 @@ export default function InventoryPanel() {
               </div>
             </div>
 
+            {/* Stock Movement & Out of Stock History for this Item */}
+            {(() => {
+              const itemLogs = logs.filter(l => (
+                (viewingItem._id && (l.itemId === viewingItem._id || l.id === viewingItem._id)) ||
+                (viewingItem.id && (l.itemId === viewingItem.id || l.id === viewingItem.id)) ||
+                (l.itemName && viewingItem.name && l.itemName.toLowerCase() === viewingItem.name.toLowerCase())
+              ));
+
+              return (
+                <div style={{ marginTop: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                      Stock Movement History ({itemLogs.length} entries)
+                    </span>
+                    {itemLogs.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const itm = viewingItem;
+                          setViewingItem(null);
+                          handleOpenItemLogs(itm);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#ff5a1f',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          textDecoration: 'underline'
+                        }}
+                      >
+                        View Full Logs →
+                      </button>
+                    )}
+                  </div>
+
+                  {itemLogs.length > 0 ? (
+                    <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>DATE</th>
+                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>TYPE</th>
+                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>QTY</th>
+                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>REASON</th>
+                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>LOGGED BY</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {itemLogs.slice(0, 10).map((log, lIdx) => (
+                            <tr key={log.id || lIdx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '7px 10px', color: '#64748b' }}>{log.date}</td>
+                              <td style={{ padding: '7px 10px' }}>
+                                <span style={{
+                                  padding: '2px 6px',
+                                  borderRadius: '10px',
+                                  fontSize: '10px',
+                                  fontWeight: 800,
+                                  background: log.type === 'Stock In' ? '#ecfdf5' : '#fef2f2',
+                                  color: log.type === 'Stock In' ? '#059669' : '#dc2626'
+                                }}>
+                                  {log.type}
+                                </span>
+                              </td>
+                              <td style={{ padding: '7px 10px', fontWeight: 800, color: log.type === 'Stock In' ? '#059669' : '#dc2626' }}>
+                                {log.type === 'Stock In' ? `+${log.quantity}` : `-${log.quantity}`} {log.unit}
+                              </td>
+                              <td style={{ padding: '7px 10px', color: '#334155' }}>{log.reason}</td>
+                              <td style={{ padding: '7px 10px', color: '#64748b' }}>{log.user || 'Admin'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '14px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#94a3b8', fontSize: '12px' }}>
+                      No stock movement history recorded yet for this item.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"
@@ -2011,66 +2712,186 @@ export default function InventoryPanel() {
       {/* 8. MODAL: STOCK MOVEMENT & AUDIT LOGS */}
       <Modal
         isOpen={isLogsModalOpen}
-        onClose={() => setIsLogsModalOpen(false)}
-        title="Inventory Stock Movement & Audit Logs"
-        maxWidth="750px"
+        onClose={() => {
+          setIsLogsModalOpen(false);
+          setLogFilterItemName('All');
+          setLogFilterType('All');
+          setLogSearchTerm('');
+        }}
+        title="Inventory Stock Movement & History Logs"
+        maxWidth="850px"
       >
-        <div style={{ maxHeight: '450px', overflowY: 'auto', marginTop: '12px' }}>
-          {logs.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DATE / TIME</th>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEM NAME</th>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>QUANTITY</th>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REASON & NOTES</th>
-                  <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGGED BY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log, idx) => {
-                  const isIn = log.type === 'Stock In';
-                  return (
-                    <tr key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '10px 12px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                        {log.date}
-                      </td>
-                      <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>
-                        {log.itemName}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 800,
-                          background: isIn ? '#ecfdf5' : '#fef2f2',
-                          color: isIn ? '#059669' : '#dc2626'
-                        }}>
-                          {log.type}
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontWeight: 800, color: '#0f172a' }}>
-                        {isIn ? `+${log.quantity}` : `-${log.quantity}`} {log.unit}
-                      </td>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ fontWeight: 600, color: '#334155' }}>{log.reason}</span>
-                        {log.notes && <span style={{ color: '#94a3b8', display: 'block', fontSize: '11px' }}>{log.notes}</span>}
-                      </td>
-                      <td style={{ padding: '10px 12px', color: '#64748b' }}>
-                        {log.user || 'Admin'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-              No stock movement logs recorded yet.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '8px' }}>
+          {/* Filter Toolbar inside Modal */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '10px',
+            background: '#f8fafc',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: '1px solid #e2e8f0'
+          }}>
+            {/* Search Input */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              padding: '6px 10px',
+              width: '200px'
+            }}>
+              <SearchIcon size={13} color="#64748b" />
+              <input
+                type="text"
+                placeholder="Search logs..."
+                value={logSearchTerm}
+                onChange={e => setLogSearchTerm(e.target.value)}
+                style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '12px', width: '100%', color: '#0f172a' }}
+              />
+              {logSearchTerm && (
+                <button type="button" onClick={() => setLogSearchTerm('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', fontSize: '11px' }}>✕</button>
+              )}
             </div>
-          )}
+
+            {/* Filter by Item Name */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Item:</label>
+              <select
+                value={logFilterItemName}
+                onChange={e => setLogFilterItemName(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: logFilterItemName !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
+                  background: logFilterItemName !== 'All' ? '#fff7ed' : '#ffffff',
+                  color: logFilterItemName !== 'All' ? '#c2410c' : '#0f172a',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  maxWidth: '180px'
+                }}
+              >
+                <option value="All">All Items ({uniqueItemNames.length})</option>
+                {uniqueItemNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter by Type */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {[
+                { id: 'All', label: 'All Movements' },
+                { id: 'Stock Out', label: 'Stock Out' },
+                { id: 'Stock In', label: 'Stock In' }
+              ].map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setLogFilterType(t.id)}
+                  style={{
+                    padding: '5px 10px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: logFilterType === t.id ? (t.id === 'Stock Out' ? '#ef4444' : t.id === 'Stock In' ? '#10b981' : '#0f172a') : '#ffffff',
+                    color: logFilterType === t.id ? '#ffffff' : '#475569',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Filtered Logs Rendering */}
+          {(() => {
+            const filteredModalLogs = logs.filter(log => {
+              const matchesItem = logFilterItemName === 'All' || log.itemName === logFilterItemName;
+              const matchesType = logFilterType === 'All' || log.type === logFilterType;
+              const q = logSearchTerm.toLowerCase().trim();
+              const matchesSearch = !q ||
+                (log.itemName || '').toLowerCase().includes(q) ||
+                (log.reason || '').toLowerCase().includes(q) ||
+                (log.notes || '').toLowerCase().includes(q) ||
+                (log.user || '').toLowerCase().includes(q);
+              return matchesItem && matchesType && matchesSearch;
+            });
+
+            return (
+              <div style={{ maxHeight: '420px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                {filteredModalLogs.length > 0 ? (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff', position: 'sticky', top: 0, zIndex: 2 }}>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>DATE / TIME</th>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>ITEM NAME</th>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>TYPE</th>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>QUANTITY</th>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>REASON & DETAILS</th>
+                        <th style={{ padding: '12px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase' }}>LOGGED BY</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredModalLogs.map((log, idx) => {
+                        const isIn = log.type === 'Stock In';
+                        const itemName = log.itemName !== '—' ? log.itemName : ((items || []).find(i => (i._id === log.itemId || i.id === log.itemId))?.name || 'Item');
+                        return (
+                          <tr key={log.id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                            <td style={{ padding: '10px 14px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                              {log.date}
+                            </td>
+                            <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0f172a' }}>
+                              {itemName}
+                            </td>
+                            <td style={{ padding: '10px 14px' }}>
+                              <span style={{
+                                padding: '3px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 800,
+                                background: isIn ? '#ecfdf5' : '#fef2f2',
+                                color: isIn ? '#059669' : '#dc2626'
+                              }}>
+                                {log.type}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 14px', fontWeight: 800, color: isIn ? '#059669' : '#dc2626' }}>
+                              {isIn ? `+${log.quantity}` : `-${log.quantity}`} {log.unit}
+                            </td>
+                            <td style={{ padding: '10px 14px' }}>
+                              <span style={{ fontWeight: 600, color: '#334155' }}>{log.reason}</span>
+                              {log.notes && <span style={{ color: '#94a3b8', display: 'block', fontSize: '11px' }}>{log.notes}</span>}
+                            </td>
+                            <td style={{ padding: '10px 14px', color: '#64748b' }}>
+                              {log.user || 'Admin'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <HistoryIcon size={28} color="#94a3b8" />
+                    <p style={{ margin: '8px 0 0 0', fontWeight: 600, color: '#334155' }}>No movement history found</p>
+                    <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                      {logFilterItemName !== 'All' ? `No Stock Out or Stock In logs recorded for "${logFilterItemName}".` : 'No logs match your filter criteria.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </Modal>
 

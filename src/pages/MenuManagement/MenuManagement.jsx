@@ -76,14 +76,19 @@ export default function MenuManagement() {
   };
 
   const fetchCategories = async () => {
-    const params = selectedBranchId ? { branchId: selectedBranchId } : {};
+    const params = (selectedBranchId && selectedBranchId !== 'ALL') ? { branchId: selectedBranchId, limit: 1000 } : { branchId: 'all', limit: 1000 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
-      const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-      setCategories(catArray);
-      const availableOnly = catArray.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
+      const catArray = Array.isArray(res.response.data)
+        ? res.response.data
+        : (Array.isArray(res.response.data?.items)
+            ? res.response.data.items
+            : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
+      const cleanList = catArray.filter(cat => !cat?.isDelete);
+      setCategories(cleanList);
+      const availableOnly = cleanList.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
       if (availableOnly.length > 0 && !menuForm.category) {
-        setMenuForm(prev => ({ ...prev, category: availableOnly[0]._id }));
+        setMenuForm(prev => ({ ...prev, category: availableOnly[0]._id || availableOnly[0].id }));
       }
     }
   };
@@ -523,23 +528,73 @@ export default function MenuManagement() {
                     </select>
                   </div>
 
-                  {(currentUser?.role === 'Admin' || currentUser?.role === 'RESTAURANT_OWNER' || currentUser?.userType === 'RESTAURANT_OWNER') && activeRestaurant.branches?.length > 0 && (
+                  {activeRestaurant.branches?.length > 0 && (
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>
-                        Branch <span style={{ color: '#ef4444' }}>*</span>
+                        Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                       </label>
-                      <select
-                        value={menuForm.branchId}
-                        onChange={(e) => setMenuForm({ ...menuForm, branchId: e.target.value })}
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
-                      >
-                        {(selectedBranchId && selectedBranchId !== 'ALL'
-                          ? activeRestaurant.branches.filter(b => String(b.id || b._id) === String(selectedBranchId))
-                          : activeRestaurant.branches
-                        ).map(b => (
-                          <option key={b.id || b._id} value={b.id || b._id}>{b.branchName}</option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+                          ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+                          : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+                        const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+                        const userRole = (roleStr || '').toLowerCase();
+                        const userType = (userTypeStr || '').toUpperCase();
+                        const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+
+                        if (isAdminOrOwner) {
+                          return (
+                            <select
+                              value={menuForm.branchId || ''}
+                              onChange={e => setMenuForm({ ...menuForm, branchId: e.target.value })}
+                              style={{
+                                width: '100%',
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                border: '1px solid var(--border)',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                background: '#fff',
+                                color: '#0f172a',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="">-- Select Branch --</option>
+                              {(activeRestaurant?.branches || []).map(b => (
+                                <option key={b._id || b.id} value={b._id || b.id}>
+                                  {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        }
+
+                        const bObj = (activeRestaurant?.branches || []).find(b => String(b.id || b._id) === String(menuForm.branchId))
+                          || (selectedBranchId && selectedBranchId !== 'ALL' ? (activeRestaurant?.branches || []).find(b => String(b.id || b._id) === String(selectedBranchId)) : null)
+                          || (activeRestaurant?.branches || [])[0];
+
+                        return (
+                          <input
+                            type="text"
+                            value={bObj ? bObj.branchName : 'Serviq Branch'}
+                            readOnly
+                            disabled
+                            style={{
+                              width: '100%',
+                              padding: '10px 12px',
+                              borderRadius: '8px',
+                              border: '1px solid var(--border)',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              color: '#64748b',
+                              backgroundColor: '#f8fafc',
+                              cursor: 'not-allowed',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -565,7 +620,7 @@ export default function MenuManagement() {
                       {categories
                         .filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false)
                         .map(cat => (
-                          <option key={cat._id} value={cat._id}>{cat.name}</option>
+                          <option key={cat._id || cat.id} value={cat._id || cat.id}>{cat.name}</option>
                         ))
                       }
                       <option value="custom">+ Add Custom Category...</option>

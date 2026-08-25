@@ -48,3 +48,35 @@ export const validateRequired = (val = '', fieldName = 'Field') => {
   }
   return '';
 };
+
+// Validate 6-digit Indian pincode
+export const validatePincode = (pincode = '') => {
+  const pin = String(pincode || '').trim();
+  if (!pin) return 'Pincode is required';
+  if (!/^[0-9]{6}$/.test(pin)) {
+    return 'Pincode must be exactly 6 digits';
+  }
+  return '';
+};
+
+// Validate branch name (alphanumeric, spaces, and standard business symbols)
+export const validateBranchName = (name = '') => {
+  const val = String(name || '').trim();
+  if (!val) return 'Branch Name is required';
+  if (val.length < 2) return 'Branch Name must be at least 2 characters';
+  if (!/^[a-zA-Z0-9\s.,&'/#()-]+$/.test(val)) {
+    return 'Branch Name contains invalid special characters';
+  }
+  return '';
+};
+
+// Validate branch code (alphanumeric with hyphens/underscores)
+export const validateBranchCode = (code = '') => {
+  const val = String(code || '').trim();
+  if (!val) return 'Branch Code is required';
+  if (val.length < 2) return 'Branch Code must be at least 2 characters';
+  if (!/^[A-Za-z0-9_-]+$/.test(val)) {
+    return 'Branch Code can only contain letters, numbers, hyphens (-), and underscores (_)';
+  }
+  return '';
+};

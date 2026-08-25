@@ -69,7 +69,14 @@ export default function StaffManagementPanel({
   const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
     ? selectedBranchId
     : currentBranchId;
-  const isAdmin = user?.userType === 'RESTAURANT_OWNER' || user?.userType === 'SUPER_ADMIN';
+  const roleStr = typeof user?.role === 'object' && user?.role !== null
+    ? (user?.role?.roleName || user?.role?.name || '')
+    : (typeof user?.role === 'string' ? user.role : '');
+  const userTypeStr = typeof user?.userType === 'string' ? user.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -850,7 +857,16 @@ export default function StaffManagementPanel({
               type="text"
               placeholder="Search by staff name, email, phone..."
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={(e) => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchQuery(val);
+                setPage(1);
+              }}
               style={{
                 width: '100%',
                 padding: '9px 14px 9px 36px',
@@ -941,18 +957,18 @@ export default function StaffManagementPanel({
 
       {/* Staff Unified Table */}
       <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-              <th style={{ width: '4%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-              <th style={{ width: '18%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
+              <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+              <th style={{ width: '17%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
+              <th style={{ width: '8%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
+              <th style={{ width: '9%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
               <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
-              <th style={{ width: '8%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ width: '11%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
+              <th style={{ width: '13%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
+              <th style={{ width: '13%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+              <th style={{ width: '14%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -1078,7 +1094,7 @@ export default function StaffManagementPanel({
                   </td>
 
                   {/* 7. Duty Status with Toggle */}
-                  <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                  <td style={{ padding: '12px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <button
                       type="button"
                       onClick={() => handleToggleDuty(user)}
@@ -1086,17 +1102,29 @@ export default function StaffManagementPanel({
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '5px',
-                        padding: '6px 12px',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
                         borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        color: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#fff' : '#475569',
-                        background: (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? '#10b981' : '#e2e8f0',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        letterSpacing: '0.3px',
+                        color: isOnDuty ? '#166534' : '#64748b',
+                        background: isOnDuty ? '#dcfce7' : '#f1f5f9',
+                        border: isOnDuty ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
                         cursor: 'pointer',
-                        border: 'none'
+                        minWidth: '95px',
+                        transition: 'all 0.15s ease',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                       }}
                     >
+                      <span style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        backgroundColor: isOnDuty ? '#16a34a' : '#94a3b8',
+                        display: 'inline-block'
+                      }}></span>
                       {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}
                     </button>
                   </td>
@@ -1481,26 +1509,29 @@ export default function StaffManagementPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  value={kitchenForm.branchId}
-                  onChange={e => setKitchenForm({ ...kitchenForm, branchId: e.target.value })}
+                <input
+                  type="text"
+                  value={(() => {
+                    const bObj = (apiBranches || []).find(b => b._id === kitchenForm.branchId)
+                      || (activeFilteredBranchId ? (apiBranches || []).find(b => b._id === activeFilteredBranchId) : null)
+                      || (apiBranches && apiBranches.length > 0 ? apiBranches[0] : null);
+                    return bObj ? bObj.branchName : 'Default Branch';
+                  })()}
+                  readOnly
+                  disabled
                   style={{
-                    width: '100%', padding: '10px 14px', borderRadius: '8px',
-                    border: kitchenFormErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                    fontSize: '14px', background: '#ffffff', boxSizing: 'border-box'
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'not-allowed',
+                    boxSizing: 'border-box'
                   }}
-                >
-                  <option value="" disabled>Select Branch</option>
-                  {(activeFilteredBranchId
-                    ? apiBranches.filter(b => b._id === activeFilteredBranchId)
-                    : apiBranches
-                  ).map(b => (
-                    <option key={b._id} value={b._id}>{b.branchName}</option>
-                  ))}
-                </select>
-                {kitchenFormErrors.branchId && (
-                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>{kitchenFormErrors.branchId}</span>
-                )}
+                />
               </div>
 
               <div style={{ marginBottom: '16px' }}>

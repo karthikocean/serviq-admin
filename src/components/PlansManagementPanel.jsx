@@ -460,7 +460,15 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               type="text"
               placeholder="Search invoice, plan, date..."
               value={historySearch}
-              onChange={e => setHistorySearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setHistorySearch(val);
+              }}
               style={{
                 width: '100%',
                 padding: '8px 14px 8px 34px',

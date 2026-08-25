@@ -600,7 +600,16 @@ export default function UserListPanel() {
               type="text"
               placeholder="Search by name, email, phone or role..."
               value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchQuery(val);
+                setPage(1);
+              }}
               style={{
                 width: '100%',
                 padding: '10px 14px 10px 38px',

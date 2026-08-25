@@ -87,7 +87,7 @@ export default function StockReductionPanel() {
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = {};
+      const params = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
@@ -150,6 +150,36 @@ export default function StockReductionPanel() {
       if (match) return match.name;
     }
     return item.category || 'General';
+  };
+
+  // Helper to check if a string is a raw MongoDB ObjectId or UUID
+  const isMongoId = (str) => {
+    if (!str || typeof str !== 'string') return false;
+    return /^[a-fA-F0-9]{24}$/.test(str.trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+  };
+
+  // Helper to get clean human-readable item name (never shows raw backend _id)
+  const getItemDisplayName = (rawName, itemId) => {
+    if (rawName && typeof rawName === 'string' && !isMongoId(rawName) && rawName !== '—') {
+      return rawName;
+    }
+    const targetId = (typeof itemId === 'object' ? (itemId?._id || itemId?.id) : itemId) || (isMongoId(rawName) ? rawName : null);
+    if (targetId) {
+      const matched = rawInventory.find(i => (
+        (i._id && String(i._id) === String(targetId)) ||
+        (i.id && String(i.id) === String(targetId)) ||
+        (i.sku && String(i.sku) === String(targetId))
+      ));
+      if (matched) {
+        if (matched.name && !isMongoId(matched.name)) return matched.name;
+        if (matched.itemName && !isMongoId(matched.itemName)) return matched.itemName;
+        if (matched.sku) return `Item (${matched.sku})`;
+      }
+    }
+    if (typeof itemId === 'object' && itemId?.name && !isMongoId(itemId.name)) {
+      return itemId.name;
+    }
+    return 'Item';
   };
 
   // Filter items and logs by selected branch if set
@@ -469,11 +499,12 @@ export default function StockReductionPanel() {
 
   // Filtered Reductions for History Tab
   const filteredReductions = reductions.filter(r => {
-    const rName = typeof r.itemId === 'object' ? (r.itemId?.name || '') : (r.itemName || '');
+    const matchedItem = rawInventory.find(i => (i._id === r.itemId || i.id === r.itemId || i.sku === r.itemId || i._id === r.itemId?._id));
+    const rName = getItemDisplayName(r.itemName || (typeof r.itemId === 'object' ? (r.itemId?.name || r.itemId?.itemName) : ''), r.itemId);
     const rReason = r.reason || '';
     const rUser = typeof r.reducedBy === 'object' ? (r.reducedBy?.name || '') : (r.reducedBy || '');
     const rNotes = r.details || r.notes || '';
-    const rCat = (typeof r.itemId === 'object' && r.itemId?.categoryId) ? (rawCategories.find(c => (c._id === r.itemId.categoryId || c.id === r.itemId.categoryId))?.name || 'General') : (r.category || 'General');
+    const rCat = (typeof r.itemId === 'object' && r.itemId?.categoryId) ? (rawCategories.find(c => (c._id === r.itemId.categoryId || c.id === r.itemId.categoryId))?.name || 'General') : (matchedItem ? getCategoryName(matchedItem) : (r.category || 'General'));
 
     const matchesSearch = rName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           rReason.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -486,11 +517,12 @@ export default function StockReductionPanel() {
 
   // Filtered Purchases for Purchase Records Tab
   const filteredPurchases = purchases.filter(p => {
-    const pName = typeof p.itemId === 'object' ? (p.itemId?.name || '') : (p.itemName || '');
+    const matchedItem = rawInventory.find(i => (i._id === p.itemId || i.id === p.itemId || i.sku === p.itemId || i._id === p.itemId?._id));
+    const pName = getItemDisplayName(p.itemName || (typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : ''), p.itemId);
     const pInv = p.invoiceNumber || '';
     const pSupplier = p.supplierName || '';
     const pUser = typeof p.addedBy === 'object' ? (p.addedBy?.name || '') : (p.addedBy || '');
-    const pCat = (typeof p.itemId === 'object' && p.itemId?.categoryId) ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General') : (p.category || 'General');
+    const pCat = (typeof p.itemId === 'object' && p.itemId?.categoryId) ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General') : (matchedItem ? getCategoryName(matchedItem) : (p.category || 'General'));
 
     const matchesSearch = pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           pInv.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -502,8 +534,9 @@ export default function StockReductionPanel() {
 
   // Filtered Inventory for Quick Actions Tab
   const filteredInventory = inventory.filter(i => {
+    const itemName = getItemDisplayName(i.name || i.itemName, i._id || i.id);
     const catName = getCategoryName(i);
-    const matchesSearch = (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (itemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || catName === categoryFilter;
     return matchesSearch && matchesCategory;
@@ -518,6 +551,20 @@ export default function StockReductionPanel() {
 
   const totalPages = Math.ceil(activeDataList.length / rowsPerPage) || 1;
   const paginatedData = activeDataList.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const getReasonBadge = (reason) => {
     const rConfig = REDUCTION_REASONS.find(r => r.id === reason) || REDUCTION_REASONS[4];
@@ -1097,9 +1144,6 @@ export default function StockReductionPanel() {
                 LIVE API
               </span>
             </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              Log kitchen usage, waste, supplier restock shipments, and audit ledger entries
-            </p>
           </div>
         </div>
 
@@ -1423,8 +1467,10 @@ export default function StockReductionPanel() {
                           {(currentPage - 1) * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px' }}>
-                          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>{item.name}</div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>SKU: {item.sku}</div>
+                          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
+                            {getItemDisplayName(item.name || item.itemName, item._id || item.id)}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>SKU: {item.sku || 'N/A'}</div>
                         </td>
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#334155' }}>
                           {catName}
@@ -1496,6 +1542,7 @@ export default function StockReductionPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>DATE & TIME</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>RAW MATERIAL ITEM</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>QTY REDUCED</th>
@@ -1508,14 +1555,14 @@ export default function StockReductionPanel() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                       Loading reduction logs...
                     </td>
                   </tr>
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((record, idx) => {
                     const dateFormatted = record.createdAt ? new Date(record.createdAt).toLocaleString('en-IN') : (record.date || '—');
-                    const itemName = typeof record.itemId === 'object' ? (record.itemId?.name || '—') : (rawInventory.find(i => (i._id === record.itemId || i.id === record.itemId))?.name || record.itemName || '—');
+                    const itemName = getItemDisplayName(record.itemName || (typeof record.itemId === 'object' ? (record.itemId?.name || record.itemId?.itemName) : ''), record.itemId);
                     const catName = (typeof record.itemId === 'object' && record.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === record.itemId.categoryId || c.id === record.itemId.categoryId))?.name || 'General')
                       : (record.category || 'General');
@@ -1531,6 +1578,9 @@ export default function StockReductionPanel() {
                         onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
+                        <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
+                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                        </td>
                         <td style={{ padding: '14px 18px', color: '#64748b', whiteSpace: 'nowrap' }}>
                           {dateFormatted}
                         </td>
@@ -1557,21 +1607,24 @@ export default function StockReductionPanel() {
                               if (window.confirm(`Delete reduction log for ${itemName}?`)) {
                                 if (deleteReductionRecord && activeRestaurant?.id) {
                                   deleteReductionRecord(activeRestaurant.id, record.id || record._id);
-                                  ShowNotifications.showAlertNotification("Reduction log deleted.", true);
+                                  fetchAllData();
                                 }
                               }
                             }}
                             style={{
-                              background: '#fee2e2',
+                              background: '#fef2f2',
                               border: '1px solid #fecaca',
+                              color: '#dc2626',
+                              padding: '5px 8px',
                               borderRadius: '6px',
-                              padding: '6px 8px',
                               cursor: 'pointer',
-                              color: '#dc2626'
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
-                            title="Delete log entry"
+                            title="Delete Record"
                           >
-                            <TrashIcon size={13} color="#dc2626" />
+                            <TrashIcon size={13} />
                           </button>
                         </td>
                       </tr>
@@ -1579,7 +1632,7 @@ export default function StockReductionPanel() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                       No reduction logs recorded yet.
                     </td>
                   </tr>
@@ -1593,6 +1646,7 @@ export default function StockReductionPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>INVOICE / DATE</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>ITEM & CATEGORY</th>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>SUPPLIER VENDOR</th>
@@ -1605,7 +1659,7 @@ export default function StockReductionPanel() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <td colSpan="8" style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                       Loading purchase records...
                     </td>
                   </tr>
@@ -1613,7 +1667,7 @@ export default function StockReductionPanel() {
                   paginatedData.map((p, idx) => {
                     const invoiceNum = p.invoiceNumber || `INV-${(p._id || '').slice(-5)}`;
                     const dateFormatted = p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '—');
-                    const itemName = typeof p.itemId === 'object' ? (p.itemId?.name || '—') : (rawInventory.find(i => (i._id === p.itemId || i.id === p.itemId))?.name || p.itemName || '—');
+                    const itemName = getItemDisplayName(p.itemName || (typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : ''), p.itemId);
                     const catName = (typeof p.itemId === 'object' && p.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General')
                       : (p.category || 'General');
@@ -1629,6 +1683,9 @@ export default function StockReductionPanel() {
                         onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
+                        <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
+                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                        </td>
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>{invoiceNum}</div>
                           <div style={{ fontSize: '11px', color: '#64748b' }}>{dateFormatted}</div>
@@ -1700,60 +1757,83 @@ export default function StockReductionPanel() {
         </div>
 
         {/* Pagination Controls */}
-        {activeDataList.length > rowsPerPage && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: '20px',
-            paddingTop: '16px',
-            borderTop: '1px solid #f1f5f9',
-            fontSize: '12px',
-            color: '#64748b'
-          }}>
-            <div>
-              Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  background: currentPage === 1 ? '#f8fafc' : '#ffffff',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  fontWeight: 700
-                }}
-              >
-                Previous
-              </button>
-
-              <span style={{ fontWeight: 800, color: '#0f172a', padding: '0 8px' }}>
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                type="button"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  background: currentPage === totalPages ? '#f8fafc' : '#ffffff',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  fontWeight: 700
-                }}
-              >
-                Next
-              </button>
-            </div>
+        {/* Pagination Controls */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid #f1f5f9',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {activeDataList.length === 0 ? 0 : ((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
           </div>
-        )}
+
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: currentPage === 1 ? '#f8fafc' : '#ffffff',
+                color: currentPage === 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setCurrentPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: currentPage === pageNum ? 700 : 500,
+                  border: currentPage === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: currentPage === pageNum ? '#000000' : '#ffffff',
+                  color: currentPage === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (currentPage >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (currentPage >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (currentPage >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -12,7 +12,10 @@ import {
   validateName,
   validateMobile,
   validateEmail,
-  validateRequired
+  validateRequired,
+  validatePincode,
+  validateBranchName,
+  validateBranchCode
 } from '../helper/ValidationHelper';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -70,8 +73,8 @@ const initialBranchState = {
   password: '',
   confirmPassword: '',
   address: '',
-  country: 'India',
-  state: 'Tamil Nadu',
+  country: '',
+  state: '',
   city: '',
   pincode: '',
   openingDate: new Date().toISOString().split('T')[0],
@@ -163,11 +166,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const navigate = useNavigate();
   const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots } = useAppState();
 
-  const userType = (currentUser?.userType || currentUser?.role || '').toUpperCase();
-  const userRoleLower = (currentUser?.role || '').toLowerCase();
-  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const role = currentUser?.role || 'Admin';
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userRoleLower === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+
+  const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
     if (isAdmin) return true;
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
@@ -283,6 +291,30 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     return matchesSearch && matchesStatus;
   });
 
+  // Pagination for branches
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const totalPages = Math.ceil(filteredBranches.length / limit) || 1;
+  const paginatedBranches = filteredBranches.slice((page - 1) * limit, page * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter]);
+
   // Metrics
   const totalBranchesCount = branches.length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
@@ -346,8 +378,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       password: branch.password || '',
       confirmPassword: branch.password || '',
       address: branch.address || '',
-      country: branch.country || 'India',
-      state: branch.state || 'Tamil Nadu',
+      country: branch.country || '',
+      state: branch.state || '',
       city: branch.city || '',
       pincode: branch.pincode || '',
       openingDate: branch.openingDate || new Date().toISOString().split('T')[0],
@@ -384,54 +416,127 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const validateForm = () => {
     const errors = {};
 
-    // Branch Name validation (characters only)
-    const nameErr = validateName(branchForm.branchName);
-    if (nameErr) errors.branchName = nameErr;
-
-    // Branch Code
-    const codeErr = validateRequired(branchForm.branchCode, 'Branch Code');
-    if (codeErr) errors.branchCode = codeErr;
-
-    // Branch Manager (characters only if provided)
-    if (branchForm.branchManager.trim()) {
-      const mgrErr = validateName(branchForm.branchManager);
-      if (mgrErr) errors.branchManager = 'Manager name must contain letters only';
+    // 1. Branch Name validation
+    const branchNameTrimmed = (branchForm.branchName || '').trim();
+    const branchNameErr = validateBranchName(branchNameTrimmed);
+    if (branchNameErr) {
+      errors.branchName = branchNameErr;
+    } else {
+      const isDuplicateName = branches.some(b => {
+        if (isEditing && (String(b.id) === String(branchForm.id) || String(b._id) === String(branchForm.id))) return false;
+        return (b.branchName || '').trim().toLowerCase() === branchNameTrimmed.toLowerCase();
+      });
+      if (isDuplicateName) {
+        errors.branchName = 'A branch with this name already exists.';
+      }
     }
 
-    // Mobile Number (exactly 10 digits)
-    const mobileErr = validateMobile(branchForm.mobileNumber);
-    if (mobileErr) errors.mobileNumber = mobileErr;
+    // 2. Branch Code validation
+    const branchCodeTrimmed = (branchForm.branchCode || '').trim();
+    const branchCodeErr = validateBranchCode(branchCodeTrimmed);
+    if (branchCodeErr) {
+      errors.branchCode = branchCodeErr;
+    } else {
+      const isDuplicateCode = branches.some(b => {
+        if (isEditing && (String(b.id) === String(branchForm.id) || String(b._id) === String(branchForm.id))) return false;
+        return (b.branchCode || '').trim().toLowerCase() === branchCodeTrimmed.toLowerCase();
+      });
+      if (isDuplicateCode) {
+        errors.branchCode = 'A branch with this code already exists.';
+      }
+    }
 
-    // Email Address (format validation)
-    const emailErr = validateEmail(branchForm.email);
-    if (emailErr) errors.email = emailErr;
+    // 3. Branch Opening Date validation
+    const dateErr = validateRequired(branchForm.openingDate, 'Branch Opening Date');
+    if (dateErr) {
+      errors.openingDate = dateErr;
+    }
 
-    // Password validation (required only when creating)
+    // 4. Branch Manager (Manager Name) validation
+    const managerTrimmed = (branchForm.branchManager || '').trim();
+    if (!managerTrimmed) {
+      errors.branchManager = 'Branch Manager name is required.';
+    } else if (managerTrimmed.length < 2) {
+      errors.branchManager = 'Branch Manager name must be at least 2 characters.';
+    } else if (!/^[a-zA-Z\s.]+$/.test(managerTrimmed)) {
+      errors.branchManager = 'Branch Manager name must contain letters and spaces only.';
+    }
+
+    // 5. Mobile Number (Exactly 10 digits, starts with 6-9)
+    const mobileTrimmed = (branchForm.mobileNumber || '').trim();
+    const mobileErr = validateMobile(mobileTrimmed);
+    if (mobileErr) {
+      errors.mobileNumber = mobileErr;
+    } else if (!/^[6-9][0-9]{9}$/.test(mobileTrimmed)) {
+      errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+    }
+
+    // 6. Email Address validation
+    const emailTrimmed = (branchForm.email || '').trim();
+    const emailErr = validateEmail(emailTrimmed);
+    if (emailErr) {
+      errors.email = emailErr;
+    }
+
+    // 7. Password validation (required only when creating)
     if (!isEditing) {
       if (!branchForm.password || !branchForm.password.trim()) {
-        errors.password = 'Password is required';
-      } else if (branchForm.password.length < 4) {
-        errors.password = 'Password must be at least 4 characters';
+        errors.password = 'Password is required.';
+      } else if (branchForm.password.length < 6) {
+        errors.password = 'Password must be at least 6 characters.';
       }
 
       // Confirm Password validation
       if (!branchForm.confirmPassword || !branchForm.confirmPassword.trim()) {
-        errors.confirmPassword = 'Confirm password is required';
+        errors.confirmPassword = 'Confirm password is required.';
       } else if (branchForm.password !== branchForm.confirmPassword) {
-        errors.confirmPassword = 'Passwords do not match';
+        errors.confirmPassword = 'Passwords do not match.';
       }
     }
 
-    // Address (Street Address) - Required
-    const addressErr = validateRequired(branchForm.address, 'Address');
-    if (addressErr) errors.address = addressErr;
-
-    // City & State (characters only if provided)
-    if (branchForm.city && !/^[a-zA-Z\s]+$/.test(branchForm.city.trim())) {
-      errors.city = 'City must contain letters only';
+    // 8. Address (Street Address) - Required
+    const addressTrimmed = (branchForm.address || '').trim();
+    if (!addressTrimmed) {
+      errors.address = 'Street Address is required.';
+    } else if (addressTrimmed.length < 3) {
+      errors.address = 'Street Address must be at least 3 characters.';
     }
-    if (branchForm.state && !/^[a-zA-Z\s]+$/.test(branchForm.state.trim())) {
-      errors.state = 'State must contain letters only';
+
+    // 9. City validation
+    const cityTrimmed = (branchForm.city || '').trim();
+    if (!cityTrimmed) {
+      errors.city = 'City is required.';
+    } else if (cityTrimmed.length < 2) {
+      errors.city = 'City must be at least 2 characters.';
+    } else if (!/^[a-zA-Z\s]+$/.test(cityTrimmed)) {
+      errors.city = 'City must contain letters and spaces only.';
+    }
+
+    // 10. State validation
+    const stateTrimmed = (branchForm.state || '').trim();
+    if (!stateTrimmed) {
+      errors.state = 'State is required.';
+    } else if (stateTrimmed.length < 2) {
+      errors.state = 'State must be at least 2 characters.';
+    } else if (!/^[a-zA-Z\s]+$/.test(stateTrimmed)) {
+      errors.state = 'State must contain letters and spaces only.';
+    }
+
+    // 11. Country validation
+    const countryTrimmed = (branchForm.country || '').trim();
+    if (!countryTrimmed) {
+      errors.country = 'Country is required.';
+    } else if (countryTrimmed.length < 2) {
+      errors.country = 'Country must be at least 2 characters.';
+    } else if (!/^[a-zA-Z\s]+$/.test(countryTrimmed)) {
+      errors.country = 'Country must contain letters and spaces only.';
+    }
+
+    // 12. Pincode validation
+    const pincodeTrimmed = (branchForm.pincode || '').trim();
+    const pincodeErr = validatePincode(pincodeTrimmed);
+    if (pincodeErr) {
+      errors.pincode = pincodeErr;
     }
 
     setFormErrors(errors);
@@ -935,8 +1040,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       placeholder="e.g. Serviq Chennai Main Branch"
                       value={branchForm.branchName}
                       onChange={e => {
-                        const val = sanitizeName(e.target.value);
-                        setBranchForm({ ...branchForm, branchName: val });
+                        setBranchForm({ ...branchForm, branchName: e.target.value });
                         if (formErrors.branchName) setFormErrors({ ...formErrors, branchName: '' });
                       }}
                       style={{
@@ -944,7 +1048,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         padding: '12px 16px',
                         borderRadius: '8px',
                         border: formErrors.branchName ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                        fontSize: '14px'
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
                       }}
                     />
                     {formErrors.branchName && (
@@ -964,7 +1069,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       placeholder="e.g. BR-CHE-01"
                       value={branchForm.branchCode}
                       onChange={e => {
-                        setBranchForm({ ...branchForm, branchCode: e.target.value });
+                        setBranchForm({ ...branchForm, branchCode: e.target.value.toUpperCase() });
                         if (formErrors.branchCode) setFormErrors({ ...formErrors, branchCode: '' });
                       }}
                       style={{
@@ -973,7 +1078,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         borderRadius: '8px',
                         border: formErrors.branchCode ? '1.5px solid #ef4444' : '1px solid var(--border)',
                         fontSize: '14px',
-                        fontFamily: 'monospace'
+                        fontFamily: 'monospace',
+                        boxSizing: 'border-box'
                       }}
                     />
                     {formErrors.branchCode && (
@@ -985,13 +1091,30 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                   {/* Field 3: Branch Opening Date */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>Branch Opening Date</label>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Branch Opening Date <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
                     <input
                       type="date"
                       value={branchForm.openingDate}
-                      onChange={e => setBranchForm({ ...branchForm, openingDate: e.target.value })}
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px' }}
+                      onChange={e => {
+                        setBranchForm({ ...branchForm, openingDate: e.target.value });
+                        if (formErrors.openingDate) setFormErrors({ ...formErrors, openingDate: '' });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: formErrors.openingDate ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
                     />
+                    {formErrors.openingDate && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.openingDate}
+                      </span>
+                    )}
                   </div>
 
                   {/* Field 4: Status */}
@@ -1000,7 +1123,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     <select
                       value={branchForm.status}
                       onChange={e => setBranchForm({ ...branchForm, status: e.target.value })}
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', backgroundColor: '#fff' }}
+                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', backgroundColor: '#fff', boxSizing: 'border-box' }}
                     >
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
@@ -1032,7 +1155,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   
                   {/* Field 5: Branch Manager (Characters Only) */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>Branch Manager</label>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Branch Manager <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
                     <input
                       type="text"
                       placeholder="e.g. Saravana Kumaran"
@@ -1064,7 +1189,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
                       maxLength={10}
                       placeholder="10 digit mobile number"
                       value={branchForm.mobileNumber}
@@ -1128,7 +1253,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         <div style={{ position: 'relative' }}>
                           <input
                             type={showPassword ? 'text' : 'password'}
-                            placeholder="Enter password"
+                            placeholder="Enter password (min 6 characters)"
                             value={branchForm.password}
                             onChange={e => {
                               setBranchForm({ ...branchForm, password: e.target.value });
@@ -1264,7 +1389,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>City</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>
+                        City <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
                       <input
                         type="text"
                         placeholder="Chennai"
@@ -1279,7 +1406,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           padding: '10px 14px',
                           borderRadius: '8px',
                           border: formErrors.city ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '13px'
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
                         }}
                       />
                       {formErrors.city && (
@@ -1287,10 +1415,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       )}
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>State</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>
+                        State <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
                       <input
                         type="text"
-                        placeholder="Tamil Nadu"
+                        placeholder="e.g. Tamil Nadu"
                         value={branchForm.state}
                         onChange={e => {
                           const val = sanitizeName(e.target.value);
@@ -1302,7 +1432,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           padding: '10px 14px',
                           borderRadius: '8px',
                           border: formErrors.state ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '13px'
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
                         }}
                       />
                       {formErrors.state && (
@@ -1310,31 +1441,61 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       )}
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>Country</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>
+                        Country <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
                       <input
                         type="text"
-                        placeholder="India"
+                        placeholder="e.g. India"
                         value={branchForm.country}
-                        onChange={e => setBranchForm({ ...branchForm, country: e.target.value })}
-                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}
+                        onChange={e => {
+                          const val = sanitizeName(e.target.value);
+                          setBranchForm({ ...branchForm, country: val });
+                          if (formErrors.country) setFormErrors({ ...formErrors, country: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: formErrors.country ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
                       />
+                      {formErrors.country && (
+                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block' }}>{formErrors.country}</span>
+                      )}
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>Pincode</label>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px', color: '#0f172a' }}>
+                        Pincode <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
                       <input
                         type="text"
+                        maxLength={6}
                         placeholder="600017"
                         value={branchForm.pincode}
-                        onChange={e => setBranchForm({ ...branchForm, pincode: e.target.value.replace(/[^0-9]/g, '').slice(0, 6) })}
-                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}
+                        onChange={e => {
+                          const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                          setBranchForm({ ...branchForm, pincode: val });
+                          if (formErrors.pincode) setFormErrors({ ...formErrors, pincode: '' });
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          border: formErrors.pincode ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                          fontSize: '13px',
+                          boxSizing: 'border-box'
+                        }}
                       />
+                      {formErrors.pincode && (
+                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block' }}>{formErrors.pincode}</span>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
-
-
-
 
             </div>
 
@@ -1438,7 +1599,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               type="text"
               placeholder="Search branch name, code, manager, city..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+              }}
               style={{ width: '100%', padding: '10px 16px 10px 38px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', outline: 'none' }}
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
@@ -1464,64 +1633,65 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       {/* 4. Branch List Table */}
       <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table style={{ width: '100%', minWidth: '1050px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-              <th style={{ width: '11%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>
-              <th style={{ width: '21%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Name</th>
-              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Location</th>
-              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Manager</th>
-              <th style={{ width: '15%', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Contact</th>
-              <th style={{ width: '6%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Tables</th>
-              <th style={{ width: '7%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Status</th>
-              <th style={{ width: '10%', padding: '14px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Actions</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Name</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Location</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Manager</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Contact</th>
+              <th style={{ padding: '14px 10px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Status</th>
+              <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredBranches.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                   No branches found matching your search.
                 </td>
               </tr>
             ) : (
-              filteredBranches.map(b => (
+              paginatedBranches.map(b => (
                 <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   
                   {/* 1. Branch Code */}
-                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left', whiteSpace: 'nowrap' }}>
                     <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', display: 'inline-block' }}>
                       {b.branchCode}
                     </span>
                   </td>
 
                   {/* 2. Branch Name */}
-                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.branchName}</span>
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span>{b.branchName}</span>
                         {b.isMainBranch && (
                           <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px', border: '1px solid #fde68a', flexShrink: 0 }} title="Main Branch">
                             ★ Main
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.address}>
-                        {b.address || 'No address provided'}
-                      </div>
+                      {b.address && (
+                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
+                          {b.address}
+                        </div>
+                      )}
                     </div>
                   </td>
 
                   {/* 3. Location */}
-                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ color: '#334155', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.city ? `${b.city}, ${b.state || 'Tamil Nadu'}` : 'Not Specified'}>
-                      {b.city ? `${b.city}, ${b.state || 'Tamil Nadu'}` : 'Not Specified'}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ color: '#334155', fontWeight: 600, fontSize: '13px', lineHeight: '1.4' }}>
+                      {b.city ? `${b.city}${b.state ? `, ${b.state}` : ''}` : (b.state || 'Not Specified')}
                     </div>
                   </td>
 
                   {/* 4. Manager */}
-                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{
                         width: '28px',
                         height: '28px',
@@ -1540,48 +1710,41 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       }}>
                         {(b.branchManager && b.branchManager.trim() ? b.branchManager.trim().charAt(0) : 'U').toUpperCase()}
                       </span>
-                      <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.branchManager || 'Unassigned'}>
+                      <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px', lineHeight: '1.4' }}>
                         {b.branchManager || 'Unassigned'}
                       </span>
                     </div>
                   </td>
 
                   {/* 5. Contact */}
-                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
                         {b.mobileNumber || 'N/A'}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.email || ''}>
-                        {b.email || '—'}
-                      </div>
+                      {b.email && (
+                        <div style={{ fontSize: '11px', color: '#64748b', wordBreak: 'break-all' }}>
+                          {b.email}
+                        </div>
+                      )}
                     </div>
                   </td>
 
-                  {/* 6. Tables */}
-                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, minWidth: '28px', textAlign: 'center', display: 'inline-block' }}>
-                        {b.totalTables || 0}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* 7. Status */}
-                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
+                  {/* 6. Status */}
+                  <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Badge status={b.status === 'Active' ? 'Active' : 'Inactive'} />
                     </div>
                   </td>
 
-                  {/* 8. Actions */}
-                  <td style={{ padding: '14px 8px', verticalAlign: 'middle', textAlign: 'center' }}>
+                  {/* 7. Actions */}
+                  <td style={{ padding: '14px 12px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                       <button
                         type="button"
                         title="View Operational Details"
                         onClick={() => handleOpenHierarchy(b)}
-                        style={{ border: 'none', background: '#eff6ff', color: '#2563eb', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                        style={{ border: 'none', background: '#eff6ff', color: '#2563eb', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
                         onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
                         onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
                       >
@@ -1593,7 +1756,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           type="button"
                           title="Edit Branch"
                           onClick={() => handleOpenEditForm(b)}
-                          style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                          style={{ border: 'none', background: '#f1f5f9', color: '#475569', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
                           onMouseEnter={e => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.background = '#e2e8f0'; }}
                           onMouseLeave={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.background = '#f1f5f9'; }}
                         >
@@ -1606,7 +1769,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           type="button"
                           title="Delete Branch"
                           onClick={() => handleDeleteBranchClick(b)}
-                          style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                          style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
                           onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
                         >
@@ -1621,6 +1784,87 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {filteredBranches.length > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid var(--border)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredBranches.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredBranches.length)} of {filteredBranches.length} branches
+          </div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: page <= 1 ? '#f8fafc' : '#ffffff',
+                color: page <= 1 ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page === pageNum ? 700 : 500,
+                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page === pageNum ? '#000000' : '#ffffff',
+                  color: page === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || totalPages === 0}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 5. DELETE CONFIRMATION MODAL */}
       <Modal
