@@ -40,20 +40,22 @@ class RoleApi {
     }
   }
 
-  async createRole(data) {
+  async createRole(data, silent = false) {
     try {
       const response = await apiClient.post("/roles-permissions", data);
       if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(
-          response.data.message || "Role Created Successfully!",
-          true,
-        );
+        if (!silent) {
+          ShowNotifications.showAlertNotification(
+            response.data.message || "Role Created Successfully!",
+            true,
+          );
+        }
         return { status: true, response: response.data };
       }
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message || "Failed to create role.";
-      if (error?.response?.status !== 401) {
+      if (!silent && error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
       return {

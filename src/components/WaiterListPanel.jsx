@@ -175,8 +175,8 @@ export default function WaiterListPanel({
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>

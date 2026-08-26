@@ -349,8 +349,8 @@ export default function InventoryManagement() {
          
         </div>
 
-        <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', overflow: 'hidden' }}>
-          <table className="admin-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+        <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', paddingBottom: '6px' }}>
+          <table className="admin-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', fontWeight: 800, color: '#ffffff' }}>FEATURES & MODULES</th>

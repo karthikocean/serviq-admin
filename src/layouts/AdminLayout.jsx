@@ -53,8 +53,17 @@ export default function AdminLayout() {
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser?.role?.roleName : (currentUser?.role || '');
   const role = roleStr || 'Admin';
   const userType = (currentUser?.userType || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER';
+  const isAdmin = 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'ADMIN' || 
+    userType === 'OWNER' || 
+    userRoleLower === 'admin' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'restaurant_owner' ||
+    userRoleLower === 'restaurant owner';
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {

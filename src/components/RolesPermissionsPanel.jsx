@@ -252,8 +252,8 @@ export default function RolesPermissionsPanel() {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
+          <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+            <table style={{ width: '100%', minWidth: '700px', borderCollapse: 'collapse', textAlign: 'center' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
                   <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: 800, fontSize: '12px', width: '40%' }}>MODULES</th>
@@ -381,8 +381,8 @@ export default function RolesPermissionsPanel() {
         </div>
 
         {/* Table matching Screenshot 2 */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>

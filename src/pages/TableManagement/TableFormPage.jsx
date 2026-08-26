@@ -111,11 +111,39 @@ export default function TableFormPage() {
     }
   }, [existingTable]);
 
-  // Filter waiters by role and branch
-  const allWaiters = allStaff.filter(s => {
-    const roleName = s.roleId?.roleName || s.role?.name || s.role || '';
-    return roleName.toLowerCase() === 'waiter' || s.userType === 'STAFF';
-  });
+  // Filter waiters by role and branch (Waiters ONLY)
+  const isOnlyWaiter = (s) => {
+    if (!s) return false;
+    const roleName = String(
+      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : s.roleId) ||
+      s.role ||
+      s.designation ||
+      ''
+    ).toLowerCase().trim();
+    const userType = String(s.userType || '').toUpperCase().trim();
+
+    if (
+      roleName.includes('kitchen') ||
+      roleName.includes('chef') ||
+      roleName.includes('cook') ||
+      roleName.includes('manager') ||
+      roleName.includes('admin') ||
+      roleName.includes('owner') ||
+      roleName.includes('station') ||
+      roleName.includes('cashier') ||
+      userType === 'STATION' ||
+      userType === 'BRANCH_ADMIN' ||
+      userType === 'ADMIN' ||
+      userType === 'SUPER_ADMIN' ||
+      userType === 'RESTAURANT_OWNER' ||
+      userType === 'OWNER'
+    ) {
+      return false;
+    }
+    return roleName.includes('waiter') || roleName.includes('server') || roleName === 'waiter';
+  };
+
+  const allWaiters = allStaff.filter(isOnlyWaiter);
   const availableWaiters = form.branchId
     ? allWaiters.filter(s => {
       const staffBranchId = s.branchId?._id || s.branchId;

@@ -272,8 +272,8 @@ export default function KitchenReportsPanel({
         padding: '24px',
         boxShadow: 'var(--card-shadow)'
       }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+          <table className="menu-items-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr>
                 <th style={{ padding: '12px 14px' }}>KOT NUMBER</th>

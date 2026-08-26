@@ -104,8 +104,8 @@ export default function HelpSupport() {
         <div className="card-header">
           <h3>My Tickets</h3>
         </div>
-        <div className="table-responsive">
-          <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="table-responsive" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+          <table className="data-table" style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TICKET NO.</th>

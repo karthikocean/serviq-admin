@@ -86,79 +86,12 @@ const initialBranchState = {
   isMainBranch: false
 };
 
-const branchMockData = {
-  'BR-CHE-01': {
-    orders: [
-      { id: '#ORD-1082', table: 'T-03', items: 'Masala Chai x2, Paneer Tikka x1', total: '₹540', status: 'preparing', time: '5 mins ago' },
-      { id: '#ORD-1081', table: 'T-07', items: 'Butter Chicken x1, Garlic Naan x3', total: '₹750', status: 'ready', time: '12 mins ago' },
-      { id: '#ORD-1080', table: 'T-12', items: 'Veg Biryani x2, Raita x1, Coke x2', total: '₹620', status: 'served', time: '25 mins ago' },
-      { id: '#ORD-1079', table: 'T-01', items: 'Mango Lassi x2, Chilli Gobi x1', total: '₹380', status: 'preparing', time: '18 mins ago' }
-    ],
-    staff: [
-      { name: 'Saravana Kumaran', role: 'Branch Manager', status: 'Active', email: 'saravana@serviq.com', initial: 'S' },
-      { name: 'Chef Kapoor', role: 'Head Chef', status: 'Active', email: 'kapoor@serviq.com', initial: 'K' },
-      { name: 'Ramesh Kumar', role: 'Senior Waiter', status: 'Active', email: 'ramesh@serviq.com', initial: 'R' },
-      { name: 'Priya Dharshini', role: 'Waiter', status: 'Active', email: 'priya@serviq.com', initial: 'P' },
-      { name: 'Murugan T.', role: 'Kitchen Helper', status: 'On Break', email: 'murugan@serviq.com', initial: 'M' }
-    ],
-    kitchen: [
-      { name: 'Mains & Grill Station', items: 'Biryani, Tandoori, Curries', load: 'High', loadPercent: 80, status: 'Active' },
-      { name: 'Appetizers & Fast Food', items: 'Tikka, Gobi, Naan, Breads', load: 'Medium', loadPercent: 50, status: 'Active' },
-      { name: 'Beverages & Dessert Counter', items: 'Chai, Lassi, Shakes, Kulfi', load: 'Low', loadPercent: 20, status: 'Active' }
-    ]
-  },
-  'BR-CBE-02': {
-    orders: [
-      { id: '#ORD-2022', table: 'T-02', items: 'South Indian Thali x2, Filter Coffee x2', total: '₹460', status: 'preparing', time: '8 mins ago' },
-      { id: '#ORD-2021', table: 'T-05', items: 'Ghee Roast Dosa x1, Medu Vada x2', total: '₹280', status: 'ready', time: '14 mins ago' },
-      { id: '#ORD-2020', table: 'T-09', items: 'Mutton Biryani x1, Parotta x3, Salna', total: '₹680', status: 'served', time: '30 mins ago' }
-    ],
-    staff: [
-      { name: 'Karthik Raja', role: 'Branch Manager', status: 'Active', email: 'karthik@serviq.com', initial: 'K' },
-      { name: 'Chef Sundaram', role: 'Head Chef', status: 'Active', email: 'sundaram@serviq.com', initial: 'S' },
-      { name: 'Anitha S.', role: 'Senior Waiter', status: 'Active', email: 'anitha@serviq.com', initial: 'A' },
-      { name: 'Chef Venkatesh', role: 'Sous Chef', status: 'Active', email: 'venkatesh@serviq.com', initial: 'V' }
-    ],
-    kitchen: [
-      { name: 'South Traditional Section', items: 'Dosa, Idli, Vada, Meals', load: 'Medium', loadPercent: 60, status: 'Active' },
-      { name: 'Biryani & Tiffin Station', items: 'Biryani, Parotta, Gravies', load: 'High', loadPercent: 85, status: 'Active' }
-    ]
-  },
-  'BR-MD-03': {
-    orders: [
-      { id: '#ORD-3011', table: 'T-04', items: 'Kari Dosa x2, Jigarthanda x2', total: '₹580', status: 'preparing', time: '4 mins ago' },
-      { id: '#ORD-3010', table: 'T-01', items: 'Bun Parotta x4, Mutton Chukka x1', total: '₹720', status: 'served', time: '16 mins ago' }
-    ],
-    staff: [
-      { name: 'Meenakshi Sundaram', role: 'Branch Manager', status: 'Active', email: 'meenakshi@serviq.com', initial: 'M' },
-      { name: 'Chef Marimuthu', role: 'Master Chef', status: 'Active', email: 'marimuthu@serviq.com', initial: 'M' },
-      { name: 'Vikram R.', role: 'Waiter', status: 'Active', email: 'vikram@serviq.com', initial: 'V' }
-    ],
-    kitchen: [
-      { name: 'Madurai Speciality Section', items: 'Kari Dosa, Bun Parotta, Chukka', load: 'High', loadPercent: 90, status: 'Active' },
-      { name: 'Cold Beverages & Dessert', items: 'Jigarthanda, Falooda, Ice Creams', load: 'Low', loadPercent: 25, status: 'Active' }
-    ]
-  }
-};
-
 const getBranchOperationalData = (branch) => {
   if (!branch) return null;
-  const mockKey = Object.keys(branchMockData).find(k => k === branch.branchCode || branch.branchCode?.includes(k));
-  if (mockKey && branchMockData[mockKey]) {
-    return branchMockData[mockKey];
-  }
   return {
-    orders: [
-      { id: '#ORD-001', table: 'T-01', items: 'Sample Items x2', total: '₹450', status: 'preparing', time: '10 mins ago' },
-      { id: '#ORD-002', table: 'T-05', items: 'Special Dish x1', total: '₹320', status: 'ready', time: '15 mins ago' }
-    ],
-    staff: [
-      { name: branch.branchManager || 'Branch In-Charge', role: 'Branch Manager', status: 'Active', email: branch.email || 'manager@serviq.com', initial: (branch.branchManager || 'M').charAt(0).toUpperCase() },
-      { name: 'Senior Staff', role: 'Operations', status: 'Active', email: 'ops@serviq.com', initial: 'O' }
-    ],
-    kitchen: [
-      { name: 'Main Kitchen Section', items: 'All food categories', load: 'Medium', loadPercent: 50, status: 'Active' }
-    ]
+    orders: [],
+    staff: [],
+    kitchen: []
   };
 };
 
@@ -547,7 +480,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     e.preventDefault();
     
     if (!validateForm()) {
-      ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
+      const hasEmptyRequiredField = 
+        !branchForm.branchName?.trim() ||
+        !branchForm.branchCode?.trim() ||
+        !branchForm.openingDate ||
+        !branchForm.branchManager?.trim() ||
+        !branchForm.mobileNumber?.trim() ||
+        !branchForm.email?.trim() ||
+        (!isEditing && (!branchForm.password?.trim() || !branchForm.confirmPassword?.trim())) ||
+        !branchForm.address?.trim() ||
+        !branchForm.city?.trim() ||
+        !branchForm.state?.trim() ||
+        !branchForm.country?.trim() ||
+        !branchForm.pincode?.trim();
+
+      if (hasEmptyRequiredField) {
+        ShowNotifications.showAlertNotification('Please fill in the all required fields', false);
+      } else {
+        ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
+      }
       return;
     }
 
@@ -1632,8 +1583,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       </div>
 
       {/* 4. Branch List Table */}
-      <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>

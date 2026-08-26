@@ -164,25 +164,42 @@ export default function StaffManagement() {
                 const isChecked = modalTableIds.includes(table.id);
                 const currentlyAssigned = table.assignedWaiterId ? staff.find(s => s.id === table.assignedWaiterId) : null;
                 const isAssignedToOther = currentlyAssigned && currentlyAssigned.id !== modalWaiterId;
+                const tableNameStr = `Table ${table.tableNumber || table.id}`;
 
                 return (
-                  <label
+                  <div
                     key={table.id}
+                    onClick={(e) => {
+                      if (isAssignedToOther) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
                       fontSize: '13px',
                       fontWeight: '600',
-                      cursor: 'pointer',
-                      padding: '4px 0',
-                      color: 'var(--text-main)'
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: isAssignedToOther ? '1.5px solid #fecaca' : (isChecked ? '1.5px solid #ff7a00' : '1px solid var(--border)'),
+                      backgroundColor: isAssignedToOther ? '#fef2f2' : (isChecked ? '#fff7ed' : '#ffffff'),
+                      cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease',
+                      opacity: isAssignedToOther ? 0.75 : 1
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
+                      disabled={isAssignedToOther}
                       onChange={e => {
+                        if (isAssignedToOther) {
+                          ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                          return;
+                        }
                         if (e.target.checked) {
                           setModalTableIds([...modalTableIds, table.id]);
                         } else {
@@ -193,18 +210,30 @@ export default function StaffManagement() {
                         accentColor: 'var(--primary)',
                         width: '16px',
                         height: '16px',
-                        cursor: 'pointer'
+                        cursor: isAssignedToOther ? 'not-allowed' : 'pointer'
                       }}
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span>{table.id} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({table.seats} seats)</span></span>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ color: isAssignedToOther ? '#991b1b' : 'var(--text-main)' }}>
+                          {tableNameStr}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {table.seats} seats
+                        </span>
+                      </div>
                       {isAssignedToOther && (
-                        <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '500' }}>
-                          Assigned: {currentlyAssigned.name}
+                        <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px' }}>
+                          🚫 Already assigned to {currentlyAssigned.name}
+                        </span>
+                      )}
+                      {!isAssignedToOther && isChecked && (
+                        <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px' }}>
+                          ✓ Assigned to this waiter
                         </span>
                       )}
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
@@ -273,7 +302,7 @@ export default function StaffManagement() {
             </label>
             <input
               type="email"
-              value={activeRestaurant?.kitchenLogin?.email || 'kitchen@saravana.com'}
+              value={activeRestaurant?.kitchenLogin?.email || ''}
               readOnly
               style={{
                 width: '100%',

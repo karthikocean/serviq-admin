@@ -132,21 +132,26 @@ export default function BranchSearchDropdown() {
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // ONLY Restaurant Owner can allow and use the branch dropdown filter at the header
-  const isRestaurantOwner =
+  // Admin / Restaurant Owner can switch branches freely and default to All Branches (HQ)
+  const isAdminOrOwner =
     userType === 'RESTAURANT_OWNER' ||
     userType === 'OWNER' ||
+    userType === 'ADMIN' ||
+    userType === 'SUPER ADMIN' ||
+    userType === 'SUPER_ADMIN' ||
     userRole === 'restaurant_owner' ||
     userRole === 'restaurant owner' ||
-    userRole === 'owner';
+    userRole === 'owner' ||
+    userRole === 'admin' ||
+    userRole === 'super admin';
 
-  const isBranchLocked = !isRestaurantOwner;
+  const isBranchLocked = !isAdminOrOwner;
 
-  // Automatically lock branch if user is Branch Admin / branch-scoped
+  // Automatically lock branch ONLY if user is a branch-scoped staff (non-admin)
   useEffect(() => {
     if (isBranchLocked) {
       const lockId = currentUser?.activeBranchId || (typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId);
-      if (lockId && selectedBranchId !== lockId) {
+      if (lockId && lockId !== 'ALL' && selectedBranchId !== lockId) {
         setSelectedBranchId(lockId);
       }
     }

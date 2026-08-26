@@ -127,8 +127,8 @@ export default function KitchenListPanel({
       </div>
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+          <table className="menu-items-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>

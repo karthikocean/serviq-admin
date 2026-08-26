@@ -1623,11 +1623,11 @@ export default function StockReductionPanel() {
         </div>
 
         {/* 4. TABLE VIEWS */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           
           {/* TAB 1: QUICK REDUCTION ITEMS */}
           {activeTab === 'reductions' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>S.NO</th>
@@ -1737,7 +1737,7 @@ export default function StockReductionPanel() {
 
           {/* TAB 2: REDUCTION HISTORY LOGS */}
           {activeTab === 'history' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
@@ -1841,7 +1841,7 @@ export default function StockReductionPanel() {
 
           {/* TAB 3: PURCHASE RECORDS */}
           {activeTab === 'purchases' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>

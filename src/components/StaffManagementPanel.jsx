@@ -96,9 +96,104 @@ export default function StaffManagementPanel({
   const [modalWaiterId, setModalWaiterId] = useState('');
   const [modalTableIds, setModalTableIds] = useState([]);
   const [modalCoverWaiterId, setModalCoverWaiterId] = useState('');
+  const DEFAULT_STAFF_ROLES = [
+    { _id: 'Branch manager', roleName: 'Branch manager' },
+    { _id: 'Kitchen', roleName: 'Kitchen' },
+    { _id: 'Waiter', roleName: 'Waiter' }
+  ];
+
+  const mapToStandardRoles = (rolesFromApi = []) => {
+    const targetRoles = [
+      { key: 'Branch manager', displayName: 'Branch manager', aliases: ['branch manager', 'manager', 'branch admin', 'branch_admin', 'admin'] },
+      { key: 'Kitchen', displayName: 'Kitchen', aliases: ['kitchen', 'kitchen staff', 'chef', 'cook'] },
+      { key: 'Waiter', displayName: 'Waiter', aliases: ['waiter', 'server', 'captain', 'steward'] }
+    ];
+
+    return targetRoles.map(target => {
+      const found = (rolesFromApi || []).find(r => {
+        const name = (r.roleName || r.name || '').toLowerCase().trim();
+        return target.aliases.some(a => name === a || name.includes(a));
+      });
+
+      if (found) {
+        return {
+          _id: found._id || found.id || target.displayName,
+          roleName: target.displayName,
+          originalRoleName: found.roleName || found.name
+        };
+      }
+
+      return {
+        _id: target.displayName,
+        roleName: target.displayName
+      };
+    });
+  };
+
+  const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(String(id || '').trim());
+
+  const ensureValidRoleId = async (targetRoleIdOrName, currentRoles = []) => {
+    if (isObjectId(targetRoleIdOrName)) return targetRoleIdOrName;
+
+    const clean = String(targetRoleIdOrName || '').toLowerCase().trim();
+    const matched = (currentRoles || []).find(r => {
+      if (!isObjectId(r._id)) return false;
+      const name = String(r.roleName || r.name || '').toLowerCase().trim();
+      if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+      if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+      if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+      return name === clean;
+    });
+
+    if (matched && isObjectId(matched._id)) return matched._id;
+
+    // Check latest server roles
+    try {
+      const serverRoles = await RoleApi.getRoles();
+      if (serverRoles?.status && Array.isArray(serverRoles.response.data)) {
+        const sMatch = serverRoles.response.data.find(r => {
+          if (!isObjectId(r._id)) return false;
+          const name = String(r.roleName || r.name || '').toLowerCase().trim();
+          if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+          if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+          if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+          return name === clean;
+        });
+        if (sMatch && isObjectId(sMatch._id)) return sMatch._id;
+      }
+    } catch (e) {
+      console.error("Error checking roles from server:", e);
+    }
+
+    // Auto-create role in database silently
+    let roleTitle = 'Branch manager';
+    if (clean.includes('kitchen')) roleTitle = 'Kitchen';
+    else if (clean.includes('waiter')) roleTitle = 'Waiter';
+
+    try {
+      const createRes = await RoleApi.createRole({
+        roleName: roleTitle,
+        permissions: {
+          dashboard: { view: true, add: true, edit: true, delete: false },
+          orders: { view: true, add: true, edit: true, delete: false },
+          menu: { view: true, add: false, edit: false, delete: false },
+          tables: { view: true, add: true, edit: true, delete: false }
+        }
+      }, true);
+      const createdId = createRes?.response?.data?._id || createRes?.response?.data?.id;
+      if (createdId && isObjectId(createdId)) {
+        return createdId;
+      }
+    } catch (createErr) {
+      console.error("Error creating role:", createErr);
+    }
+
+    return targetRoleIdOrName;
+  };
+
   const [apiStations, setApiStations] = useState([]);
   const [apiBranches, setApiBranches] = useState([]);
-  const [apiRoles, setApiRoles] = useState([]);
+  const [apiRoles, setApiRoles] = useState(DEFAULT_STAFF_ROLES);
   const [apiTables, setApiTables] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -149,7 +244,31 @@ export default function StaffManagementPanel({
     }
     if (stationsRes?.status) setApiStations(stationsRes.response.data || []);
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
-    if (rolesRes?.status) setApiRoles(rolesRes.response.data || []);
+    if (rolesRes?.status && Array.isArray(rolesRes.response.data)) {
+      const mapped = mapToStandardRoles(rolesRes.response.data);
+      setApiRoles(mapped);
+
+      // Check if any standard roles are missing in the backend DB and auto-seed them
+      const missing = mapped.filter(r => !isObjectId(r._id));
+      if (missing.length > 0) {
+        Promise.all(missing.map(mr => RoleApi.createRole({
+          roleName: mr.roleName,
+          permissions: {
+            dashboard: { view: true, add: true, edit: true, delete: false },
+            orders: { view: true, add: true, edit: true, delete: false },
+            menu: { view: true, add: false, edit: false, delete: false },
+            tables: { view: true, add: true, edit: true, delete: false }
+          }
+        }, true))).then(async () => {
+          const freshRolesRes = await RoleApi.getRoles();
+          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data)) {
+            setApiRoles(mapToStandardRoles(freshRolesRes.response.data));
+          }
+        }).catch(err => console.error("Auto-seeding roles error:", err));
+      }
+    } else {
+      setApiRoles(DEFAULT_STAFF_ROLES);
+    }
     if (tablesRes?.status) setApiTables(tablesRes.response.data || []);
     setIsLoading(false);
   };
@@ -267,6 +386,14 @@ export default function StaffManagementPanel({
       }
     }
 
+    const emailTrimmed = (userForm.email || '').trim();
+    if (emailTrimmed) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(emailTrimmed)) {
+        errors.email = 'Please enter a valid email address (e.g. name@example.com).';
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -275,13 +402,14 @@ export default function StaffManagementPanel({
     e.preventDefault();
     if (!validate()) return;
 
-    const roleName = apiRoles.find(r => r._id === userForm.roleId)?.roleName || '';
+    const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
+    const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
     const isKitchenEmployee = roleName.toLowerCase().includes('kitchen');
 
     const payload = {
       name: userForm.name.trim(),
-      roleId: userForm.roleId,
+      roleId: resolvedRoleId,
       branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
@@ -328,23 +456,22 @@ export default function StaffManagementPanel({
     e.preventDefault();
     const errors = {};
     if (!kitchenForm.branchId) errors.branchId = 'Branch is required.';
-    if (!kitchenForm.email.trim()) errors.email = 'Email is required.';
+    if (!kitchenForm.email.trim()) {
+      errors.email = 'Email is required.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kitchenForm.email.trim())) {
+      errors.email = 'Please enter a valid email address (e.g. name@example.com).';
+    }
     if (!kitchenForm.password.trim()) errors.password = 'Password is required.';
 
     setKitchenFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
-    const kitchenRole = apiRoles.find(r => r.roleName.toLowerCase().includes('kitchen'));
+    const resolvedKitchenRoleId = await ensureValidRoleId('Kitchen', apiRoles);
     const branch = apiBranches.find(b => b._id === kitchenForm.branchId);
-
-    if (!kitchenRole) {
-      ShowNotifications.showAlertNotification("Kitchen role not found in the system.", false);
-      return;
-    }
 
     const payload = {
       name: (branch ? branch.branchName : 'Branch') + ' Kitchen',
-      roleId: kitchenRole._id,
+      roleId: resolvedKitchenRoleId,
       branchId: kitchenForm.branchId,
       userType: 'STATION',
       email: kitchenForm.email.trim(),
@@ -712,12 +839,27 @@ export default function StaffManagementPanel({
                     Email Address
                   </label>
                   <input
-                    type="text"
+                    type="email"
                     value={userForm.email}
-                    onChange={e => setUserForm({ ...userForm, email: e.target.value })}
+                    onChange={e => {
+                      setUserForm({ ...userForm, email: e.target.value });
+                      if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                    }}
                     placeholder="e.g. rajesh@serviq.com"
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', boxSizing: 'border-box' }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: formErrors.email ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                      fontSize: '14px',
+                      boxSizing: 'border-box'
+                    }}
                   />
+                  {formErrors.email && (
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                      {formErrors.email}
+                    </span>
+                  )}
                 </div>
 
                 {!editingUserId && (
@@ -752,202 +894,6 @@ export default function StaffManagementPanel({
               </div>
             )}
 
-            {/* Table Assigning Option (Visible when Role is Waiter) */}
-            {(() => {
-              const selectedRole = apiRoles.find(r => r._id === userForm.roleId);
-              const isWaiter = selectedRole?.roleName?.toLowerCase().includes('waiter');
-              if (!isWaiter) return null;
-
-              const branchTables = apiTables.filter(t => {
-                const tBranchId = typeof t.branchId === 'object' ? t.branchId?._id : t.branchId;
-                return !userForm.branchId || !tBranchId || tBranchId === userForm.branchId;
-              });
-
-              return (
-                <div style={{
-                  background: '#f8fafc',
-                  border: '1.5px solid #e2e8f0',
-                  borderRadius: '12px',
-                  padding: '20px 24px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '14px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '8px',
-                        background: '#ffedd5',
-                        color: '#ea580c',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <TableAssignIcon size={18} color="#ea580c" />
-                      </div>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-                          Assign Tables to Waiter
-                        </h4>
-                        <span style={{ fontSize: '12px', color: '#64748b' }}>
-                          Select dining tables assigned to this waiter for active service
-                        </span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{
-                        background: (userForm.assignedTableIds?.length || 0) > 0 ? '#ffedd5' : '#f1f5f9',
-                        color: (userForm.assignedTableIds?.length || 0) > 0 ? '#ea580c' : '#64748b',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        padding: '4px 10px',
-                        borderRadius: '20px'
-                      }}>
-                        {userForm.assignedTableIds?.length || 0} Table{(userForm.assignedTableIds?.length || 0) === 1 ? '' : 's'} Selected
-                      </span>
-                      {branchTables.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const allIds = branchTables.map(t => t._id || t.id);
-                              setUserForm(prev => ({ ...prev, assignedTableIds: allIds }));
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              color: '#0f172a',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Select All
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setUserForm(prev => ({ ...prev, assignedTableIds: [] }))}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              padding: '4px 10px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              color: '#64748b',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Clear
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {branchTables.length === 0 ? (
-                    <div style={{
-                      padding: '24px',
-                      textAlign: 'center',
-                      background: '#ffffff',
-                      borderRadius: '8px',
-                      border: '1px dashed #cbd5e1',
-                      color: '#64748b',
-                      fontSize: '13px'
-                    }}>
-                      No tables found for this branch. Please create tables in Table Management first.
-                    </div>
-                  ) : (
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                      gap: '12px',
-                      maxHeight: '260px',
-                      overflowY: 'auto',
-                      padding: '4px'
-                    }}>
-                      {branchTables.map(table => {
-                        const tId = table._id || table.id;
-                        const isSelected = (userForm.assignedTableIds || []).includes(tId);
-                        const assignedUser = table.assignedWaiterId
-                          ? apiUsers.find(s => s._id === table.assignedWaiterId)
-                          : (table.assignedWaiter ? (typeof table.assignedWaiter === 'object' ? table.assignedWaiter : apiUsers.find(s => s._id === table.assignedWaiter)) : null);
-                        const isAssignedToOther = assignedUser && assignedUser._id !== editingUserId;
-
-                        return (
-                          <div
-                            key={tId}
-                            onClick={() => {
-                              const current = userForm.assignedTableIds || [];
-                              const updated = isSelected
-                                ? current.filter(id => id !== tId)
-                                : [...current, tId];
-                              setUserForm(prev => ({ ...prev, assignedTableIds: updated }));
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '12px',
-                              padding: '12px 14px',
-                              borderRadius: '10px',
-                              background: isSelected ? '#fff7ed' : '#ffffff',
-                              border: isSelected ? '1.5px solid #ff5a1f' : '1px solid #e2e8f0',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                              boxShadow: isSelected ? '0 2px 8px rgba(255,90,31,0.12)' : 'none'
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              style={{
-                                accentColor: '#ff5a1f',
-                                width: '18px',
-                                height: '18px',
-                                cursor: 'pointer'
-                              }}
-                            />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: '13px', fontWeight: 800, color: isSelected ? '#ea580c' : '#0f172a' }}>
-                                  Table {table.tableNo || table.tableNumber || tId}
-                                </span>
-                                <span style={{
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: table.status === 'Occupied' ? '#dc2626' : '#16a34a',
-                                  background: table.status === 'Occupied' ? '#fee2e2' : '#dcfce7',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px'
-                                }}>
-                                  {table.status || 'Free'}
-                                </span>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', fontSize: '11px', color: '#64748b' }}>
-                                <span>{table.section || table.area || 'Main Hall'}</span>
-                                <span>•</span>
-                                <span>{table.seats || table.seatingCapacity || 4} Seats</span>
-                              </div>
-                              {isAssignedToOther && (
-                                <div style={{ marginTop: '4px', fontSize: '10px', fontWeight: 600, color: '#d97706', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                  <span>⚠️ Currently: {assignedUser.name}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
               <button
@@ -1233,19 +1179,19 @@ export default function StaffManagementPanel({
       </div>
 
       {/* Staff Unified Table */}
-      <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
+      <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
+        <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-              <th style={{ width: '5%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-              <th style={{ width: '17%', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
-              <th style={{ width: '8%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
-              <th style={{ width: '9%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
-              <th style={{ width: '10%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
-              <th style={{ width: '11%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
-              <th style={{ width: '13%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
-              <th style={{ width: '13%', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
-              <th style={{ width: '14%', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+              <th style={{ minWidth: '180px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
+              <th style={{ minWidth: '90px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
+              <th style={{ minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
+              <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
+              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
+              <th style={{ minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
+              <th style={{ minWidth: '120px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -1947,27 +1893,44 @@ export default function StaffManagementPanel({
                 return filteredTables.map(table => {
                   const tId = table._id || table.id;
                   const isChecked = modalTableIds.includes(tId);
-                  const currentlyAssigned = table.assignedWaiterId ? apiUsers.find(s => s._id === table.assignedWaiterId) : null;
-                  const isAssignedToOther = currentlyAssigned && currentlyAssigned._id !== modalWaiterId;
+                  const currentlyAssigned = table.assignedWaiterId ? apiUsers.find(s => String(s._id || s.id) === String(table.assignedWaiterId)) : null;
+                  const isAssignedToOther = currentlyAssigned && String(currentlyAssigned._id || currentlyAssigned.id) !== String(modalWaiterId);
+                  const tableNameStr = `Table ${table.tableNo || table.tableNumber || tId}`;
 
                   return (
-                    <label
+                    <div
                       key={tId}
+                      onClick={(e) => {
+                        if (isAssignedToOther) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                        }
+                      }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
                         fontSize: '13px',
                         fontWeight: '600',
-                        cursor: 'pointer',
-                        padding: '4px 0',
-                        color: '#334155'
+                        padding: '8px 10px',
+                        borderRadius: '8px',
+                        border: isAssignedToOther ? '1.5px solid #fecaca' : (isChecked ? '1.5px solid #ff7a00' : '1px solid #e2e8f0'),
+                        backgroundColor: isAssignedToOther ? '#fef2f2' : (isChecked ? '#fff7ed' : '#ffffff'),
+                        cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease',
+                        opacity: isAssignedToOther ? 0.75 : 1
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
+                        disabled={isAssignedToOther}
                         onChange={e => {
+                          if (isAssignedToOther) {
+                            ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                            return;
+                          }
                           if (e.target.checked) {
                             setModalTableIds([...modalTableIds, tId]);
                           } else {
@@ -1978,18 +1941,30 @@ export default function StaffManagementPanel({
                           accentColor: 'var(--primary)',
                           width: '16px',
                           height: '16px',
-                          cursor: 'pointer'
+                          cursor: isAssignedToOther ? 'not-allowed' : 'pointer'
                         }}
                       />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>Table {table.tableNo || table.tableNumber || tId} <span style={{ fontSize: '11px', color: '#94a3b8' }}>({table.seats || table.seatingCapacity || table.tableCapacity || 2} seats)</span></span>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <span style={{ color: isAssignedToOther ? '#991b1b' : '#0f172a' }}>
+                            {tableNameStr}
+                          </span>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                            {table.seats || table.seatingCapacity || table.tableCapacity || 2} seats
+                          </span>
+                        </div>
                         {isAssignedToOther && (
-                          <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '500' }}>
-                            Assigned: {currentlyAssigned.name}
+                          <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px' }}>
+                            🚫 Already assigned to {currentlyAssigned.name}
+                          </span>
+                        )}
+                        {!isAssignedToOther && isChecked && (
+                          <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px' }}>
+                            ✓ Assigned to this waiter
                           </span>
                         )}
                       </div>
-                    </label>
+                    </div>
                   );
                 });
               })()}

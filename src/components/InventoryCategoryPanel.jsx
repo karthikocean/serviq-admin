@@ -765,8 +765,8 @@ export default function InventoryCategoryPanel() {
         padding: '20px',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>

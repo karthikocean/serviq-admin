@@ -6,12 +6,12 @@ export default function Login() {
   const { login, currentUser } = useAppState();
   const navigate = useNavigate();
   const [role] = useState('admin');
-  const [email, setEmail] = useState('arjun.kumar@royalspice.test');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [errorMsg, setErrorMsg] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   if (currentUser) {

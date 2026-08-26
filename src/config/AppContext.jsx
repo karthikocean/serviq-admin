@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { initialRestaurantsData, initialState, AVAILABLE_PLANS } from './initialData';
+import { isTokenExpired } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
 import QrCodeApi from '../api/QrCode.js';
@@ -150,10 +151,30 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
   { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
 ];
 
+const loadSavedUser = () => {
+  try {
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const savedUserStr = localStorage.getItem('currentUser');
+    if (token && savedUserStr) {
+      if (isTokenExpired(token)) {
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentUser');
+        try { sessionStorage.clear(); } catch (e) { }
+        return null;
+      }
+      return JSON.parse(savedUserStr);
+    }
+  } catch (e) {
+    console.warn("Could not load saved user session", e);
+  }
+  return null;
+};
+
 export const AppProvider = ({ children }) => {
-  // Core database states (In-Memory state - No localStorage persistence)
+  // Core database states
   const [restaurantsData, setRestaurantsData] = useState(initialRestaurantsData);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(loadSavedUser);
   const [currentRestaurantId, setCurrentRestaurantId] = useState(initialRestaurantsData['rest-1'] ? 'rest-1' : null);
   // Active Tenant settings overrides / defaults
   const [darkMode, setDarkMode] = useState(false);
@@ -161,6 +182,34 @@ export const AppProvider = ({ children }) => {
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
   // Branch filter state (null = All Branches)
   const [selectedBranchId, setSelectedBranchId] = useState(null);
+
+  // Synchronize currentUser to localStorage whenever it changes
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('currentUser');
+    }
+  }, [currentUser]);
+
+  // Periodic token expiration check & auto-logout
+  useEffect(() => {
+    const checkTokenExpiry = () => {
+      const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+      if (token && isTokenExpired(token)) {
+        ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
+        logout();
+      }
+    };
+
+    const interval = setInterval(checkTokenExpiry, 15000);
+    window.addEventListener('focus', checkTokenExpiry);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkTokenExpiry);
+    };
+  }, []);
 
 
   // Active computed tenant info
@@ -181,16 +230,40 @@ export const AppProvider = ({ children }) => {
   };
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
+    if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
+
+    const extractOrderTable = (o) => {
+      if (!o) return '';
+      if (typeof o.table === 'string') return o.table;
+      if (typeof o.table === 'number') return String(o.table);
+      if (o.tableId && typeof o.tableId === 'object') {
+        return String(o.tableId.tableNumber || o.tableId.tableNo || o.tableId.name || o.tableId._id || '');
+      }
+      if (typeof o.tableId === 'string' || typeof o.tableId === 'number') {
+        return String(o.tableId);
+      }
+      return '';
+    };
+
     return tablesList.map(t => {
-      const tableNum = t.id.replace('T-', '');
-      const tableLabel = `Table ${tableNum}`;
+      if (!t) return null;
+      const tIdStr = String(t.id || t.tableNumber || t.tableNo || t.name || '').trim();
+      const tableNum = tIdStr.replace(/^T-|^Table\s*/i, '').trim();
+      const tableLabel = `Table ${tableNum || tIdStr || '1'}`;
+
       const unpaidOrders = ordersList.filter(o => {
-        const oTable = o.table.replace('Table ', '').trim();
-        return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'unpaid';
+        if (!o) return false;
+        const rawTable = extractOrderTable(o);
+        const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+        const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+          (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+          (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+        const bStatus = (o.billingStatus || '').toLowerCase();
+        return isMatch && bStatus !== 'paid';
       });
 
       if (unpaidOrders.length > 0) {
-        const total = unpaidOrders.reduce((sum, o) => sum + o.total, 0);
+        const total = unpaidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
         return {
           table: tableLabel,
           orders: unpaidOrders.length,
@@ -199,10 +272,16 @@ export const AppProvider = ({ children }) => {
         };
       } else {
         const paidOrders = ordersList.filter(o => {
-          const oTable = o.table.replace('Table ', '').trim();
-          return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'paid';
+          if (!o) return false;
+          const rawTable = extractOrderTable(o);
+          const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+          const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+            (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+            (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+          const bStatus = (o.billingStatus || '').toLowerCase();
+          return isMatch && bStatus === 'paid';
         });
-        const lastPaidTotal = paidOrders.length > 0 ? paidOrders[paidOrders.length - 1].total : 0;
+        const lastPaidTotal = paidOrders.length > 0 ? (Number(paidOrders[paidOrders.length - 1].total) || 0) : 0;
         return {
           table: tableLabel,
           orders: 0,
@@ -210,7 +289,7 @@ export const AppProvider = ({ children }) => {
           status: 'Paid'
         };
       }
-    });
+    }).filter(Boolean);
   };
 
   const fetchTables = async () => {
@@ -225,10 +304,10 @@ export const AppProvider = ({ children }) => {
           if (!rest) return prev;
           const localTables = rest.tables || [];
           const mapped = res.response.data.map(t => {
-            const localT = localTables.find(lt => lt.id.toLowerCase() === t.tableNumber.toLowerCase());
+            const localT = localTables.find(lt => lt && lt.id && t && t.tableNumber && String(lt.id).toLowerCase() === String(t.tableNumber).toLowerCase());
             return {
               _id: t._id,
-              id: t.tableNumber,
+              id: t.tableNumber || t.id,
               seats: t.seatingCapacity,
               status: t.status ? 'Occupied' : 'Free',
               isActive: t.isActive,
@@ -283,16 +362,24 @@ export const AppProvider = ({ children }) => {
     if (!token) return;
     try {
       const res = await OrderApi.getOrders();
-      if (res && res.status && res.response && res.response.data) {
+      if (res && res.status) {
+        const payload = res.response || {};
+        const rawOrders = Array.isArray(payload) ? payload :
+          Array.isArray(payload.data) ? payload.data :
+          Array.isArray(payload.data?.orders) ? payload.data.orders :
+          Array.isArray(payload.orders) ? payload.orders :
+          Array.isArray(payload.response?.data) ? payload.response.data :
+          [];
+
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
-          const computedBillData = computeBillingData(res.response.data, rest.tables || []);
+          const computedBillData = computeBillingData(rawOrders, rest.tables || []);
           return {
             ...prev,
             [targetId]: {
               ...rest,
-              orders: res.response.data,
+              orders: rawOrders,
               billingData: computedBillData
             }
           };
@@ -393,6 +480,7 @@ export const AppProvider = ({ children }) => {
 
     const initData = async () => {
       await fetchBranches();
+      await fetchOrders();
     };
     initData();
   }, [currentUser, currentRestaurantId]);
@@ -429,22 +517,36 @@ export const AppProvider = ({ children }) => {
           try { sessionStorage.clear(); } catch (e) { }
 
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
+          const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
+          const roleUpper = roleStr.toUpperCase();
+          const isAdminUser = 
+            userTypeUpper === 'RESTAURANT_OWNER' || 
+            userTypeUpper === 'OWNER' || 
+            userTypeUpper === 'ADMIN' || 
+            userTypeUpper === 'SUPER ADMIN' || 
+            userTypeUpper === 'SUPER_ADMIN' ||
+            roleUpper === 'ADMIN' ||
+            roleUpper === 'SUPER ADMIN' ||
+            roleUpper === 'RESTAURANT_OWNER' ||
+            roleUpper === 'OWNER';
+
           const user = {
             id: apiUser.id || apiUser._id,
             name: apiUser.name,
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber,
-            userType: apiUser.userType, // "RESTAURANT_OWNER"
+            userType: apiUser.userType || (isAdminUser ? 'RESTAURANT_OWNER' : 'STAFF'),
             role: userTypeUpper === 'RESTAURANT_OWNER' ? 'RESTAURANT_OWNER' : (apiUser.role || 'Admin'),
             restaurantId: apiUser.restaurantId || currentRestaurantId || 'rest-1',
-            activeBranchId: apiUser.activeBranchId || 'ALL',
-            branchId: apiUser.activeBranchId || 'ALL'
+            activeBranchId: isAdminUser ? 'ALL' : (apiUser.activeBranchId || apiUser.branchId || 'ALL'),
+            branchId: isAdminUser ? 'ALL' : (apiUser.activeBranchId || apiUser.branchId || 'ALL')
           };
 
+          localStorage.setItem("currentUser", JSON.stringify(user));
           setCurrentUser(user);
           const targetRestId = apiUser.restaurantId || currentRestaurantId || 'rest-1';
           setCurrentRestaurantId(targetRestId);
-          setSelectedBranchId(user.branchId === 'ALL' ? null : user.branchId);
+          setSelectedBranchId(null);
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
           return { success: true, user };
@@ -460,6 +562,7 @@ export const AppProvider = ({ children }) => {
 
       localStorage.removeItem("userToken");
       localStorage.removeItem("token");
+      localStorage.removeItem("currentUser");
       sessionStorage.clear();
       setCurrentUser(null);
 
@@ -470,6 +573,7 @@ export const AppProvider = ({ children }) => {
       const errMsg = e?.response?.data?.message || e?.message || "Invalid credentials.";
       localStorage.removeItem("userToken");
       localStorage.removeItem("token");
+      localStorage.removeItem("currentUser");
       sessionStorage.clear();
       setCurrentUser(null);
       ShowNotifications.showAlertNotification(errMsg, false);
@@ -482,9 +586,12 @@ export const AppProvider = ({ children }) => {
     setCurrentRestaurantId(null);
     setSelectedBranchId(null);
     try {
-      localStorage.clear();
+      localStorage.removeItem('userToken');
+      localStorage.removeItem('token');
+      localStorage.removeItem('currentUser');
       sessionStorage.clear();
     } catch (e) { }
+    window.location.href = '/login';
   };
 
 

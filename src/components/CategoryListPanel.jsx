@@ -35,38 +35,68 @@ export default function CategoryListPanel({
   activeRestaurant
 }) {
   const { currentUser, selectedBranchId } = useAppState();
-  const [paginatedCategories, setPaginatedCategories] = useState([]);
-  const [totalItems, setTotalItems] = useState(0);
+  const [allCategories, setAllCategories] = useState([]);
   const [page, setPage] = useState(1);
   const limit = 10;
-  const [totalPages, setTotalPages] = useState(1);
 
-  React.useEffect(() => {
-    fetchPaginatedCategories();
-  }, [page, activeRestaurant, selectedBranchId]);
-
-  const fetchPaginatedCategories = async () => {
+  const fetchCategoriesData = async () => {
     if (!activeRestaurant) return;
-    const params = { page, limit };
-    if (selectedBranchId) {
-      params.branchId = selectedBranchId;
-    } else {
-      params.branchId = 'all';
-    }
-    const res = await MenuApi.getCategories(params);
-    if (res?.status && res.response) {
-      if (res.response.data && res.response.data.items) {
-        setPaginatedCategories(res.response.data.items);
-        setTotalItems(res.response.data.total || 0);
-        setTotalPages(Math.ceil((res.response.data.total || 0) / limit) || 1);
+    try {
+      const params = { limit: 1000 };
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
       } else {
-        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-        setPaginatedCategories(arr);
-        setTotalItems(arr.length);
-        setTotalPages(Math.ceil(arr.length / limit) || 1);
+        params.branchId = 'all';
+      }
+      const res = await MenuApi.getCategories(params);
+      if (res?.status && res.response) {
+        const rawData = res.response.data || res.response.categories || res.response || [];
+        const arr = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.items) ? rawData.items : (Array.isArray(rawData?.data) ? rawData.data : []))).filter(c => !c?.isDelete);
+        setAllCategories(arr);
+      } else if (Array.isArray(categories) && categories.length > 0) {
+        setAllCategories(categories.filter(c => !c?.isDelete));
+      }
+    } catch (err) {
+      console.error("Error fetching categories:", err);
+      if (Array.isArray(categories) && categories.length > 0) {
+        setAllCategories(categories.filter(c => !c?.isDelete));
       }
     }
   };
+
+  React.useEffect(() => {
+    fetchCategoriesData();
+  }, [activeRestaurant, selectedBranchId]);
+
+  React.useEffect(() => {
+    if (Array.isArray(categories) && categories.length > 0) {
+      setAllCategories(categories.filter(c => !c?.isDelete));
+    }
+  }, [categories]);
+
+  const displayCategories = allCategories.filter(cat => {
+    if (selectedBranchId && selectedBranchId !== 'ALL') {
+      const catBranchId = typeof cat.branchId === 'object' ? (cat.branchId?._id || cat.branchId?.id) : cat.branchId;
+      if (catBranchId && String(catBranchId) !== String(selectedBranchId)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const totalItems = displayCategories.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+  const paginatedCategories = displayCategories.slice((page - 1) * limit, page * limit);
+
+  React.useEffect(() => {
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages);
+    }
+  }, [totalPages, page]);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [selectedBranchId]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -169,7 +199,7 @@ export default function CategoryListPanel({
         if (res.status) {
           ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
           if (refreshCategories) refreshCategories();
-          fetchPaginatedCategories();
+          fetchCategoriesData();
           setViewMode('list');
         } else {
           ShowNotifications.showAlertNotification('Failed to update category', false);
@@ -182,7 +212,7 @@ export default function CategoryListPanel({
       if (res.status) {
         ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
         if (refreshCategories) refreshCategories();
-        fetchPaginatedCategories();
+        fetchCategoriesData();
         setViewMode('list');
       } else {
         ShowNotifications.showAlertNotification('Failed to create category', false);
@@ -197,7 +227,7 @@ export default function CategoryListPanel({
         if (res.status) {
           ShowNotifications.showAlertNotification(`Category "${item.name}" deleted!`, true);
           if (refreshCategories) refreshCategories();
-          fetchPaginatedCategories();
+          fetchCategoriesData();
         } else {
           ShowNotifications.showAlertNotification('Failed to delete category', false);
         }
@@ -507,8 +537,8 @@ export default function CategoryListPanel({
         padding: '24px',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
@@ -529,18 +559,25 @@ export default function CategoryListPanel({
               </tr>
             </thead>
             <tbody>
-              {paginatedCategories.map((item, index) => {
-                const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
-                return (
-                  <tr
-                    key={item._id || index}
-                    style={{
-                      borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-                  >
+              {paginatedCategories.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+                    No categories found. Click <strong>Add Category</strong> to create one.
+                  </td>
+                </tr>
+              ) : (
+                paginatedCategories.map((item, index) => {
+                  const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
+                  return (
+                    <tr
+                      key={item._id || index}
+                      style={{
+                        borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                    >
                     {/* S.NO */}
                     <td style={{ padding: '16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', width: '5%' }}>
                       {(page - 1) * limit + index + 1}
@@ -642,7 +679,8 @@ export default function CategoryListPanel({
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>

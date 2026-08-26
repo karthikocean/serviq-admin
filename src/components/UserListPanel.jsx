@@ -68,9 +68,102 @@ export default function UserListPanel() {
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
+  const DEFAULT_STAFF_ROLES = [
+    { _id: 'Branch manager', roleName: 'Branch manager' },
+    { _id: 'Kitchen', roleName: 'Kitchen' },
+    { _id: 'Waiter', roleName: 'Waiter' }
+  ];
+
+  const mapToStandardRoles = (rolesFromApi = []) => {
+    const targetRoles = [
+      { key: 'Branch manager', displayName: 'Branch manager', aliases: ['branch manager', 'manager', 'branch admin', 'branch_admin', 'admin'] },
+      { key: 'Kitchen', displayName: 'Kitchen', aliases: ['kitchen', 'kitchen staff', 'chef', 'cook'] },
+      { key: 'Waiter', displayName: 'Waiter', aliases: ['waiter', 'server', 'captain', 'steward'] }
+    ];
+
+    return targetRoles.map(target => {
+      const found = (rolesFromApi || []).find(r => {
+        const name = (r.roleName || r.name || '').toLowerCase().trim();
+        return target.aliases.some(a => name === a || name.includes(a));
+      });
+
+      if (found) {
+        return {
+          _id: found._id || found.id || target.displayName,
+          roleName: target.displayName,
+          originalRoleName: found.roleName || found.name
+        };
+      }
+
+      return {
+        _id: target.displayName,
+        roleName: target.displayName
+      };
+    });
+  };
+
+  const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(String(id || '').trim());
+
+  const ensureValidRoleId = async (targetRoleIdOrName, currentRoles = []) => {
+    if (isObjectId(targetRoleIdOrName)) return targetRoleIdOrName;
+
+    const clean = String(targetRoleIdOrName || '').toLowerCase().trim();
+    const matched = (currentRoles || []).find(r => {
+      if (!isObjectId(r._id)) return false;
+      const name = String(r.roleName || r.name || '').toLowerCase().trim();
+      if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+      if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+      if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+      return name === clean;
+    });
+
+    if (matched && isObjectId(matched._id)) return matched._id;
+
+    try {
+      const serverRoles = await RoleApi.getRoles();
+      if (serverRoles?.status && Array.isArray(serverRoles.response.data)) {
+        const sMatch = serverRoles.response.data.find(r => {
+          if (!isObjectId(r._id)) return false;
+          const name = String(r.roleName || r.name || '').toLowerCase().trim();
+          if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+          if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+          if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+          return name === clean;
+        });
+        if (sMatch && isObjectId(sMatch._id)) return sMatch._id;
+      }
+    } catch (e) {
+      console.error("Error checking roles:", e);
+    }
+
+    let roleTitle = 'Branch manager';
+    if (clean.includes('kitchen')) roleTitle = 'Kitchen';
+    else if (clean.includes('waiter')) roleTitle = 'Waiter';
+
+    try {
+      const createRes = await RoleApi.createRole({
+        roleName: roleTitle,
+        permissions: {
+          dashboard: { view: true, add: true, edit: true, delete: false },
+          orders: { view: true, add: true, edit: true, delete: false },
+          menu: { view: true, add: false, edit: false, delete: false },
+          tables: { view: true, add: true, edit: true, delete: false }
+        }
+      }, true);
+      const createdId = createRes?.response?.data?._id || createRes?.response?.data?.id;
+      if (createdId && isObjectId(createdId)) {
+        return createdId;
+      }
+    } catch (createErr) {
+      console.error("Error creating role:", createErr);
+    }
+
+    return targetRoleIdOrName;
+  };
+
   const [apiUsers, setApiUsers] = useState([]);
   const [apiBranches, setApiBranches] = useState([]);
-  const [apiRoles, setApiRoles] = useState([]);
+  const [apiRoles, setApiRoles] = useState(DEFAULT_STAFF_ROLES);
   const [isLoading, setIsLoading] = useState(false);
 
   const [page, setPage] = useState(1);
@@ -97,7 +190,30 @@ export default function UserListPanel() {
       setTotalRecords(usersRes.response.total || 0);
     }
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
-    if (rolesRes?.status) setApiRoles(rolesRes.response.data || []);
+    if (rolesRes?.status && Array.isArray(rolesRes.response.data)) {
+      const mapped = mapToStandardRoles(rolesRes.response.data);
+      setApiRoles(mapped);
+
+      const missing = mapped.filter(r => !isObjectId(r._id));
+      if (missing.length > 0) {
+        Promise.all(missing.map(mr => RoleApi.createRole({
+          roleName: mr.roleName,
+          permissions: {
+            dashboard: { view: true, add: true, edit: true, delete: false },
+            orders: { view: true, add: true, edit: true, delete: false },
+            menu: { view: true, add: false, edit: false, delete: false },
+            tables: { view: true, add: true, edit: true, delete: false }
+          }
+        }, true))).then(async () => {
+          const freshRolesRes = await RoleApi.getRoles();
+          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data)) {
+            setApiRoles(mapToStandardRoles(freshRolesRes.response.data));
+          }
+        }).catch(err => console.error("Auto-seeding roles error:", err));
+      }
+    } else {
+      setApiRoles(DEFAULT_STAFF_ROLES);
+    }
     setIsLoading(false);
   };
 
@@ -215,12 +331,13 @@ export default function UserListPanel() {
       return;
     }
 
-    const roleName = apiRoles.find(r => r._id === userForm.roleId)?.roleName || '';
+    const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
+    const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
 
     const payload = {
       name: userForm.name.trim(),
-      roleId: userForm.roleId,
+      roleId: resolvedRoleId,
       branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
@@ -730,8 +847,8 @@ export default function UserListPanel() {
           </select>
         </div>
 
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>

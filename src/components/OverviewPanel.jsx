@@ -142,7 +142,7 @@ export default function OverviewPanel({
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
 
   // Calculate dynamic monthly sales
-  const monthlySales = todayRevenue + (isAllBranches ? 85400 : 28500);
+  const monthlySales = todayRevenue;
 
   // Top ordered menu item fallback
   const getTopOrderedItem = () => {
@@ -152,7 +152,7 @@ export default function OverviewPanel({
         itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.qty || 0);
       });
     });
-    let topItemName = 'Chicken Biryani';
+    let topItemName = '-';
     let maxCount = 0;
     Object.keys(itemCounts).forEach(name => {
       if (itemCounts[name] > maxCount) {
@@ -246,7 +246,7 @@ export default function OverviewPanel({
       )}
 
       {/* 8 STATS CARDS GRID (2 Rows of 4 Cards) */}
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' }}>
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
         
         {/* Card 1: Today's Orders / Total Branches */}
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
@@ -431,8 +431,8 @@ export default function OverviewPanel({
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)' }}>
-            <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)', paddingBottom: '6px' }}>
+            <table className="menu-items-table" style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', textAlign: 'left' }}>
                   <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH NAME</th>
@@ -511,10 +511,10 @@ export default function OverviewPanel({
       )}
 
       {/* CHARTS CONTAINER (Revenue Growth & Order Breakdown) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1.2fr)', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
         
         {/* Revenue Growth Card */}
-        <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+        <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
             <div>
               <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>
@@ -613,7 +613,7 @@ export default function OverviewPanel({
         </div>
 
         {/* Order Breakdown Card */}
-        <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+        <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
             <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
@@ -670,10 +670,10 @@ export default function OverviewPanel({
       </div>
 
       {/* LOWER ROW: Live Order Feed & Dining Tables Panel */}
-      <div className="dashboard-inner-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+      <div className="dashboard-inner-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1.2fr)', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
         
         {/* Live Order Feed Table */}
-        <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)' }}>
+        <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
           <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
@@ -682,8 +682,8 @@ export default function OverviewPanel({
             </div>
             <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
           </div>
-          <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-            <table className="menu-items-table feed-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', paddingBottom: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+            <table className="menu-items-table feed-table" style={{ width: '100%', minWidth: '580px', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                   <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ORDER ID</th>
@@ -745,18 +745,18 @@ export default function OverviewPanel({
         </div>
 
         {/* Dining Tables Grid */}
-        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '8px' }}>
             <div>
-              <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
+              <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0, whiteSpace: 'nowrap' }}>
                 Live Tables Status
               </h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '11px', background: '#fef2f2', color: '#ef4444', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #fecaca' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <span style={{ fontSize: '11px', background: '#fef2f2', color: '#ef4444', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #fecaca', whiteSpace: 'nowrap' }}>
                 {liveTablesData?.summary?.occupiedTables !== undefined ? liveTablesData.summary.occupiedTables : occupiedTablesCount} Occupied
               </span>
-              <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
                 {liveTablesData?.summary?.totalTables !== undefined ? liveTablesData.summary.totalTables : tables.length} Total
               </span>
             </div>
@@ -766,8 +766,8 @@ export default function OverviewPanel({
             className="tables-status-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: '10px',
               maxHeight: '440px',
               overflowY: 'auto',
               paddingRight: '4px'

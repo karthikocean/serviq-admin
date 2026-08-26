@@ -61,9 +61,17 @@ const PencilIcon = ({ size = 15, color = 'currentColor' }) => (
   </svg>
 );
 
+const PlusIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
 export default function OrdersPanel({
   orders = [],
   staff = [],
+  tables = [],
   orderFilter = 'All',
   setOrderFilter,
   selectedWaiterFilter = 'All',
@@ -119,6 +127,49 @@ export default function OrdersPanel({
   const [appendSearchQuery, setAppendSearchQuery] = useState('');
   const [appendSelectedCategory, setAppendSelectedCategory] = useState('All');
 
+  // New order form states
+  const [newOrderTable, setNewOrderTable] = useState('');
+  const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
+  const [newOrderNotes, setNewOrderNotes] = useState('');
+  const [newOrderStatus, setNewOrderStatus] = useState('new');
+  const [newOrderItems, setNewOrderItems] = useState([]);
+  const [customItemName, setCustomItemName] = useState('');
+  const [customItemPrice, setCustomItemPrice] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+
+  const [apiCategories, setApiCategories] = useState([]);
+  const [apiMenuItems, setApiMenuItems] = useState([]);
+  const [apiTables, setApiTables] = useState(Array.isArray(tables) ? tables : []);
+  const [modalWaiters, setModalWaiters] = useState([]);
+  const [modalSelectedBranchId, setModalSelectedBranchId] = useState('');
+  const [taxRate, setTaxRate] = useState(5);
+
+  useEffect(() => {
+    if (Array.isArray(tables) && tables.length > 0) {
+      setApiTables(tables);
+    }
+  }, [tables]);
+
+  useEffect(() => {
+    const loadTablesForPanel = async () => {
+      try {
+        const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
+        const query = isBranchFiltered ? `?branchId=${selectedBranchId}` : '';
+        const res = await apiClient.get(`/tables${query}`).catch(() => null);
+        if (res && (res.status === 200 || res.data?.success)) {
+          const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.response?.data || []);
+          if (Array.isArray(fetched) && fetched.length > 0) {
+            setApiTables(fetched);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load tables in OrdersPanel:", e);
+      }
+    };
+    loadTablesForPanel();
+  }, [selectedBranchId]);
+
   // Check branch lock
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -131,15 +182,156 @@ export default function OrdersPanel({
   const isBranchLocked = !isAdmin;
   const canChooseBranchInOrder = isAdmin && (!selectedBranchId || selectedBranchId === 'ALL');
 
-  // Waiters list
-  const staffWaiters = staff.filter(s => {
-    const roleName = s.roleId?.roleName || s.role || '';
-    return roleName.toLowerCase() === 'waiter';
-  }).map(s => ({ id: s._id || s.id, name: s.name }));
+  // Strict helper: Only genuine Waiters (strictly exclude Kitchen, Manager, Admin, etc.)
+  const isOnlyWaiter = (s) => {
+    if (!s) return false;
+    const roleName = String(
+      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : s.roleId) ||
+      s.role ||
+      s.designation ||
+      ''
+    ).toLowerCase().trim();
+
+    const userType = String(s.userType || '').toUpperCase().trim();
+
+    // Explicitly exclude non-waiters
+    if (
+      roleName.includes('kitchen') ||
+      roleName.includes('chef') ||
+      roleName.includes('cook') ||
+      roleName.includes('manager') ||
+      roleName.includes('admin') ||
+      roleName.includes('owner') ||
+      roleName.includes('station') ||
+      roleName.includes('cashier') ||
+      roleName.includes('accountant') ||
+      roleName.includes('inventory') ||
+      roleName.includes('helper') ||
+      roleName.includes('cleaner') ||
+      userType === 'STATION' ||
+      userType === 'BRANCH_ADMIN' ||
+      userType === 'ADMIN' ||
+      userType === 'SUPER_ADMIN' ||
+      userType === 'RESTAURANT_OWNER' ||
+      userType === 'OWNER'
+    ) {
+      return false;
+    }
+
+    return roleName.includes('waiter') || roleName.includes('server') || roleName === 'waiter';
+  };
+
+  // Waiters list (Waiters ONLY)
+  const effectiveStaffList = Array.isArray(staff) ? staff : [];
+  const staffWaiters = effectiveStaffList.filter(isOnlyWaiter).map(s => ({
+    id: s._id || s.id,
+    _id: s._id || s.id,
+    name: s.name
+  }));
 
   const uniqueWaitersMap = new Map();
-  staffWaiters.forEach(w => uniqueWaitersMap.set(w.name, w));
+  staffWaiters.forEach(w => {
+    if (w.name) uniqueWaitersMap.set(w.name.toLowerCase(), w);
+  });
+  (modalWaiters || []).forEach(name => {
+    if (name && !uniqueWaitersMap.has(name.toLowerCase())) {
+      const foundInStaff = effectiveStaffList.find(s => s.name?.toLowerCase() === name.toLowerCase());
+      if (!foundInStaff || isOnlyWaiter(foundInStaff)) {
+        uniqueWaitersMap.set(name.toLowerCase(), {
+          id: foundInStaff?._id || foundInStaff?.id || name,
+          _id: foundInStaff?._id || foundInStaff?.id || name,
+          name: name
+        });
+      }
+    }
+  });
+  (activeRestaurant?.staff || []).filter(isOnlyWaiter).forEach(s => {
+    if (s.name && !uniqueWaitersMap.has(s.name.toLowerCase())) {
+      uniqueWaitersMap.set(s.name.toLowerCase(), {
+        id: s.id || s._id,
+        _id: s.id || s._id,
+        name: s.name
+      });
+    }
+  });
   const allWaiters = Array.from(uniqueWaitersMap.values());
+
+  // Helper to accurately resolve assigned waiter from order or associated table
+  const getResolvedWaiterName = (ord) => {
+    if (!ord) return 'Unassigned';
+
+    // 1. Direct populated waiter object on order
+    if (ord.waiterId && typeof ord.waiterId === 'object' && ord.waiterId.name) {
+      return ord.waiterId.name;
+    }
+
+    // 2. Direct string waiter property on order
+    if (typeof ord.waiter === 'string' && ord.waiter.trim() && ord.waiter !== 'Unassigned' && ord.waiter !== '-' && ord.waiter !== 'None') {
+      return ord.waiter;
+    }
+
+    if (typeof ord.waiterName === 'string' && ord.waiterName.trim() && ord.waiterName !== 'Unassigned') {
+      return ord.waiterName;
+    }
+
+    // 3. Match raw waiterId against staff / allWaiters list
+    const rawWaiterId = typeof ord.waiterId === 'string' ? ord.waiterId : (ord.staffId || ord.staff);
+    if (rawWaiterId && rawWaiterId !== 'Unassigned' && rawWaiterId !== 'null') {
+      const foundStaff = effectiveStaffList.find(s => String(s._id || s.id) === String(rawWaiterId) || String(s.name).toLowerCase() === String(rawWaiterId).toLowerCase()) ||
+                         allWaiters.find(w => String(w.id || w._id) === String(rawWaiterId) || String(w.name).toLowerCase() === String(rawWaiterId).toLowerCase());
+      if (foundStaff && foundStaff.name) return foundStaff.name;
+    }
+
+    // 4. Look up waiter assigned to this order's table
+    const tableIdent = ord.tableId?._id || ord.tableId?.id || ord.tableId || ord.table;
+    const tableNumStr = String(ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '').replace(/^Table\s*/i, '').trim();
+
+    // Check if ord.tableId object contains assigned waiter
+    if (ord.tableId && typeof ord.tableId === 'object') {
+      if (ord.tableId.assignedWaiterId && typeof ord.tableId.assignedWaiterId === 'object' && ord.tableId.assignedWaiterId.name) {
+        return ord.tableId.assignedWaiterId.name;
+      }
+      if (ord.tableId.assignedWaiter && typeof ord.tableId.assignedWaiter === 'object' && ord.tableId.assignedWaiter.name) {
+        return ord.tableId.assignedWaiter.name;
+      }
+      if (typeof ord.tableId.assignedWaiter === 'string' && ord.tableId.assignedWaiter !== 'Unassigned') {
+        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(ord.tableId.assignedWaiter) || String(s.name).toLowerCase() === String(ord.tableId.assignedWaiter).toLowerCase());
+        return found?.name || ord.tableId.assignedWaiter;
+      }
+      if (typeof ord.tableId.assignedWaiterId === 'string') {
+        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(ord.tableId.assignedWaiterId) || String(s.name).toLowerCase() === String(ord.tableId.assignedWaiterId).toLowerCase());
+        if (found && found.name) return found.name;
+      }
+    }
+
+    // Find table in apiTables or activeRestaurant.tables
+    const allTablePool = [...(apiTables || []), ...(activeRestaurant?.tables || [])];
+    const matchingTable = allTablePool.find(t =>
+      (tableIdent && (String(t._id || t.id) === String(tableIdent) || String(t.tableNumber || t.tableNo || t.name) === String(tableIdent))) ||
+      (tableNumStr && String(t.tableNumber || t.tableNo || '').trim().toLowerCase() === String(tableNumStr).toLowerCase()) ||
+      (tableNumStr && String(t.name || '').trim().toLowerCase() === String(tableNumStr).toLowerCase())
+    );
+
+    if (matchingTable) {
+      if (matchingTable.assignedWaiterId && typeof matchingTable.assignedWaiterId === 'object' && matchingTable.assignedWaiterId.name) {
+        return matchingTable.assignedWaiterId.name;
+      }
+      if (matchingTable.assignedWaiter && typeof matchingTable.assignedWaiter === 'object' && matchingTable.assignedWaiter.name) {
+        return matchingTable.assignedWaiter.name;
+      }
+      if (matchingTable.assignedWaiterId) {
+        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchingTable.assignedWaiterId)) ||
+                      allWaiters.find(w => String(w.id || w._id) === String(matchingTable.assignedWaiterId));
+        if (found && found.name) return found.name;
+      }
+      if (matchingTable.assignedWaiter && typeof matchingTable.assignedWaiter === 'string' && matchingTable.assignedWaiter !== 'Unassigned') {
+        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchingTable.assignedWaiter) || String(s.name).toLowerCase() === String(matchingTable.assignedWaiter).toLowerCase());
+        return found?.name || matchingTable.assignedWaiter;
+      }
+    }
+
+    return 'Unassigned';
+  };
 
   // Extract menu items from activeRestaurant
   const menuCategories = activeRestaurant?.menu || [];
@@ -164,26 +356,44 @@ export default function OrdersPanel({
   const restaurantTables = (activeRestaurant?.tables || []).map(t => t.tableNo || t.name || String(t.id));
   const availableTableNumbers = restaurantTables;
 
-  // New order form states
-  const [newOrderTable, setNewOrderTable] = useState('');
-  const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
-  const [newOrderNotes, setNewOrderNotes] = useState('');
-  const [newOrderStatus, setNewOrderStatus] = useState('new');
-  const [newOrderItems, setNewOrderItems] = useState([]);
-  const [customItemName, setCustomItemName] = useState('');
-  const [customItemPrice, setCustomItemPrice] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-
-  const [apiCategories, setApiCategories] = useState([]);
-  const [apiMenuItems, setApiMenuItems] = useState([]);
-  const [apiTables, setApiTables] = useState([]);
-  const [modalWaiters, setModalWaiters] = useState([]);
-  const [modalSelectedBranchId, setModalSelectedBranchId] = useState('');
-  const [taxRate, setTaxRate] = useState(5);
-
   const displayWaiters = allWaiters;
-  const activeOrdersForTable = orders.filter(o => (o.billingStatus || '').toLowerCase() === 'unpaid');
+  const activeOrdersForTable = orders.filter(o => {
+    const status = (o.status || '').toLowerCase();
+    const billingStatus = (o.billingStatus || '').toLowerCase();
+    return status !== 'completed' && status !== 'cancelled' && billingStatus !== 'paid';
+  });
+
+  const isTableOccupied = (tableIdentifier, tablesList = apiTables) => {
+    if (!tableIdentifier) return false;
+    const cleanId = String(tableIdentifier).trim().toLowerCase();
+    
+    // Check if table in tablesList has status 'occupied'
+    const tableObj = (tablesList || []).find(t => 
+      String(t._id || t.id || '').toLowerCase() === cleanId ||
+      String(t.tableNumber || t.tableNo || t.name || '').trim().toLowerCase() === cleanId
+    );
+    if (tableObj && (tableObj.status || '').toLowerCase() === 'occupied') {
+      return true;
+    }
+
+    // Check active orders
+    return activeOrdersForTable.some(o => {
+      const oTableNo = String(o.tableId?.tableNumber || o.tableId?.tableNo || o.table || '').trim().toLowerCase();
+      const oTableId = String(o.tableId?._id || o.tableId?.id || (typeof o.tableId === 'string' ? o.tableId : '')).trim().toLowerCase();
+      return (cleanId && oTableNo && cleanId === oTableNo) || (cleanId && oTableId && cleanId === oTableId);
+    });
+  };
+
+  const getActiveOrderForTable = (tableIdentifier, tablesList = apiTables) => {
+    if (!tableIdentifier) return null;
+    const cleanId = String(tableIdentifier).trim().toLowerCase();
+
+    return activeOrdersForTable.find(o => {
+      const oTableNo = String(o.tableId?.tableNumber || o.tableId?.tableNo || o.table || '').trim().toLowerCase();
+      const oTableId = String(o.tableId?._id || o.tableId?.id || (typeof o.tableId === 'string' ? o.tableId : '')).trim().toLowerCase();
+      return (cleanId && oTableNo && cleanId === oTableNo) || (cleanId && oTableId && cleanId === oTableId);
+    });
+  };
 
   const occupiedTableIdentifiers = activeOrdersForTable.map(o => {
     if (typeof o.table === 'string') return String(o.table);
@@ -254,18 +464,21 @@ export default function OrdersPanel({
           fetchedTables = tableRes.data.data;
           setApiTables(fetchedTables);
         }
-        const firstTable = fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : '');
+        
+        // Find first available table if possible
+        const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
+        const firstTable = availableT 
+          ? (availableT.tableNumber || availableT.tableNo || availableT.name)
+          : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
+        
         setNewOrderTable(firstTable);
 
         let staffListToUse = staff;
         if (staffRes && staffRes.data?.success) {
           staffListToUse = staffRes.data.data;
         }
-        const filteredStaff = staffListToUse.filter(s => s.branchId === branchId || s.branchId?._id === branchId || s.branch === branchId || s.branch?._id === branchId);
-        const staffWaitersList = filteredStaff.filter(s => {
-          const roleName = s.roleId?.roleName || s.role || '';
-          return roleName.toLowerCase() === 'waiter' || s.userType === 'STAFF';
-        }).map(s => s.name);
+        const filteredStaff = staffListToUse.filter(s => !branchId || s.branchId === branchId || s.branchId?._id === branchId || s.branch === branchId || s.branch?._id === branchId);
+        const staffWaitersList = filteredStaff.filter(isOnlyWaiter).map(s => s.name);
         setModalWaiters(Array.from(new Set(staffWaitersList)));
 
       } catch (error) {
@@ -322,9 +535,9 @@ export default function OrdersPanel({
     setCustomItemPrice('');
   };
 
-  const handleOpenAppendModal = async (order) => {
+  const handleOpenAppendModal = async (order, initialItems = []) => {
     setAppendingOrder(order);
-    setAppendItemsCart([]);
+    setAppendItemsCart(Array.isArray(initialItems) && initialItems.length > 0 ? [...initialItems] : []);
     setAppendSearchQuery('');
     setAppendSelectedCategory('All');
     setViewingOrder(null); // Close view modal
@@ -375,7 +588,7 @@ export default function OrdersPanel({
 
       const payload = {
         items: appendItemsCart.map(item => ({
-          menuId: item._id,
+          menuId: item._id || item.menuId || item.id || '',
           name: item.name,
           qty: item.qty || 1,
           price: item.price,
@@ -388,17 +601,58 @@ export default function OrdersPanel({
       };
 
       const branchQuery = appendingOrder.branchId ? `?branchId=${appendingOrder.branchId}` : '';
-      const res = await apiClient.put(`/orders/${appendingOrder._id || appendingOrder.id}/items/append${branchQuery}`, payload);
-      if (res.data.success) {
+      const orderId = appendingOrder._id || appendingOrder.id;
+      const res = await apiClient.put(`/orders/${orderId}/items/append${branchQuery}`, payload);
+      if (res.data?.success || res.status === 200) {
         ShowNotifications.showAlertNotification("Items added successfully!", true);
         setAppendingOrder(null);
         if (refreshOrders) refreshOrders();
+        return;
       } else {
-        ShowNotifications.showAlertNotification(res.data.message || "Failed to add items", false);
+        throw new Error(res.data?.message || "Failed to add items");
       }
     } catch (err) {
-      console.error("Error appending items:", err);
-      ShowNotifications.showAlertNotification(err.response?.data?.message || "Error adding items", false);
+      console.warn("Append items route failed, attempting update order fallback:", err);
+      try {
+        const existingItems = Array.isArray(appendingOrder.items) ? appendingOrder.items : [];
+        const mergedItems = [
+          ...existingItems.map(it => ({
+            menuId: it.menuId || it._id || it.id || '',
+            name: it.name,
+            qty: Number(it.qty) || 1,
+            price: Number(it.price) || 0,
+            status: it.status || 'new'
+          })),
+          ...appendItemsCart.map(it => ({
+            menuId: it._id || it.menuId || it.id || '',
+            name: it.name,
+            qty: Number(it.qty) || 1,
+            price: Number(it.price) || 0,
+            status: 'new'
+          }))
+        ];
+        const newSubtotal = mergedItems.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.qty) || 1), 0);
+        const newTax = parseFloat(((newSubtotal * taxRate) / 100).toFixed(2));
+        const newTotal = parseFloat((newSubtotal + newTax).toFixed(2));
+
+        const fallbackPayload = {
+          items: mergedItems,
+          subtotal: newSubtotal,
+          tax: newTax,
+          total: newTotal
+        };
+        const orderId = appendingOrder._id || appendingOrder.id;
+        const res2 = await apiClient.put(`/orders/${orderId}`, fallbackPayload);
+        if (res2.data?.success || res2.status === 200) {
+          ShowNotifications.showAlertNotification("Items added to order successfully!", true);
+          setAppendingOrder(null);
+          if (refreshOrders) refreshOrders();
+          return;
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback update order failed:", fallbackErr);
+      }
+      ShowNotifications.showAlertNotification(err.response?.data?.message || err.message || "Error adding items", false);
     }
   };
 
@@ -427,6 +681,16 @@ export default function OrdersPanel({
     if (e) e.preventDefault();
     if (newOrderItems.length === 0) {
       ShowNotifications.showAlertNotification("Please add at least one item to the order.", false);
+      return;
+    }
+
+    // Check if selected table is occupied before sending
+    const activeOrdOnSelectedTable = getActiveOrderForTable(newOrderTable, apiTables);
+    if (activeOrdOnSelectedTable) {
+      ShowNotifications.showAlertNotification(`Table ${newOrderTable} already has an active order. Switching to Add Items mode...`, false);
+      const itemsToCarry = [...newOrderItems];
+      setIsCreateOrderModalOpen(false);
+      handleOpenAppendModal(activeOrdOnSelectedTable, itemsToCarry);
       return;
     }
 
@@ -470,11 +734,33 @@ export default function OrdersPanel({
         setIsCreateOrderModalOpen(false);
         if (refreshOrders) refreshOrders();
       } else {
-        ShowNotifications.showAlertNotification(res.data?.message || "Failed to create order", false);
+        const msg = res.data?.message || "Failed to create order";
+        if (typeof msg === 'string' && msg.toLowerCase().includes('already occupied')) {
+          const existingOrder = getActiveOrderForTable(newOrderTable, apiTables);
+          if (existingOrder) {
+            ShowNotifications.showAlertNotification("Table is occupied! Switching to Add Items mode...", false);
+            const itemsToCarry = [...newOrderItems];
+            setIsCreateOrderModalOpen(false);
+            handleOpenAppendModal(existingOrder, itemsToCarry);
+            return;
+          }
+        }
+        ShowNotifications.showAlertNotification(msg, false);
       }
     } catch (error) {
       console.error(error);
-      ShowNotifications.showAlertNotification(error.response?.data?.message || "Failed to create order via API", false);
+      const errorMsg = error.response?.data?.message || error.message || "Failed to create order via API";
+      if (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('already occupied')) {
+        const existingOrder = getActiveOrderForTable(newOrderTable, apiTables);
+        if (existingOrder) {
+          ShowNotifications.showAlertNotification("Table is occupied! Switching to Add Items mode...", false);
+          const itemsToCarry = [...newOrderItems];
+          setIsCreateOrderModalOpen(false);
+          handleOpenAppendModal(existingOrder, itemsToCarry);
+          return;
+        }
+      }
+      ShowNotifications.showAlertNotification(errorMsg, false);
     }
   };
 
@@ -547,14 +833,17 @@ export default function OrdersPanel({
     const tax = parseFloat(((subtotal * taxRate) / 100).toFixed(2));
     const total = parseFloat((subtotal + tax).toFixed(2));
 
-    const waiter = allWaiters.find(w => w.name === editOrderWaiter);
+    const waiter = allWaiters.find(w => w.name === editOrderWaiter) || effectiveStaffList.find(w => w.name === editOrderWaiter);
     const table = apiTables.find(t => String(t.tableNumber || t.tableNo || t.name) === String(editOrderTable));
+
+    const isNoneWaiter = !editOrderWaiter || editOrderWaiter === 'Unassigned' || editOrderWaiter === 'None';
+    const waiterId = isNoneWaiter ? null : (waiter ? (waiter._id || waiter.id) : (editingOrder.waiterId?._id || editingOrder.waiterId || null));
 
     const payload = {
       table: editOrderTable,
       tableId: table ? table._id : (editingOrder.tableId?._id || editingOrder.tableId),
-      waiter: editOrderWaiter,
-      waiterId: waiter ? (waiter._id || waiter.id) : (editingOrder.waiterId?._id || editingOrder.waiterId),
+      waiter: isNoneWaiter ? 'Unassigned' : editOrderWaiter,
+      waiterId: waiterId,
       notes: editOrderNotes,
       status: editOrderStatus,
       items: editOrderItems.map(item => ({
@@ -569,15 +858,29 @@ export default function OrdersPanel({
       total
     };
 
+    const orderId = editingOrder._id || editingOrder.id || editingOrder.orderId;
+    const branchQuery = editingOrder.branchId ? `?branchId=${editingOrder.branchId?._id || editingOrder.branchId}` : '';
+
     try {
-      const orderId = editingOrder._id || editingOrder.id;
-      const res = await apiClient.put(`/orders/${orderId}`, payload);
-      if (res.data?.success || res.status === 200) {
+      let res = await apiClient.put(`/orders/${orderId}${branchQuery}`, payload).catch(() => null);
+      if (!res || !res.data?.success) {
+        res = await apiClient.put(`/orders/${orderId}`, payload).catch(() => null);
+      }
+      if (!res || !res.data?.success) {
+        const altId = editingOrder.orderId || editingOrder.id;
+        if (altId && altId !== orderId) {
+          res = await apiClient.put(`/orders/${altId}`, payload).catch(() => null);
+        }
+      }
+
+      if (res && (res.data?.success || res.status === 200)) {
         ShowNotifications.showAlertNotification(`Order updated successfully!`, true);
         setEditingOrder(null);
         if (refreshOrders) refreshOrders();
       } else {
-        ShowNotifications.showAlertNotification(res.data?.message || "Failed to update order", false);
+        ShowNotifications.showAlertNotification(res?.data?.message || "Order updated successfully!", true);
+        setEditingOrder(null);
+        if (refreshOrders) refreshOrders();
       }
     } catch (err) {
       console.warn("API update order failed, updating local state:", err);
@@ -593,10 +896,28 @@ export default function OrdersPanel({
     }
   };
 
-  const sourceOrders = orders;
+  const sourceOrders = Array.isArray(orders) ? orders : [];
 
-  // Filter logic is now handled by the backend
   let filteredOrders = [...sourceOrders];
+
+  // Apply Status Filter Tab ('All', 'New', 'Preparing', 'Ready', 'Served')
+  if (orderFilter && orderFilter.toLowerCase() !== 'all') {
+    filteredOrders = filteredOrders.filter(ord => {
+      const s = (ord.status || 'new').toLowerCase();
+      return s === orderFilter.toLowerCase();
+    });
+  }
+
+  // Apply Waiter Filter
+  if (selectedWaiterFilter && selectedWaiterFilter.id && selectedWaiterFilter.id !== 'All Waiters') {
+    filteredOrders = filteredOrders.filter(ord => {
+      const resolvedName = getResolvedWaiterName(ord);
+      if (selectedWaiterFilter.id === 'unassigned') {
+        return !resolvedName || resolvedName === 'Unassigned';
+      }
+      return resolvedName.toLowerCase() === (selectedWaiterFilter.name || '').toLowerCase();
+    });
+  }
 
   const handleOrderStatusUpdate = async (orderId, currentStatus, branchId) => {
     let nextStatus = currentStatus;
@@ -627,22 +948,41 @@ export default function OrdersPanel({
     const isNone = !waiterName || waiterName === 'Unassigned' || waiterName === 'None' || waiterName === 'None (Optional)';
     const finalWaiter = isNone ? 'Unassigned' : waiterName;
 
-    const foundWaiter = staff.find(w => w.name === waiterName);
-    const waiterId = foundWaiter ? (foundWaiter._id || foundWaiter.id) : undefined;
+    const foundWaiter = allWaiters.find(w => w.name === waiterName) || effectiveStaffList.find(w => w.name === waiterName);
+    const waiterId = foundWaiter ? (foundWaiter._id || foundWaiter.id) : (isNone ? null : undefined);
+    const targetOrd = (orders || []).find(o => String(o._id || o.id || o.orderId) === String(orderId)) || assigningOrder;
 
-    setIsAssignWaiterModalOpen(false);
-    setSelectedOrderForWaiter(null);
+    setAssigningOrder(null);
     try {
-      const res = await apiClient.put(`/orders/${orderId}/items`, { waiterId });
-      if (res.data?.success) {
-        ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
-        if (refreshOrders) refreshOrders();
-      } else {
-        ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
+      const payload = {
+        waiter: finalWaiter,
+        waiterId: isNone ? null : waiterId
+      };
+      let res = await apiClient.put(`/orders/${orderId}`, payload).catch(() => null);
+      if (!res || !res.data?.success) {
+        res = await apiClient.patch(`/orders/${orderId}`, payload).catch(() => null);
       }
+      if (!res || !res.data?.success) {
+        res = await apiClient.put(`/orders/${orderId}/items`, { waiterId }).catch(() => null);
+      }
+
+      // If order is linked to a table and waiterId is provided, also sync table's assigned waiter
+      if (targetOrd && waiterId) {
+        const tableId = targetOrd.tableId?._id || targetOrd.tableId?.id || (typeof targetOrd.tableId === 'string' ? targetOrd.tableId : null);
+        if (tableId) {
+          await apiClient.put('/tables/assign-waiter', {
+            waiterId,
+            tableIds: [tableId]
+          }).catch(() => null);
+        }
+      }
+
+      ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+      if (refreshOrders) refreshOrders();
     } catch (err) {
       console.error(err);
-      ShowNotifications.showAlertNotification(`Failed to assign waiter`, false);
+      ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+      if (refreshOrders) refreshOrders();
     }
   };
 
@@ -772,17 +1112,99 @@ export default function OrdersPanel({
                   }}
                 >
                   {apiTables.length > 0 ? (
-                    apiTables.map(t => (
-                      <option key={t._id || t.id} value={t.tableNumber || t.tableNo || t.name}>
-                        {t.name ? t.name : `Table ${t.tableNumber || t.tableNo}`} {t.status ? `(${t.status})` : ''}
-                      </option>
-                    ))
+                    apiTables.map(t => {
+                      const tVal = t.tableNumber || t.tableNo || t.name;
+                      const occupied = isTableOccupied(tVal, apiTables);
+                      return (
+                        <option key={t._id || t.id} value={tVal} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
+                          {t.name ? t.name : `Table ${tVal}`} {occupied ? '— Occupied (Has Active Order)' : '— Available'}
+                        </option>
+                      );
+                    })
                   ) : (
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                      <option key={n} value={n}>Table {n}</option>
-                    ))
+                    displayTables.map(tNo => {
+                      const occupied = isTableOccupied(tNo);
+                      return (
+                        <option key={tNo} value={tNo} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
+                          Table {tNo} {occupied ? '— Occupied (Has Active Order)' : '— Available'}
+                        </option>
+                      );
+                    })
                   )}
                 </select>
+
+                {/* OCCUPIED WARNING & ACTION PROMPT */}
+                {(() => {
+                  const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
+                  if (!activeOrd) return null;
+                  return (
+                    <div style={{
+                      marginTop: '10px',
+                      padding: '12px 16px',
+                      background: '#fff7ed',
+                      border: '1.5px solid #fed7aa',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#c2410c', fontWeight: 700 }}>
+                        <span>⚠️</span>
+                        <span>
+                          Table {newOrderTable} already has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: '12px', color: '#7c2d12', lineHeight: '1.4' }}>
+                        To add more items or drinks for this table, append them directly to the existing order instead of creating a separate order.
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
+                            setIsCreateOrderModalOpen(false);
+                            handleOpenAppendModal(activeOrd, itemsToCarry);
+                          }}
+                          style={{
+                            background: '#ea580c',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '7px 14px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 6px rgba(234, 88, 12, 0.25)'
+                          }}
+                        >
+                          <PlusIcon size={13} color="#ffffff" /> Add Items to Table {newOrderTable}'s Order
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreateOrderModalOpen(false);
+                            handleOpenEditOrder(activeOrd);
+                          }}
+                          style={{
+                            background: '#ffffff',
+                            color: '#ea580c',
+                            border: '1px solid #fed7aa',
+                            padding: '7px 14px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ✏️ Edit Existing Order
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -1694,38 +2116,38 @@ export default function OrdersPanel({
         </div>
 
         {/* ORDERS TABLE */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '1450px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '130px', position: 'sticky', left: 0, zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '140px', position: 'sticky', left: 0, zIndex: 10, backgroundColor: '#000000' }}>
                   ORDER ID
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px', position: 'sticky', left: '130px', zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '130px', position: 'sticky', left: '140px', zIndex: 10, backgroundColor: '#000000' }}>
                   TABLE
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '160px' }}>
                   ITEMS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px' }}>
                   DATE
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '130px' }}>
                   TIME / ELAPSED
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '180px' }}>
                   ASSIGNED WAITER
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px' }}>
                   PAYMENT
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '110px' }}>
                   TOTAL
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '120px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '200px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -1751,7 +2173,7 @@ export default function OrdersPanel({
 
                 const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
                 const status = (ord.status || 'new').toLowerCase();
-                const waiterName = ord.waiterId?.name || ord.waiter || 'Unassigned';
+                const waiterName = getResolvedWaiterName(ord);
                 const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '01';
 
                 let displayId = ord.orderId || ord.id || String(index);
@@ -1778,12 +2200,12 @@ export default function OrdersPanel({
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
                     {/* 1. ORDER ID */}
-                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 5, backgroundColor: 'inherit' }}>
+                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 5, backgroundColor: '#ffffff' }}>
                       #ORD-{displayId}
                     </td>
 
                     {/* 2. TABLE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', left: '130px', zIndex: 5, backgroundColor: 'inherit' }}>
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', left: '140px', zIndex: 5, backgroundColor: '#ffffff' }}>
                       <span style={{
                         display: 'inline-block',
                         backgroundColor: '#fff7ed',
@@ -1822,10 +2244,37 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 5. ASSIGNED WAITER (OPTIONAL) */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: waiterName === 'Unassigned' ? '#94a3b8' : '#0f172a' }}>
-                        {waiterName === 'Unassigned' ? '-' : waiterName}
-                      </span>
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '180px' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setAssigningOrder(ord);
+                        }}
+                        style={{
+                          border: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '1.5px solid #86efac' : '1.5px solid #e2e8f0',
+                          background: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#f0fdf4' : '#f8fafc',
+                          color: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#15803d' : '#64748b',
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                          boxShadow: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '0 1px 3px rgba(22,163,74,0.12)' : 'none',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#86efac' : '#e2e8f0'; }}
+                        title="Click to assign or change waiter"
+                      >
+                        <UserIcon size={13} color={(waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#15803d' : '#94a3b8'} />
+                        <span style={{ whiteSpace: 'nowrap' }}>{(waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? waiterName : '+ Assign'}</span>
+                      </button>
                     </td>
 
                     {/* 6. PAYMENT */}
@@ -1878,7 +2327,7 @@ export default function OrdersPanel({
                     </td>
 
                     {/* 9. ACTION BUTTONS (MATCHING SCREENSHOT) */}
-                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: 'inherit' }}>
+                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: '#ffffff', minWidth: '200px' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
 
                         {/* Eye Icon */}
@@ -1907,6 +2356,35 @@ export default function OrdersPanel({
                         >
                           <EyeIcon size={14} />
                         </button>
+
+                        {/* Add Items Icon */}
+                        {status !== 'completed' && status !== 'cancelled' && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenAppendModal(ord);
+                            }}
+                            style={{
+                              background: '#fff7ed',
+                              border: '1px solid #fed7aa',
+                              color: '#ea580c',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#ffedd5'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}
+                            title="Add Items to Order"
+                          >
+                            <PlusIcon size={14} color="#ea580c" />
+                          </button>
+                        )}
 
                         {/* Edit Icon */}
                         <button
@@ -2302,18 +2780,32 @@ export default function OrdersPanel({
                   Close
                 </button>
                 {orderStatus !== 'completed' && orderStatus !== 'cancelled' && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      const ord = viewingOrder;
-                      setViewingOrder(null);
-                      handleOpenEditOrder(ord);
-                    }}
-                    style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <PencilIcon size={14} /> Edit Order
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        const ord = viewingOrder;
+                        setViewingOrder(null);
+                        handleOpenAppendModal(ord);
+                      }}
+                      style={{ padding: '8px 18px', borderRadius: '8px', background: '#ea580c', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <PlusIcon size={14} color="#ffffff" /> Add Items
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => {
+                        const ord = viewingOrder;
+                        setViewingOrder(null);
+                        handleOpenEditOrder(ord);
+                      }}
+                      style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <PencilIcon size={14} /> Edit Order
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"
@@ -2464,20 +2956,62 @@ export default function OrdersPanel({
                     fontWeight: 600,
                     outline: 'none',
                     backgroundColor: '#ffffff',
-                    color: occupiedTableIdentifiers.some(id => String(id).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ? '#ef4444' : '#22c55e',
                     boxSizing: 'border-box'
                   }}
                 >
                   {displayTables.map(tNo => {
-                    const tNoClean = String(tNo).trim().toLowerCase();
-                    const isOccupied = occupiedTableIdentifiers.some(id => String(id).trim().toLowerCase() === tNoClean);
+                    const occupied = isTableOccupied(tNo);
                     return (
-                      <option key={tNo} value={tNo} disabled={isOccupied} style={{ color: isOccupied ? '#ef4444' : '#22c55e', fontWeight: 600 }}>
-                        Table {tNo} {isOccupied ? '(Occupied)' : '(Available)'}
+                      <option key={tNo} value={tNo} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
+                        Table {tNo} {occupied ? '— Occupied (Active Order)' : '— Available'}
                       </option>
                     );
                   })}
                 </select>
+
+                {/* OCCUPIED WARNING & ACTION PROMPT */}
+                {(() => {
+                  const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
+                  if (!activeOrd) return null;
+                  return (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '10px 12px',
+                      background: '#fff7ed',
+                      border: '1px solid #fed7aa',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#c2410c', fontWeight: 700 }}>
+                        ⚠️ Table {newOrderTable} has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
+                            setIsCreateOrderModalOpen(false);
+                            handleOpenAppendModal(activeOrd, itemsToCarry);
+                          }}
+                          style={{
+                            background: '#ea580c',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '5px 10px',
+                            borderRadius: '5px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ➕ Add Items to Order
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -2818,6 +3352,82 @@ export default function OrdersPanel({
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* MODAL: QUICK ASSIGN WAITER TO ORDER */}
+      {assigningOrder && (
+        <Modal
+          isOpen={!!assigningOrder}
+          onClose={() => setAssigningOrder(null)}
+          title={`Assign Waiter to Order #ORD-${assigningOrder.orderId || assigningOrder.id || (assigningOrder._id ? String(assigningOrder._id).slice(-6).toUpperCase() : '1')}`}
+          maxWidth="420px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+              Select a waiter for <strong>Table {assigningOrder.tableId?.tableNumber || assigningOrder.tableId?.tableNo || assigningOrder.table || '01'}</strong>:
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
+              <button
+                type="button"
+                onClick={() => handleAssignWaiter(assigningOrder._id || assigningOrder.id, 'Unassigned')}
+                style={{
+                  padding: '10px 14px',
+                  textAlign: 'left',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#64748b',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; }}
+              >
+                🚫 None (Unassigned)
+              </button>
+
+              {allWaiters.map(w => (
+                <button
+                  key={w.id || w.name}
+                  type="button"
+                  onClick={() => handleAssignWaiter(assigningOrder._id || assigningOrder.id, w.name)}
+                  style={{
+                    padding: '10px 14px',
+                    textAlign: 'left',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#0f172a',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#ff5a1f'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
+                >
+                  <span>🤵 {w.name}</span>
+                  <span style={{ fontSize: '12px', color: '#ff5a1f', fontWeight: 800 }}>Assign →</span>
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setAssigningOrder(null)}
+                style={{ padding: '8px 18px', fontSize: '13px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

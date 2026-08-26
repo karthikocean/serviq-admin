@@ -953,9 +953,56 @@ color: #000000;
 
 
 
+/* Global Sleek Horizontal Scrollbar styling for table wrappers */
+.table-responsive,
+.menu-table-wrapper,
+.feed-table-wrapper,
+div[style*="overflowX: auto"],
+div[style*="overflow-x: auto"] {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive::-webkit-scrollbar,
+.menu-table-wrapper::-webkit-scrollbar,
+.feed-table-wrapper::-webkit-scrollbar,
+div[style*="overflowX: auto"]::-webkit-scrollbar,
+div[style*="overflow-x: auto"]::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track,
+.menu-table-wrapper::-webkit-scrollbar-track,
+.feed-table-wrapper::-webkit-scrollbar-track,
+div[style*="overflowX: auto"]::-webkit-scrollbar-track,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb,
+.menu-table-wrapper::-webkit-scrollbar-thumb,
+.feed-table-wrapper::-webkit-scrollbar-thumb,
+div[style*="overflowX: auto"]::-webkit-scrollbar-thumb,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover,
+.menu-table-wrapper::-webkit-scrollbar-thumb:hover,
+.feed-table-wrapper::-webkit-scrollbar-thumb:hover,
+div[style*="overflowX: auto"]::-webkit-scrollbar-thumb:hover,
+div[style*="overflow-x: auto"]::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* Live Order Feed Table styling */
 .feed-table-wrapper {
   overflow-x: auto;
+  padding-bottom: 6px;
 }
 
 .feed-table {
