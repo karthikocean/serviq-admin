@@ -7,6 +7,7 @@ import ShowNotifications from '../../helper/ShowNotifications.js';
 import MenuApi from '../../api/Menu.js';
 import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -46,6 +47,8 @@ export default function MenuManagement() {
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [customCategoryError, setCustomCategoryError] = useState('');
   const [previousCategory, setPreviousCategory] = useState('');
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
   const [categories, setCategories] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -216,12 +219,19 @@ export default function MenuManagement() {
     setActivePage('menu-form');
   };
 
-  const handleDeleteMenu = async (itemId) => {
+  const handleDeleteMenu = (itemId) => {
+    const found = menuItems.find(m => (m._id === itemId || m.id === itemId));
+    setItemToDelete(found || { _id: itemId, id: itemId, name: 'this menu item' });
+  };
 
-    if (window.confirm('Are you sure you want to delete this menu item?')) {
-      await deleteMenuItem(activeRestaurant.id, itemId);
-      setRefreshTrigger(prev => prev + 1);
-    }
+  const handleConfirmDeleteMenu = async () => {
+    if (!itemToDelete) return;
+    setIsDeletingItem(true);
+    const targetId = itemToDelete._id || itemToDelete.id;
+    await deleteMenuItem(activeRestaurant.id, targetId);
+    setRefreshTrigger(prev => prev + 1);
+    setItemToDelete(null);
+    setIsDeletingItem(false);
   };
 
   const validate = () => {
@@ -515,17 +525,18 @@ export default function MenuManagement() {
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>
                       GST Rate (%) <span style={{ color: '#ef4444' }}>*</span>
                     </label>
-                    <select
+                    <SearchableSelect
                       value={menuForm.gst}
                       onChange={(e) => setMenuForm({ ...menuForm, gst: parseFloat(e.target.value) || 0 })}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
-                    >
-                      <option value="5">5% GST (Standard Food - CGST 2.5% + SGST 2.5%)</option>
-                      <option value="12">12% GST (Packaged / Drinks)</option>
-                      <option value="18">18% GST (AC / Premium Food Service)</option>
-                      <option value="0">0% (GST Exempt)</option>
-                      <option value="28">28% GST</option>
-                    </select>
+                      options={[
+                        { value: 5, label: '5% GST (Standard Food - CGST 2.5% + SGST 2.5%)' },
+                        { value: 12, label: '12% GST (Packaged / Drinks)' },
+                        { value: 18, label: '18% GST (AC / Premium Food Service)' },
+                        { value: 0, label: '0% (GST Exempt)' },
+                        { value: 28, label: '28% GST' }
+                      ]}
+                      placeholder="Select GST Rate..."
+                    />
                   </div>
 
                   {activeRestaurant.branches?.length > 0 && (
@@ -556,33 +567,18 @@ export default function MenuManagement() {
 
                         return (
                           <div>
-                            <select
+                            <SearchableSelect
                               value={effectiveVal}
                               onChange={e => setMenuForm({ ...menuForm, branchId: e.target.value })}
-                              disabled={isLocked}
-                              style={{
-                                width: '100%',
-                                padding: '10px 12px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--border)',
-                                fontSize: '13px',
-                                fontWeight: 600,
-                                background: isLocked ? '#f8fafc' : '#fff',
-                                color: isLocked ? '#64748b' : '#0f172a',
-                                cursor: isLocked ? 'not-allowed' : 'pointer',
-                                boxSizing: 'border-box'
-                              }}
-                            >
-                              {allBranchesList.length === 0 ? (
-                                <option value="">Main Branch</option>
-                              ) : (
-                                allBranchesList.map(b => (
-                                  <option key={b._id || b.id} value={b._id || b.id}>
-                                    {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                                  </option>
-                                ))
-                              )}
-                            </select>
+                              isDisabled={isLocked}
+                              options={allBranchesList.length === 0 ? [
+                                { value: '', label: 'Main Branch' }
+                              ] : allBranchesList.map(b => ({
+                                value: b._id || b.id,
+                                label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                              }))}
+                              placeholder="Select Branch..."
+                            />
                             {isLocked && (
                               <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                                 Branch is locked to currently selected branch.
@@ -598,7 +594,7 @@ export default function MenuManagement() {
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>
                       Category <span style={{ color: '#ef4444' }}>*</span>
                     </label>
-                    <select
+                    <SearchableSelect
                       value={menuForm.category}
                       onChange={(e) => {
                         if (e.target.value === 'custom') {
@@ -611,16 +607,17 @@ export default function MenuManagement() {
                           setMenuForm({ ...menuForm, category: e.target.value });
                         }
                       }}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', background: '#fff', fontWeight: 600 }}
-                    >
-                      {categories
-                        .filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false)
-                        .map(cat => (
-                          <option key={cat._id || cat.id} value={cat._id || cat.id}>{cat.name}</option>
-                        ))
-                      }
-                      <option value="custom">+ Add Custom Category...</option>
-                    </select>
+                      options={[
+                        ...categories
+                          .filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false)
+                          .map(cat => ({
+                            value: cat._id || cat.id,
+                            label: cat.name
+                          })),
+                        { value: 'custom', label: '+ Add Custom Category...' }
+                      ]}
+                      placeholder="Select Category..."
+                    />
                   </div>
                 </div>
 
@@ -855,6 +852,45 @@ export default function MenuManagement() {
           </div>
         </div>
       </Modal>
+
+      {/* Delete Menu Item Confirmation Modal */}
+      {itemToDelete && (
+        <Modal
+          isOpen={!!itemToDelete}
+          onClose={() => !isDeletingItem && setItemToDelete(null)}
+          title="Confirm Menu Item Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete menu item <strong>"{itemToDelete?.name}"</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setItemToDelete(null)}
+                disabled={isDeletingItem}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleConfirmDeleteMenu}
+                disabled={isDeletingItem}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                {isDeletingItem ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

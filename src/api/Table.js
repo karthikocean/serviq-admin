@@ -4,7 +4,13 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class MemberApi {
   async getTables(params = {}) {
     try {
-      const response = await apiClient.get("/tables", { params });
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+          cleanParams[key] = params[key];
+        }
+      });
+      const response = await apiClient.get("/tables", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

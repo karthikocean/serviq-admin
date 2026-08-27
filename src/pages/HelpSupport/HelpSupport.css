@@ -59,23 +59,21 @@
   
   .data-table th,
   .data-table td {
-    padding: 14px 24px;
-    text-align: left;
+    padding: 14px 20px;
     border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
   }
   
   .data-table th {
-    background: #f9fafb;
-    font-weight: 600;
-    color: #4b5563;
-    font-size: 0.85rem;
+    font-weight: 800;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.5px;
   }
   
   .data-table td {
     color: #374151;
-    font-size: 0.95rem;
+    font-size: 13px;
   }
   
   .badge {

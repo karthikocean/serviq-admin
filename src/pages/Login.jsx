@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
+import ShowNotifications from '../helper/ShowNotifications';
 
 export default function Login() {
   const { login, currentUser } = useAppState();
@@ -10,37 +11,64 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [formErrors, setFormErrors] = useState({});
-  const [errorMsg, setErrorMsg] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem('rememberedEmail');
+      const isRemembered = localStorage.getItem('rememberMe') === 'true';
+      if (savedEmail && isRemembered) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    } catch (e) {
+      console.error('Error loading saved credentials:', e);
+    }
+  }, []);
 
   if (currentUser) {
     return <Navigate to="/dashboard" replace />;
   }
 
   const validate = () => {
-    const errors = {};
     const emailTrimmed = email.trim();
-    if (!emailTrimmed) {
-      errors.email = 'Email address is required.';
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(emailTrimmed)) {
-        errors.email = 'Please enter a valid email address (e.g. name@example.com).';
-      }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isEmailEmpty = !emailTrimmed;
+    const isPasswordEmpty = !password;
+    const isEmailValid = Boolean(emailTrimmed && emailRegex.test(emailTrimmed));
+    const isPasswordValid = Boolean(password && password.length > 0);
+
+    if (isEmailEmpty && isPasswordEmpty) {
+      setFormErrors({ email: true, password: true });
+      ShowNotifications.showAlertNotification('Please enter your email and password', false);
+      return false;
     }
 
-    if (!password) {
-      errors.password = 'Password is required.';
+    if (!isEmailValid && !isPasswordValid) {
+      setFormErrors({ email: true, password: true });
+      ShowNotifications.showAlertNotification('Invalid credentials', false);
+      return false;
     }
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    if (!isEmailValid) {
+      setFormErrors({ email: true, password: false });
+      ShowNotifications.showAlertNotification('Email is invalid', false);
+      return false;
+    }
+
+    if (!isPasswordValid) {
+      setFormErrors({ email: false, password: true });
+      ShowNotifications.showAlertNotification('Invalid password', false);
+      return false;
+    }
+
+    setFormErrors({});
+    return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
 
     if (!validate()) {
       return;
@@ -49,14 +77,37 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email.trim());
+        localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberMe');
+      }
+
       const res = await login(email.trim(), password, role);
       if (res && res.success) {
         navigate('/dashboard', { replace: true });
       } else {
-        setErrorMsg(res?.error || 'Invalid email or password. Please try again.');
+        const rawErr = String(res?.error || '').toLowerCase();
+        
+        if (rawErr.includes('mail') || rawErr.includes('email') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered')) {
+          setFormErrors({ email: true, password: false });
+        } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('mismatch')) {
+          setFormErrors({ email: false, password: true });
+        } else {
+          setFormErrors({ email: true, password: true });
+        }
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Login failed. Please check network connection.');
+      const rawErr = String(err.message || '').toLowerCase();
+      if (rawErr.includes('mail') || rawErr.includes('email') || rawErr.includes('user not found') || rawErr.includes('user does not exist')) {
+        setFormErrors({ email: true, password: false });
+      } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong')) {
+        setFormErrors({ email: false, password: true });
+      } else {
+        setFormErrors({ email: true, password: true });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +139,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                  if (formErrors.email) setFormErrors(prev => ({ ...prev, email: false }));
                 }}
                 placeholder="Enter your email" 
                 style={{
@@ -96,11 +147,6 @@ export default function Login() {
                 }}
               />
             </div>
-            {formErrors.email && (
-              <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                {formErrors.email}
-              </span>
-            )}
           </div>
           
           <div className="form-group" style={{ textAlign: 'left', position: 'relative', marginBottom: '16px' }}>
@@ -119,7 +165,7 @@ export default function Login() {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                  if (formErrors.password) setFormErrors(prev => ({ ...prev, password: false }));
                 }}
                 placeholder="Enter your password" 
                 style={{ 
@@ -127,19 +173,43 @@ export default function Login() {
                   borderColor: formErrors.password ? '#dc2626' : undefined
                 }} 
               />
-              <span 
+              <button
+                type="button"
                 id="toggle-password-btn" 
                 onClick={() => setShowPassword(!showPassword)}
-                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', userSelect: 'none', fontSize: '13px', fontWeight: 600, color: 'var(--primary)' }}
+                title={showPassword ? 'Hide password' : 'Show password'}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                style={{ 
+                  position: 'absolute', 
+                  right: '12px', 
+                  top: '50%', 
+                  transform: 'translateY(-50%)', 
+                  cursor: 'pointer', 
+                  background: 'none',
+                  border: 'none',
+                  padding: '4px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: showPassword ? 'var(--primary, #ff5a1f)' : '#64748b',
+                  transition: 'color 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary, #ff5a1f)'}
+                onMouseLeave={(e) => e.currentTarget.style.color = showPassword ? 'var(--primary, #ff5a1f)' : '#64748b'}
               >
-                {showPassword ? 'Hide' : 'Show'}
-              </span>
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                )}
+              </button>
             </div>
-            {formErrors.password && (
-              <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                {formErrors.password}
-              </span>
-            )}
           </div>
           
           <div className="form-row-remember">
@@ -154,12 +224,6 @@ export default function Login() {
               Remember me
             </label>
           </div>
-          
-          {errorMsg && (
-            <div id="login-error" style={{ color: 'var(--danger)', fontSize: '13px', marginBottom: '15px', display: 'block', textAlign: 'left', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              {errorMsg}
-            </div>
-          )}
           
           <button 
             type="submit" 

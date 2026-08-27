@@ -6,6 +6,8 @@ import InventoryCategoryApi from '../api/InventoryCategory';
 import BranchApi from '../api/Branch';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
 // Clean SVG Icons
 const BoxIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -316,7 +318,7 @@ export default function InventoryPanel() {
       const combined = [
         ...pList.map(p => ({
           id: p._id || p.id,
-          date: p.purchaseDate ? new Date(p.purchaseDate).toLocaleString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleString('en-IN') : '—'),
+          date: p.purchaseDate ? formatDateTimeDMY(p.purchaseDate) : (p.createdAt ? formatDateTimeDMY(p.createdAt) : '—'),
           rawDate: p.purchaseDate || p.createdAt,
           itemId: typeof p.itemId === 'object' ? (p.itemId?._id || p.itemId?.id) : p.itemId,
           rawItemName: typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : p.itemName,
@@ -329,7 +331,7 @@ export default function InventoryPanel() {
         })),
         ...rList.map(r => ({
           id: r._id || r.id,
-          date: r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.date || '—'),
+          date: r.createdAt ? formatDateTimeDMY(r.createdAt) : (r.date ? formatDateTimeDMY(r.date) : '—'),
           rawDate: r.createdAt || r.date,
           itemId: typeof r.itemId === 'object' ? (r.itemId?._id || r.itemId?.id) : r.itemId,
           rawItemName: typeof r.itemId === 'object' ? (r.itemId?.name || r.itemId?.itemName) : r.itemName,
@@ -863,8 +865,8 @@ export default function InventoryPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Category
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={formState.categoryId || ''}
                   onChange={e => {
                     const selectedId = e.target.value;
@@ -875,23 +877,12 @@ export default function InventoryPanel() {
                       category: catObj ? catObj.name : formState.category
                     });
                   }}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {availableCategories.map(cat => (
-                    <option key={cat._id || cat.id} value={cat._id || cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  options={availableCategories.map(cat => ({
+                    value: cat._id || cat.id,
+                    label: cat.name
+                  }))}
+                  placeholder="Select Category..."
+                />
               </div>
 
               <div>
@@ -912,36 +903,21 @@ export default function InventoryPanel() {
 
                   return (
                     <div>
-                      <select
-                        disabled={isSubmitting || isLocked}
+                      <SearchableSelect
+                        isDisabled={isSubmitting || isLocked}
                         value={effectiveVal}
                         onChange={e => {
                           setFormState({ ...formState, branchId: e.target.value });
                           if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                         }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          borderRadius: '8px',
-                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                          fontSize: '14px',
-                          outline: 'none',
-                          backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                          color: isLocked ? '#64748b' : '#0f172a',
-                          boxSizing: 'border-box',
-                          cursor: (isLocked || isSubmitting) ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {branchesArr.length === 0 ? (
-                          <option value="">Main Branch</option>
-                        ) : (
-                          branchesArr.map(b => (
-                            <option key={b._id || b.id} value={b._id || b.id}>
-                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                        options={branchesArr.length === 0 ? [
+                          { value: '', label: 'Main Branch' }
+                        ] : branchesArr.map(b => ({
+                          value: b._id || b.id,
+                          label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                        }))}
+                        placeholder="Select Branch..."
+                      />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                           Branch is locked to currently selected branch.
@@ -1028,33 +1004,25 @@ export default function InventoryPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Unit of Measure
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={formState.unit}
                   onChange={e => setFormState({ ...formState, unit: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="kg">kg (Kilogram)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liter)</option>
-                  <option value="ml">ml (Milliliter)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="box">box (Boxes)</option>
-                  <option value="bag">bag (Bags / Sacks)</option>
-                  <option value="pack">pack (Packets)</option>
-                  <option value="can">can (Cans)</option>
-                  <option value="dozen">dozen (Dozens)</option>
-                  <option value="bundle">bundle (Bundles)</option>
-                </select>
+                  options={[
+                    { value: 'kg', label: 'kg (Kilogram)' },
+                    { value: 'g', label: 'g (Grams)' },
+                    { value: 'L', label: 'L (Liter)' },
+                    { value: 'ml', label: 'ml (Milliliter)' },
+                    { value: 'pcs', label: 'pcs (Pieces)' },
+                    { value: 'box', label: 'box (Boxes)' },
+                    { value: 'bag', label: 'bag (Bags / Sacks)' },
+                    { value: 'pack', label: 'pack (Packets)' },
+                    { value: 'can', label: 'can (Cans)' },
+                    { value: 'dozen', label: 'dozen (Dozens)' },
+                    { value: 'bundle', label: 'bundle (Bundles)' }
+                  ]}
+                  placeholder="Select Unit..."
+                />
               </div>
             </div>
 
@@ -1310,36 +1278,22 @@ export default function InventoryPanel() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Reason / Movement Purpose
               </label>
-              <select
+              <SearchableSelect
                 value={adjustState.reason}
                 onChange={e => setAdjustState({ ...adjustState, reason: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {adjustState.type === 'Stock In' ? (
-                  <>
-                    <option value="Supplier Purchase">Supplier Purchase / Inbound Shipment</option>
-                    <option value="Branch Transfer In">Branch Transfer In</option>
-                    <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (+)</option>
-                    <option value="Returned Items">Customer / Kitchen Return</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="Kitchen Issue">Kitchen Production / Daily Usage</option>
-                    <option value="Wastage / Spoilage">Spoilage / Expired / Damaged</option>
-                    <option value="Branch Transfer Out">Branch Transfer Out</option>
-                    <option value="Inventory Audit Adjustment">Inventory Audit Count Correction (-)</option>
-                  </>
-                )}
-              </select>
+                options={adjustState.type === 'Stock In' ? [
+                  { value: 'Supplier Purchase', label: 'Supplier Purchase / Inbound Shipment' },
+                  { value: 'Branch Transfer In', label: 'Branch Transfer In' },
+                  { value: 'Inventory Audit Adjustment', label: 'Inventory Audit Count Correction (+)' },
+                  { value: 'Returned Items', label: 'Customer / Kitchen Return' }
+                ] : [
+                  { value: 'Kitchen Issue', label: 'Kitchen Production / Daily Usage' },
+                  { value: 'Wastage / Spoilage', label: 'Spoilage / Expired / Damaged' },
+                  { value: 'Branch Transfer Out', label: 'Branch Transfer Out' },
+                  { value: 'Inventory Audit Adjustment', label: 'Inventory Audit Count Correction (-)' }
+                ]}
+                placeholder="Select Reason..."
+              />
             </div>
 
             {/* Notes / Invoice Ref */}
@@ -2753,29 +2707,19 @@ export default function InventoryPanel() {
             </div>
 
             {/* Filter by Item Name */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Item:</label>
-              <select
-                value={logFilterItemName}
-                onChange={e => setLogFilterItemName(e.target.value)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: logFilterItemName !== 'All' ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
-                  background: logFilterItemName !== 'All' ? '#fff7ed' : '#ffffff',
-                  color: logFilterItemName !== 'All' ? '#c2410c' : '#0f172a',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  cursor: 'pointer',
-                  maxWidth: '180px'
-                }}
-              >
-                <option value="All">All Items ({uniqueItemNames.length})</option>
-                {uniqueItemNames.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={logFilterItemName}
+                  onChange={e => setLogFilterItemName(e.target.value)}
+                  options={[
+                    { value: 'All', label: `All Items (${uniqueItemNames.length})` },
+                    ...uniqueItemNames.map(name => ({ value: name, label: name }))
+                  ]}
+                  placeholder="Filter Item..."
+                />
+              </div>
             </div>
 
             {/* Filter by Type */}

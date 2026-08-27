@@ -64,13 +64,16 @@ export default function QRManagementPanel({
   ];
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'Oct 24, 2024';
+    if (!dateStr) return '24/10/2024';
     try {
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return dateStr;
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
     } catch (e) {
-      return 'Oct 24, 2024';
+      return '24/10/2024';
     }
   };
 

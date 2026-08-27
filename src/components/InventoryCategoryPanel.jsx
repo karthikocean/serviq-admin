@@ -6,6 +6,7 @@ import InventoryApi from '../api/Inventory';
 import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -97,6 +98,8 @@ export default function InventoryCategoryPanel() {
   // View and Form States
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -311,22 +314,24 @@ export default function InventoryCategoryPanel() {
     }
   };
 
-  const handleDelete = async (cat) => {
-    const catId = cat._id || cat.id;
-    const count = getItemCountForCategory(cat);
-    const msg = count > 0
-      ? `Are you sure you want to delete category "${cat.name}"? It is currently used by ${count} inventory item(s).`
-      : `Are you sure you want to delete category "${cat.name}"?`;
+  const handleDelete = (cat) => {
+    setCategoryToDelete(cat);
+  };
 
-    if (window.confirm(msg)) {
-      const res = await InventoryCategoryApi.deleteCategory(catId);
-      if (res?.status) {
-        await fetchAllData();
-        if (deleteInventoryCategory && activeRestaurant?.id) {
-          deleteInventoryCategory(activeRestaurant.id, catId);
-        }
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete) return;
+    setIsDeleting(true);
+    const catId = categoryToDelete._id || categoryToDelete.id;
+    const res = await InventoryCategoryApi.deleteCategory(catId);
+    if (res?.status) {
+      ShowNotifications.showAlertNotification(`Category "${categoryToDelete.name}" deleted!`, true);
+      await fetchAllData();
+      if (deleteInventoryCategory && activeRestaurant?.id) {
+        deleteInventoryCategory(activeRestaurant.id, catId);
       }
+      setCategoryToDelete(null);
     }
+    setIsDeleting(false);
   };
 
   const handleToggleStatus = async (cat) => {
@@ -436,36 +441,21 @@ export default function InventoryCategoryPanel() {
 
                 return (
                   <div>
-                    <select
+                    <SearchableSelect
                       value={effectiveVal}
                       onChange={e => {
                         setFormBranchId(e.target.value);
                         if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                       }}
-                      disabled={isSubmitting || isLocked}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: formErrors.branchId ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                        outline: 'none',
-                        fontSize: '14px',
-                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                        color: isLocked ? '#64748b' : '#0f172a',
-                        boxSizing: 'border-box',
-                        cursor: (isLocked || isSubmitting) ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {allBranchesList.length === 0 ? (
-                        <option value="">Main Branch</option>
-                      ) : (
-                        allBranchesList.map(b => (
-                          <option key={b._id || b.id} value={b._id || b.id}>
-                            {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      isDisabled={isSubmitting || isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                         Branch is locked to currently selected branch.
@@ -508,24 +498,16 @@ export default function InventoryCategoryPanel() {
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
                 Status
               </label>
-              <select
+              <SearchableSelect
                 value={formStatus}
                 onChange={e => setFormStatus(e.target.value)}
-                disabled={isSubmitting}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  outline: 'none',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                  background: '#ffffff'
-                }}
-              >
-                <option value="AVAILABLE">AVAILABLE (Active)</option>
-                <option value="UNAVAILABLE">UNAVAILABLE (Disabled)</option>
-              </select>
+                isDisabled={isSubmitting}
+                options={[
+                  { value: 'AVAILABLE', label: 'AVAILABLE (Active)' },
+                  { value: 'UNAVAILABLE', label: 'UNAVAILABLE (Disabled)' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
@@ -727,27 +709,20 @@ export default function InventoryCategoryPanel() {
           </div>
 
           {/* Status Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '12px',
-                fontWeight: 600,
-                outline: 'none',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="AVAILABLE">Available (Active)</option>
-              <option value="UNAVAILABLE">Unavailable (Disabled)</option>
-            </select>
+            <div style={{ flex: 1 }}>
+              <SearchableSelect
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                options={[
+                  { value: 'ALL', label: 'All Statuses' },
+                  { value: 'AVAILABLE', label: 'Available (Active)' },
+                  { value: 'UNAVAILABLE', label: 'Unavailable (Disabled)' }
+                ]}
+                placeholder="Filter Status..."
+              />
+            </div>
           </div>
         </div>
 
@@ -1123,6 +1098,49 @@ export default function InventoryCategoryPanel() {
                 style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
               >
                 Edit Category
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Category Confirmation Modal Popup */}
+      {categoryToDelete && (
+        <Modal
+          isOpen={!!categoryToDelete}
+          onClose={() => !isDeleting && setCategoryToDelete(null)}
+          title="Confirm Category Deletion"
+          maxWidth="450px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>
+              {(() => {
+                const count = getItemCountForCategory(categoryToDelete);
+                return count > 0 ? `? It is currently used by ${count} inventory item(s).` : '?';
+              })()}
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setCategoryToDelete(null)}
+                disabled={isDeleting}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

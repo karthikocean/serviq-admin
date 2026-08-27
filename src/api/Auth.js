@@ -6,14 +6,24 @@ class AuthApi {
     try {
       const response = await apiClient.post("/login", { email, password });
       if (response.status === 200 || response.status === 201) {
-        return { status: true, response: response.data };
+        const isSuccess = response.data?.success !== false;
+        return { 
+          status: isSuccess, 
+          message: response.data?.message,
+          response: response.data 
+        };
       }
-      return { status: false, response: response.data };
+      return { 
+        status: false, 
+        message: response.data?.message,
+        response: response.data 
+      };
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
+        error?.response?.message ||
         error?.message ||
-        "Login failed. Please check your credentials.";
+        "";
       return {
         status: false,
         message: errorMessage,

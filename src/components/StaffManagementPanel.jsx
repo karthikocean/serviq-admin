@@ -7,6 +7,7 @@ import TableApi from '../api/Table';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -200,7 +201,7 @@ export default function StaffManagementPanel({
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
-  const limit = 10;
+  const [limit, setLimit] = useState(25);
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [kitchenViewState, setKitchenViewState] = useState('list'); // 'list' or 'add'
@@ -223,6 +224,7 @@ export default function StaffManagementPanel({
 
   const fetchData = async () => {
     setIsLoading(true);
+    const validBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : '';
     const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
       UserApi.getUsers({
         page,
@@ -230,17 +232,20 @@ export default function StaffManagementPanel({
         search: searchQuery,
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
         statusFilter: statusFilter === 'All' ? '' : statusFilter,
-        branchId: selectedBranchId || ''
+        branchId: validBranchId
       }),
-      UserApi.getStations({ branchId: selectedBranchId || '' }),
+      UserApi.getStations({ branchId: validBranchId }),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
-      TableApi.getTables({ branchId: selectedBranchId || '' })
+      TableApi.getTables({ branchId: validBranchId })
     ]);
     if (usersRes?.status) {
-      setApiUsers(usersRes.response.data || []);
-      setTotalPages(usersRes.response.totalPages || 1);
-      setTotalRecords(usersRes.response.total || 0);
+      const raw = usersRes.response?.data || usersRes.response?.users || usersRes.response?.staff || (Array.isArray(usersRes.response) ? usersRes.response : []);
+      const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+      const totalCount = usersRes.response?.total || usersRes.response?.totalRecords || usersRes.response?.count || list.length;
+      setApiUsers(list);
+      setTotalPages(usersRes.response?.totalPages || Math.ceil(totalCount / limit) || 1);
+      setTotalRecords(totalCount);
     }
     if (stationsRes?.status) setApiStations(stationsRes.response.data || []);
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
@@ -488,6 +493,61 @@ export default function StaffManagementPanel({
     }
   };
 
+  const resolveTableAssignedWaiter = (table, userList = apiUsers) => {
+    if (!table) return null;
+    if (table.assignedWaiter && typeof table.assignedWaiter === 'object') {
+      const id = table.assignedWaiter._id || table.assignedWaiter.id;
+      const name = table.assignedWaiter.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && userList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+    if (table.assignedWaiterId && typeof table.assignedWaiterId === 'object') {
+      const id = table.assignedWaiterId._id || table.assignedWaiterId.id;
+      const name = table.assignedWaiterId.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && userList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+
+    const rawId = table.assignedWaiterId || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null) || table.waiterId;
+    const rawName = table.assignedWaiterName || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null);
+
+    if (!rawId && !rawName) return null;
+
+    if (userList && userList.length > 0) {
+      const found = userList.find(u => {
+        const uId = String(u._id || u.id || '');
+        const uName = String(u.name || '').trim().toLowerCase();
+        if (rawId && uId === String(rawId)) return true;
+        if (rawName && uName === String(rawName).trim().toLowerCase()) return true;
+        if (rawId && uName === String(rawId).trim().toLowerCase()) return true;
+        return false;
+      });
+      if (found) {
+        return {
+          id: found._id || found.id,
+          name: found.name
+        };
+      }
+    }
+
+    if (rawName && rawName !== 'Unassigned' && rawName !== 'null' && rawName !== 'undefined') {
+      return { id: rawId || rawName, name: rawName };
+    }
+    if (rawId && isNaN(rawId) && typeof rawId === 'string' && !rawId.match(/^[0-9a-fA-F]{24}$/)) {
+      return { id: rawId, name: rawId };
+    }
+
+    return null;
+  };
+
   const handleToggleDuty = async (user) => {
     const nextDutyStatus = (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? 'OFF_DUTY' : 'ON_DUTY';
     const payload = { dutyStatus: nextDutyStatus };
@@ -501,10 +561,16 @@ export default function StaffManagementPanel({
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
     if (waiterId) {
-      const assignedTables = apiTables.filter(t => t.assignedWaiterId === waiterId);
+      const selectedWaiter = apiUsers.find(u => String(u._id || u.id) === String(waiterId));
+      const assignedTables = apiTables.filter(t => {
+        const assigned = resolveTableAssignedWaiter(t, apiUsers);
+        if (!assigned) return false;
+        return String(assigned.id) === String(waiterId) || 
+          (selectedWaiter && String(assigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase());
+      });
       setModalTableIds(assignedTables.map(t => t._id || t.id));
-      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId);
-      setModalCoverWaiterId(firstTableWithCover ? firstTableWithCover.tempWaiterId : '');
+      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId || t.coverWaiterId);
+      setModalCoverWaiterId(firstTableWithCover ? (firstTableWithCover.tempWaiterId || firstTableWithCover.coverWaiterId) : '');
     } else {
       setModalTableIds([]);
       setModalCoverWaiterId('');
@@ -536,6 +602,9 @@ export default function StaffManagementPanel({
       coverWaiterId: modalCoverWaiterId || null
     });
     if (res.status) {
+      if (assignTablesToWaiter && activeRestaurant?.id) {
+        assignTablesToWaiter(activeRestaurant.id, modalWaiterId, modalTableIds, modalCoverWaiterId);
+      }
       setShowAssignTablesModal(false);
       fetchData(); // Refresh tables and users
     }
@@ -700,35 +769,21 @@ export default function StaffManagementPanel({
 
                   return (
                     <>
-                      <select
+                      <SearchableSelect
                         value={effectiveVal}
                         onChange={e => {
                           setUserForm({ ...userForm, branchId: e.target.value });
                           if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                         }}
-                        style={{
-                          width: '100%',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                          fontSize: '14px',
-                          background: isLocked ? '#f8fafc' : '#ffffff',
-                          color: isLocked ? '#64748b' : '#0f172a',
-                          cursor: isLocked ? 'not-allowed' : 'pointer',
-                          boxSizing: 'border-box'
-                        }}
-                        disabled={isLocked}
-                      >
-                        {allBranchesList.length === 0 ? (
-                          <option value="">Main Branch</option>
-                        ) : (
-                          allBranchesList.map(b => (
-                            <option key={b._id || b.id} value={b._id || b.id}>
-                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                        isDisabled={isLocked}
+                        options={allBranchesList.length === 0 ? [
+                          { value: '', label: 'Main Branch' }
+                        ] : allBranchesList.map(b => ({
+                          value: b._id || b.id,
+                          label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                        }))}
+                        placeholder="Select Branch..."
+                      />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                           Branch is locked to currently selected branch.
@@ -750,19 +805,18 @@ export default function StaffManagementPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Access Role <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.roleId}
                   onChange={e => {
                     setUserForm({ ...userForm, roleId: e.target.value });
                     if (formErrors.roleId) setFormErrors({ ...formErrors, roleId: '' });
                   }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.roleId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="" disabled>Select a role...</option>
-                  {apiRoles.map(r => (
-                    <option key={r._id} value={r._id}>{r.roleName}</option>
-                  ))}
-                </select>
+                  options={apiRoles.map(r => ({
+                    value: r._id,
+                    label: r.roleName
+                  }))}
+                  placeholder="Select a role..."
+                />
                 {formErrors.roleId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.roleId}
@@ -774,14 +828,15 @@ export default function StaffManagementPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Account Status <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.status}
                   onChange={e => setUserForm({ ...userForm, status: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                  options={[
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Inactive', label: 'Inactive' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
             </div>
 
@@ -821,14 +876,15 @@ export default function StaffManagementPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Duty Status
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.dutyStatus}
                   onChange={e => setUserForm({ ...userForm, dutyStatus: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="ON_DUTY">On Duty</option>
-                  <option value="OFF_DUTY">Off Duty</option>
-                </select>
+                  options={[
+                    { value: 'ON_DUTY', label: 'On Duty' },
+                    { value: 'OFF_DUTY', label: 'Off Duty' }
+                  ]}
+                  placeholder="Select Duty Status..."
+                />
               </div>
             </div>
 
@@ -937,7 +993,7 @@ export default function StaffManagementPanel({
     return rName?.toLowerCase().includes('kitchen') && (!s.dutyStatus || s.dutyStatus === 'ON_DUTY');
   }).length;
 
-  const totalAssignedTables = apiTables.filter(t => t.assignedWaiterId || t.assignedWaiter).length;
+  const totalAssignedTables = apiTables.filter(t => resolveTableAssignedWaiter(t, apiUsers)).length;
 
   return (
     <section className="panel-view active" style={{ width: '100%', paddingBottom: '24px' }}>
@@ -1116,46 +1172,20 @@ export default function StaffManagementPanel({
             </svg>
           </div>
 
-          <div>
-            <select
+          <div style={{ minWidth: '160px' }}>
+            <SearchableSelect
               value={roleFilter}
               onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                fontWeight: 600,
-                backgroundColor: '#fff'
-              }}
-            >
-              <option value="All">All Roles</option>
-              {apiRoles.map(r => (
-                <option key={r._id} value={r._id}>{r.roleName}</option>
-              ))}
-            </select>
+              options={[
+                { value: 'All', label: 'All Roles' },
+                ...apiRoles.map(r => ({
+                  value: r._id,
+                  label: r.roleName
+                }))
+              ]}
+              placeholder="Filter Role..."
+            />
           </div>
-
-          {/* <div>
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                fontWeight: 600,
-                backgroundColor: '#fff'
-              }}
-            >
-              <option value="All">All Account Statuses</option>
-              <option value="Active">Active Staff</option>
-              <option value="Inactive">Inactive Staff</option>
-            </select>
-          </div> */}
 
           {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All') && (
             <button
@@ -1205,7 +1235,18 @@ export default function StaffManagementPanel({
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
               const isOnDuty = user.dutyStatus === 'ON_DUTY' || !user.dutyStatus; // default to on duty
-              const assignedTables = isWaiter ? (user.assignedTableBadges || []) : [];
+              const assignedTables = isWaiter ? apiTables
+                .filter(t => {
+                  const assigned = resolveTableAssignedWaiter(t, apiUsers);
+                  return assigned && (
+                    String(assigned.id) === String(user._id || user.id) ||
+                    String(assigned.name).trim().toLowerCase() === String(user.name).trim().toLowerCase()
+                  );
+                })
+                .map(t => {
+                  const tName = t.tableNo || t.tableNumber || t.id;
+                  return tName.startsWith('Table') ? tName : `Table ${tName}`;
+                }) : [];
 
               return (
                 <tr key={user._id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
@@ -1834,31 +1875,18 @@ export default function StaffManagementPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', color: '#334155', marginTop: '10px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>Select Waiter</label>
-            <select
+            <SearchableSelect
               value={modalWaiterId}
               onChange={e => loadWaiterAssignments(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1.5px solid #cbd5e1',
-                backgroundColor: '#f8fafc',
-                color: '#334155',
-                fontSize: '14px',
-                fontWeight: '600',
-                outline: 'none',
-                width: '100%'
-              }}
-            >
-              <option value="" disabled>Select a Waiter</option>
-              {apiUsers.filter(s => {
+              options={apiUsers.filter(s => {
                 const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
                 return rName?.toLowerCase().includes('waiter');
-              }).map(s => (
-                <option key={s._id} value={s._id}>
-                  {s.name} ({(!s.dutyStatus || s.dutyStatus === 'ON_DUTY') ? 'On Duty' : 'Off Duty'})
-                </option>
-              ))}
-            </select>
+              }).map(s => ({
+                value: s._id,
+                label: `${s.name} (${(!s.dutyStatus || s.dutyStatus === 'ON_DUTY') ? 'On Duty' : 'Off Duty'})`
+              }))}
+              placeholder="Select a Waiter..."
+            />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1879,11 +1907,12 @@ export default function StaffManagementPanel({
                   return <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>Select a waiter to view tables</div>;
                 }
 
+                const selectedWaiter = apiUsers.find(u => String(u._id || u.id) === String(modalWaiterId));
+                const wBranchId = typeof selectedWaiter?.branchId === 'object' ? selectedWaiter.branchId?._id : selectedWaiter?.branchId;
+
                 const filteredTables = apiTables.filter(t => {
-                  const selectedWaiter = apiUsers.find(u => u._id === modalWaiterId);
-                  const wBranchId = typeof selectedWaiter?.branchId === 'object' ? selectedWaiter.branchId?._id : selectedWaiter?.branchId;
                   const tBranchId = typeof t.branchId === 'object' ? t.branchId?._id : t.branchId;
-                  return !wBranchId || !tBranchId || tBranchId === wBranchId;
+                  return !wBranchId || !tBranchId || String(tBranchId) === String(wBranchId);
                 });
 
                 if (filteredTables.length === 0) {
@@ -1892,9 +1921,13 @@ export default function StaffManagementPanel({
 
                 return filteredTables.map(table => {
                   const tId = table._id || table.id;
+                  const currentlyAssigned = resolveTableAssignedWaiter(table, apiUsers);
+                  const isAssignedToThisWaiter = currentlyAssigned && (
+                    String(currentlyAssigned.id) === String(modalWaiterId) ||
+                    (selectedWaiter && String(currentlyAssigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase())
+                  );
+                  const isAssignedToOther = currentlyAssigned && !isAssignedToThisWaiter;
                   const isChecked = modalTableIds.includes(tId);
-                  const currentlyAssigned = table.assignedWaiterId ? apiUsers.find(s => String(s._id || s.id) === String(table.assignedWaiterId)) : null;
-                  const isAssignedToOther = currentlyAssigned && String(currentlyAssigned._id || currentlyAssigned.id) !== String(modalWaiterId);
                   const tableNameStr = `Table ${table.tableNo || table.tableNumber || tId}`;
 
                   return (
@@ -1910,16 +1943,16 @@ export default function StaffManagementPanel({
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '10px',
                         fontSize: '13px',
                         fontWeight: '600',
-                        padding: '8px 10px',
+                        padding: '10px 12px',
                         borderRadius: '8px',
                         border: isAssignedToOther ? '1.5px solid #fecaca' : (isChecked ? '1.5px solid #ff7a00' : '1px solid #e2e8f0'),
                         backgroundColor: isAssignedToOther ? '#fef2f2' : (isChecked ? '#fff7ed' : '#ffffff'),
                         cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s ease',
-                        opacity: isAssignedToOther ? 0.75 : 1
+                        opacity: isAssignedToOther ? 0.85 : 1
                       }}
                     >
                       <input
@@ -1941,26 +1974,32 @@ export default function StaffManagementPanel({
                           accentColor: 'var(--primary)',
                           width: '16px',
                           height: '16px',
-                          cursor: isAssignedToOther ? 'not-allowed' : 'pointer'
+                          cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                          flexShrink: 0
                         }}
                       />
-                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                          <span style={{ color: isAssignedToOther ? '#991b1b' : '#0f172a' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
+                          <span style={{ color: isAssignedToOther ? '#991b1b' : '#0f172a', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {tableNameStr}
                           </span>
-                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                          <span style={{ fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}>
                             {table.seats || table.seatingCapacity || table.tableCapacity || 2} seats
                           </span>
                         </div>
                         {isAssignedToOther && (
-                          <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px' }}>
+                          <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
                             🚫 Already assigned to {currentlyAssigned.name}
                           </span>
                         )}
                         {!isAssignedToOther && isChecked && (
-                          <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px' }}>
+                          <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
                             ✓ Assigned to this waiter
+                          </span>
+                        )}
+                        {!isAssignedToOther && !isChecked && (
+                          <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 600, marginTop: '2px', lineHeight: '1.2' }}>
+                            Available
                           </span>
                         )}
                       </div>
@@ -1969,37 +2008,6 @@ export default function StaffManagementPanel({
                 });
               })()}
             </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
-              Cover Waiter <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>(Optional)</span>
-            </label>
-            <select
-              value={modalCoverWaiterId}
-              onChange={e => setModalCoverWaiterId(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1.5px solid #cbd5e1',
-                backgroundColor: '#f8fafc',
-                color: '#334155',
-                fontSize: '14px',
-                fontWeight: '600',
-                outline: 'none',
-                width: '100%'
-              }}
-            >
-              <option value="">No Cover Waiter</option>
-              {apiUsers.filter(s => {
-                const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
-                return rName?.toLowerCase().includes('waiter') && s._id !== modalWaiterId;
-              }).map(s => (
-                <option key={s._id} value={s._id}>
-                  {s.name} ({(!s.dutyStatus || s.dutyStatus === 'ON_DUTY') ? 'On Duty' : 'Off Duty'})
-                </option>
-              ))}
-            </select>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>

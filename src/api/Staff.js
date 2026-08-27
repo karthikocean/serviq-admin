@@ -4,7 +4,8 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class StaffApi {
   async getStaff(branchId = "") {
     try {
-      const url = branchId ? `/staff?branchId=${branchId}` : `/staff`;
+      const validBranch = branchId && branchId !== 'ALL' ? branchId : '';
+      const url = validBranch ? `/staff?branchId=${validBranch}` : `/staff`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

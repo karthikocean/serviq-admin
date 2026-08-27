@@ -5,6 +5,7 @@ import ShowNotifications from '../../helper/ShowNotifications';
 import TableApi from '../../api/Table';
 import StaffApi from '../../api/Staff';
 import BranchApi from '../../api/Branch';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function TableFormPage() {
   const navigate = useNavigate();
@@ -293,34 +294,18 @@ export default function TableFormPage() {
 
                 return (
                   <div>
-                    <select
+                    <SearchableSelect
                       value={effectiveVal}
                       onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
-                      disabled={isLocked}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        outline: 'none',
-                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                        color: isLocked ? '#64748b' : '#0f172a',
-                        cursor: isLocked ? 'not-allowed' : 'pointer',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {allBranchesList.length === 0 ? (
-                        <option value="">Main Branch</option>
-                      ) : (
-                        allBranchesList.map(b => (
-                          <option key={b._id || b.id} value={b._id || b.id}>
-                            {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                         Branch is locked to currently selected branch.
@@ -403,29 +388,21 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Section / Area
               </label>
-              <select
+              <SearchableSelect
                 value={form.section}
                 onChange={(e) => setForm({ ...form, section: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="Main Dining">Main Dining</option>
-                <option value="Main Hall">Main Hall</option>
-                <option value="AC Dining">AC Dining</option>
-                <option value="AC Hall">AC Hall</option>
-                <option value="Family Section">Family Section</option>
-                <option value="Outdoor Terrace">Outdoor Terrace</option>
-                <option value="Garden View">Garden View</option>
-                <option value="VIP Lounge">VIP Lounge</option>
-              </select>
+                options={[
+                  { value: 'Main Dining', label: 'Main Dining' },
+                  { value: 'Main Hall', label: 'Main Hall' },
+                  { value: 'AC Dining', label: 'AC Dining' },
+                  { value: 'AC Hall', label: 'AC Hall' },
+                  { value: 'Family Section', label: 'Family Section' },
+                  { value: 'Outdoor Terrace', label: 'Outdoor Terrace' },
+                  { value: 'Garden View', label: 'Garden View' },
+                  { value: 'VIP Lounge', label: 'VIP Lounge' }
+                ]}
+                placeholder="Select Section..."
+              />
             </div>
           </div>
 
@@ -435,27 +412,18 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Assign Waiter (Optional)
               </label>
-              <select
+              <SearchableSelect
                 value={form.assignedWaiterId || ''}
                 onChange={(e) => setForm({ ...form, assignedWaiterId: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="">-- None (Unassigned) --</option>
-                {availableWaiters.map(w => (
-                  <option key={w._id || w.id} value={w._id || w.id}>
-                    🤵 {w.name} ({w.status || 'Active'})
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: '-- None (Unassigned) --' },
+                  ...availableWaiters.map(w => ({
+                    value: w._id || w.id,
+                    label: `🤵 ${w.name} (${w.status || 'Active'})`
+                  }))
+                ]}
+                placeholder="Select Waiter..."
+              />
             </div>
 
             {isEdit ? (
@@ -463,23 +431,15 @@ export default function TableFormPage() {
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                   Occupancy Status
                 </label>
-                <select
+                <SearchableSelect
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="Free">Free (Available)</option>
-                  <option value="Occupied">Occupied</option>
-                </select>
+                  options={[
+                    { value: 'Free', label: 'Free (Available)' },
+                    { value: 'Occupied', label: 'Occupied' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
             ) : (
               <div>

@@ -6,6 +6,7 @@ import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -520,35 +521,21 @@ export default function UserListPanel() {
 
                   return (
                     <>
-                      <select
+                      <SearchableSelect
                         value={effectiveVal}
                         onChange={e => {
                           setUserForm({ ...userForm, branchId: e.target.value });
                           if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                         }}
-                        disabled={isLocked}
-                        style={{
-                          width: '100%',
-                          padding: '10px 14px',
-                          borderRadius: '8px',
-                          border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                          fontSize: '14px',
-                          background: isLocked ? '#f8fafc' : '#ffffff',
-                          color: isLocked ? '#64748b' : '#0f172a',
-                          cursor: isLocked ? 'not-allowed' : 'pointer',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        {allBranchesList.length === 0 ? (
-                          <option value="">Main Branch</option>
-                        ) : (
-                          allBranchesList.map(b => (
-                            <option key={b._id || b.id} value={b._id || b.id}>
-                              {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                        isDisabled={isLocked}
+                        options={allBranchesList.length === 0 ? [
+                          { value: '', label: 'Main Branch' }
+                        ] : allBranchesList.map(b => ({
+                          value: b._id || b.id,
+                          label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                        }))}
+                        placeholder="Select Branch..."
+                      />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                           Branch is locked to currently selected branch.
@@ -570,19 +557,18 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Access Role <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.roleId}
                   onChange={e => {
                     setUserForm({ ...userForm, roleId: e.target.value });
                     if (formErrors.roleId) setFormErrors({ ...formErrors, roleId: '' });
                   }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.roleId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="" disabled>Select a role...</option>
-                  {apiRoles.map(r => (
-                    <option key={r._id} value={r._id}>{r.roleName}</option>
-                  ))}
-                </select>
+                  options={apiRoles.map(r => ({
+                    value: r._id,
+                    label: r.roleName
+                  }))}
+                  placeholder="Select a role..."
+                />
                 {formErrors.roleId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.roleId}
@@ -594,14 +580,15 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Account Status <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.status}
                   onChange={e => setUserForm({ ...userForm, status: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                  options={[
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Inactive', label: 'Inactive' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
             </div>
 
@@ -806,45 +793,32 @@ export default function UserListPanel() {
               }}
             />
           </div>
-          <select
-            value={roleFilter}
-            onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
-            style={{
-              padding: '10px 16px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '14px',
-              background: '#ffffff',
-              minWidth: '200px',
-              cursor: 'pointer',
-              color: '#0f172a',
-              outline: 'none'
-            }}
-          >
-            <option value="All">All Roles</option>
-            {apiRoles.map(r => (
-              <option key={r._id} value={r._id}>{r.roleName}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            style={{
-              padding: '10px 16px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '14px',
-              background: '#ffffff',
-              minWidth: '150px',
-              cursor: 'pointer',
-              color: '#0f172a',
-              outline: 'none'
-            }}
-          >
-            <option value="All">All Statuses</option>
-            <option value="Active">Active Users</option>
-            <option value="Inactive">Inactive Users</option>
-          </select>
+          <div style={{ minWidth: '180px' }}>
+            <SearchableSelect
+              value={roleFilter}
+              onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
+              options={[
+                { value: 'All', label: 'All Roles' },
+                ...apiRoles.map(r => ({
+                  value: r._id,
+                  label: r.roleName
+                }))
+              ]}
+              placeholder="Filter Role..."
+            />
+          </div>
+          <div style={{ minWidth: '160px' }}>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+              options={[
+                { value: 'All', label: 'All Statuses' },
+                { value: 'Active', label: 'Active Users' },
+                { value: 'Inactive', label: 'Inactive Users' }
+              ]}
+              placeholder="Filter Status..."
+            />
+          </div>
         </div>
 
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>

@@ -4,7 +4,14 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class BillingApi {
   async getBillingHistory(filters = {}) {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      const cleanParams = {};
+      Object.keys(filters).forEach(key => {
+        const val = filters[key];
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+          cleanParams[key] = val;
+        }
+      });
+      const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/history${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
 
@@ -29,7 +36,14 @@ class BillingApi {
 
   async getActiveTables(filters = {}) {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      const cleanParams = {};
+      Object.keys(filters).forEach(key => {
+        const val = filters[key];
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+          cleanParams[key] = val;
+        }
+      });
+      const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/active-tables${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {

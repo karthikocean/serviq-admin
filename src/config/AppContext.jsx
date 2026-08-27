@@ -305,15 +305,23 @@ export const AppProvider = ({ children }) => {
           const localTables = rest.tables || [];
           const mapped = res.response.data.map(t => {
             const localT = localTables.find(lt => lt && lt.id && t && t.tableNumber && String(lt.id).toLowerCase() === String(t.tableNumber).toLowerCase());
+            const backendWaiterId = (typeof t.assignedWaiter === 'object' ? t.assignedWaiter?._id : t.assignedWaiter) || t.assignedWaiterId;
+            const statusStr = typeof t.status === 'string' ? t.status : (t.status ? 'Occupied' : 'Free');
+            const isOcc = ['occupied', 'busy', 'reserved'].includes(String(statusStr || t.occupancyStatus || '').toLowerCase()) || t.isOccupied === true;
             return {
               _id: t._id,
-              id: t.tableNumber || t.id,
-              seats: t.seatingCapacity,
-              status: t.status ? 'Occupied' : 'Free',
+              id: t.tableNumber || t.tableNo || t.id,
+              tableNumber: t.tableNumber || t.tableNo || t.id,
+              tableNo: t.tableNo || t.tableNumber || t.id,
+              seats: t.seatingCapacity || t.seats,
+              seatingCapacity: t.seatingCapacity || t.seats,
+              status: isOcc ? 'Occupied' : (statusStr || 'Free'),
               isActive: t.isActive,
-              assignedWaiterId: localT?.assignedWaiterId || null,
-              tempWaiterId: localT?.tempWaiterId || null,
-              assignedQrId: t.assignedQrId || null
+              assignedWaiter: t.assignedWaiter || null,
+              assignedWaiterId: backendWaiterId || localT?.assignedWaiterId || null,
+              tempWaiterId: t.coverWaiterId || t.tempWaiterId || localT?.tempWaiterId || null,
+              assignedQrId: t.assignedQrId || null,
+              branchId: t.branchId
             };
           });
           const computedBillData = computeBillingData(rest.orders || [], mapped);
@@ -554,11 +562,18 @@ export const AppProvider = ({ children }) => {
       }
 
       // If backend rejected login (invalid credentials, incorrect password, etc.)
-      const errorMsg =
+      const backendMessage =
         apiRes?.response?.data?.message ||
         apiRes?.response?.message ||
         apiRes?.message ||
-        "Invalid credentials.";
+        apiRes?.data?.message ||
+        apiRes?.response?.data?.error ||
+        apiRes?.error ||
+        "";
+
+      const errorMsg = backendMessage && typeof backendMessage === 'string' && backendMessage.trim()
+        ? backendMessage.trim()
+        : "Invalid credentials";
 
       localStorage.removeItem("userToken");
       localStorage.removeItem("token");
@@ -570,7 +585,16 @@ export const AppProvider = ({ children }) => {
       return { success: false, error: errorMsg };
     } catch (e) {
       console.warn("Backend API login error:", e);
-      const errMsg = e?.response?.data?.message || e?.message || "Invalid credentials.";
+      const backendCatchMsg =
+        e?.response?.data?.message ||
+        e?.response?.message ||
+        e?.message ||
+        "";
+
+      const errMsg = backendCatchMsg && typeof backendCatchMsg === 'string' && backendCatchMsg.trim()
+        ? backendCatchMsg.trim()
+        : "Invalid credentials";
+
       localStorage.removeItem("userToken");
       localStorage.removeItem("token");
       localStorage.removeItem("currentUser");

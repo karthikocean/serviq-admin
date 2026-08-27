@@ -27,6 +27,71 @@ const UsersIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+// Robust Branch Matcher
+const branchMatches = (itemBranch, targetBranch) => {
+  if (!itemBranch || !targetBranch) return false;
+
+  const targetId = String(targetBranch._id || targetBranch.id || '').toLowerCase().trim();
+  const targetCode = String(targetBranch.branchCode || targetBranch.code || '').toLowerCase().trim();
+  const targetName = String(targetBranch.branchName || targetBranch.name || '').toLowerCase().trim();
+
+  let itemId = '';
+  let itemCode = '';
+  let itemName = '';
+
+  if (typeof itemBranch === 'object' && itemBranch !== null) {
+    itemId = String(itemBranch._id || itemBranch.id || '').toLowerCase().trim();
+    itemCode = String(itemBranch.branchCode || itemBranch.code || '').toLowerCase().trim();
+    itemName = String(itemBranch.branchName || itemBranch.name || '').toLowerCase().trim();
+  } else {
+    itemId = String(itemBranch).toLowerCase().trim();
+    itemCode = itemId;
+  }
+
+  if (targetId && itemId && (targetId === itemId || itemId === targetId)) return true;
+  if (targetCode && (itemCode === targetCode || itemId === targetCode)) return true;
+  if (targetName && (itemName === targetName || itemId === targetName)) return true;
+  return false;
+};
+
+// Robust Table Occupancy Evaluator
+const isTableOccupied = (table, orderList = []) => {
+  if (!table) return false;
+
+  // 1. Direct status flags
+  const statusStr = String(table.status || table.occupancyStatus || '').toLowerCase().trim();
+  if (['occupied', 'busy', 'reserved', 'dining', 'seated', 'active', 'in_use'].includes(statusStr)) return true;
+  if (table.isOccupied === true || table.occupied === true) return true;
+  if (table.currentOrder || table.activeOrderId) return true;
+
+  // 2. Active order check
+  const tableNum = String(table.tableNumber || table.tableNo || table.id || table.name || '').toLowerCase().trim();
+  const tableIdStr = String(table._id || table.id || '').toLowerCase().trim();
+  const tableDigits = tableNum.replace(/\D/g, '');
+
+  const hasActiveOrder = (orderList || []).some(order => {
+    const ordTableNum = String(order.tableNumber || order.table || order.tableName || '').toLowerCase().trim();
+    const ordTableId = String(order.tableId || (typeof order.table === 'object' ? (order.table?._id || order.table?.id) : '') || '').toLowerCase().trim();
+    const ordDigits = ordTableNum.replace(/\D/g, '');
+
+    const matchesTable = 
+      (tableNum && ordTableNum && (ordTableNum === tableNum || ordTableNum === `table ${tableNum}` || `table ${ordTableNum}` === tableNum)) ||
+      (tableDigits && ordDigits && tableDigits === ordDigits) ||
+      (tableIdStr && ordTableId && tableIdStr === ordTableId);
+
+    if (!matchesTable) return false;
+
+    const ordStatus = String(order.status || '').toLowerCase().trim();
+    const ordBilling = String(order.billingStatus || order.paymentStatus || '').toLowerCase().trim();
+    const isCompleted = ordStatus === 'completed' || ordStatus === 'delivered' || ordStatus === 'cancelled' || ordStatus === 'rejected' || ordStatus === 'closed';
+    const isPaidAndDone = ordBilling === 'paid' && (ordStatus === 'completed' || ordStatus === 'ready' || ordStatus === 'delivered' || ordStatus === 'served');
+
+    return !isCompleted && !isPaidAndDone;
+  });
+
+  return hasActiveOrder;
+};
+
 export default function OverviewPanel({
   orders = [],
   tables = [],
@@ -52,7 +117,7 @@ export default function OverviewPanel({
   const userType = (userTypeStr || '').toUpperCase();
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
-  const selectedBranch = branches.find(b => b.id === selectedBranchId || b._id === selectedBranchId);
+  const selectedBranch = branches.find(b => b.id === selectedBranchId || b._id === selectedBranchId || b.branchCode === selectedBranchId);
   const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
 
   // Live Dashboard API Stats State
@@ -133,13 +198,44 @@ export default function OverviewPanel({
     fetchLiveTables();
   }, [selectedBranchId]);
 
-  // Fallback Counts
-  const preparingOrdersCount = orders.filter(o => o.status === 'preparing').length;
-  const occupiedTablesCount = tables.filter(t => t.status === 'Occupied').length;
-  const pendingOrdersCount = orders.filter(o => o.status === 'new').length;
-  const completedOrdersCount = orders.filter(o => o.status === 'completed').length;
-  const onDutyStaffCount = staff.filter(s => s.status === 'On Duty').length;
-  const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
+  // Current view tables and orders
+  const currentTables = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? allTables.filter(t => branchMatches(t.branchId || t.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
+    : allTables;
+  const currentOrders = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? allOrders.filter(o => branchMatches(o.branchId || o.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
+    : allOrders;
+  const currentStaff = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? allStaff.filter(s => branchMatches(s.branchId || s.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
+    : allStaff;
+
+  const displayTables = (currentTables && currentTables.length > 0) ? currentTables : tables;
+  const displayOrders = (currentOrders && currentOrders.length > 0) ? currentOrders : orders;
+  const displayStaff = (currentStaff && currentStaff.length > 0) ? currentStaff : staff;
+
+  // Accurately computed fallback counts
+  const preparingOrdersCount = displayOrders.filter(o => o.status === 'preparing').length;
+  const apiOccupiedCount =
+    statsData?.activeTables?.occupied !== undefined ? Number(statsData.activeTables.occupied) :
+    statsData?.activeTables?.count !== undefined ? Number(statsData.activeTables.count) :
+    typeof statsData?.activeTables === 'number' ? statsData.activeTables :
+    statsData?.occupiedTables?.count !== undefined ? Number(statsData.occupiedTables.count) :
+    statsData?.occupiedTables?.occupied !== undefined ? Number(statsData.occupiedTables.occupied) :
+    typeof statsData?.occupiedTables === 'number' ? statsData.occupiedTables :
+    liveTablesData?.occupiedCount !== undefined ? Number(liveTablesData.occupiedCount) :
+    liveTablesData?.occupied !== undefined ? Number(liveTablesData.occupied) :
+    undefined;
+
+  const localOccupiedCount = displayTables.filter(t => isTableOccupied(t, displayOrders)).length;
+  const occupiedTablesCount = apiOccupiedCount !== undefined ? apiOccupiedCount : localOccupiedCount;
+  const totalTablesDisplayCount = statsData?.activeTables?.total || statsData?.occupiedTables?.total || liveTablesData?.total || displayTables.length;
+  const pendingOrdersCount = displayOrders.filter(o => o.status === 'new').length;
+  const completedOrdersCount = displayOrders.filter(o => o.status === 'completed').length;
+  const onDutyStaffCount = displayStaff.filter(s => {
+    const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
+    return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
+  }).length || displayStaff.length;
+  const activeBranchesCount = branches.filter(b => b.status === 'Active' || b.isActive !== false).length;
 
   // Calculate dynamic monthly sales
   const monthlySales = todayRevenue;
@@ -147,7 +243,7 @@ export default function OverviewPanel({
   // Top ordered menu item fallback
   const getTopOrderedItem = () => {
     const itemCounts = {};
-    orders.forEach(order => {
+    displayOrders.forEach(order => {
       (order.items || []).forEach(item => {
         itemCounts[item.name] = (itemCounts[item.name] || 0) + (item.qty || 0);
       });
@@ -167,21 +263,28 @@ export default function OverviewPanel({
 
   // Branch statistics computation for All Branches view
   const branchAnalytics = branches.map(branch => {
-    const branchOrders = allOrders.filter(o => o.branchId === branch.id);
-    const branchTables = allTables.filter(t => t.branchId === branch.id);
-    const branchStaff = allStaff.filter(s => s.branchId === branch.id);
-    const branchRevenue = branchOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-    const occupied = branchTables.filter(t => t.status === 'Occupied').length;
-    const activeStaff = branchStaff.filter(s => s.status === 'On Duty').length;
+    const branchOrders = allOrders.filter(o => branchMatches(o.branchId || o.branch, branch));
+    const branchTables = allTables.filter(t => branchMatches(t.branchId || t.branch, branch));
+    const branchStaff = allStaff.filter(s => branchMatches(s.branchId || s.branch, branch));
+    const branchRevenue = branchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
+    const occupied = branchTables.filter(t => isTableOccupied(t, branchOrders)).length;
+    const activeStaff = branchStaff.filter(s => {
+      const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
+      return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
+    }).length;
 
     return {
       ...branch,
+      id: branch._id || branch.id,
+      branchName: branch.branchName || branch.name || 'Branch',
+      branchCode: branch.branchCode || 'BR-001',
       ordersCount: branchOrders.length,
       revenue: branchRevenue,
       tablesCount: branchTables.length || branch.totalTables || 10,
       occupiedTables: occupied,
       staffCount: branchStaff.length || 5,
-      activeStaff: activeStaff || 3
+      activeStaff: activeStaff || (branchStaff.length > 0 ? branchStaff.length : 3)
     };
   });
 
@@ -218,7 +321,7 @@ export default function OverviewPanel({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                  {selectedBranch.branchName}
+                  {selectedBranch.branchName || selectedBranch.name}
                 </h3>
                 <span style={{ fontSize: '11px', background: '#059669', color: '#ffffff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
                   {selectedBranch.status || 'Active'}
@@ -228,7 +331,7 @@ export default function OverviewPanel({
                 </span>
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                📍 {selectedBranch.city || selectedBranch.address} • Manager: <strong>{selectedBranch.branchManager || 'Unassigned'}</strong> • Contact: {selectedBranch.mobileNumber || 'N/A'}
+                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{typeof selectedBranch.branchManager === 'object' && selectedBranch.branchManager !== null ? (selectedBranch.branchManager?.name || selectedBranch.branchManager?.username || 'Unassigned') : (selectedBranch.branchManager || 'Unassigned')}</strong> • Contact: {selectedBranch.mobileNumber || selectedBranch.phoneNumber || (typeof selectedBranch.contact === 'object' ? selectedBranch.contact?.phone : selectedBranch.contact) || 'N/A'}
               </p>
             </div>
           </div>
@@ -259,8 +362,8 @@ export default function OverviewPanel({
                 {statsData?.todayOrders
                   ? (isAllBranches && statsData.todayOrders.totalBranches > 0
                       ? `${statsData.todayOrders.totalBranches} Outlets`
-                      : (statsData.todayOrders.count !== undefined ? statsData.todayOrders.count : orders.length))
-                  : (isAllBranches ? `${branches.length} Outlets` : orders.length)}
+                      : (statsData.todayOrders.count !== undefined ? statsData.todayOrders.count : displayOrders.length))
+                  : (isAllBranches ? `${branches.length} Outlets` : displayOrders.length)}
               </h3>
               <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
                 {statsData?.todayOrders
@@ -281,14 +384,10 @@ export default function OverviewPanel({
                 {statsData?.activeTables?.label || (isAllBranches ? 'Occupied Tables' : 'Active Tables')}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                {statsData?.activeTables?.display
-                  ? statsData.activeTables.display
-                  : (statsData?.activeTables?.occupied !== undefined
-                      ? `${statsData.activeTables.occupied} / ${statsData.activeTables.total ?? tables.length} Total`
-                      : `${occupiedTablesCount} / ${tables.length} Total`)}
+                {`${occupiedTablesCount} / ${totalTablesDisplayCount} Total`}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {statsData?.activeTables?.subLabel || (isAllBranches ? 'Across all branches' : 'In this branch')}
+              <div className="stat-sub-label" style={{ fontSize: '11px', color: occupiedTablesCount > 0 ? '#ea580c' : 'var(--text-muted)', fontWeight: 600 }}>
+                {statsData?.activeTables?.subLabel || (occupiedTablesCount > 0 ? `${occupiedTablesCount} currently seated` : (isAllBranches ? 'Across all branches' : 'In this branch'))}
               </div>
             </div>
           </div>
@@ -753,11 +852,11 @@ export default function OverviewPanel({
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-              <span style={{ fontSize: '11px', background: '#fef2f2', color: '#ef4444', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #fecaca', whiteSpace: 'nowrap' }}>
-                {liveTablesData?.summary?.occupiedTables !== undefined ? liveTablesData.summary.occupiedTables : occupiedTablesCount} Occupied
+              <span style={{ fontSize: '11px', background: occupiedTablesCount > 0 ? '#fef2f2' : '#f0fdf4', color: occupiedTablesCount > 0 ? '#ef4444' : '#166534', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: occupiedTablesCount > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>
+                {occupiedTablesCount} Occupied
               </span>
               <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
-                {liveTablesData?.summary?.totalTables !== undefined ? liveTablesData.summary.totalTables : tables.length} Total
+                {displayTables.length} Total
               </span>
             </div>
           </div>
@@ -773,17 +872,17 @@ export default function OverviewPanel({
               paddingRight: '4px'
             }}
           >
-            {((liveTablesData?.tables && liveTablesData.tables.length > 0) ? liveTablesData.tables : tables).map((table, idx) => {
-              const isOccupied = String(table.status || '').toLowerCase() === 'occupied';
+            {displayTables.map((table, idx) => {
+              const isOccupied = isTableOccupied(table, displayOrders);
               const isReserved = String(table.status || '').toLowerCase() === 'reserved';
-              const tableNum = table.tableNumber || table.id || `T-${idx + 1}`;
+              const tableNum = table.tableNumber || table.tableNo || table.id || `T-${idx + 1}`;
               const seats = table.seatingCapacity ?? table.seats ?? 4;
               const section = table.section || 'Main Dining';
-              const waiterName = table.assignedWaiter?.name;
+              const waiterName = table.assignedWaiter?.name || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null);
 
               return (
                 <div 
-                  key={table.id || table.tableNumber || idx} 
+                  key={table._id || table.id || table.tableNumber || idx} 
                   style={{ 
                     background: '#ffffff', 
                     border: '1.5px solid var(--border)', 
@@ -837,7 +936,7 @@ export default function OverviewPanel({
               );
             })}
 
-            {(!liveTablesData?.tables || liveTablesData.tables.length === 0) && tables.length === 0 && (
+            {displayTables.length === 0 && (
               <div style={{ gridColumn: 'span 2', textAlign: 'center', color: '#94a3b8', padding: '24px', fontSize: '12px' }}>
                 No tables configured for this branch.
               </div>

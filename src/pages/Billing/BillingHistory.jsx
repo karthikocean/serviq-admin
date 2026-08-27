@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppState } from '../../config/AppContext';
 import BillingHistoryPanel from '../../components/BillingHistoryPanel';
 import BillingApi from '../../api/Billing';
+import { formatDateDMY } from '../../helper/DateHelper.js';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId } = useAppState();
@@ -60,7 +61,7 @@ export default function BillingHistory() {
         orderId: item.orderRefId,
         table: item.tableNumber,
         branchId: item.branchId,
-        date: new Date(item.createdAt).toLocaleDateString(),
+        date: formatDateDMY(item.createdAt),
         time: new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         amount: item.totalAmount,
         paymentMethod: item.paymentMethod === 'upi' ? 'UPI' : item.paymentMethod.charAt(0).toUpperCase() + item.paymentMethod.slice(1),

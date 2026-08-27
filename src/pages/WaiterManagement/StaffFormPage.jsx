@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
 import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
@@ -216,34 +217,18 @@ export default function StaffFormPage() {
 
                 return (
                   <div>
-                    <select
+                    <SearchableSelect
                       value={effectiveVal}
                       onChange={e => setForm({ ...form, branchId: e.target.value })}
-                      disabled={isLocked}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        outline: 'none',
-                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                        color: isLocked ? '#64748b' : '#0f172a',
-                        cursor: isLocked ? 'not-allowed' : 'pointer',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {allBranchesList.length === 0 ? (
-                        <option value="">Main Branch</option>
-                      ) : (
-                        allBranchesList.map(b => (
-                          <option key={b._id || b.id} value={b._id || b.id}>
-                            {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                         Branch is locked to currently selected branch.
@@ -260,15 +245,16 @@ export default function StaffFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Role <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-              >
-                <option value="Branch manager">Branch manager</option>
-                <option value="Kitchen">Kitchen</option>
-                <option value="Waiter">Waiter</option>
-              </select>
+                options={[
+                  { value: 'Branch manager', label: 'Branch manager' },
+                  { value: 'Kitchen', label: 'Kitchen' },
+                  { value: 'Waiter', label: 'Waiter' }
+                ]}
+                placeholder="Select Role..."
+              />
             </div>
 
             <div>
@@ -368,14 +354,15 @@ export default function StaffFormPage() {
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
               Duty Status
             </label>
-            <select
+            <SearchableSelect
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
-              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-            >
-              <option value="On Duty">On Duty</option>
-              <option value="Off Duty">Off Duty</option>
-            </select>
+              options={[
+                { value: 'On Duty', label: 'On Duty' },
+                { value: 'Off Duty', label: 'Off Duty' }
+              ]}
+              placeholder="Select Status..."
+            />
           </div>
 
 

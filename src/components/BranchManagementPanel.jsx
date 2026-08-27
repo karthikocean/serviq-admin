@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BranchApi from '../api/Branch.js';
+import SubscriptionApi from '../api/Subscription.js';
+import UserApi from '../api/User.js';
+import OrderApi from '../api/Order.js';
+import TableApi from '../api/Table.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
 import {
   sanitizeName,
@@ -86,15 +91,6 @@ const initialBranchState = {
   isMainBranch: false
 };
 
-const getBranchOperationalData = (branch) => {
-  if (!branch) return null;
-  return {
-    orders: [],
-    staff: [],
-    kitchen: []
-  };
-};
-
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
   const navigate = useNavigate();
   const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots } = useAppState();
@@ -160,34 +156,89 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const [apiBranches, setApiBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [liveBranchStaff, setLiveBranchStaff] = useState([]);
+  const [liveBranchOrders, setLiveBranchOrders] = useState([]);
+  const [liveBranchTables, setLiveBranchTables] = useState([]);
+  const [isLoadingOpData, setIsLoadingOpData] = useState(false);
 
   const fetchBranches = async () => {
     setIsLoading(true);
     const res = await BranchApi.getBranches();
     if (res && res.status && res.response && res.response.data) {
-      const mappedBranches = res.response.data.map(b => ({
-        id: b._id,
-        branchName: b.branchName,
-        branchCode: b.branchCode,
-        branchManager: b.managerName,
-        mobileNumber: b.contactNumber,
-        email: b.email,
-        password: '',
-        confirmPassword: '',
-        address: b.address?.street || '',
-        country: b.address?.country || '',
-        state: b.address?.state || '',
-        city: b.address?.city || '',
-        pincode: b.address?.pincode || '',
-        openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : '',
-        status: b.status || 'Active',
-        totalTables: b.totalTables || 0,
-        isMainBranch: b.isMainBranch || false
-      }));
+      const rawList = Array.isArray(res.response.data) ? res.response.data : (res.response.data?.branches || []);
+      const mappedBranches = rawList.map(b => {
+        const mgr = (
+          (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName) : b.branchManager) ||
+          b.managerName ||
+          (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName) : b.manager) ||
+          b.branchManagerName ||
+          b.contactPerson ||
+          ''
+        );
+
+        const addr = typeof b.address === 'object' && b.address !== null ? b.address : {};
+        const streetStr = typeof b.address === 'string' ? b.address : (addr.street || b.street || '');
+        const cityStr = b.city || addr.city || '';
+        const stateStr = b.state || addr.state || '';
+        const countryStr = b.country || addr.country || '';
+        const pincodeStr = b.pincode || addr.pincode || '';
+
+        return {
+          id: b._id || b.id,
+          _id: b._id || b.id,
+          branchName: b.branchName || b.name || '',
+          branchCode: b.branchCode || b.code || '',
+          branchManager: mgr,
+          managerName: mgr,
+          mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+          email: b.email || b.managerEmail || '',
+          password: '',
+          confirmPassword: '',
+          address: streetStr,
+          country: countryStr,
+          state: stateStr,
+          city: cityStr,
+          pincode: pincodeStr,
+          openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate ? b.openingDate.split('T')[0] : ''),
+          status: b.status || 'Active',
+          totalTables: b.totalTables || (Array.isArray(b.tables) ? b.tables.length : 0),
+          isMainBranch: b.isMainBranch || false
+        };
+      });
       setApiBranches(mappedBranches);
     }
     setIsLoading(false);
   };
+
+  const fetchBranchOperationalData = useCallback(async (targetBranch) => {
+    if (!targetBranch) return;
+    const branchId = targetBranch.id || targetBranch._id;
+    setIsLoadingOpData(true);
+    try {
+      const [staffRes, ordersRes, tablesRes] = await Promise.allSettled([
+        UserApi.getUsers({ branchId }),
+        OrderApi.getOrders({ branchId }),
+        TableApi.getTables({ branchId })
+      ]);
+
+      if (staffRes.status === 'fulfilled' && staffRes.value?.status) {
+        const list = staffRes.value.response?.data || staffRes.value.response?.users || (Array.isArray(staffRes.value.response) ? staffRes.value.response : []);
+        setLiveBranchStaff(list);
+      }
+      if (ordersRes.status === 'fulfilled' && ordersRes.value?.status) {
+        const list = ordersRes.value.response?.data || ordersRes.value.response?.orders || (Array.isArray(ordersRes.value.response) ? ordersRes.value.response : []);
+        setLiveBranchOrders(list);
+      }
+      if (tablesRes.status === 'fulfilled' && tablesRes.value?.status) {
+        const list = tablesRes.value.response?.data || tablesRes.value.response?.tables || (Array.isArray(tablesRes.value.response) ? tablesRes.value.response : []);
+        setLiveBranchTables(list);
+      }
+    } catch (e) {
+      console.error("Error fetching branch operational data:", e);
+    } finally {
+      setIsLoadingOpData(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (isAdmin) {
@@ -285,15 +336,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     openAddBranchFormDirectly();
   };
 
-  const handlePayAndUnlockBranchSlot = () => {
+  const handlePayAndUnlockBranchSlot = async () => {
     setIsProcessingSlotPayment(true);
-    setTimeout(() => {
-      purchaseExtraBranchSlots(activeRestaurant.id, 1, 'Credit Card (•••• 4242)');
+    try {
+      const res = await SubscriptionApi.purchaseAddons({
+        additionalSlots: 1,
+        paymentMethod: 'Credit Card'
+      });
+      if (res && res.status) {
+        if (typeof purchaseExtraBranchSlots === 'function' && activeRestaurant?.id) {
+          purchaseExtraBranchSlots(activeRestaurant.id, 1, 'Credit Card');
+        }
+        setIsPlanLimitModalOpen(false);
+        openAddBranchFormDirectly();
+      }
+    } catch (err) {
+      console.error("Error purchasing branch slot:", err);
+    } finally {
       setIsProcessingSlotPayment(false);
-      setIsPlanLimitModalOpen(false);
-      ShowNotifications.showAlertNotification("Additional branch slot purchased and activated successfully!", true);
-      openAddBranchFormDirectly();
-    }, 900);
+    }
   };
 
   const handleOpenEditForm = (branch) => {
@@ -507,6 +568,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       branchCode: branchForm.branchCode,
       branchOpeningDate: branchForm.openingDate,
       contactNumber: branchForm.mobileNumber,
+      mobileNumber: branchForm.mobileNumber,
+      phone: branchForm.mobileNumber,
       email: branchForm.email,
       street: branchForm.address,
       city: branchForm.city,
@@ -514,6 +577,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       country: branchForm.country,
       pincode: branchForm.pincode,
       managerName: branchForm.branchManager,
+      branchManager: branchForm.branchManager,
+      manager: branchForm.branchManager,
+      contactPerson: branchForm.branchManager,
       managerMobile: branchForm.mobileNumber,
       managerEmail: branchForm.email,
       managerPassword: branchForm.password,
@@ -561,7 +627,133 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   // Target branch currently viewed in hierarchy mode
   const currentViewBranch = selectedBranchForTree || (branches.length > 0 ? branches[0] : null);
-  const opData = getBranchOperationalData(currentViewBranch);
+
+  useEffect(() => {
+    if (activeView === 'hierarchy' && currentViewBranch) {
+      fetchBranchOperationalData(currentViewBranch);
+    }
+  }, [activeView, currentViewBranch, fetchBranchOperationalData]);
+
+  // Live computed operational data for current branch
+  const opData = (() => {
+    const curBranchId = currentViewBranch?.id || currentViewBranch?._id;
+
+    // 1. Staff list
+    const branchStaffRaw = (liveBranchStaff.length > 0)
+      ? liveBranchStaff
+      : (activeRestaurant?.staff || []).filter(s => {
+          const bId = s.branchId?._id || s.branchId || s.branch;
+          return String(bId) === String(curBranchId);
+        });
+
+    const mappedStaff = branchStaffRaw.map(person => {
+      const pName = person.name || 'Staff Member';
+      const roleName = person.roleId?.roleName || person.role?.roleName || person.role || person.userType || 'Staff';
+      const pEmail = person.email || person.phoneNumber || `${pName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`;
+      const pStatus = (person.status || (person.isActive !== false ? 'Active' : 'Inactive'));
+
+      return {
+        name: pName,
+        role: roleName,
+        email: pEmail,
+        status: pStatus,
+        initial: (pName.trim().charAt(0) || 'S').toUpperCase()
+      };
+    });
+
+    // 2. Orders list
+    const branchOrdersRaw = (liveBranchOrders.length > 0)
+      ? liveBranchOrders
+      : (activeRestaurant?.orders || []).filter(o => {
+          const bId = o.branchId?._id || o.branchId || o.branch;
+          return String(bId) === String(curBranchId);
+        });
+
+    const activeOrders = branchOrdersRaw.filter(o => {
+      const st = String(o.status || '').toLowerCase();
+      return st !== 'cancelled' && st !== 'rejected';
+    });
+
+    const mappedOrders = activeOrders.map(ord => {
+      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '#ORD-101');
+      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? ord.table?.tableNumber : ord.table) || 'Table 1';
+      const itemsStr = Array.isArray(ord.items)
+        ? ord.items.map(i => `${i.quantity || i.qty || 1}x ${i.name || i.menuItem?.name || 'Item'}`).join(', ')
+        : (typeof ord.items === 'string' ? ord.items : 'Items Ordered');
+      const totalAmount = typeof ord.total === 'number' ? `₹${ord.total.toLocaleString('en-IN')}` : (ord.total || '₹0');
+      const timeStr = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '5 mins ago';
+
+      let st = 'preparing';
+      const rawSt = String(ord.status || '').toLowerCase();
+      if (rawSt === 'ready' || rawSt === 'ready to serve') st = 'ready';
+      else if (rawSt === 'served' || rawSt === 'delivered' || rawSt === 'completed') st = 'served';
+
+      return {
+        id: ordId,
+        table: String(tableStr).startsWith('Table') ? tableStr : `Table ${tableStr}`,
+        items: itemsStr,
+        total: totalAmount,
+        time: timeStr,
+        status: st
+      };
+    });
+
+    // 3. Tables list
+    const branchTablesRaw = (liveBranchTables.length > 0)
+      ? liveBranchTables
+      : (activeRestaurant?.tables || []).filter(t => {
+          const bId = t.branchId?._id || t.branchId || t.branch;
+          return String(bId) === String(curBranchId);
+        });
+
+    const mappedTables = branchTablesRaw.length > 0
+      ? branchTablesRaw.map((t, i) => ({
+          name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-0${i + 1}`),
+          seats: t.capacity || t.seats || 4,
+          status: t.status || 'Available'
+        }))
+      : Array.from({ length: currentViewBranch?.totalTables || 10 }).map((_, i) => ({
+          name: `T-${String(i + 1).padStart(2, '0')}`,
+          seats: 4,
+          status: 'Available'
+        }));
+
+    // 4. Kitchen KDS stations
+    const activeCount = mappedOrders.filter(o => o.status === 'preparing').length;
+    const mappedKitchen = [
+      {
+        name: 'Main Hot Kitchen KDS',
+        items: 'Biryani, Curries, Rice Platters, Main Course',
+        load: activeCount > 5 ? 'High' : (activeCount > 2 ? 'Medium' : 'Normal'),
+        loadPercent: Math.min(100, Math.max(25, activeCount * 18))
+      },
+      {
+        name: 'Grill, Tandoor & Starters KDS',
+        items: 'Kebabs, Tandoori, Starters, Fried Items',
+        load: activeCount > 4 ? 'Medium' : 'Normal',
+        loadPercent: Math.min(100, Math.max(20, activeCount * 14))
+      },
+      {
+        name: 'Beverages & Mocktail Bar KDS',
+        items: 'Fresh Juices, Shakes, Mocktails, Hot Teas',
+        load: activeCount > 6 ? 'High' : 'Normal',
+        loadPercent: Math.min(100, Math.max(15, activeCount * 12))
+      },
+      {
+        name: 'Desserts & Bakery KDS',
+        items: 'Ice Creams, Pastries, Puddings, Sweets',
+        load: 'Normal',
+        loadPercent: Math.min(100, Math.max(10, activeCount * 8))
+      }
+    ];
+
+    return {
+      staff: mappedStaff,
+      orders: mappedOrders,
+      tables: mappedTables,
+      kitchen: mappedKitchen
+    };
+  })();
 
   // ==========================================
   // VIEW 1: REDESIGNED BRANCH VIEW PAGE UI
@@ -606,7 +798,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 <Badge status={currentViewBranch?.status === 'Active' ? 'Active' : 'Inactive'} />
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-                Location: {currentViewBranch?.address || 'Main Road'}, {currentViewBranch?.city || 'Chennai'}, {currentViewBranch?.state || 'Tamil Nadu'}
+                Location: {typeof currentViewBranch?.address === 'object' && currentViewBranch?.address !== null ? (currentViewBranch.address.street || currentViewBranch.address.city || 'Main Road') : (currentViewBranch?.address || 'Main Road')}, {currentViewBranch?.city || (typeof currentViewBranch?.address === 'object' ? currentViewBranch.address?.city : '') || 'Chennai'}, {currentViewBranch?.state || (typeof currentViewBranch?.address === 'object' ? currentViewBranch.address?.state : '') || 'Tamil Nadu'}
               </p>
             </div>
           </div>
@@ -655,7 +847,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ fontSize: '12px', color: '#475569' }}>
               <strong>Full Street Address:</strong>
               <div style={{ color: '#0f172a', fontWeight: 600, marginTop: '4px' }}>
-                {currentViewBranch?.address}, {currentViewBranch?.city}, {currentViewBranch?.state} - {currentViewBranch?.pincode} ({currentViewBranch?.country || 'India'})
+                {typeof currentViewBranch?.address === 'object' && currentViewBranch?.address !== null
+                  ? `${currentViewBranch.address.street || ''}${currentViewBranch.address.city ? `, ${currentViewBranch.address.city}` : ''}${currentViewBranch.address.state ? `, ${currentViewBranch.address.state}` : ''}${currentViewBranch.address.pincode ? ` - ${currentViewBranch.address.pincode}` : ''}`
+                  : `${currentViewBranch?.address || ''}, ${currentViewBranch?.city || ''}, ${currentViewBranch?.state || ''} - ${currentViewBranch?.pincode || ''} (${currentViewBranch?.country || 'India'})`}
               </div>
             </div>
           </div>
@@ -667,7 +861,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Seating Capacity</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--primary)', marginTop: '8px' }}>
-                {currentViewBranch?.totalTables || 15} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Dining Tables</span>
+                {opData.tables.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Dining Tables</span>
               </div>
               <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>✓ Operational</span>
             </div>
@@ -676,7 +870,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Live Orders</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b', marginTop: '8px' }}>
-                {currentViewBranch?.operationalData?.activeOrders || 8} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
+                {opData.orders.filter(o => o.status !== 'served').length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
               </div>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>Real-time POS activity</span>
             </div>
@@ -685,7 +879,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Staff</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#6366f1', marginTop: '8px' }}>
-                {currentViewBranch?.operationalData?.staffCount || 10} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Staff Members</span>
+                {opData.staff.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Staff Members</span>
               </div>
               <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>Waiters & Kitchen team</span>
             </div>
@@ -694,7 +888,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Kitchen KDS Stations</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#ea580c', marginTop: '8px' }}>
-                {currentViewBranch?.operationalData?.kitchenStations || 2} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Active Displays</span>
+                {opData.kitchen.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Active Displays</span>
               </div>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>Order routing active</span>
             </div>
@@ -706,13 +900,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         {/* Operational Sub-Tabs (Tables, Orders, Staff, Kitchen) */}
         <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '2px solid #f1f5f9', paddingBottom: '16px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '2px solid #f1f5f9', paddingBottom: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={() => setOpSubTab('tables')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'tables' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'tables' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Tables ({currentViewBranch?.totalTables || 15})
+              Tables ({opData.tables.length})
             </button>
 
             <button
@@ -720,7 +914,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('orders')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Live Orders Queue
+              Live Orders Queue ({opData.orders.filter(o => o.status !== 'served').length})
             </button>
 
             <button
@@ -728,7 +922,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('staff')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'staff' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'staff' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Staff ({currentViewBranch?.operationalData?.staffCount || 10})
+              Staff ({opData.staff.length})
             </button>
 
             <button
@@ -736,7 +930,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('kitchen')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'kitchen' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'kitchen' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Kitchen KDS
+              Kitchen KDS ({opData.kitchen.length})
             </button>
           </div>
 
@@ -744,14 +938,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           {opSubTab === 'tables' && (
             <div>
               <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Configured Dining Tables</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' }}>
-                {Array.from({ length: currentViewBranch?.totalTables || 15 }).map((_, i) => (
-                  <div key={i} style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>T-0{i + 1}</div>
-                    <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>4 Seats</span>
-                  </div>
-                ))}
-              </div>
+              {opData.tables.length === 0 ? (
+                <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No tables configured for this branch.</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
+                  {opData.tables.map((tbl, i) => (
+                    <div key={i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{tbl.name}</div>
+                      <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>{tbl.seats} Seats</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1071,14 +1269,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {/* Field 4: Status */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>Status</label>
-                    <select
+                    <SearchableSelect
                       value={branchForm.status}
                       onChange={e => setBranchForm({ ...branchForm, status: e.target.value })}
-                      style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', backgroundColor: '#fff', boxSizing: 'border-box' }}
-                    >
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
+                      options={[
+                        { value: 'Active', label: 'Active' },
+                        { value: 'Inactive', label: 'Inactive' }
+                      ]}
+                      placeholder="Select Status..."
+                    />
                   </div>
 
                   {/* Field 5: Is Main Branch Checkbox */}
@@ -1568,17 +1767,20 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '200px' }}>
           <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Status:</span>
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff', cursor: 'pointer' }}
-          >
-            <option value="All">All Statuses</option>
-            <option value="Active">Active Only</option>
-            <option value="Inactive">Inactive Only</option>
-          </select>
+          <div style={{ flex: 1 }}>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              options={[
+                { value: 'All', label: 'All Statuses' },
+                { value: 'Active', label: 'Active Only' },
+                { value: 'Inactive', label: 'Inactive Only' }
+              ]}
+              placeholder="Filter Status..."
+            />
+          </div>
         </div>
       </div>
 
@@ -1627,7 +1829,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </div>
                       {b.address && (
                         <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
-                          {b.address}
+                          {typeof b.address === 'object' && b.address !== null
+                            ? (b.address.street || b.address.city || '')
+                            : b.address}
                         </div>
                       )}
                     </div>

@@ -57,10 +57,20 @@ export default function WaiterListPanel({
   const realWaiters = staff.filter(s => s.role === 'Waiter');
 
   const getAssignedTableBadges = (waiterName, waiterId) => {
-    const assigned = tables.filter(t => t.assignedWaiterId === waiterId || t.assignedWaiter === waiterName || t.assignedWaiterName === waiterName);
+    const assigned = tables.filter(t => {
+      const assignedObj = typeof t.assignedWaiter === 'object' ? t.assignedWaiter : (typeof t.assignedWaiterId === 'object' ? t.assignedWaiterId : null);
+      const rawWId = assignedObj?._id || assignedObj?.id || t.assignedWaiterId || (typeof t.assignedWaiter === 'string' ? t.assignedWaiter : null);
+      const rawWName = assignedObj?.name || t.assignedWaiterName || (typeof t.assignedWaiter === 'string' ? t.assignedWaiter : null);
+
+      if (waiterId && rawWId && String(rawWId) === String(waiterId)) return true;
+      if (waiterName && rawWName && String(rawWName).trim().toLowerCase() === String(waiterName).trim().toLowerCase()) return true;
+      if (waiterId && rawWName && String(rawWName).trim().toLowerCase() === String(waiterId).trim().toLowerCase()) return true;
+      return false;
+    });
+
     return assigned.map(t => {
-      const num = t.id.replace(/\D/g, '');
-      return `T-${num ? num.padStart(2, '0') : '01'}`;
+      const tName = t.tableNumber || t.tableNo || t.id || t._id;
+      return tName.startsWith('Table') ? tName : `Table ${tName}`;
     });
   };
 

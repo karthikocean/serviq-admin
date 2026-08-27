@@ -32,5 +32,47 @@ export const ticketApi = {
             }
             throw new Error(errorMessage);
         }
+    },
+
+    // Update an existing ticket
+    updateTicket: async (ticketId, ticketData) => {
+        try {
+            const response = await apiClient.put(`/tickets/${ticketId}`, ticketData);
+            if (response.status === 200 || response.status === 201) {
+                return { status: true, data: response.data };
+            }
+            return { status: false, data: response.data };
+        } catch (error) {
+            try {
+                const patchRes = await apiClient.patch(`/tickets/${ticketId}`, ticketData);
+                if (patchRes.status === 200 || patchRes.status === 201) {
+                    return { status: true, data: patchRes.data };
+                }
+            } catch (patchErr) {
+                // Ignore fallback error
+            }
+            const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Update Ticket';
+            if (error?.response?.status !== 401) {
+                ShowNotifications.showAlertNotification(errorMessage, false);
+            }
+            throw new Error(errorMessage);
+        }
+    },
+
+    // Delete a ticket
+    deleteTicket: async (ticketId) => {
+        try {
+            const response = await apiClient.delete(`/tickets/${ticketId}`);
+            if (response.status === 200 || response.status === 201 || response.status === 204) {
+                return { status: true, data: response.data };
+            }
+            return { status: false, data: response.data };
+        } catch (error) {
+            const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Delete Ticket';
+            if (error?.response?.status !== 401) {
+                ShowNotifications.showAlertNotification(errorMessage, false);
+            }
+            throw new Error(errorMessage);
+        }
     }
 };

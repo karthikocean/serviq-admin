@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { AVAILABLE_PLANS } from '../config/initialData';
+import SubscriptionApi from '../api/Subscription';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -36,6 +37,20 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+};
+
 export default function PlansManagementPanel({ hasPermission: hasPermissionProp }) {
   const {
     activeRestaurant,
@@ -53,6 +68,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     return !!userRoleConfig.permissions?.[moduleName]?.[action];
   });
 
+  const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   const [extraSlotsToAdd, setExtraSlotsToAdd] = useState(1);
   const [isExtraBranchModalOpen, setIsExtraBranchModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
@@ -65,6 +84,26 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'addon'
   const [historySearch, setHistorySearch] = useState('');
+  const [localPurchases, setLocalPurchases] = useState([]);
+
+  // Fetch live subscription dashboard data
+  const fetchDashboardData = useCallback(async (showToast = false) => {
+    setIsRefreshing(true);
+    const res = await SubscriptionApi.getDashboard();
+    if (res.status && res.response) {
+      const data = res.response.data || res.response;
+      setDashboardData(data);
+      if (showToast) {
+        ShowNotifications.showAlertNotification(res.response.message || "Subscription dashboard data updated successfully.", true);
+      }
+    }
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   // Active Subscription extraction with fallbacks
   const sub = activeRestaurant?.subscription || {
@@ -85,39 +124,146 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     autoRenew: true,
   };
 
+  // API Data breakdown with local fallbacks
+  const activePlanData = dashboardData?.activePlan;
+  const lastRechargeData = dashboardData?.lastRecharge;
+  const branchCapacityData = dashboardData?.branchCapacity;
+  const extraBranchRateData = dashboardData?.extraBranchRate;
+
+  // Active Plan fields
+  const currentPlanName = activePlanData?.planName || sub.planName || 'Standard Plan';
+  const currentBillingCycle = activePlanData?.billingCycle || (sub.billingCycle === 'annual' ? 'Annual' : 'Monthly');
+  const currentPlanPrice = activePlanData?.price !== undefined ? activePlanData.price : (sub.price || 1999);
+  const nextRenewalFormatted = formatDate(activePlanData?.nextRenewal || sub.nextBillingDate || '2026-09-23');
+  const validityFormatted = formatDate(activePlanData?.validity || sub.expiryDate || '2026-09-23');
+
+  // Branch Capacity fields
   const branches = activeRestaurant?.branches || [];
   const activeBranchesCount = branches.length;
-  const baseBranchLimit = sub.baseBranchLimit || 3;
-  const extraBranchSlots = sub.extraBranchSlots || 0;
-  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
-  const remainingSlots = Math.max(0, totalAllowedBranches - activeBranchesCount);
-  const branchUsagePercent = Math.min(100, Math.round((activeBranchesCount / (totalAllowedBranches || 1)) * 100));
+  const baseBranchLimit = branchCapacityData?.base !== undefined ? branchCapacityData.base : (sub.baseBranchLimit || 3);
+  const extraBranchSlots = branchCapacityData?.addons !== undefined ? branchCapacityData.addons : (sub.extraBranchSlots || 0);
+  const totalAllowedBranches = branchCapacityData?.total !== undefined ? branchCapacityData.total : (baseBranchLimit + extraBranchSlots);
+  const usedBranchesCount = branchCapacityData?.used !== undefined ? branchCapacityData.used : activeBranchesCount;
+  const remainingSlots = branchCapacityData?.available !== undefined ? branchCapacityData.available : Math.max(0, totalAllowedBranches - usedBranchesCount);
+  const branchUsagePercent = branchCapacityData?.percentUsed !== undefined ? branchCapacityData.percentUsed : Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
 
   const matchedActivePlan = AVAILABLE_PLANS.find(p =>
     p.id === sub.planId ||
-    p.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
-    (sub.planName || '').toLowerCase().includes(p.name.toLowerCase().replace(' plan', ''))
+    p.name.toLowerCase().includes((currentPlanName || '').toLowerCase().replace(' plan', '')) ||
+    (currentPlanName || '').toLowerCase().includes(p.name.toLowerCase().replace(' plan', ''))
   );
-  const extraBranchUnitPrice = matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699;
+  const extraBranchUnitPrice = extraBranchRateData?.rate !== undefined ? extraBranchRateData.rate : (matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699);
+  const isAutoRenewActive = extraBranchRateData?.autoRenew !== undefined ? extraBranchRateData.autoRenew : (sub.autoRenew !== false);
+
   const extraBranchSubtotal = extraSlotsToAdd * extraBranchUnitPrice;
   const extraBranchGst = Math.round(extraBranchSubtotal * 0.18);
   const extraBranchTotal = extraBranchSubtotal + extraBranchGst;
 
-  const invoices = activeRestaurant?.subscriptionInvoices || [
-    { id: "INV-PLN-2026-003", planName: `${sub.planName}`, type: "subscription", description: `${sub.planName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: sub.price, date: "2026-08-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
-    { id: "INV-PLN-2026-002", planName: `${sub.planName}`, type: "subscription", description: `${sub.planName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: sub.price, date: "2026-07-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
-    { id: "INV-PLN-2026-001", planName: `${sub.planName}`, type: "subscription", description: `${sub.planName} - Initial Subscription Activation`, branchesIncluded: baseBranchLimit, amount: sub.price, date: "2026-06-15", paymentMethod: "Razorpay UPI", status: "Paid" }
+  // Helper to normalize any invoice item
+  const normalizeInvoice = (item, idx = 0) => {
+    if (!item) return null;
+    const isAddon =
+      item.type === 'addon' ||
+      (item.description || '').toLowerCase().includes('branch') ||
+      (item.description || '').toLowerCase().includes('slot') ||
+      (item.planName || '').toLowerCase().includes('add-on') ||
+      (item.planName || '').toLowerCase().includes('addon') ||
+      (item.transactionId || '').includes('ADDON') ||
+      (item.id || '').includes('SLOT') ||
+      (item.id || '').includes('ADDON') ||
+      Number(item.amount) === 1650 ||
+      Number(item.amount) === 699;
+
+    const invoiceId = item.invoiceNumber || item.invoiceId || item.transactionId || item.id || item._id || `INV-${isAddon ? 'ADDON' : 'PLN'}-${String(idx + 1).padStart(3, '0')}`;
+    const amount = Number(item.amount || item.totalAmount || item.price || (isAddon ? 1650 : currentPlanPrice));
+    const date = item.date || item.createdAt || item.purchaseDate || item.rechargeDate || new Date().toISOString();
+    const paymentMethod = item.paymentMethod || item.method || 'Credit Card (•••• 4242)';
+    const status = item.status || 'Paid';
+    const slots = item.additionalSlots || item.extraBranches || item.branchesIncluded || item.slots || (isAddon ? 2 : baseBranchLimit);
+
+    const planName = item.planName || item.title || (isAddon ? 'Standard Add-on' : currentPlanName);
+    const description = item.description || (isAddon ? `Additional Branch Slot x${slots} (Recurring Add-on)` : `${planName} - Monthly Subscription Renewal`);
+
+    return {
+      id: invoiceId,
+      planName,
+      type: isAddon ? 'addon' : 'subscription',
+      description,
+      branchesIncluded: slots,
+      amount,
+      date,
+      paymentMethod,
+      status
+    };
+  };
+
+  // Compile full invoices list from API, context, lastRecharge, and local purchases
+  const apiInvoicesList = 
+    (dashboardData?.history && Array.isArray(dashboardData.history) && dashboardData.history.length > 0 ? dashboardData.history : null) ||
+    (dashboardData?.invoices && Array.isArray(dashboardData.invoices) && dashboardData.invoices.length > 0 ? dashboardData.invoices : null) ||
+    (dashboardData?.rechargeHistory && Array.isArray(dashboardData.rechargeHistory) && dashboardData.rechargeHistory.length > 0 ? dashboardData.rechargeHistory : null) ||
+    (dashboardData?.subscriptionInvoices && Array.isArray(dashboardData.subscriptionInvoices) && dashboardData.subscriptionInvoices.length > 0 ? dashboardData.subscriptionInvoices : null) ||
+    (dashboardData?.addons && Array.isArray(dashboardData.addons) && dashboardData.addons.length > 0 ? dashboardData.addons : null) ||
+    (dashboardData?.transactions && Array.isArray(dashboardData.transactions) && dashboardData.transactions.length > 0 ? dashboardData.transactions : null) ||
+    (activeRestaurant?.subscriptionInvoices && Array.isArray(activeRestaurant.subscriptionInvoices) && activeRestaurant.subscriptionInvoices.length > 0 ? activeRestaurant.subscriptionInvoices : []);
+
+  let combinedInvoices = [
+    ...localPurchases,
+    ...apiInvoicesList
   ];
 
-  const lastRecharge = invoices[0] || {
+  // If lastRechargeData exists and its transaction/date is not in list yet, include it
+  if (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date || lastRechargeData.transactionId)) {
+    const isAlreadyPresent = combinedInvoices.some(inv => 
+      (lastRechargeData.transactionId && inv.id === lastRechargeData.transactionId) ||
+      (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount) === Number(lastRechargeData.amount))
+    );
+
+    if (!isAlreadyPresent) {
+      combinedInvoices.unshift({
+        id: lastRechargeData.transactionId || lastRechargeData.invoiceId || `INV-SLOT-${Date.now().toString().slice(-6)}`,
+        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'Standard Add-on' : `${currentPlanName}`),
+        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'addon' : 'subscription',
+        description: lastRechargeData.description || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? `Additional Branch Slot x${branchCapacityData?.addons || 2} (Recurring Add-on)` : `${currentPlanName} - Monthly Subscription Renewal`),
+        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.addons || 2,
+        amount: lastRechargeData.amount || 1650,
+        date: lastRechargeData.date || new Date().toISOString(),
+        paymentMethod: lastRechargeData.paymentMethod || 'Credit Card (•••• 4242)',
+        status: lastRechargeData.status || 'Paid'
+      });
+    }
+  }
+
+  // If still empty (e.g. initial setup), supply baseline initial subscription records
+  if (combinedInvoices.length === 0) {
+    combinedInvoices = [
+      { id: "INV-PLN-2026-003", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-08-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
+      { id: "INV-PLN-2026-002", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-07-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
+      { id: "INV-PLN-2026-001", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Initial Subscription Activation`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-06-15", paymentMethod: "Razorpay UPI", status: "Paid" }
+    ];
+  }
+
+  const invoices = combinedInvoices.map((inv, idx) => normalizeInvoice(inv, idx)).filter(Boolean);
+
+  const addonInvoices = invoices.filter(inv => inv.type === 'addon');
+
+  const lastRecharge = (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date)) ? {
+    id: lastRechargeData.transactionId || lastRechargeData.invoiceId || invoices[0]?.id || `TXN-RECHARGE-${Date.now().toString().slice(-6)}`,
+    planName: lastRechargeData.planName || invoices[0]?.planName || currentPlanName,
+    description: lastRechargeData.description || invoices[0]?.description || `${currentPlanName} Subscription Renewal`,
+    amount: lastRechargeData.amount !== undefined ? lastRechargeData.amount : (invoices[0]?.amount || currentPlanPrice),
+    date: lastRechargeData.date || invoices[0]?.date || new Date().toISOString(),
+    paymentMethod: lastRechargeData.paymentMethod || invoices[0]?.paymentMethod || 'Credit Card (•••• 4242)',
+    status: lastRechargeData.status || 'Paid'
+  } : (invoices[0] || {
     id: "INV-PLN-2026-003",
-    planName: `${sub.planName}`,
-    description: `${sub.planName} - Monthly Subscription Renewal`,
-    amount: sub.price || 1999,
+    planName: currentPlanName,
+    description: `${currentPlanName} - Monthly Subscription Renewal`,
+    amount: currentPlanPrice,
     date: "2026-08-15",
-    paymentMethod: sub.paymentMethod,
+    paymentMethod: "Credit Card (•••• 4242)",
     status: "Paid"
-  };
+  });
 
   const totalSpentOnPlans = invoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
@@ -130,11 +276,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       (inv.date || '').toLowerCase().includes(historySearch.toLowerCase()) ||
       (inv.paymentMethod || '').toLowerCase().includes(historySearch.toLowerCase());
 
-    const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot'));
+    const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
 
-    if (historyFilter === 'plan') {
-      return matchesSearch && !isAddon;
-    }
     if (historyFilter === 'addon') {
       return matchesSearch && isAddon;
     }
@@ -142,19 +285,56 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   });
 
   // Handlers
-  const handleConfirmExtraBranchPurchase = () => {
+  const handleConfirmExtraBranchPurchase = async () => {
     setIsProcessingPayment(true);
+    try {
+      let formattedPaymentMethod = 'Credit Card';
+      if (paymentMethod === 'upi') {
+        formattedPaymentMethod = 'UPI';
+      } else if (paymentMethod === 'netbanking') {
+        formattedPaymentMethod = 'NetBanking';
+      } else if (paymentMethod === 'cash') {
+        formattedPaymentMethod = 'Cash';
+      }
 
-    setTimeout(() => {
-      purchaseExtraBranchSlots(
-        activeRestaurant.id,
-        extraSlotsToAdd,
-        paymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : paymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)'
-      );
+      const payload = {
+        additionalSlots: Number(extraSlotsToAdd),
+        paymentMethod: formattedPaymentMethod
+      };
+
+      const res = await SubscriptionApi.purchaseAddons(payload);
+      if (res && res.status) {
+        const paymentInfo = res.response?.data?.payment || res.response?.payment || {};
+        const newAddonInvoice = {
+          id: paymentInfo.transactionId || `TXN-ADDON-${Date.now()}`,
+          planName: `Standard Add-on`,
+          description: `Additional Branch Slot x${extraSlotsToAdd} (Recurring Add-on)`,
+          branchesIncluded: extraSlotsToAdd,
+          amount: paymentInfo.amount || extraBranchTotal,
+          date: new Date().toISOString(),
+          paymentMethod: formattedPaymentMethod,
+          status: paymentInfo.status || 'Paid',
+          type: 'addon'
+        };
+
+        setLocalPurchases(prev => [newAddonInvoice, ...prev]);
+
+        if (typeof purchaseExtraBranchSlots === 'function' && activeRestaurant?.id) {
+          purchaseExtraBranchSlots(
+            activeRestaurant.id,
+            extraSlotsToAdd,
+            formattedPaymentMethod
+          );
+        }
+        setIsExtraBranchModalOpen(false);
+        setExtraSlotsToAdd(1);
+        await fetchDashboardData(false);
+      }
+    } catch (err) {
+      console.error("Error purchasing addons:", err);
+    } finally {
       setIsProcessingPayment(false);
-      setIsExtraBranchModalOpen(false);
-      ShowNotifications.showAlertNotification(`Successfully added ${extraSlotsToAdd} additional branch slot!`, true);
-    }, 900);
+    }
   };
 
   const handleConfirmPlanUpgrade = (targetPlan) => {
@@ -168,6 +348,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       setIsProcessingUpgrade(false);
       setIsUpgradeModalOpen(false);
       setSelectedPlanForUpgrade(null);
+      fetchDashboardData(false);
       ShowNotifications.showAlertNotification(`Successfully updated subscription to ${targetPlan.name}!`, true);
     }, 900);
   };
@@ -175,7 +356,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const handleToggleAutoRenew = () => {
     toggleSubscriptionAutoRenew(activeRestaurant.id);
     ShowNotifications.showAlertNotification(
-      `Auto-renewal has been ${!sub.autoRenew ? 'enabled' : 'disabled'}.`,
+      `Auto-renewal has been ${!isAutoRenewActive ? 'enabled' : 'disabled'}.`,
       true
     );
   };
@@ -195,34 +376,36 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <button
             type="button"
             className="btn btn-outline"
-            onClick={() => setIsExtraBranchModalOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a' }}
-          >
-            <BuildingIcon size={16} /> + Buy Addons
-          </button>
-
-          {/* <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              setUpgradeBillingCycle(sub.billingCycle || 'monthly');
-              setIsUpgradeModalOpen(true);
-            }}
+            onClick={() => fetchDashboardData(true)}
+            disabled={isRefreshing}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '10px 20px',
+              gap: '6px',
+              padding: '10px 16px',
               borderRadius: '10px',
               fontSize: '13px',
-              fontWeight: 800,
-              background: 'var(--primary)',
-              color: '#ffffff',
-              boxShadow: '0 4px 14px rgba(255, 122, 0, 0.3)'
+              fontWeight: 700,
+              borderColor: '#cbd5e1',
+              color: '#0f172a',
+              background: '#ffffff',
+              cursor: isRefreshing ? 'wait' : 'pointer'
             }}
           >
-            ⚡ Upgrade / Change Plan
-          </button> */}
+            <span style={{ display: 'inline-block', transform: isRefreshing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>
+              🔄
+            </span>
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setIsExtraBranchModalOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a', background: '#ffffff' }}
+          >
+            <BuildingIcon size={16} /> + Buy Addons
+          </button>
         </div>
       </div>
 
@@ -235,26 +418,26 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Current Active Plan</span>
               <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 800, fontSize: '10px', padding: '2px 7px', borderRadius: '6px' }}>
-                {sub.billingCycle === 'annual' ? 'Annual' : 'Monthly'}
+                {currentBillingCycle}
               </span>
             </div>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', marginTop: '8px', fontFamily: "'Outfit', sans-serif" }}>
-              {sub.planName}
+              {currentPlanName}
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-              <strong style={{ color: 'var(--primary)', fontSize: '16px' }}>₹{sub.price ? sub.price.toLocaleString() : '1,999'}</strong> / month
+              <strong style={{ color: 'var(--primary)', fontSize: '16px' }}>₹{currentPlanPrice ? currentPlanPrice.toLocaleString() : '0'}</strong> / {currentBillingCycle.toLowerCase().includes('annual') || currentBillingCycle.toLowerCase().includes('year') ? 'year' : 'month'}
             </div>
           </div>
 
           <div>
             <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
-              <span>Next: <strong style={{ color: '#0f172a' }}>{sub.nextBillingDate || '2026-09-15'}</strong></span>
-              <span>Valid: <strong style={{ color: '#0f172a' }}>{sub.expiryDate || '2027-01-15'}</strong></span>
+              <span>Next: <strong style={{ color: '#0f172a' }}>{nextRenewalFormatted}</strong></span>
+              <span>Valid: <strong style={{ color: '#0f172a' }}>{validityFormatted}</strong></span>
             </div>
             <button
               type="button"
               onClick={() => {
-                setUpgradeBillingCycle(sub.billingCycle || 'monthly');
+                setUpgradeBillingCycle(currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
                 setIsUpgradeModalOpen(true);
               }}
               style={{
@@ -289,32 +472,52 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   Last Recharge
                 </span>
               </div>
-              <span style={{ background: '#ecfdf5', color: '#059669', fontWeight: 800, fontSize: '10px', padding: '2px 7px', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
-                ● {lastRecharge.status}
+              <span style={{
+                background: lastRechargeData ? '#ecfdf5' : '#f0fdf4',
+                color: '#166534',
+                fontWeight: 800,
+                fontSize: '10px',
+                padding: '2px 7px',
+                borderRadius: '6px',
+                border: '1px solid #bbf7d0'
+              }}>
+                ● {lastRechargeData ? (lastRechargeData.status || 'Paid') : 'Active Plan'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '8px' }}>
               <span style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                ₹{lastRecharge.amount ? lastRecharge.amount.toLocaleString() : '1,999'}
+                ₹{(lastRechargeData?.amount !== undefined ? lastRechargeData.amount : (lastRecharge?.amount || currentPlanPrice)).toLocaleString()}
               </span>
-              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>on {lastRecharge.date}</span>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                {lastRechargeData?.date ? `on ${formatDate(lastRechargeData.date)}` : `Active Plan`}
+              </span>
             </div>
 
             <div style={{ fontSize: '11px', color: '#334155', fontWeight: 600, marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              📦 {lastRecharge.planName || lastRecharge.description}
+              📦 {lastRechargeData?.planName || lastRechargeData?.description || currentPlanName}
             </div>
 
           </div>
 
           <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>{lastRecharge.id}</span>
+            <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
+              {lastRechargeData?.id || (lastRechargeData === null ? 'PLAN-ACTIVE' : lastRecharge.id)}
+            </span>
             <button
               type="button"
-              onClick={() => setSelectedInvoiceForView(lastRecharge)}
+              onClick={() => setSelectedInvoiceForView(lastRechargeData || {
+                id: "PLAN-ACTIVE",
+                planName: currentPlanName,
+                description: `${currentPlanName} (${currentBillingCycle})`,
+                amount: currentPlanPrice,
+                date: nextRenewalFormatted,
+                paymentMethod: "Online Payment",
+                status: "Active"
+              })}
               style={{ border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 8px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
             >
-              <ReceiptIcon size={11} /> Receipt
+              <ReceiptIcon size={11} /> {lastRechargeData ? 'Receipt' : 'Details'}
             </button>
           </div>
         </div>
@@ -330,7 +533,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '8px' }}>
-              <span style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>{activeBranchesCount}</span>
+              <span style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>{usedBranchesCount}</span>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>/ {totalAllowedBranches} Outlets</span>
             </div>
 
@@ -338,7 +541,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             <div style={{ width: '100%', height: '7px', background: '#f1f5f9', borderRadius: '5px', overflow: 'hidden', marginTop: '8px' }}>
               <div
                 style={{
-                  width: `${branchUsagePercent}%`,
+                  width: `${Math.min(100, Math.max(0, branchUsagePercent))}%`,
                   height: '100%',
                   background: branchUsagePercent >= 100 ? 'linear-gradient(90deg, #f97316, #ef4444)' : 'linear-gradient(90deg, #10b981, var(--primary))',
                   borderRadius: '5px',
@@ -381,8 +584,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               onClick={handleToggleAutoRenew}
               style={{
                 border: 'none',
-                background: sub.autoRenew ? '#dcfce7' : '#fee2e2',
-                color: sub.autoRenew ? '#15803d' : '#b91c1c',
+                background: isAutoRenewActive ? '#dcfce7' : '#fee2e2',
+                color: isAutoRenewActive ? '#15803d' : '#b91c1c',
                 padding: '3px 8px',
                 borderRadius: '16px',
                 fontSize: '10px',
@@ -390,7 +593,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 cursor: 'pointer'
               }}
             >
-              {sub.autoRenew ? '✓ Enabled' : '✕ Disabled'}
+              {isAutoRenewActive ? '✓ Enabled' : '✕ Disabled'}
             </button>
           </div>
         </div>
@@ -421,7 +624,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             </div>
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 14px', borderRadius: '10px', textAlign: 'right' }}>
               <span style={{ fontSize: '11px', color: '#166534', display: 'block' }}>Latest Recharge:</span>
-              <strong style={{ fontSize: '14px', color: '#166534' }}>{lastRecharge.date} (₹{lastRecharge.amount.toLocaleString()})</strong>
+              <strong style={{ fontSize: '14px', color: '#166534' }}>{lastRecharge.date ? formatDate(lastRecharge.date) : '—'} (₹{lastRecharge.amount.toLocaleString()})</strong>
             </div>
           </div>
         </div>
@@ -431,7 +634,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             {[
               { id: 'all', label: `All History (${invoices.length})` },
-              { id: 'addon', label: 'Branch Add-ons' }
+              { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -522,7 +725,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', background: isLatest ? '#fafafa' : '#ffffff' }}>
                       <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{inv.date}</span>
+                          <span>{formatDate(inv.date)}</span>
                           {isLatest && (
                             <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '9px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
                               Latest
@@ -760,7 +963,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
                 <span style={{ color: '#64748b' }}>Recharge Date:</span>
-                <strong style={{ color: '#0f172a' }}>{selectedInvoiceForView.date}</strong>
+                <strong style={{ color: '#0f172a' }}>{formatDate(selectedInvoiceForView.date)}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
                 <span style={{ color: '#64748b' }}>Payment Mode:</span>
@@ -810,12 +1013,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: '#f8fafc', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <div>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Active Plan: </span>
-                <strong style={{ color: '#0f172a', fontSize: '14px' }}>{sub.planName}</strong>
+                <strong style={{ color: '#0f172a', fontSize: '14px' }}>{currentPlanName}</strong>
                 <span style={{ marginLeft: '8px', fontSize: '11px', background: '#dcfce7', color: '#166534', fontWeight: 800, padding: '2px 8px', borderRadius: '12px' }}>
                   ● Active
                 </span>
                 <span style={{ marginLeft: '8px', fontSize: '11px', color: '#64748b' }}>
-                  (Valid until {sub.expiryDate || '2027-01-15'})
+                  (Valid until {validityFormatted})
                 </span>
               </div>
 
@@ -871,8 +1074,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
                 const isCurrentActive =
                   plan.id === sub.planId ||
-                  plan.name.toLowerCase().includes((sub.planName || '').toLowerCase().replace(' plan', '')) ||
-                  (sub.planName || '').toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
+                  plan.name.toLowerCase().includes((currentPlanName || '').toLowerCase().replace(' plan', '')) ||
+                  (currentPlanName || '').toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
 
                 return (
                   <div

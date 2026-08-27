@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY } from '../helper/DateHelper.js';
 
 export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-07', onGenerate }) {
   const [tableNumber, setTableNumber] = useState(defaultTableId);
   const [status, setStatus] = useState('Free');
   const [error, setError] = useState('');
 
-  // Format date e.g. "Aug 12, 2026"
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Format date e.g. "27/08/2026"
+  const dateStr = formatDateDMY(new Date());
   const numStr = tableNumber ? tableNumber.replace(/\D/g, '') : '07';
   const displayTableId = tableNumber.startsWith('T-') ? tableNumber : `T-${numStr ? numStr.padStart(2, '0') : '07'}`;
   const qrUrl = `http://serviq-super-admin.vercel.app:3001/table/${displayTableId}`;
@@ -182,26 +184,17 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
               Status
             </label>
-            <select 
+            <SearchableSelect 
               value={status} 
               onChange={e => setStatus(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '14px',
-                color: '#0f172a',
-                backgroundColor: '#ffffff',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            >
-              <option value="Free">Free</option>
-              <option value="Occupied">Occupied</option>
-              <option value="Reserved">Reserved</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+              options={[
+                { value: 'Free', label: 'Free' },
+                { value: 'Occupied', label: 'Occupied' },
+                { value: 'Reserved', label: 'Reserved' },
+                { value: 'Inactive', label: 'Inactive' }
+              ]}
+              placeholder="Select Status..."
+            />
           </div>
 
           {/* Footer Actions */}

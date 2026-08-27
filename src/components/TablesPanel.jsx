@@ -599,48 +599,39 @@ export default function TablesPanel({
                       {/* 5. QR Code */}
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                         {table.qrUrl || table.assignedQrId ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                            <div
-                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                background: '#ffffff',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                padding: '2px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              title="Click to expand QR Code"
-                            >
-                              <img
-                                src={qrImgSrc}
-                                alt={`QR ${tableIdStr}`}
-                                style={{ width: '26px', height: '26px', display: 'block', borderRadius: '4px' }}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                              style={{
-                                background: '#f8fafc',
-                                border: '1px solid #e2e8f0',
-                                color: '#ff5a1f',
-                                cursor: 'pointer',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '11px',
-                                fontWeight: 700
-                              }}
-                            >
-                              <QrIcon size={13} /> View
-                            </button>
+                          <div
+                            onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              background: '#ffffff',
+                              borderRadius: '8px',
+                              border: '1.5px solid #e2e8f0',
+                              padding: '2px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s ease',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.borderColor = '#ff5a1f';
+                              e.currentTarget.style.transform = 'scale(1.08)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(255,90,31,0.15)';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.borderColor = '#e2e8f0';
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.04)';
+                            }}
+                            title="Click to preview & print QR code"
+                          >
+                            <img
+                              src={qrImgSrc}
+                              alt={`QR ${tableIdStr}`}
+                              style={{ width: '28px', height: '28px', display: 'block', borderRadius: '4px' }}
+                            />
                           </div>
                         ) : (
                           <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>
@@ -911,23 +902,7 @@ export default function TablesPanel({
               </a>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setViewingQrTable(null)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#f8fafc',
-                color: '#64748b',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Close Window
-            </button>
+
           </div>
         </Modal>
       )}

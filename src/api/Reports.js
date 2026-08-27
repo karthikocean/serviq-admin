@@ -4,7 +4,14 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class ReportsApi {
   async getWaiterReports(filters = {}) {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      const cleanParams = {};
+      Object.keys(filters).forEach(key => {
+        const val = filters[key];
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+          cleanParams[key] = val;
+        }
+      });
+      const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/waiter${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       
@@ -29,7 +36,14 @@ class ReportsApi {
 
   async getKitchenReports(filters = {}) {
     try {
-      const queryParams = new URLSearchParams(filters).toString();
+      const cleanParams = {};
+      Object.keys(filters).forEach(key => {
+        const val = filters[key];
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+          cleanParams[key] = val;
+        }
+      });
+      const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/kitchen${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       

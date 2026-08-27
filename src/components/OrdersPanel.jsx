@@ -3,6 +3,8 @@ import apiClient from '../config/index.js';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY } from '../helper/DateHelper.js';
 
 // Clean SVG Icons
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
@@ -771,12 +773,13 @@ export default function OrdersPanel({
       await fetchModalDataForBranch(targetBranchId);
     }
 
-    const tableVal = ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo) : (ord.tableId || ''));
-    const waiterVal = ord.waiter || (ord.waiterId && typeof ord.waiterId === 'object' ? ord.waiterId.name : (ord.waiterId || 'Unassigned'));
+    const tableVal = ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo || ord.tableId.name) : (ord.tableId || ''));
+    const resolvedWaiter = getResolvedWaiterName(ord);
+    const waiterVal = (resolvedWaiter && resolvedWaiter !== 'Unassigned' && resolvedWaiter !== '-') ? resolvedWaiter : 'Unassigned';
 
     setEditingOrder(ord);
     setEditOrderTable(tableVal);
-    setEditOrderWaiter(waiterVal || 'Unassigned');
+    setEditOrderWaiter(waiterVal);
     setEditOrderStatus((ord.status || 'new').toLowerCase());
     setEditOrderNotes(ord.notes || ord.specialInstructions || '');
     setEditOrderItems(
@@ -1052,34 +1055,18 @@ export default function OrdersPanel({
 
                 return (
                   <div>
-                    <select
+                    <SearchableSelect
                       value={effectiveVal}
                       onChange={handleModalBranchChange}
-                      disabled={isLocked}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        outline: 'none',
-                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                        color: isLocked ? '#64748b' : '#0f172a',
-                        cursor: isLocked ? 'not-allowed' : 'pointer',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {allBranchesList.length === 0 ? (
-                        <option value="">Main Branch</option>
-                      ) : (
-                        allBranchesList.map(b => (
-                          <option key={b._id || b.id} value={b._id || b.id}>
-                            {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                         Branch is locked to currently selected branch.
@@ -1096,42 +1083,29 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Dining Table <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderTable}
                   onChange={e => setNewOrderTable(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {apiTables.length > 0 ? (
+                  options={apiTables.length > 0 ? (
                     apiTables.map(t => {
                       const tVal = t.tableNumber || t.tableNo || t.name;
                       const occupied = isTableOccupied(tVal, apiTables);
-                      return (
-                        <option key={t._id || t.id} value={tVal} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
-                          {t.name ? t.name : `Table ${tVal}`} {occupied ? '— Occupied (Has Active Order)' : '— Available'}
-                        </option>
-                      );
+                      return {
+                        value: tVal,
+                        label: `${t.name ? t.name : `Table ${tVal}`} ${occupied ? '— Occupied (Has Active Order)' : '— Available'}`
+                      };
                     })
                   ) : (
                     displayTables.map(tNo => {
                       const occupied = isTableOccupied(tNo);
-                      return (
-                        <option key={tNo} value={tNo} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
-                          Table {tNo} {occupied ? '— Occupied (Has Active Order)' : '— Available'}
-                        </option>
-                      );
+                      return {
+                        value: tNo,
+                        label: `Table ${tNo} ${occupied ? '— Occupied (Has Active Order)' : '— Available'}`
+                      };
                     })
                   )}
-                </select>
+                  placeholder="Select Dining Table..."
+                />
 
                 {/* OCCUPIED WARNING & ACTION PROMPT */}
                 {(() => {
@@ -1148,21 +1122,14 @@ export default function OrdersPanel({
                       flexDirection: 'column',
                       gap: '8px'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#c2410c', fontWeight: 700 }}>
-                        <span>⚠️</span>
-                        <span>
-                          Table {newOrderTable} already has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
-                        </span>
+                      <div style={{ fontSize: '12px', color: '#c2410c', fontWeight: 700 }}>
+                        ⚠️ Table {newOrderTable} currently has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
                       </div>
-                      <p style={{ margin: 0, fontSize: '12px', color: '#7c2d12', lineHeight: '1.4' }}>
-                        To add more items or drinks for this table, append them directly to the existing order instead of creating a separate order.
-                      </p>
-                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                           type="button"
                           onClick={() => {
                             const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
-                            setIsCreateOrderModalOpen(false);
                             handleOpenAppendModal(activeOrd, itemsToCarry);
                           }}
                           style={{
@@ -1211,26 +1178,15 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Assign Waiter (Optional)
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderWaiter}
                   onChange={e => setNewOrderWaiter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="Unassigned">None (Unassigned)</option>
-                  {allWaiters.map(w => (
-                    <option key={w.name} value={w.name}>{w.name}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: 'Unassigned', label: 'None (Unassigned)' },
+                    ...allWaiters.map(w => ({ value: w.name, label: w.name }))
+                  ]}
+                  placeholder="Select Waiter..."
+                />
               </div>
             </div>
 
@@ -1240,26 +1196,17 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Initial Status
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderStatus}
                   onChange={e => setNewOrderStatus(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="new">New (Pending)</option>
-                  <option value="preparing">Preparing</option>
-                  <option value="ready">Ready</option>
-                  <option value="served">Served</option>
-                </select>
+                  options={[
+                    { value: 'new', label: 'New (Pending)' },
+                    { value: 'preparing', label: 'Preparing' },
+                    { value: 'ready', label: 'Ready' },
+                    { value: 'served', label: 'Served' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
 
               <div>
@@ -1317,24 +1264,17 @@ export default function OrdersPanel({
                     }}
                   />
                 </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    fontWeight: 600
-                  }}
-                >
-                  {displayCategories.map(c => (
-                    <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: '160px' }}>
+                  <SearchableSelect
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    options={displayCategories.map(c => ({
+                      value: c,
+                      label: c === 'All' ? 'All Categories' : c
+                    }))}
+                    placeholder="Category..."
+                  />
+                </div>
               </div>
 
               {/* Items Grid */}
@@ -1482,59 +1422,63 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Table Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={editOrderTable}
-                  onChange={e => setEditOrderTable(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {apiTables.length > 0 ? (
-                    apiTables.map(t => (
-                      <option key={t._id || t.id} value={t.tableNumber || t.tableNo || t.name}>
-                        {t.name ? t.name : `Table ${t.tableNumber || t.tableNo}`} {t.status ? `(${t.status})` : ''}
-                      </option>
-                    ))
+                  options={apiTables.length > 0 ? (
+                    apiTables.map(t => ({
+                      value: t.tableNumber || t.tableNo || t.name,
+                      label: `${t.name ? t.name : `Table ${t.tableNumber || t.tableNo}`} ${t.status ? `(${t.status})` : ''}`
+                    }))
                   ) : (
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                      <option key={n} value={n}>Table {n}</option>
-                    ))
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({
+                      value: String(n),
+                      label: `Table ${n}`
+                    }))
                   )}
-                </select>
+                  onChange={e => {
+                    const selTableVal = e.target.value;
+                    setEditOrderTable(selTableVal);
+                    const matchedTable = apiTables.find(t =>
+                      String(t.tableNumber || t.tableNo || t.name) === String(selTableVal) ||
+                      String(t._id || t.id) === String(selTableVal)
+                    );
+                    if (matchedTable) {
+                      let tblWaiter = '';
+                      if (matchedTable.assignedWaiterId && typeof matchedTable.assignedWaiterId === 'object' && matchedTable.assignedWaiterId.name) {
+                        tblWaiter = matchedTable.assignedWaiterId.name;
+                      } else if (matchedTable.assignedWaiter && typeof matchedTable.assignedWaiter === 'object' && matchedTable.assignedWaiter.name) {
+                        tblWaiter = matchedTable.assignedWaiter.name;
+                      } else if (matchedTable.assignedWaiterId) {
+                        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchedTable.assignedWaiterId)) ||
+                                      allWaiters.find(w => String(w.id || w._id) === String(matchedTable.assignedWaiterId));
+                        if (found && found.name) tblWaiter = found.name;
+                      } else if (typeof matchedTable.assignedWaiter === 'string' && matchedTable.assignedWaiter !== 'Unassigned') {
+                        const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchedTable.assignedWaiter) || String(s.name).toLowerCase() === String(matchedTable.assignedWaiter).toLowerCase());
+                        tblWaiter = found?.name || matchedTable.assignedWaiter;
+                      }
+                      if (tblWaiter) {
+                        setEditOrderWaiter(tblWaiter);
+                      }
+                    }
+                  }}
+                  placeholder="Select Dining Table..."
+                />
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Assigned Waiter
                 </label>
-                <select
+                <SearchableSelect
                   value={editOrderWaiter}
                   onChange={e => setEditOrderWaiter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="Unassigned">None (Unassigned)</option>
-                  {allWaiters.map(w => (
-                    <option key={w.name} value={w.name}>{w.name}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: 'Unassigned', label: 'None (Unassigned)' },
+                    ...(editOrderWaiter && editOrderWaiter !== 'Unassigned' && !allWaiters.some(w => w.name?.toLowerCase() === editOrderWaiter.toLowerCase()) ? [{ value: editOrderWaiter, label: editOrderWaiter }] : []),
+                    ...allWaiters.map(w => ({ value: w.name, label: w.name }))
+                  ]}
+                  placeholder="Select Waiter..."
+                />
               </div>
             </div>
 
@@ -1544,28 +1488,19 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Order Status
                 </label>
-                <select
+                <SearchableSelect
                   value={editOrderStatus}
                   onChange={e => setEditOrderStatus(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="new">New</option>
-                  <option value="preparing">Preparing</option>
-                  <option value="ready">Ready</option>
-                  <option value="served">Served</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+                  options={[
+                    { value: 'new', label: 'New' },
+                    { value: 'preparing', label: 'Preparing' },
+                    { value: 'ready', label: 'Ready' },
+                    { value: 'served', label: 'Served' },
+                    { value: 'completed', label: 'Completed' },
+                    { value: 'cancelled', label: 'Cancelled' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
 
               <div>
@@ -1620,24 +1555,17 @@ export default function OrdersPanel({
                     boxSizing: 'border-box'
                   }}
                 />
-                <select
-                  value={editSelectedCategory}
-                  onChange={(e) => setEditSelectedCategory(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    fontWeight: 600
-                  }}
-                >
-                  {displayCategories.map(c => (
-                    <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: '160px' }}>
+                  <SearchableSelect
+                    value={editSelectedCategory}
+                    onChange={(e) => setEditSelectedCategory(e.target.value)}
+                    options={displayCategories.map(c => ({
+                      value: c,
+                      label: c === 'All' ? 'All Categories' : c
+                    }))}
+                    placeholder="Category..."
+                  />
+                </div>
               </div>
 
               {/* Items Picker */}
@@ -1825,24 +1753,17 @@ export default function OrdersPanel({
                     boxSizing: 'border-box'
                   }}
                 />
-                <select
-                  value={appendSelectedCategory}
-                  onChange={(e) => setAppendSelectedCategory(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    fontWeight: 600
-                  }}
-                >
-                  {displayCategories.map(c => (
-                    <option key={c} value={c}>{c === 'All' ? 'All Categories' : c}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: '160px' }}>
+                  <SearchableSelect
+                    value={appendSelectedCategory}
+                    onChange={(e) => setAppendSelectedCategory(e.target.value)}
+                    options={displayCategories.map(c => ({
+                      value: c,
+                      label: c === 'All' ? 'All Categories' : c
+                    }))}
+                    placeholder="Category..."
+                  />
+                </div>
               </div>
 
               {/* Dishes Grid */}
@@ -2155,21 +2076,30 @@ export default function OrdersPanel({
             <tbody>
               {filteredOrders.map((ord, index) => {
                 let totalItemsCount = 0;
-                if (Array.isArray(ord.items)) {
-                  totalItemsCount = ord.items.length;
+                let itemsListDetail = '';
+
+                if (Array.isArray(ord.items) && ord.items.length > 0) {
+                  totalItemsCount = ord.items.reduce((sum, it) => sum + (Number(it.qty || it.quantity || it.count || 1) || 1), 0);
+                  itemsListDetail = ord.items.map(it => `${it.name || 'Item'} (x${it.qty || it.quantity || 1})`).join(', ');
+                } else if (typeof ord.items === 'string' && ord.items.trim()) {
+                  itemsListDetail = ord.items;
+                  totalItemsCount = ord.items.split(',').length || 1;
+                } else if (ord.itemsSummary) {
+                  itemsListDetail = ord.itemsSummary;
+                  totalItemsCount = ord.totalItems || ord.itemCount || (ord.itemsSummary.split(',').length || 1);
+                } else if (ord.totalItems || ord.itemCount || ord.itemsCount) {
+                  totalItemsCount = Number(ord.totalItems || ord.itemCount || ord.itemsCount) || 1;
+                  itemsListDetail = `${totalItemsCount} Items`;
                 }
 
-                const itemSummary = Array.isArray(ord.items)
-                  ? (
-                    <div style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}>
-                      {totalItemsCount} Items
-                    </div>
-                  )
-                  : (
-                    <div style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}>
-                      {ord.items || 'Standard Order'}
-                    </div>
-                  );
+                const itemSummary = (
+                  <div
+                    title={itemsListDetail || `${totalItemsCount} Items`}
+                    style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}
+                  >
+                    {totalItemsCount} Items
+                  </div>
+                );
 
                 const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
                 const status = (ord.status || 'new').toLowerCase();
@@ -2179,7 +2109,7 @@ export default function OrdersPanel({
                 let displayId = ord.orderId || ord.id || String(index);
                 if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
 
-                const dateStr = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+                const dateStr = ord.createdAt ? formatDateDMY(ord.createdAt) : 'N/A';
                 const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
                 const timeAgoStr = ord.createdAt ? (() => {
                   const diffMin = Math.floor((new Date() - new Date(ord.createdAt)) / 60000);
@@ -2243,38 +2173,22 @@ export default function OrdersPanel({
                       </div>
                     </td>
 
-                    {/* 5. ASSIGNED WAITER (OPTIONAL) */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '180px' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setAssigningOrder(ord);
-                        }}
-                        style={{
-                          border: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '1.5px solid #86efac' : '1.5px solid #e2e8f0',
-                          background: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#f0fdf4' : '#f8fafc',
-                          color: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#15803d' : '#64748b',
-                          padding: '6px 14px',
-                          borderRadius: '8px',
-                          fontSize: '12px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          whiteSpace: 'nowrap',
-                          boxShadow: (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '0 1px 3px rgba(22,163,74,0.12)' : 'none',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = (waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#86efac' : '#e2e8f0'; }}
-                        title="Click to assign or change waiter"
-                      >
-                        <UserIcon size={13} color={(waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? '#15803d' : '#94a3b8'} />
-                        <span style={{ whiteSpace: 'nowrap' }}>{(waiterName && waiterName !== 'Unassigned' && waiterName !== '-') ? waiterName : '+ Assign'}</span>
-                      </button>
+                    {/* 5. ASSIGNED WAITER */}
+                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        {waiterName && waiterName !== 'Unassigned' && waiterName !== '-' ? (
+                          <>
+                            <UserIcon size={14} color="#0f172a" />
+                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                              {waiterName}
+                            </span>
+                          </>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
+                            Unassigned
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* 6. PAYMENT */}
@@ -2356,35 +2270,6 @@ export default function OrdersPanel({
                         >
                           <EyeIcon size={14} />
                         </button>
-
-                        {/* Add Items Icon */}
-                        {status !== 'completed' && status !== 'cancelled' && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleOpenAppendModal(ord);
-                            }}
-                            style={{
-                              background: '#fff7ed',
-                              border: '1px solid #fed7aa',
-                              color: '#ea580c',
-                              cursor: 'pointer',
-                              padding: '6px',
-                              borderRadius: '6px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#ffedd5'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}
-                            title="Add Items to Order"
-                          >
-                            <PlusIcon size={14} color="#ea580c" />
-                          </button>
-                        )}
 
                         {/* Edit Icon */}
                         <button
@@ -2714,7 +2599,7 @@ export default function OrdersPanel({
               {/* Items Section */}
               <div>
                 <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '8px' }}>
-                  Ordered Items ({itemsList.length})
+                  Ordered Items ({itemsList.reduce((sum, it) => sum + (Number(it.qty || it.quantity || 1) || 1), 0)})
                 </div>
 
                 <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
@@ -2888,30 +2773,15 @@ export default function OrdersPanel({
                 Branch <span style={{ color: '#ef4444' }}>*</span>
               </label>
               {canChooseBranchInOrder ? (
-                <select
+                <SearchableSelect
                   value={modalSelectedBranchId || ''}
                   onChange={handleModalBranchChange}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="" disabled>-- Select Branch --</option>
-                  {(activeRestaurant?.branches || []).map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>
-                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                    </option>
-                  ))}
-                </select>
+                  options={(activeRestaurant?.branches || []).map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                  }))}
+                  placeholder="Select Branch..."
+                />
               ) : (
                 <input
                   type="text"
@@ -2944,30 +2814,18 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Dining Table <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderTable}
                   onChange={e => setNewOrderTable(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {displayTables.map(tNo => {
+                  options={displayTables.map(tNo => {
                     const occupied = isTableOccupied(tNo);
-                    return (
-                      <option key={tNo} value={tNo} style={{ color: occupied ? '#ea580c' : '#16a34a', fontWeight: 600 }}>
-                        Table {tNo} {occupied ? '— Occupied (Active Order)' : '— Available'}
-                      </option>
-                    );
+                    return {
+                      value: tNo,
+                      label: `Table ${tNo} ${occupied ? '— Occupied (Active Order)' : '— Available'}`
+                    };
                   })}
-                </select>
+                  placeholder="Select Dining Table..."
+                />
 
                 {/* OCCUPIED WARNING & ACTION PROMPT */}
                 {(() => {
@@ -3018,26 +2876,15 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Assigned Waiter <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>(Optional)</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderWaiter}
                   onChange={e => setNewOrderWaiter(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="Unassigned">-- None (Unassigned) --</option>
-                  {modalWaiters.map((w, idx) => (
-                    <option key={idx} value={w}>🤵 {w}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: 'Unassigned', label: '-- None (Unassigned) --' },
+                    ...modalWaiters.map(w => ({ value: w, label: `🤵 ${w}` }))
+                  ]}
+                  placeholder="Select Waiter..."
+                />
               </div>
             </div>
 
@@ -3047,25 +2894,16 @@ export default function OrdersPanel({
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Initial Status
                 </label>
-                <select
+                <SearchableSelect
                   value={newOrderStatus}
                   onChange={e => setNewOrderStatus(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="new">New (KOT)</option>
-                  <option value="preparing">Preparing</option>
-                  <option value="ready">Ready to Serve</option>
-                </select>
+                  options={[
+                    { value: 'new', label: 'New (KOT)' },
+                    { value: 'preparing', label: 'Preparing' },
+                    { value: 'ready', label: 'Ready to Serve' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
 
               <div>
@@ -3234,7 +3072,7 @@ export default function OrdersPanel({
             <div style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Order Items ({newOrderItems.length})
+                  Order Items ({newOrderItems.reduce((sum, it) => sum + (Number(it.qty) || 1), 0)})
                 </span>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>Qty & Rate</span>
               </div>

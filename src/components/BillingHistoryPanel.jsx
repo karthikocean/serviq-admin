@@ -3,6 +3,8 @@ import { Modal } from './Modal';
 import * as XLSX from 'xlsx';
 import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY } from '../helper/DateHelper.js';
 
 export default function BillingHistoryPanel({
   billingHistory = [],
@@ -69,7 +71,7 @@ export default function BillingHistoryPanel({
         'Invoice ID': item.invoiceId,
         'Order ID': item.orderRefId,
         'Table': `Table ${item.tableNumber}`,
-        'Date': new Date(item.createdAt).toLocaleDateString(),
+        'Date': formatDateDMY(item.createdAt),
         'Time': new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         'Subtotal': item.subtotal,
         'Tax': item.tax,
@@ -125,19 +127,20 @@ export default function BillingHistoryPanel({
             />
           </div>
 
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div style={{ flex: '1', minWidth: '160px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Date Range</label>
-            <select
+            <SearchableSelect
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value="Today">Today</option>
-              <option value="Yesterday">Yesterday</option>
-              <option value="This Week">This Week</option>
-              <option value="This Month">This Month</option>
-              <option value="Custom">Custom Range</option>
-            </select>
+              options={[
+                { value: 'Today', label: 'Today' },
+                { value: 'Yesterday', label: 'Yesterday' },
+                { value: 'This Week', label: 'This Week' },
+                { value: 'This Month', label: 'This Month' },
+                { value: 'Custom', label: 'Custom Range' }
+              ]}
+              placeholder="Select Date Range..."
+            />
           </div>
 
           {dateRange === 'Custom' && (
@@ -153,18 +156,19 @@ export default function BillingHistoryPanel({
             </div>
           )}
 
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div style={{ flex: '1', minWidth: '160px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Payment Method</label>
-            <select
+            <SearchableSelect
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value="All">All Methods</option>
-              <option value="UPI">UPI</option>
-              <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
-            </select>
+              options={[
+                { value: 'All', label: 'All Methods' },
+                { value: 'UPI', label: 'UPI' },
+                { value: 'Cash', label: 'Cash' },
+                { value: 'Card', label: 'Card' }
+              ]}
+              placeholder="Select Payment Method..."
+            />
           </div>
 
           <div>

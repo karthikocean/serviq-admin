@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -258,84 +259,90 @@ export default function WaiterReportsPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Waiter</label>
-              <select 
+              <SearchableSelect 
                 value={filterWaiter}
                 onChange={e => setFilterWaiter(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Waiters</option>
-                {waitersList.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Waiters' },
+                  ...waitersList.map(w => ({ value: w, label: w }))
+                ]}
+                placeholder="Select Waiter..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Table</label>
-              <select 
+              <SearchableSelect 
                 value={filterTable}
                 onChange={e => setFilterTable(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Tables</option>
-                {uniqueTables.map(t => <option key={t} value={t}>Table {t}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Tables' },
+                  ...uniqueTables.map(t => ({ value: t, label: `Table ${t}` }))
+                ]}
+                placeholder="Select Table..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Source</label>
-              <select 
+              <SearchableSelect 
                 value={filterSource}
                 onChange={e => setFilterSource(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Sources</option>
-                <option value="Dine-In">Dine-In</option>
-                <option value="Mobile">Mobile</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Sources' },
+                  { value: 'Dine-In', label: 'Dine-In' },
+                  { value: 'Mobile', label: 'Mobile' }
+                ]}
+                placeholder="Select Source..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Mode</label>
-              <select 
+              <SearchableSelect 
                 value={filterPaymentMode}
                 onChange={e => setFilterPaymentMode(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Modes</option>
-                <option value="UPI">UPI</option>
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Pending">Pending</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Modes' },
+                  { value: 'UPI', label: 'UPI' },
+                  { value: 'Cash', label: 'Cash' },
+                  { value: 'Card', label: 'Card' },
+                  { value: 'Pending', label: 'Pending' }
+                ]}
+                placeholder="Select Mode..."
+              />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Status</label>
-              <select 
+              <SearchableSelect 
                 value={filterPaymentStatus}
                 onChange={e => setFilterPaymentStatus(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Statuses</option>
-                <option value="Paid">Paid</option>
-                <option value="Unpaid">Unpaid</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'Paid', label: 'Paid' },
+                  { value: 'Unpaid', label: 'Unpaid' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Status</label>
-              <select 
+              <SearchableSelect 
                 value={filterOrderStatus}
                 onChange={e => setFilterOrderStatus(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Statuses</option>
-                <option value="New">New</option>
-                <option value="Preparing">Preparing</option>
-                <option value="Ready">Ready</option>
-                <option value="Done">Done</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'New', label: 'New' },
+                  { value: 'Preparing', label: 'Preparing' },
+                  { value: 'Ready', label: 'Ready' },
+                  { value: 'Done', label: 'Done' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
             <div style={{ gridColumn: 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
               <button 
@@ -708,25 +715,16 @@ export default function WaiterReportsPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>Payment Type</label>
-              <select
+              <SearchableSelect
                 value={offlinePaymentType}
                 onChange={e => setOfflinePaymentType(e.target.value)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border)',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-main)',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  outline: 'none',
-                  width: '100%'
-                }}
-              >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="UPI">UPI</option>
-              </select>
+                options={[
+                  { value: 'Cash', label: 'Cash' },
+                  { value: 'Card', label: 'Card' },
+                  { value: 'UPI', label: 'UPI' }
+                ]}
+                placeholder="Select Payment Type..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1.5px solid var(--border)', paddingTop: '16px', marginTop: '10px' }}>

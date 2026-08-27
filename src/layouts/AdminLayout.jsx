@@ -50,9 +50,10 @@ export default function AdminLayout() {
   }, []);
 
   const restaurantName = activeRestaurant?.name || 'Serviq';
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser?.role?.roleName : (currentUser?.role || '');
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? (currentUser?.role?.roleName || currentUser?.role?.name) : (currentUser?.role || '');
   const role = roleStr || 'Admin';
   const userType = (currentUser?.userType || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
   const isAdmin = 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
@@ -67,8 +68,13 @@ export default function AdminLayout() {
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {
-    // Branch management is ONLY accessible to Admin role
-    if (moduleName === 'branch-management' || moduleName === 'branches') {
+    // Branch management and Plans management are strictly ONLY accessible to Admin / Restaurant Owner
+    if (
+      moduleName === 'branch-management' || 
+      moduleName === 'branches' || 
+      moduleName === 'plans-management' || 
+      moduleName === 'plans'
+    ) {
       return isAdmin;
     }
 
@@ -87,8 +93,13 @@ export default function AdminLayout() {
   };
 
   const isTabAllowed = (permissionKey) => {
-    // If tab is branch-management or plans, ONLY Admin role (RESTAURANT_OWNER/SUPER_ADMIN) can view it
-    if (permissionKey === 'branch-management' || permissionKey === 'plans-management') {
+    // If tab is branch-management or plans-management, ONLY Restaurant Owner / Admin can view it
+    if (
+      permissionKey === 'branch-management' || 
+      permissionKey === 'branches' || 
+      permissionKey === 'plans-management' || 
+      permissionKey === 'plans'
+    ) {
       return isAdmin;
     }
 
@@ -184,6 +195,11 @@ export default function AdminLayout() {
 
   const currentSubPlan = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
   const isCurrentPremium = currentSubPlan.includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
+
+  // Protect restricted routes: Only Restaurant Owner / Admin can access Branch & Plans Management
+  if ((isBranchActive || isPlansActive) && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div id="dashboard-view" className="dashboard-wrapper">

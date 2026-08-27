@@ -13,7 +13,13 @@ const extractErrorMessage = (error, defaultMsg) => {
 class UserApi {
   async getUsers(params = {}) {
     try {
-      const response = await apiClient.get("/users", { params });
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+          cleanParams[key] = params[key];
+        }
+      });
+      const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -28,7 +34,13 @@ class UserApi {
 
   async getStations(params = {}) {
     try {
-      const response = await apiClient.get("/users/stations", { params });
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+          cleanParams[key] = params[key];
+        }
+      });
+      const response = await apiClient.get("/users/stations", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

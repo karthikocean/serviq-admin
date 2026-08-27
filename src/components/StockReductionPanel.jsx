@@ -5,6 +5,8 @@ import InventoryApi from '../api/Inventory';
 import InventoryCategoryApi from '../api/InventoryCategory';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY, formatDateTimeDMY } from '../helper/DateHelper.js';
 
 // Clean SVG Icons
 const TrendingDownIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -79,6 +81,8 @@ export default function StockReductionPanel() {
   const [liveItems, setLiveItems] = useState([]);
   const [livePurchases, setLivePurchases] = useState([]);
   const [liveReductions, setLiveReductions] = useState([]);
+  const [reductionToDelete, setReductionToDelete] = useState(null);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
   const [apiStats, setApiStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -527,7 +531,7 @@ export default function StockReductionPanel() {
         r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity,
         (typeof r.itemId === 'object' && r.itemId?.unit) ? r.itemId.unit : (r.unit || 'unit'),
         r.reason || 'Kitchen Usage',
-        `"${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.date || '')}"`,
+        `"${r.createdAt ? formatDateTimeDMY(r.createdAt) : (r.date || '')}"`,
         `"${typeof r.reducedBy === 'object' ? r.reducedBy?.name : (r.reducedBy || 'Admin')}"`,
         `"${r.details || r.notes || ''}"`
       ]);
@@ -544,7 +548,7 @@ export default function StockReductionPanel() {
         (typeof p.itemId === 'object' && p.itemId?.unit) ? p.itemId.unit : (p.unit || 'kg'),
         p.unitPrice || 0,
         p.totalAmount || 0,
-        p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : ''),
+        p.purchaseDate ? formatDateDMY(p.purchaseDate) : (p.createdAt ? formatDateDMY(p.createdAt) : ''),
         p.paymentStatus || 'Paid',
         `"${typeof p.addedBy === 'object' ? p.addedBy?.name : (p.addedBy || 'Admin')}"`
       ]);
@@ -728,27 +732,16 @@ export default function StockReductionPanel() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Select Item <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                disabled={isSubmitting}
+              <SearchableSelect
+                isDisabled={isSubmitting}
                 value={reduceForm.itemId}
                 onChange={e => handleItemSelectChange(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: reduceErrors.itemId ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {inventory.map(item => (
-                  <option key={item._id || item.id} value={item._id || item.id}>
-                    {item.name} ({item.currentStock} {item.unit} available)
-                  </option>
-                ))}
-              </select>
+                options={inventory.map(item => ({
+                  value: item._id || item.id,
+                  label: `${item.name} (${item.currentStock} ${item.unit} available)`
+                }))}
+                placeholder="Select Item..."
+              />
               {reduceErrors.itemId && (
                 <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {reduceErrors.itemId}
@@ -820,28 +813,19 @@ export default function StockReductionPanel() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Reason for Reduction <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                disabled={isSubmitting}
+              <SearchableSelect
+                isDisabled={isSubmitting}
                 value={reduceForm.reason}
                 onChange={e => {
                   setReduceForm({ ...reduceForm, reason: e.target.value });
                   if (reduceErrors.reason) setReduceErrors(prev => ({ ...prev, reason: '' }));
                 }}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: reduceErrors.reason ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {REDUCTION_REASONS.map(r => (
-                  <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>
-                ))}
-              </select>
+                options={REDUCTION_REASONS.map(r => ({
+                  value: r.id,
+                  label: `${r.label} — ${r.desc}`
+                }))}
+                placeholder="Select Reason..."
+              />
               {reduceErrors.reason && (
                 <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {reduceErrors.reason}
@@ -965,32 +949,19 @@ export default function StockReductionPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Inventory Item <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={purchaseForm.itemId}
                   onChange={e => handlePurchaseItemSelect(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: (purchaseErrors.itemId || purchaseErrors.itemName) ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    backgroundColor: '#ffffff',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <optgroup label="Select Existing Item">
-                    {inventory.map(item => (
-                      <option key={item._id || item.id} value={item._id || item.id}>
-                        {item.name} ({getCategoryName(item)})
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Or Custom Entry">
-                    <option value="CUSTOM">+ New / Unlisted Item</option>
-                  </optgroup>
-                </select>
+                  options={[
+                    ...inventory.map(item => ({
+                      value: item._id || item.id,
+                      label: `${item.name} (${getCategoryName(item)})`
+                    })),
+                    { value: 'CUSTOM', label: '+ New / Unlisted Item' }
+                  ]}
+                  placeholder="Select or Enter Item..."
+                />
                 {(purchaseErrors.itemId || purchaseErrors.itemName) && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {purchaseErrors.itemId || purchaseErrors.itemName}
@@ -1134,30 +1105,22 @@ export default function StockReductionPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Unit
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={purchaseForm.unit}
                   onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    backgroundColor: '#ffffff',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="kg">kg (Kilogram)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liter)</option>
-                  <option value="ml">ml (Milliliter)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="box">box (Boxes)</option>
-                  <option value="bag">bag (Bags)</option>
-                  <option value="pack">pack (Packets)</option>
-                </select>
+                  options={[
+                    { value: 'kg', label: 'kg (Kilogram)' },
+                    { value: 'g', label: 'g (Grams)' },
+                    { value: 'L', label: 'L (Liter)' },
+                    { value: 'ml', label: 'ml (Milliliter)' },
+                    { value: 'pcs', label: 'pcs (Pieces)' },
+                    { value: 'box', label: 'box (Boxes)' },
+                    { value: 'bag', label: 'bag (Bags)' },
+                    { value: 'pack', label: 'pack (Packets)' }
+                  ]}
+                  placeholder="Select Unit..."
+                />
               </div>
 
               <div>
@@ -1520,81 +1483,61 @@ export default function StockReductionPanel() {
           {/* Filter Controls & Actions */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             {/* View / Section Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '220px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>View:</label>
-              <select
-                value={activeTab}
-                onChange={e => { setActiveTab(e.target.value); setCurrentPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="reductions">Stock Reduction Items ({inventory.length})</option>
-                <option value="history">Reduction History Logs ({reductions.length})</option>
-                <option value="purchases">Purchase Records ({purchases.length})</option>
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={activeTab}
+                  onChange={e => { setActiveTab(e.target.value); setCurrentPage(1); }}
+                  options={[
+                    { value: 'reductions', label: `Stock Reduction Items (${inventory.length})` },
+                    { value: 'history', label: `Reduction History Logs (${reductions.length})` },
+                    { value: 'purchases', label: `Purchase Records (${purchases.length})` }
+                  ]}
+                  placeholder="Select View..."
+                />
+              </div>
             </div>
 
             {/* Category Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Category:</label>
-              <select
-                value={categoryFilter}
-                onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="All">All Categories</option>
-                {rawCategories
-                  .filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false)
-                  .map(c => (
-                    <option key={c.id || c._id || c.name} value={c.name}>{c.name}</option>
-                  ))
-                }
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={categoryFilter}
+                  onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                  options={[
+                    { value: 'All', label: 'All Categories' },
+                    ...rawCategories
+                      .filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false)
+                      .map(c => ({
+                        value: c.name,
+                        label: c.name
+                      }))
+                  ]}
+                  placeholder="Select Category..."
+                />
+              </div>
             </div>
 
             {/* Reason Filter (Only for history view) */}
             {activeTab === 'history' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Reason:</label>
-                <select
-                  value={reasonFilter}
-                  onChange={e => { setReasonFilter(e.target.value); setCurrentPage(1); }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="All">All Reasons</option>
-                  {REDUCTION_REASONS.map(r => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
-                  ))}
-                </select>
+                <div style={{ flex: 1 }}>
+                  <SearchableSelect
+                    value={reasonFilter}
+                    onChange={e => { setReasonFilter(e.target.value); setCurrentPage(1); }}
+                    options={[
+                      { value: 'All', label: 'All Reasons' },
+                      ...REDUCTION_REASONS.map(r => ({
+                        value: r.id,
+                        label: r.label
+                      }))
+                    ]}
+                    placeholder="Select Reason..."
+                  />
+                </div>
               </div>
             )}
 
@@ -1759,7 +1702,7 @@ export default function StockReductionPanel() {
                   </tr>
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((record, idx) => {
-                    const dateFormatted = record.createdAt ? new Date(record.createdAt).toLocaleString('en-IN') : (record.date || '—');
+                    const dateFormatted = record.createdAt ? formatDateTimeDMY(record.createdAt) : (record.date || '—');
                     const itemName = getItemDisplayName(record.itemName || (typeof record.itemId === 'object' ? (record.itemId?.name || record.itemId?.itemName) : ''), record.itemId);
                     const catName = (typeof record.itemId === 'object' && record.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === record.itemId.categoryId || c.id === record.itemId.categoryId))?.name || 'General')
@@ -1801,14 +1744,7 @@ export default function StockReductionPanel() {
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete reduction log for ${itemName}?`)) {
-                                if (deleteReductionRecord && activeRestaurant?.id) {
-                                  deleteReductionRecord(activeRestaurant.id, record.id || record._id);
-                                  fetchAllData();
-                                }
-                              }
-                            }}
+                            onClick={() => setReductionToDelete({ record, itemName })}
                             style={{
                               background: '#fef2f2',
                               border: '1px solid #fecaca',
@@ -1864,7 +1800,7 @@ export default function StockReductionPanel() {
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((p, idx) => {
                     const invoiceNum = p.invoiceNumber || `INV-${(p._id || '').slice(-5)}`;
-                    const dateFormatted = p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '—');
+                    const dateFormatted = p.purchaseDate ? formatDateDMY(p.purchaseDate) : (p.createdAt ? formatDateDMY(p.createdAt) : '—');
                     const itemName = getItemDisplayName(p.itemName || (typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : ''), p.itemId);
                     const catName = (typeof p.itemId === 'object' && p.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General')
@@ -1918,14 +1854,7 @@ export default function StockReductionPanel() {
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete purchase record #${invoiceNum}?`)) {
-                                if (deletePurchaseRecord && activeRestaurant?.id) {
-                                  deletePurchaseRecord(activeRestaurant.id, p.id || p._id);
-                                  ShowNotifications.showAlertNotification("Purchase record removed.", true);
-                                }
-                              }
-                            }}
+                            onClick={() => setPurchaseToDelete({ purchase: p, invoiceNum })}
                             style={{
                               background: '#fee2e2',
                               border: '1px solid #fecaca',
@@ -2033,6 +1962,93 @@ export default function StockReductionPanel() {
           </div>
         </div>
       </div>
+
+      {/* Delete Reduction Log Confirmation Modal */}
+      {reductionToDelete && (
+        <Modal
+          isOpen={!!reductionToDelete}
+          onClose={() => setReductionToDelete(null)}
+          title="Confirm Reduction Log Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete reduction log for <strong>"{reductionToDelete.itemName}"</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReductionToDelete(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  if (deleteReductionRecord && activeRestaurant?.id && reductionToDelete) {
+                    deleteReductionRecord(activeRestaurant.id, reductionToDelete.record.id || reductionToDelete.record._id);
+                    fetchAllData();
+                  }
+                  setReductionToDelete(null);
+                }}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Purchase Record Confirmation Modal */}
+      {purchaseToDelete && (
+        <Modal
+          isOpen={!!purchaseToDelete}
+          onClose={() => setPurchaseToDelete(null)}
+          title="Confirm Purchase Record Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete purchase record <strong>#{purchaseToDelete.invoiceNum}</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setPurchaseToDelete(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  if (deletePurchaseRecord && activeRestaurant?.id && purchaseToDelete) {
+                    deletePurchaseRecord(activeRestaurant.id, purchaseToDelete.purchase.id || purchaseToDelete.purchase._id);
+                    ShowNotifications.showAlertNotification("Purchase record removed.", true);
+                    fetchAllData();
+                  }
+                  setPurchaseToDelete(null);
+                }}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

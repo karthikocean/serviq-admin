@@ -18,6 +18,8 @@ const ReceiptIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import ReportsApi from '../api/Reports';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY } from '../helper/DateHelper.js';
 
 export default function ReportsPanel({
   staff = [],
@@ -233,8 +235,8 @@ export default function ReportsPanel({
               <p>${activeRestaurant.name || 'Serviq'} - Restaurant Operations Reports</p>
             </div>
             <div class="meta-block">
-              <strong>Generated on:</strong> ${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}<br>
-              <strong>Date Range:</strong> ${dateStart || 'All Time'} to ${dateEnd || 'Present'}
+              <strong>Generated on:</strong> ${formatDateDMY(new Date())}<br>
+              <strong>Date Range:</strong> ${dateStart ? formatDateDMY(dateStart) : 'All Time'} to ${dateEnd ? formatDateDMY(dateEnd) : 'Present'}
             </div>
           </div>
 
@@ -456,27 +458,31 @@ export default function ReportsPanel({
               {activeReportTab === 'waiter' ? 'Filter by Waiter' : 'Filter by Category'}
             </label>
             {activeReportTab === 'waiter' ? (
-              <select
+              <SearchableSelect
                 value={filterWaiter}
                 onChange={e => setFilterWaiter(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff' }}
-              >
-                <option value="All">All Waiters</option>
-                {staff.filter(s => s.role === 'Waiter').map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Waiters' },
+                  ...staff.filter(s => s.role === 'Waiter').map(w => ({
+                    value: w.id,
+                    label: w.name
+                  }))
+                ]}
+                placeholder="Select Waiter..."
+              />
             ) : (
-              <select
+              <SearchableSelect
                 value={filterKitchenCategory}
                 onChange={e => setFilterKitchenCategory(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', fontWeight: 600, backgroundColor: '#fff' }}
-              >
-                <option value="All">All Food Categories</option>
-                {Array.from(new Set(menu.map(m => m.category).filter(Boolean))).map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Food Categories' },
+                  ...Array.from(new Set(menu.map(m => m.category).filter(Boolean))).map(cat => ({
+                    value: cat,
+                    label: cat
+                  }))
+                ]}
+                placeholder="Select Category..."
+              />
             )}
           </div>
 

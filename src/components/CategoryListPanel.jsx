@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
 import { useAppState } from '../config/AppContext';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -137,6 +138,8 @@ export default function CategoryListPanel({
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -220,21 +223,28 @@ export default function CategoryListPanel({
     }
   };
 
-  const handleDelete = async (item) => {
-    if (window.confirm(`Are you sure you want to delete category "${item.name}"?`)) {
-      if (item._id) {
-        const res = await MenuApi.deleteCategory(item._id);
-        if (res.status) {
-          ShowNotifications.showAlertNotification(`Category "${item.name}" deleted!`, true);
-          if (refreshCategories) refreshCategories();
-          fetchCategoriesData();
-        } else {
-          ShowNotifications.showAlertNotification('Failed to delete category', false);
-        }
+  const handleDelete = (item) => {
+    setCategoryToDelete(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete) return;
+    setIsDeleting(true);
+    if (categoryToDelete._id) {
+      const res = await MenuApi.deleteCategory(categoryToDelete._id);
+      if (res.status) {
+        ShowNotifications.showAlertNotification(`Category "${categoryToDelete.name}" deleted!`, true);
+        if (refreshCategories) refreshCategories();
+        fetchCategoriesData();
+        setCategoryToDelete(null);
       } else {
-        ShowNotifications.showAlertNotification('Cannot delete default placeholder category', false);
+        ShowNotifications.showAlertNotification('Failed to delete category', false);
       }
+    } else {
+      ShowNotifications.showAlertNotification('Cannot delete default placeholder category', false);
+      setCategoryToDelete(null);
     }
+    setIsDeleting(false);
   };
 
   if (viewMode === 'form') {
@@ -332,36 +342,21 @@ export default function CategoryListPanel({
 
                 return (
                   <div>
-                    <select
+                    <SearchableSelect
                       value={effectiveVal}
                       onChange={e => {
                         setFormBranchId(e.target.value);
                         if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                       }}
-                      disabled={isLocked}
-                      style={{
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                        fontSize: '14px',
-                        backgroundColor: isLocked ? '#f8fafc' : '#ffffff',
-                        color: isLocked ? '#64748b' : '#0f172a',
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        cursor: isLocked ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {allBranchesList.length === 0 ? (
-                        <option value="">Main Branch</option>
-                      ) : (
-                        allBranchesList.map(b => (
-                          <option key={b._id || b.id} value={b._id || b.id}>
-                            {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                         Branch is locked to currently selected branch.
@@ -404,24 +399,15 @@ export default function CategoryListPanel({
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
                 Status
               </label>
-              <select
+              <SearchableSelect
                 value={formStatus}
                 onChange={e => setFormStatus(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  color: '#0f172a',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="AVAILABLE">Available</option>
-                <option value="UNAVAILABLE">Unavailable</option>
-              </select>
+                options={[
+                  { value: 'AVAILABLE', label: 'Available' },
+                  { value: 'UNAVAILABLE', label: 'Unavailable' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
@@ -801,6 +787,45 @@ export default function CategoryListPanel({
                 style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
               >
                 Edit Category
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Category Confirmation Modal Popup */}
+      {categoryToDelete && (
+        <Modal
+          isOpen={!!categoryToDelete}
+          onClose={() => !isDeleting && setCategoryToDelete(null)}
+          title="Confirm Category Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setCategoryToDelete(null)}
+                disabled={isDeleting}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
