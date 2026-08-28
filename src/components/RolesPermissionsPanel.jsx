@@ -34,16 +34,16 @@ const defaultRolesList = [
   { id: 6, name: 'Kitchen Staff', status: 'Active' }
 ];
 
-const isAdminRole = (roleName = '') => {
+const isOwnerRole = (roleName = '') => {
   const lower = (roleName || '').trim().toLowerCase();
-  return lower === 'admin' || lower === 'super admin' || lower === 'restaurant_owner' || lower === 'owner';
+  return lower === 'restaurant_owner' || lower === 'restaurant owner' || lower === 'owner' || lower === 'super admin' || lower === 'super_admin';
 };
 
 const MODULES_LIST = [
   // Core
   { id: 'dashboard', name: 'Dashboard / Overview' },
-  { id: 'branch_management', name: 'Branch Management', adminOnly: true },
-  { id: 'plans_subscription', name: 'Plans & Subscription' },
+  { id: 'branch_management', name: 'Branch Management', ownerOnly: true },
+  { id: 'plans_subscription', name: 'Plans & Subscription', ownerOnly: true },
   { id: 'billing_payments', name: 'Billing' },
   { id: 'staff_management', name: 'Staff Management (Waiters & Kitchen)' },
   { id: 'user_accounts', name: 'User Accounts' },
@@ -108,10 +108,10 @@ export default function RolesPermissionsPanel() {
     setRoleNameError('');
     const existingPerms = role.permissions || {};
     const basePermissions = {};
-    const isTargetAdmin = isAdminRole(role.roleName);
+    const isTargetOwner = isOwnerRole(role.roleName);
 
     MODULES_LIST.forEach(m => {
-      if (m.adminOnly && !isTargetAdmin) {
+      if (m.ownerOnly && !isTargetOwner) {
         basePermissions[m.id] = { view: false, add: false, edit: false, delete: false };
       } else {
         basePermissions[m.id] = existingPerms[m.id] || { view: false, add: false, edit: false, delete: false };
@@ -140,10 +140,11 @@ export default function RolesPermissionsPanel() {
       return;
     }
 
-    const isTargetAdmin = isAdminRole(trimmedRoleName);
+    const isTargetOwner = isOwnerRole(trimmedRoleName);
     const finalPermissions = { ...permissionsState };
-    if (!isTargetAdmin) {
+    if (!isTargetOwner) {
       finalPermissions['branch_management'] = { view: false, add: false, edit: false, delete: false };
+      finalPermissions['plans_subscription'] = { view: false, add: false, edit: false, delete: false };
     }
 
     let res;
@@ -160,9 +161,9 @@ export default function RolesPermissionsPanel() {
   };
 
   const togglePermission = (moduleId, action) => {
-    const isTargetAdmin = isAdminRole(editingRoleName);
-    if (moduleId === 'branch_management' && !isTargetAdmin) {
-      ShowNotifications.showAlertNotification("Branch Management is restricted to Admin role only.", false);
+    const isTargetOwner = isOwnerRole(editingRoleName);
+    if ((moduleId === 'branch_management' || moduleId === 'plans_subscription') && !isTargetOwner) {
+      ShowNotifications.showAlertNotification("This module is restricted to Restaurant Owner only.", false);
       return;
     }
 
@@ -176,8 +177,8 @@ export default function RolesPermissionsPanel() {
   };
 
   const toggleColumn = (action) => {
-    const isTargetAdmin = isAdminRole(editingRoleName);
-    const activeModules = isTargetAdmin ? MODULES_LIST : MODULES_LIST.filter(m => !m.adminOnly);
+    const isTargetOwner = isOwnerRole(editingRoleName);
+    const activeModules = isTargetOwner ? MODULES_LIST : MODULES_LIST.filter(m => !m.ownerOnly);
     const allSelected = activeModules.every(m => permissionsState[m.id]?.[action]);
 
     setPermissionsState(prev => {
@@ -191,7 +192,7 @@ export default function RolesPermissionsPanel() {
   };
 
   if (viewState === 'edit' || viewState === 'add') {
-    const isCurrentRoleAdmin = isAdminRole(editingRoleName);
+    const isCurrentRoleOwner = isOwnerRole(editingRoleName);
 
     return (
       <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
@@ -263,7 +264,7 @@ export default function RolesPermissionsPanel() {
                         <span>{action}</span>
                         <input
                           type="checkbox"
-                          checked={MODULES_LIST.filter(m => isCurrentRoleAdmin || !m.adminOnly).every(m => permissionsState[m.id]?.[action])}
+                          checked={MODULES_LIST.filter(m => isCurrentRoleOwner || !m.ownerOnly).every(m => permissionsState[m.id]?.[action])}
                           onChange={() => toggleColumn(action)}
                           style={{ width: '16px', height: '16px', cursor: 'pointer', accentColor: '#ff5a1f' }}
                         />
@@ -274,14 +275,14 @@ export default function RolesPermissionsPanel() {
               </thead>
               <tbody>
                 {MODULES_LIST.map((module, idx) => {
-                  const isLockedAdminOnly = module.adminOnly && !isCurrentRoleAdmin;
+                  const isLockedOwnerOnly = module.ownerOnly && !isCurrentRoleOwner;
 
                   return (
-                    <tr key={module.id} style={{ borderBottom: '1px solid #f1f5f9', background: isLockedAdminOnly ? '#fafafa' : '#ffffff' }}>
+                    <tr key={module.id} style={{ borderBottom: '1px solid #f1f5f9', background: isLockedOwnerOnly ? '#fafafa' : '#ffffff' }}>
                       <td style={{ padding: '14px 24px', textAlign: 'left', fontWeight: 600, color: '#0f172a', borderRight: '1px solid #f1f5f9', fontSize: '13px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span>{module.name}</span>
-                          {module.adminOnly && (
+                          {module.ownerOnly && (
                             <span style={{
                               fontSize: '11px',
                               background: '#fee2e2',
@@ -291,7 +292,7 @@ export default function RolesPermissionsPanel() {
                               borderRadius: '6px',
                               border: '1px solid #fecaca'
                             }}>
-                              🔒 Admin Only
+                              🔒 Restaurant Owner Only
                             </span>
                           )}
                         </div>
@@ -300,16 +301,16 @@ export default function RolesPermissionsPanel() {
                         <td key={action} style={{ padding: '14px', borderRight: '1px solid #f1f5f9' }}>
                           <input
                             type="checkbox"
-                            disabled={isLockedAdminOnly}
-                            checked={isLockedAdminOnly ? false : (permissionsState[module.id]?.[action] || false)}
+                            disabled={isLockedOwnerOnly}
+                            checked={isLockedOwnerOnly ? false : (permissionsState[module.id]?.[action] || false)}
                             onChange={() => togglePermission(module.id, action)}
-                            title={isLockedAdminOnly ? "Restricted to Admin role only" : `${action} permission`}
+                            title={isLockedOwnerOnly ? "Restricted to Restaurant Owner only" : `${action} permission`}
                             style={{
                               width: '16px',
                               height: '16px',
-                              cursor: isLockedAdminOnly ? 'not-allowed' : 'pointer',
+                              cursor: isLockedOwnerOnly ? 'not-allowed' : 'pointer',
                               accentColor: '#ff5a1f',
-                              opacity: isLockedAdminOnly ? 0.35 : 1
+                              opacity: isLockedOwnerOnly ? 0.35 : 1
                             }}
                           />
                         </td>

@@ -19,6 +19,11 @@ class UserApi {
           cleanParams[key] = params[key];
         }
       });
+      // Backend API pagination starts from zero (page 0 is first page)
+      if (cleanParams.page !== undefined) {
+        const pNum = Number(cleanParams.page);
+        cleanParams.page = Math.max(0, pNum > 0 ? pNum - 1 : 0);
+      }
       const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
@@ -40,6 +45,11 @@ class UserApi {
           cleanParams[key] = params[key];
         }
       });
+      // Backend API pagination starts from zero (page 0 is first page)
+      if (cleanParams.page !== undefined) {
+        const pNum = Number(cleanParams.page);
+        cleanParams.page = Math.max(0, pNum > 0 ? pNum - 1 : 0);
+      }
       const response = await apiClient.get("/users/stations", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

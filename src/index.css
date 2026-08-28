@@ -4430,3 +4430,14 @@ body.dark-theme .branch-option-meta-row .branch-meta-item,
 body.dark-theme .branch-option-subtext {
   color: #94a3b8;
 }
+
+@keyframes fadeInSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

@@ -1459,7 +1459,16 @@ export default function StockReductionPanel() {
               type="text"
               placeholder={activeTab === 'purchases' ? "Search invoice #, supplier, item..." : "Search items, reason, user..."}
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+                setCurrentPage(1);
+              }}
               style={{
                 border: 'none',
                 background: 'transparent',

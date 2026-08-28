@@ -45,62 +45,92 @@ export default function BillingHistoryPanel({
   const handleExportExcel = async () => {
     setIsExporting(true);
 
-    const filters = {
-      search: searchTerm,
-      dateRange,
-      startDate: customStartDate,
-      endDate: customEndDate,
-      branchId: selectedBranchId,
-      paymentMethod: selectedPayment,
-      isExport: 'true',
-      limit: '0' // Tell backend to fetch all for export
-    };
+    let itemsToExport = [];
 
-    const result = await BillingApi.getBillingHistory(filters);
+    try {
+      const filters = {
+        search: searchTerm,
+        dateRange,
+        startDate: customStartDate,
+        endDate: customEndDate,
+        branchId: selectedBranchId,
+        paymentMethod: selectedPayment,
+        isExport: 'true',
+        limit: '0' // Tell backend to fetch all for export
+      };
 
-    if (result.status && result.response.data && result.response.data.items) {
-      const itemsToExport = result.response.data.items;
+      const result = await BillingApi.getBillingHistory(filters);
 
-      if (itemsToExport.length === 0) {
-        ShowNotifications.showAlertNotification("No data available to export.", false);
-        setIsExporting(false);
-        return;
+      if (result && result.status) {
+        const payload = result.response?.data || result.response || result.data;
+        if (Array.isArray(payload)) {
+          itemsToExport = payload;
+        } else if (payload && typeof payload === 'object') {
+          itemsToExport = Array.isArray(payload.items) ? payload.items :
+                          Array.isArray(payload.data) ? payload.data :
+                          Array.isArray(payload.billingHistory) ? payload.billingHistory :
+                          Array.isArray(payload.history) ? payload.history : [];
+        }
       }
-
-      const exportData = itemsToExport.map(item => ({
-        'Invoice ID': item.invoiceId,
-        'Order ID': item.orderRefId,
-        'Table': `Table ${item.tableNumber}`,
-        'Date': formatDateDMY(item.createdAt),
-        'Time': new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        'Subtotal': item.subtotal,
-        'Tax': item.tax,
-        'Discount': item.discount,
-        'Total Amount': item.totalAmount,
-        'Payment Method': item.paymentMethod === 'upi' ? 'UPI' : (item.paymentMethod || '').charAt(0).toUpperCase() + (item.paymentMethod || '').slice(1),
-        'Payment Status': item.paymentStatus,
-        'Staff': item.staffName,
-        'Branch ID': item.branchId
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
-
-      // Auto-size columns loosely
-      const wscols = [
-        { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-        { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
-        { wch: 15 }, { wch: 15 }, { wch: 25 }
-      ];
-      worksheet['!cols'] = wscols;
-
-      const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-    } else {
-      ShowNotifications.showAlertNotification("Failed to fetch data for export.", false);
+    } catch (e) {
+      console.error("Export API error", e);
     }
 
+    // Fallback to local table data if API didn't return full list
+    if (itemsToExport.length === 0 && billingHistory.length > 0) {
+      itemsToExport = billingHistory;
+    }
+
+    if (itemsToExport.length === 0) {
+      ShowNotifications.showAlertNotification("No data available to export.", false);
+      setIsExporting(false);
+      return;
+    }
+
+    const exportData = itemsToExport.map((item, idx) => {
+      const id = item.id || item.invoiceId || item.invoiceNumber || item._id || `INV-${String(idx + 1).padStart(4, '0')}`;
+      const orderId = item.orderId || item.orderRefId || item.orderNumber || 'N/A';
+      const table = item.table || item.tableNumber || item.tableNo || '01';
+      const rawDate = item.rawDate || item.createdAt || item.date || new Date();
+      const dateStr = item.date || formatDateDMY(rawDate);
+      const timeStr = item.time || (rawDate ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 PM');
+      const amount = Number(item.amount ?? item.totalAmount ?? item.total ?? 0);
+      const methodStr = String(item.paymentMethod || item.paymentMode || 'UPI');
+      const paymentMethod = methodStr.toLowerCase() === 'upi' ? 'UPI' : (methodStr.charAt(0).toUpperCase() + methodStr.slice(1));
+      const staff = item.staff || item.staffName || item.waiterName || 'Admin';
+      const status = item.status || item.paymentStatus || 'Paid';
+
+      return {
+        'Invoice ID': id,
+        'Order ID': orderId,
+        'Table': `Table ${String(table).replace('Table ', '').trim()}`,
+        'Date': dateStr,
+        'Time': timeStr,
+        'Subtotal': Number(item.subtotal ?? amount),
+        'Tax': Number(item.tax ?? 0),
+        'Discount': Number(item.discount ?? 0),
+        'Total Amount': amount,
+        'Payment Method': paymentMethod,
+        'Payment Status': status,
+        'Staff': staff,
+        'Branch ID': item.branchId || selectedBranchId || 'main'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
+
+    // Auto-size columns loosely
+    const wscols = [
+      { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 25 }
+    ];
+    worksheet['!cols'] = wscols;
+
+    const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
     setIsExporting(false);
   };
 
@@ -122,7 +152,15 @@ export default function BillingHistoryPanel({
               type="text"
               placeholder="e.g. INV-10245"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={(e) => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+              }}
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }}
             />
           </div>
@@ -133,6 +171,7 @@ export default function BillingHistoryPanel({
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
               options={[
+                { value: 'All', label: 'All Time' },
                 { value: 'Today', label: 'Today' },
                 { value: 'Yesterday', label: 'Yesterday' },
                 { value: 'This Week', label: 'This Week' },

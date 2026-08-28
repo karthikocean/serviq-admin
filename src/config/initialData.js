@@ -68,7 +68,8 @@ export const initialRestaurantsData = {
       Admin: {
         permissions: {
           overview: { view: true, add: true, edit: true, delete: true },
-          'branch-management': { view: true, add: true, edit: true, delete: true },
+          'branch-management': { view: false, add: false, edit: false, delete: false },
+          'plans-management': { view: false, add: false, edit: false, delete: false },
           orders: { view: true, add: true, edit: true, delete: true },
           menu: { view: true, add: true, edit: true, delete: true },
           tables: { view: true, add: true, edit: true, delete: true },
@@ -84,7 +85,8 @@ export const initialRestaurantsData = {
       Manager: {
         permissions: {
           overview: { view: true, add: false, edit: false, delete: false },
-          'branch-management': { view: true, add: true, edit: true, delete: false },
+          'branch-management': { view: false, add: false, edit: false, delete: false },
+          'plans-management': { view: false, add: false, edit: false, delete: false },
           orders: { view: true, add: true, edit: true, delete: true },
           menu: { view: true, add: true, edit: true, delete: false },
           tables: { view: true, add: true, edit: true, delete: false },

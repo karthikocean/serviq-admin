@@ -55,38 +55,79 @@ const branchMatches = (itemBranch, targetBranch) => {
 };
 
 // Robust Table Occupancy Evaluator
-const isTableOccupied = (table, orderList = []) => {
+export const isTableOccupied = (table, orderList = []) => {
   if (!table) return false;
 
-  // 1. Direct status flags
+  // 1. Direct status flags on table
   const statusStr = String(table.status || table.occupancyStatus || '').toLowerCase().trim();
-  if (['occupied', 'busy', 'reserved', 'dining', 'seated', 'active', 'in_use'].includes(statusStr)) return true;
-  if (table.isOccupied === true || table.occupied === true) return true;
-  if (table.currentOrder || table.activeOrderId) return true;
+  if (['occupied', 'busy', 'reserved', 'dining', 'seated', 'active', 'in_use', 'dining_occupied'].includes(statusStr)) {
+    return true;
+  }
+  if (table.isOccupied === true || table.occupied === true) {
+    return true;
+  }
+  if (table.currentOrder || table.activeOrderId) {
+    return true;
+  }
 
-  // 2. Active order check
-  const tableNum = String(table.tableNumber || table.tableNo || table.id || table.name || '').toLowerCase().trim();
+  // 2. Extract table identifiers
+  const tableNumStr = String(table.tableNumber || table.tableNo || table.id || table.name || '').toLowerCase().trim();
   const tableIdStr = String(table._id || table.id || '').toLowerCase().trim();
-  const tableDigits = tableNum.replace(/\D/g, '');
+  const tableCleanDigits = tableNumStr.replace(/\D/g, '');
+  const tableCleanName = tableNumStr.replace(/[^a-z0-9]/g, '');
 
+  // 3. Match against active orders
   const hasActiveOrder = (orderList || []).some(order => {
-    const ordTableNum = String(order.tableNumber || order.table || order.tableName || '').toLowerCase().trim();
-    const ordTableId = String(order.tableId || (typeof order.table === 'object' ? (order.table?._id || order.table?.id) : '') || '').toLowerCase().trim();
-    const ordDigits = ordTableNum.replace(/\D/g, '');
+    if (!order) return false;
 
-    const matchesTable = 
-      (tableNum && ordTableNum && (ordTableNum === tableNum || ordTableNum === `table ${tableNum}` || `table ${ordTableNum}` === tableNum)) ||
-      (tableDigits && ordDigits && tableDigits === ordDigits) ||
-      (tableIdStr && ordTableId && tableIdStr === ordTableId);
-
-    if (!matchesTable) return false;
-
+    // Check order active status
     const ordStatus = String(order.status || '').toLowerCase().trim();
     const ordBilling = String(order.billingStatus || order.paymentStatus || '').toLowerCase().trim();
-    const isCompleted = ordStatus === 'completed' || ordStatus === 'delivered' || ordStatus === 'cancelled' || ordStatus === 'rejected' || ordStatus === 'closed';
-    const isPaidAndDone = ordBilling === 'paid' && (ordStatus === 'completed' || ordStatus === 'ready' || ordStatus === 'delivered' || ordStatus === 'served');
+    
+    // Ignore completed, delivered, cancelled, rejected, or paid & served orders
+    const isCompleted = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(ordStatus);
+    const isPaidAndDone = ordBilling === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(ordStatus);
+    if (isCompleted || isPaidAndDone) return false;
 
-    return !isCompleted && !isPaidAndDone;
+    // Extract order table identifiers
+    const ordTableObj = typeof order.tableId === 'object' && order.tableId !== null 
+      ? order.tableId 
+      : (typeof order.table === 'object' && order.table !== null ? order.table : null);
+
+    const ordTableNumStr = String(
+      ordTableObj?.tableNumber || 
+      ordTableObj?.tableNo || 
+      ordTableObj?.name || 
+      order.tableNumber || 
+      order.tableNo || 
+      (typeof order.table === 'string' ? order.table : '') || 
+      order.tableName || 
+      ''
+    ).toLowerCase().trim();
+
+    const ordTableIdStr = String(
+      ordTableObj?._id || 
+      ordTableObj?.id || 
+      (typeof order.tableId === 'string' ? order.tableId : '') || 
+      (typeof order.table === 'string' ? order.table : '') || 
+      ''
+    ).toLowerCase().trim();
+
+    const ordCleanDigits = ordTableNumStr.replace(/\D/g, '');
+    const ordCleanName = ordTableNumStr.replace(/[^a-z0-9]/g, '');
+
+    // Match by ID
+    if (tableIdStr && ordTableIdStr && (tableIdStr === ordTableIdStr)) return true;
+    if (table._id && ordTableIdStr && String(table._id).toLowerCase() === ordTableIdStr) return true;
+
+    // Match by Table Name/Number
+    if (tableNumStr && ordTableNumStr) {
+      if (tableNumStr === ordTableNumStr) return true;
+      if (tableCleanName && ordCleanName && tableCleanName === ordCleanName) return true;
+      if (tableCleanDigits && ordCleanDigits && tableCleanDigits === ordCleanDigits) return true;
+    }
+
+    return false;
   });
 
   return hasActiveOrder;
@@ -115,7 +156,17 @@ export default function OverviewPanel({
 
   const userRole = (roleStr || '').toLowerCase();
   const userType = (userTypeStr || '').toUpperCase();
-  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userRole === 'restaurant_owner' || 
+    userRole === 'restaurant owner' || 
+    userRole === 'owner' || 
+    userRole === 'super admin' || 
+    userRole === 'super_admin';
+  const isAdmin = isRestaurantOwner || userRole === 'admin' || userType === 'ADMIN';
 
   const selectedBranch = branches.find(b => b.id === selectedBranchId || b._id === selectedBranchId || b.branchCode === selectedBranchId);
   const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
@@ -214,21 +265,9 @@ export default function OverviewPanel({
   const displayStaff = (currentStaff && currentStaff.length > 0) ? currentStaff : staff;
 
   // Accurately computed fallback counts
-  const preparingOrdersCount = displayOrders.filter(o => o.status === 'preparing').length;
-  const apiOccupiedCount =
-    statsData?.activeTables?.occupied !== undefined ? Number(statsData.activeTables.occupied) :
-    statsData?.activeTables?.count !== undefined ? Number(statsData.activeTables.count) :
-    typeof statsData?.activeTables === 'number' ? statsData.activeTables :
-    statsData?.occupiedTables?.count !== undefined ? Number(statsData.occupiedTables.count) :
-    statsData?.occupiedTables?.occupied !== undefined ? Number(statsData.occupiedTables.occupied) :
-    typeof statsData?.occupiedTables === 'number' ? statsData.occupiedTables :
-    liveTablesData?.occupiedCount !== undefined ? Number(liveTablesData.occupiedCount) :
-    liveTablesData?.occupied !== undefined ? Number(liveTablesData.occupied) :
-    undefined;
-
   const localOccupiedCount = displayTables.filter(t => isTableOccupied(t, displayOrders)).length;
-  const occupiedTablesCount = apiOccupiedCount !== undefined ? apiOccupiedCount : localOccupiedCount;
-  const totalTablesDisplayCount = statsData?.activeTables?.total || statsData?.occupiedTables?.total || liveTablesData?.total || displayTables.length;
+  const occupiedTablesCount = localOccupiedCount;
+  const totalTablesDisplayCount = displayTables.length || statsData?.activeTables?.total || statsData?.occupiedTables?.total || liveTablesData?.total || 0;
   const pendingOrdersCount = displayOrders.filter(o => o.status === 'new').length;
   const completedOrdersCount = displayOrders.filter(o => o.status === 'completed').length;
   const onDutyStaffCount = displayStaff.filter(s => {
@@ -520,14 +559,16 @@ export default function OverviewPanel({
               </h3>
             
             </div>
-            <button
-              type="button"
-              className="btn btn-outline"
-              style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px' }}
-              onClick={() => navigate('/branch-management')}
-            >
-              Manage Branches →
-            </button>
+            {isRestaurantOwner && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px' }}
+                onClick={() => navigate('/branch-management')}
+              >
+                Manage Branches →
+              </button>
+            )}
           </div>
 
           <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)', paddingBottom: '6px' }}>
@@ -561,7 +602,7 @@ export default function OverviewPanel({
                       {b.city || 'Tamil Nadu'}
                     </td>
                     <td style={{ padding: '14px 16px', color: '#334155', fontWeight: 600 }}>
-                      {b.branchManager || 'Unassigned'}
+                      {(typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username) : b.branchManager) || b.managerName || 'Unassigned'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <span style={{

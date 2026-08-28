@@ -35,19 +35,12 @@ export default function HelpSupport() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    if (activeRestaurant) {
-      fetchTickets(currentPage);
-    }
-  }, [activeRestaurant, currentPage]);
-
-  const fetchTickets = async (page = 1) => {
+  const fetchTickets = async (page = currentPage) => {
     setIsLoading(true);
     try {
-      const data = await ticketApi.getTickets({ page: currentPage, limit });
+      const data = await ticketApi.getTickets({ page, limit });
       if (data && data.status && data.data) {
-        setTickets(data.data);
-        setCurrentPage(data.currentPage || 1);
+        setTickets(Array.isArray(data.data) ? data.data : []);
         setTotalPages(data.totalPages || 1);
         setTotalEntries(data.total || 0);
       }
@@ -57,6 +50,10 @@ export default function HelpSupport() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTickets(currentPage);
+  }, [currentPage]);
 
   const validateForm = () => {
     const newErrs = {};

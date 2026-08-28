@@ -85,20 +85,31 @@ export default function BranchSearchDropdown() {
           ? res.response 
           : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
         if (Array.isArray(branchArray) && branchArray.length > 0) {
-          const mapped = branchArray.map(b => ({
-            id: b._id || b.id,
-            _id: b._id || b.id,
-            branchName: b.branchName || b.name,
-            branchCode: b.branchCode || b.code,
-            branchManager: b.managerName || b.branchManager || '',
-            mobileNumber: b.contactNumber || b.mobileNumber || '',
-            email: b.email || '',
-            address: b.address?.street || b.address || '',
-            city: b.address?.city || b.city || '',
-            state: b.address?.state || b.state || '',
-            status: b.status || 'Active',
-            totalTables: b.totalTables || 10
-          }));
+          const mapped = branchArray.map(b => {
+            const mgr = (
+              (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username || b.branchManager.fullName) : (typeof b.branchManager === 'string' && b.branchManager.trim() ? b.branchManager : '')) ||
+              (typeof b.managerName === 'string' && b.managerName.trim() ? b.managerName : '') ||
+              (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName || b.manager.username || b.manager.fullName) : (typeof b.manager === 'string' && b.manager.trim() ? b.manager : '')) ||
+              (typeof b.branchManagerName === 'string' && b.branchManagerName.trim() ? b.branchManagerName : '') ||
+              (typeof b.contactPerson === 'string' && b.contactPerson.trim() ? b.contactPerson : '') ||
+              ''
+            );
+            return {
+              id: b._id || b.id,
+              _id: b._id || b.id,
+              branchName: b.branchName || b.name,
+              branchCode: b.branchCode || b.code,
+              branchManager: mgr,
+              managerName: mgr,
+              mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+              email: b.email || b.managerEmail || '',
+              address: b.address?.street || b.address || b.street || '',
+              city: b.address?.city || b.city || '',
+              state: b.address?.state || b.state || '',
+              status: b.status || 'Active',
+              totalTables: b.totalTables || 10
+            };
+          });
           setLocalBranches(mapped);
         }
       }
@@ -132,25 +143,24 @@ export default function BranchSearchDropdown() {
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // Admin / Restaurant Owner can switch branches freely and default to All Branches (HQ)
-  const isAdminOrOwner =
+  // Restaurant Owner / Super Admin ONLY can switch branches freely and default to All Branches (HQ)
+  const isRestaurantOwner =
     userType === 'RESTAURANT_OWNER' ||
     userType === 'OWNER' ||
-    userType === 'ADMIN' ||
     userType === 'SUPER ADMIN' ||
     userType === 'SUPER_ADMIN' ||
     userRole === 'restaurant_owner' ||
     userRole === 'restaurant owner' ||
     userRole === 'owner' ||
-    userRole === 'admin' ||
-    userRole === 'super admin';
+    userRole === 'super admin' ||
+    userRole === 'super_admin';
 
-  const isBranchLocked = !isAdminOrOwner;
+  const isBranchLocked = !isRestaurantOwner;
 
-  // Automatically lock branch ONLY if user is a branch-scoped staff (non-admin)
+  // Automatically lock branch ONLY if user is a branch manager or branch-scoped staff (non-owner)
   useEffect(() => {
     if (isBranchLocked) {
-      const lockId = currentUser?.activeBranchId || (typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId);
+      const lockId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : (currentUser?.branchId || currentUser?.activeBranchId));
       if (lockId && lockId !== 'ALL' && selectedBranchId !== lockId) {
         setSelectedBranchId(lockId);
       }

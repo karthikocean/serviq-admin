@@ -16,27 +16,26 @@ export default function PlansManagement() {
 
   const userType = (userTypeStr || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = 
-    userRoleLower === 'admin' || 
-    userRoleLower === 'super admin' || 
-    userRoleLower === 'owner' || 
-    userRoleLower === 'restaurant_owner' || 
-    userRoleLower === 'restaurant owner' ||
-    userType === 'ADMIN' || 
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER';
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
 
-  // Strict check: Only Restaurant Owner / Admin can access plans management
-  if (!isAdmin) {
-    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner / Admin only.", false);
+  // Strict check: Only Restaurant Owner can access plans management
+  if (!isRestaurantOwner) {
+    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner only.", false);
     return <Navigate to="/dashboard" replace />;
   }
 
   const role = currentUser?.role || 'Admin';
   const hasPermission = (moduleName, action = 'view') => {
-    if (isAdmin) return true;
+    if (isRestaurantOwner) return true;
     const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};

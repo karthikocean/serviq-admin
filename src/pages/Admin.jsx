@@ -5,11 +5,12 @@ import { Modal } from '../components/Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 
-import OverviewPanel from '../components/OverviewPanel';
+import OverviewPanel, { isTableOccupied } from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
 import MenuPanel from '../components/MenuPanel';
 import BillingPanel from '../components/BillingPanel';
 import BillingHistoryPanel from '../components/BillingHistoryPanel';
+import BillingHistory from './Billing/BillingHistory';
 import TablesPanel from '../components/TablesPanel';
 import WaiterListPanel from '../components/WaiterListPanel';
 import WaiterReportsPanel from '../components/WaiterReportsPanel';
@@ -23,6 +24,7 @@ import RolesPermissionsPanel from '../components/RolesPermissionsPanel';
 import CategoryListPanel from '../components/CategoryListPanel';
 import BranchManagementPanel from '../components/BranchManagementPanel';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
+import NotificationModal from '../components/NotificationModal';
 
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -336,6 +338,7 @@ export default function Admin() {
   const [sidebarUsersOpen, setSidebarUsersOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Roles & Permissions state
   const [selectedRole, setSelectedRole] = useState('Waiter');
@@ -431,11 +434,29 @@ export default function Admin() {
   };
 
   const isTabAllowed = (tab) => {
+    const userRoleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+      ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+      : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+    const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+    const userTypeUpper = (userTypeStr || userRoleStr || '').toUpperCase();
+    const userRoleLower = (userRoleStr || '').toLowerCase();
+    const isOwner = 
+      userTypeUpper === 'RESTAURANT_OWNER' || 
+      userTypeUpper === 'OWNER' || 
+      userTypeUpper === 'SUPER ADMIN' || 
+      userTypeUpper === 'SUPER_ADMIN' || 
+      userRoleLower === 'restaurant_owner' || 
+      userRoleLower === 'restaurant owner' || 
+      userRoleLower === 'owner' || 
+      userRoleLower === 'super admin' || 
+      userRoleLower === 'super_admin';
+
     if (tab === 'branch-management' || tab === 'plans-management') {
-      return role === 'Admin' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN';
+      return isOwner;
     }
 
-    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN') {
+    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || isOwner) {
       return true;
     }
 
@@ -639,7 +660,7 @@ export default function Admin() {
 
   const pendingOrdersCount = filteredOrders.filter(o => o.status === 'new').length;
   const preparingOrdersCount = filteredOrders.filter(o => o.status === 'preparing').length;
-  const occupiedTablesCount = filteredTables.filter(t => t.status === 'Occupied').length;
+  const occupiedTablesCount = filteredTables.filter(t => isTableOccupied(t, filteredOrders)).length;
 
   const resolveTableAssignedWaiter = (table, staffList = (activeRestaurant?.staff || [])) => {
     if (!table) return null;
@@ -1898,35 +1919,77 @@ export default function Admin() {
               <h1 className="header-title">{tabTitles[activeTab] || activeTab}</h1>
               <span className="header-subtitle-date">{dateTimeStr}</span>
             </div>
-            <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <BranchSearchDropdown />
-              <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                {pendingOrdersCount > 0 && (
-                  <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
-                )}
-              </button>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <BranchSearchDropdown />
+            <button
+              className="btn btn-notify"
+              style={{
+                position: 'relative',
+                background: '#fff7ed',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
+                width: '40px',
+                height: '40px',
+                minWidth: '40px',
+                minHeight: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              title="Quick Help & Notifications"
+              onClick={() => setIsNotificationModalOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: 'auto' }}>
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              {pendingOrdersCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  width: '9px',
+                  height: '9px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ea580c',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 1px #fed7aa'
+                }}></span>
+              )}
+            </button>
 
-              {/* PROFILE DROPDOWN */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  style={{
-                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                    color: 'white',
-                    border: 'none',
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    fontWeight: 800,
-                    fontSize: '18px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                >
+            {/* PROFILE DROPDOWN */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button
+                style={{
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  color: 'white',
+                  border: 'none',
+                  width: '40px',
+                  height: '40px',
+                  minWidth: '40px',
+                  minHeight: '40px',
+                  borderRadius: '50%',
+                  fontWeight: 800,
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxSizing: 'border-box'
+                }}
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              >
                   {name.charAt(0).toUpperCase()}
                 </button>
 
@@ -2020,6 +2083,9 @@ export default function Admin() {
                   orders={filteredOrders}
                   tables={filteredTables}
                   staff={staff}
+                  allOrders={orders}
+                  allTables={tables}
+                  allStaff={staff}
                   todayRevenue={todayRevenue}
                   pendingOrdersCount={pendingOrdersCount}
                   occupiedTablesCount={occupiedTablesCount}
@@ -2079,10 +2145,7 @@ export default function Admin() {
                 />
               )}
               {activeTab === 'billing-history' && (
-                <BillingHistoryPanel
-                  billingHistory={activeRestaurant?.billingHistory || []}
-                  branches={activeRestaurant?.branches || []}
-                />
+                <BillingHistory />
               )}
               {(activeTab === 'tables' || activeTab === 'qr-code-config') && (
                 <TablesPanel
@@ -2806,6 +2869,12 @@ export default function Admin() {
             </div>
           </Modal>
         )}
+
+        {/* QUICK HELP NOTIFICATIONS MODAL */}
+        <NotificationModal
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+        />
       </main>
     </div>
   );

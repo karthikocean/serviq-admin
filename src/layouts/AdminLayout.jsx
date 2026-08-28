@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate, Link, Navigate } from 'react-router-d
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
+import NotificationModal from '../components/NotificationModal';
 
 export default function AdminLayout() {
   const {
@@ -26,6 +27,7 @@ export default function AdminLayout() {
   const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(false);
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
 
   // Live Clock
@@ -54,28 +56,33 @@ export default function AdminLayout() {
   const role = roleStr || 'Admin';
   const userType = (currentUser?.userType || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = 
+
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'ADMIN' || 
-    userType === 'OWNER' || 
-    userRoleLower === 'admin' || 
-    userRoleLower === 'super admin' || 
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
-    userRoleLower === 'restaurant_owner' ||
-    userRoleLower === 'restaurant owner';
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
+
+  const isAdmin = 
+    isRestaurantOwner ||
+    userType === 'ADMIN' || 
+    userRoleLower === 'admin';
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {
-    // Branch management and Plans management are strictly ONLY accessible to Admin / Restaurant Owner
+    // Branch management and Plans management are strictly ONLY accessible to Restaurant Owner
     if (
       moduleName === 'branch-management' || 
       moduleName === 'branches' || 
       moduleName === 'plans-management' || 
       moduleName === 'plans'
     ) {
-      return isAdmin;
+      return isRestaurantOwner;
     }
 
     if (isAdmin) return true;
@@ -93,14 +100,14 @@ export default function AdminLayout() {
   };
 
   const isTabAllowed = (permissionKey) => {
-    // If tab is branch-management or plans-management, ONLY Restaurant Owner / Admin can view it
+    // If tab is branch-management or plans-management, ONLY Restaurant Owner can view it
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches' || 
       permissionKey === 'plans-management' || 
       permissionKey === 'plans'
     ) {
-      return isAdmin;
+      return isRestaurantOwner;
     }
 
     if (isAdmin || currentUser?.userType === 'BRANCH_ADMIN') return true;
@@ -196,8 +203,8 @@ export default function AdminLayout() {
   const currentSubPlan = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
   const isCurrentPremium = currentSubPlan.includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
 
-  // Protect restricted routes: Only Restaurant Owner / Admin can access Branch & Plans Management
-  if ((isBranchActive || isPlansActive) && !isAdmin) {
+  // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
+  if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -448,17 +455,54 @@ export default function AdminLayout() {
             <h1 className="header-title">{getRouteTitle()}</h1>
             <span className="header-subtitle-date">{dateTimeStr}</span>
           </div>
-          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <BranchSearchDropdown />
-            <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <button
+              className="btn btn-notify"
+              style={{
+                position: 'relative',
+                background: '#fff7ed',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
+                width: '40px',
+                height: '40px',
+                minWidth: '40px',
+                minHeight: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              title="Quick Help & Notifications"
+              onClick={() => setIsNotificationModalOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: 'auto' }}>
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
               {pendingOrdersCount > 0 && (
-                <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  width: '9px',
+                  height: '9px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ea580c',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 1px #fed7aa'
+                }}></span>
               )}
             </button>
 
             {/* PROFILE DROPDOWN */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <button
                 style={{
                   background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
@@ -466,6 +510,8 @@ export default function AdminLayout() {
                   border: 'none',
                   width: '40px',
                   height: '40px',
+                  minWidth: '40px',
+                  minHeight: '40px',
                   borderRadius: '50%',
                   fontWeight: 800,
                   fontSize: '18px',
@@ -473,7 +519,10 @@ export default function AdminLayout() {
                   boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxSizing: 'border-box'
                 }}
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               >
@@ -562,6 +611,12 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* QUICK HELP NOTIFICATIONS MODAL */}
+      <NotificationModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AppContext } from '../config/AppContext';
 import UserApi from '../api/User';
+import StaffApi from '../api/Staff';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
@@ -199,9 +200,7 @@ export default function StaffManagementPanel({
   const [isLoading, setIsLoading] = useState(false);
 
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [limit, setLimit] = useState(25);
+  const limit = 10;
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [kitchenViewState, setKitchenViewState] = useState('list'); // 'list' or 'add'
@@ -224,33 +223,63 @@ export default function StaffManagementPanel({
 
   const fetchData = async () => {
     setIsLoading(true);
-    const validBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : '';
-    const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
+
+    const [usersRes, allStaffRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
       UserApi.getUsers({
-        page,
-        limit,
-        search: searchQuery,
-        roleFilter: roleFilter === 'All' ? '' : roleFilter,
-        statusFilter: statusFilter === 'All' ? '' : statusFilter,
-        branchId: validBranchId
+        page: 1,
+        limit: 500
       }),
-      UserApi.getStations({ branchId: validBranchId }),
+      StaffApi.getStaff(),
+      UserApi.getStations(),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
-      TableApi.getTables({ branchId: validBranchId })
+      TableApi.getTables({ limit: 100 })
     ]);
+
+    let list = [];
     if (usersRes?.status) {
       const raw = usersRes.response?.data || usersRes.response?.users || usersRes.response?.staff || (Array.isArray(usersRes.response) ? usersRes.response : []);
-      const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
-      const totalCount = usersRes.response?.total || usersRes.response?.totalRecords || usersRes.response?.count || list.length;
-      setApiUsers(list);
-      setTotalPages(usersRes.response?.totalPages || Math.ceil(totalCount / limit) || 1);
-      setTotalRecords(totalCount);
+      if (Array.isArray(raw)) list = [...raw];
+      else if (Array.isArray(raw?.data)) list = [...raw.data];
+      else if (Array.isArray(raw?.users)) list = [...raw.users];
+      else if (Array.isArray(raw?.staff)) list = [...raw.staff];
     }
-    if (stationsRes?.status) setApiStations(stationsRes.response.data || []);
-    if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
-    if (rolesRes?.status && Array.isArray(rolesRes.response.data)) {
-      const mapped = mapToStandardRoles(rolesRes.response.data);
+
+    if (allStaffRes?.status) {
+      const staffList = allStaffRes.response?.data || allStaffRes.response?.staff || (Array.isArray(allStaffRes.response) ? allStaffRes.response : []);
+      if (Array.isArray(staffList)) {
+        staffList.forEach(st => {
+          const exists = list.some(u => 
+            String(u._id || u.id) === String(st._id || st.id) ||
+            (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
+            (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase() && u.phone === st.phone)
+          );
+          if (!exists) {
+            list.push(st);
+          }
+        });
+      }
+    }
+
+    // Also merge any local staff from activeRestaurant
+    if (Array.isArray(activeRestaurant?.staff)) {
+      activeRestaurant.staff.forEach(st => {
+        const exists = list.some(u => 
+          String(u._id || u.id) === String(st._id || st.id) ||
+          (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
+          (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
+        );
+        if (!exists) {
+          list.push(st);
+        }
+      });
+    }
+
+    setApiUsers(list);
+    if (stationsRes?.status) setApiStations(stationsRes.response.data || stationsRes.response || []);
+    if (branchesRes?.status) setApiBranches(branchesRes.response.data || branchesRes.response || []);
+    if (rolesRes?.status && Array.isArray(rolesRes.response.data || rolesRes.response)) {
+      const mapped = mapToStandardRoles(rolesRes.response.data || rolesRes.response);
       setApiRoles(mapped);
 
       // Check if any standard roles are missing in the backend DB and auto-seed them
@@ -266,24 +295,71 @@ export default function StaffManagementPanel({
           }
         }, true))).then(async () => {
           const freshRolesRes = await RoleApi.getRoles();
-          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data)) {
-            setApiRoles(mapToStandardRoles(freshRolesRes.response.data));
+          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data || freshRolesRes.response)) {
+            setApiRoles(mapToStandardRoles(freshRolesRes.response.data || freshRolesRes.response));
           }
         }).catch(err => console.error("Auto-seeding roles error:", err));
       }
     } else {
       setApiRoles(DEFAULT_STAFF_ROLES);
     }
-    if (tablesRes?.status) setApiTables(tablesRes.response.data || []);
+    if (tablesRes?.status) setApiTables(tablesRes.response.data || tablesRes.response?.tables || tablesRes.response || []);
     setIsLoading(false);
   };
 
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchData();
-    }, 300);
-    return () => clearTimeout(delayDebounceFn);
-  }, [page, searchQuery, roleFilter, statusFilter, selectedBranchId]);
+    fetchData();
+  }, [selectedBranchId]);
+
+  const filteredUsers = apiUsers.filter(u => {
+    // 1. Branch filter
+    if (activeFilteredBranchId) {
+      const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
+      if (uBranchId && String(uBranchId) !== String(activeFilteredBranchId)) {
+        return false;
+      }
+    }
+
+    // 2. Role filter
+    if (roleFilter && roleFilter !== 'All') {
+      const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
+      const uRoleName = (u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || u.role || '').toLowerCase();
+      const targetRoleObj = apiRoles.find(r => r._id === roleFilter);
+      const targetRoleName = (targetRoleObj?.roleName || roleFilter).toLowerCase();
+      const matchRole = String(uRoleId) === String(roleFilter) || uRoleName === targetRoleName || uRoleName.includes(targetRoleName);
+      if (!matchRole) return false;
+    }
+
+    // 3. Status filter
+    if (statusFilter && statusFilter !== 'All') {
+      const isActive = u.isActive !== undefined ? Boolean(u.isActive) : (u.status !== 'Inactive' && u.status !== 'Off Duty');
+      if (statusFilter === 'Active' && !isActive) return false;
+      if (statusFilter === 'Inactive' && isActive) return false;
+    }
+
+    // 4. Search query
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const phone = (u.phoneNumber || u.phone || '').toLowerCase();
+      if (!name.includes(q) && !email.includes(q) && !phone.includes(q)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  const totalRecords = filteredUsers.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
+  const paginatedUsers = filteredUsers.slice((page - 1) * limit, page * limit);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [totalPages, page]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -1130,7 +1206,13 @@ export default function StaffManagementPanel({
         gap: '14px'
       }}>
         {/* Search & Filter Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', alignItems: 'center' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(260px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto',
+          gap: '12px',
+          alignItems: 'center',
+          width: '100%'
+        }}>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
@@ -1172,7 +1254,7 @@ export default function StaffManagementPanel({
             </svg>
           </div>
 
-          <div style={{ minWidth: '160px' }}>
+          <div>
             <SearchableSelect
               value={roleFilter}
               onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
@@ -1184,6 +1266,19 @@ export default function StaffManagementPanel({
                 }))
               ]}
               placeholder="Filter Role..."
+            />
+          </div>
+
+          <div>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              options={[
+                { value: 'All', label: 'All Status' },
+                { value: 'Active', label: 'Active Only' },
+                { value: 'Inactive', label: 'Inactive Only' }
+              ]}
+              placeholder="Filter Status..."
             />
           </div>
 
@@ -1199,10 +1294,11 @@ export default function StaffManagementPanel({
                 color: '#475569',
                 fontSize: '12px',
                 fontWeight: 700,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
               }}
             >
-              Reset
+              Reset Filters
             </button>
           )}
         </div>
@@ -1225,7 +1321,7 @@ export default function StaffManagementPanel({
             </tr>
           </thead>
           <tbody>
-            {apiUsers.map((user, index) => {
+            {paginatedUsers.map((user, index) => {
               const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
               const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
               const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
@@ -1467,9 +1563,9 @@ export default function StaffManagementPanel({
               );
             })}
 
-            {apiUsers.length === 0 && !isLoading && (
+            {filteredUsers.length === 0 && !isLoading && (
               <tr>
-                <td colSpan="8" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                     <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '50%', color: '#94a3b8' }}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1487,7 +1583,7 @@ export default function StaffManagementPanel({
 
             {isLoading && (
               <tr>
-                <td colSpan="8" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
                   Loading staff data...
                 </td>
               </tr>

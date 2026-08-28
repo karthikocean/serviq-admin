@@ -1709,7 +1709,15 @@ export default function InventoryPanel() {
                       type="text"
                       placeholder="Search categories..."
                       value={catDropdownSearch}
-                      onChange={e => setCatDropdownSearch(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === ' ' && !e.currentTarget.value) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onChange={e => {
+                        const val = e.target.value.replace(/^\s+/, '');
+                        setCatDropdownSearch(val);
+                      }}
                       style={{
                         border: 'none',
                         background: 'transparent',
@@ -1875,7 +1883,15 @@ export default function InventoryPanel() {
                       type="text"
                       placeholder="Search item names..."
                       value={itemDropdownSearch}
-                      onChange={e => setItemDropdownSearch(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === ' ' && !e.currentTarget.value) {
+                          e.preventDefault();
+                        }
+                      }}
+                      onChange={e => {
+                        const val = e.target.value.replace(/^\s+/, '');
+                        setItemDropdownSearch(val);
+                      }}
                       style={{
                         border: 'none',
                         background: 'transparent',
@@ -2698,7 +2714,15 @@ export default function InventoryPanel() {
                 type="text"
                 placeholder="Search logs..."
                 value={logSearchTerm}
-                onChange={e => setLogSearchTerm(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === ' ' && !e.currentTarget.value) {
+                    e.preventDefault();
+                  }
+                }}
+                onChange={e => {
+                  const val = e.target.value.replace(/^\s+/, '');
+                  setLogSearchTerm(val);
+                }}
                 style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '12px', width: '100%', color: '#0f172a' }}
               />
               {logSearchTerm && (

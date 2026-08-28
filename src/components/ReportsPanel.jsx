@@ -32,8 +32,7 @@ export default function ReportsPanel({
   const [dateEnd, setDateEnd] = useState('');
   const [activeReportTab, setActiveReportTab] = useState(initialTab === 'kitchen' ? 'kitchen' : 'waiter'); // 'waiter' | 'kitchen'
   
-  // Waiter & Kitchen filter states
-  const [filterWaiter, setFilterWaiter] = useState('All');
+  // Kitchen filter states
   const [filterKitchenCategory, setFilterKitchenCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -70,7 +69,6 @@ export default function ReportsPanel({
       };
 
       if (activeReportTab === 'waiter') {
-        filters.waiterId = filterWaiter;
         const res = await ReportsApi.getWaiterReports(filters);
         if (res.status) {
           setWaiterData(res.response.data || []);
@@ -105,7 +103,7 @@ export default function ReportsPanel({
 
   useEffect(() => {
     fetchReports(1);
-  }, [activeReportTab, dateStart, dateEnd, filterWaiter, filterKitchenCategory, searchQuery, selectedBranchId, pagination.limit]);
+  }, [activeReportTab, dateStart, dateEnd, filterKitchenCategory, searchQuery, selectedBranchId, pagination.limit]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
@@ -131,7 +129,6 @@ export default function ReportsPanel({
   const handleResetFilters = () => {
     setDateStart('');
     setDateEnd('');
-    setFilterWaiter('All');
     setFilterKitchenCategory('All');
     setSearchQuery('');
     setPagination(prev => ({ ...prev, page: 1 }));
@@ -432,7 +429,12 @@ export default function ReportsPanel({
         flexDirection: 'column',
         gap: '12px'
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr 1fr auto', gap: '12px', alignItems: 'center' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: activeReportTab === 'kitchen' ? '1fr 1fr 1.2fr 1fr auto' : '1fr 1fr 1.2fr auto',
+          gap: '12px',
+          alignItems: 'center'
+        }}>
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Start Date</label>
             <input 
@@ -453,24 +455,11 @@ export default function ReportsPanel({
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>
-              {activeReportTab === 'waiter' ? 'Filter by Waiter' : 'Filter by Category'}
-            </label>
-            {activeReportTab === 'waiter' ? (
-              <SearchableSelect
-                value={filterWaiter}
-                onChange={e => setFilterWaiter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Waiters' },
-                  ...staff.filter(s => s.role === 'Waiter').map(w => ({
-                    value: w.id,
-                    label: w.name
-                  }))
-                ]}
-                placeholder="Select Waiter..."
-              />
-            ) : (
+          {activeReportTab === 'kitchen' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>
+                Filter by Category
+              </label>
               <SearchableSelect
                 value={filterKitchenCategory}
                 onChange={e => setFilterKitchenCategory(e.target.value)}
@@ -483,8 +472,8 @@ export default function ReportsPanel({
                 ]}
                 placeholder="Select Category..."
               />
-            )}
-          </div>
+            </div>
+          )}
 
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Search</label>

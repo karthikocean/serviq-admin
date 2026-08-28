@@ -767,6 +767,12 @@ export default function OrdersPanel({
   };
 
   const handleOpenEditOrder = async (ord) => {
+    const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
+    if (isPaid) {
+      ShowNotifications.showAlertNotification("Paid orders cannot be edited.", false);
+      return;
+    }
+
     const targetBranchId = ord.branchId?._id || ord.branchId || selectedBranchId || getFallbackBranchId();
     setModalSelectedBranchId(targetBranchId);
     if (typeof fetchModalDataForBranch === 'function') {
@@ -1149,25 +1155,31 @@ export default function OrdersPanel({
                         >
                           <PlusIcon size={13} color="#ffffff" /> Add Items to Table {newOrderTable}'s Order
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreateOrderModalOpen(false);
-                            handleOpenEditOrder(activeOrd);
-                          }}
-                          style={{
-                            background: '#ffffff',
-                            color: '#ea580c',
-                            border: '1px solid #fed7aa',
-                            padding: '7px 14px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ✏️ Edit Existing Order
-                        </button>
+                        {!(
+                          (activeOrd.billingStatus || activeOrd.paymentStatus || '').toLowerCase() === 'paid' ||
+                          activeOrd.isPaid === true ||
+                          (activeOrd.payment && (activeOrd.payment.status === 'paid' || activeOrd.payment.paymentStatus === 'paid'))
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreateOrderModalOpen(false);
+                              handleOpenEditOrder(activeOrd);
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              color: '#ea580c',
+                              border: '1px solid #fed7aa',
+                              padding: '7px 14px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✏️ Edit Existing Order
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2101,7 +2113,7 @@ export default function OrdersPanel({
                   </div>
                 );
 
-                const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid';
+                const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
                 const status = (ord.status || 'new').toLowerCase();
                 const waiterName = getResolvedWaiterName(ord);
                 const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '01';
@@ -2272,31 +2284,33 @@ export default function OrdersPanel({
                         </button>
 
                         {/* Edit Icon */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleOpenEditOrder(ord);
-                          }}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            color: '#475569',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
-                          title="Edit Order"
-                        >
-                          <PencilIcon size={14} />
-                        </button>
+                        {!isPaid && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenEditOrder(ord);
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              color: '#475569',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
+                            title="Edit Order"
+                          >
+                            <PencilIcon size={14} />
+                          </button>
+                        )}
 
                         {/* Trash Icon */}
                         {['ready', 'served', 'completed'].includes(status) ? null : (
@@ -2511,6 +2525,7 @@ export default function OrdersPanel({
         const tableNum = viewingOrder.table || viewingOrder.tableNumber || (typeof viewingOrder.tableId === 'object' ? (viewingOrder.tableId?.tableNumber || viewingOrder.tableId?.tableNo) : viewingOrder.tableId) || 'N/A';
         const waiterName = viewingOrder.waiter || viewingOrder.waiterName || (typeof viewingOrder.waiterId === 'object' ? viewingOrder.waiterId?.name : viewingOrder.waiterId) || 'Unassigned';
         const orderStatus = (viewingOrder.status || 'new').toLowerCase();
+        const isPaid = (viewingOrder.billingStatus || viewingOrder.paymentStatus || '').toLowerCase() === 'paid' || viewingOrder.isPaid === true || (viewingOrder.payment && (viewingOrder.payment.status === 'paid' || viewingOrder.payment.paymentStatus === 'paid'));
         const itemsList = Array.isArray(viewingOrder.items) ? viewingOrder.items : [];
         const itemSubtotal = itemsList.reduce((sum, it) => sum + (Number(it.price) || 0) * (Number(it.qty) || 1), 0);
         const calcTax = parseFloat(((itemSubtotal * taxRate) / 100).toFixed(2));
@@ -2678,18 +2693,20 @@ export default function OrdersPanel({
                     >
                       <PlusIcon size={14} color="#ffffff" /> Add Items
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => {
-                        const ord = viewingOrder;
-                        setViewingOrder(null);
-                        handleOpenEditOrder(ord);
-                      }}
-                      style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <PencilIcon size={14} /> Edit Order
-                    </button>
+                    {!isPaid && (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => {
+                          const ord = viewingOrder;
+                          setViewingOrder(null);
+                          handleOpenEditOrder(ord);
+                        }}
+                        style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <PencilIcon size={14} /> Edit Order
+                      </button>
+                    )}
                   </>
                 )}
                 <button

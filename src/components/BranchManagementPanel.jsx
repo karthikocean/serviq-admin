@@ -102,18 +102,27 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const userType = (userTypeStr || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userRoleLower === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
 
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (isAdmin) return true;
+    if (isRestaurantOwner) return true;
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
   });
 
-  if (!isAdmin) {
+  if (!isRestaurantOwner) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
@@ -123,7 +132,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           Access Denied
         </h2>
         <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-          Branch Management is strictly restricted to the <strong>Admin</strong> role. Non-admin roles (Manager, Staff, Kitchen, Waiter, Viewer) do not have permission to view or manage branches.
+          Branch Management is strictly restricted to the <strong>Restaurant Owner</strong> only. Other roles do not have permission to view or manage branches.
         </p>
         <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
           Return to Dashboard
@@ -164,15 +173,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const fetchBranches = async () => {
     setIsLoading(true);
     const res = await BranchApi.getBranches();
-    if (res && res.status && res.response && res.response.data) {
-      const rawList = Array.isArray(res.response.data) ? res.response.data : (res.response.data?.branches || []);
+    if (res && res.status && res.response) {
+      const rawList = Array.isArray(res.response) 
+        ? res.response 
+        : (Array.isArray(res.response.data) ? res.response.data : (res.response.data?.branches || res.response?.branches || []));
+      
+      const cachedManagers = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('serviq_branch_managers') || '{}');
+        } catch (e) {
+          return {};
+        }
+      })();
+
       const mappedBranches = rawList.map(b => {
+        const bId = b._id || b.id;
+        const cachedMgr = cachedManagers[bId] || cachedManagers[b.branchCode] || cachedManagers[b.code] || '';
         const mgr = (
-          (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName) : b.branchManager) ||
-          b.managerName ||
-          (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName) : b.manager) ||
-          b.branchManagerName ||
-          b.contactPerson ||
+          (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username || b.branchManager.fullName) : (typeof b.branchManager === 'string' && b.branchManager.trim() ? b.branchManager : '')) ||
+          (typeof b.managerName === 'string' && b.managerName.trim() ? b.managerName : '') ||
+          (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName || b.manager.username || b.manager.fullName) : (typeof b.manager === 'string' && b.manager.trim() ? b.manager : '')) ||
+          (typeof b.branchManagerName === 'string' && b.branchManagerName.trim() ? b.branchManagerName : '') ||
+          (typeof b.contactPerson === 'string' && b.contactPerson.trim() ? b.contactPerson : '') ||
+          cachedMgr ||
           ''
         );
 
@@ -184,8 +207,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         const pincodeStr = b.pincode || addr.pincode || '';
 
         return {
-          id: b._id || b.id,
-          _id: b._id || b.id,
+          id: bId,
+          _id: bId,
           branchName: b.branchName || b.name || '',
           branchCode: b.branchCode || b.code || '',
           branchManager: mgr,
@@ -212,26 +235,34 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const fetchBranchOperationalData = useCallback(async (targetBranch) => {
     if (!targetBranch) return;
-    const branchId = targetBranch.id || targetBranch._id;
+    const branchId = targetBranch._id || targetBranch.id;
     setIsLoadingOpData(true);
     try {
-      const [staffRes, ordersRes, tablesRes] = await Promise.allSettled([
-        UserApi.getUsers({ branchId }),
-        OrderApi.getOrders({ branchId }),
-        TableApi.getTables({ branchId })
+      const [usersRes, staffApiRes, ordersRes, tablesRes] = await Promise.allSettled([
+        UserApi.getUsers({ branchId, limit: 100 }),
+        StaffApi.getStaff(branchId),
+        OrderApi.getOrders({ branchId, limit: 100 }),
+        TableApi.getTables({ branchId, limit: 100 })
       ]);
 
-      if (staffRes.status === 'fulfilled' && staffRes.value?.status) {
-        const list = staffRes.value.response?.data || staffRes.value.response?.users || (Array.isArray(staffRes.value.response) ? staffRes.value.response : []);
-        setLiveBranchStaff(list);
+      let finalStaff = [];
+      if (usersRes.status === 'fulfilled' && usersRes.value?.status) {
+        const raw = usersRes.value.response?.data || usersRes.value.response?.users || usersRes.value.response?.staff || (Array.isArray(usersRes.value.response) ? usersRes.value.response : []);
+        finalStaff = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.users) ? raw.users : []));
       }
+      if (finalStaff.length === 0 && staffApiRes.status === 'fulfilled' && staffApiRes.value?.status) {
+        const rawStaff = staffApiRes.value.response?.data || (Array.isArray(staffApiRes.value.response) ? staffApiRes.value.response : []);
+        finalStaff = Array.isArray(rawStaff) ? rawStaff : [];
+      }
+      setLiveBranchStaff(finalStaff);
+
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.status) {
-        const list = ordersRes.value.response?.data || ordersRes.value.response?.orders || (Array.isArray(ordersRes.value.response) ? ordersRes.value.response : []);
-        setLiveBranchOrders(list);
+        const rawOrders = ordersRes.value.response?.data || ordersRes.value.response?.orders || (Array.isArray(ordersRes.value.response) ? ordersRes.value.response : []);
+        setLiveBranchOrders(Array.isArray(rawOrders) ? rawOrders : (Array.isArray(rawOrders?.data) ? rawOrders.data : []));
       }
       if (tablesRes.status === 'fulfilled' && tablesRes.value?.status) {
-        const list = tablesRes.value.response?.data || tablesRes.value.response?.tables || (Array.isArray(tablesRes.value.response) ? tablesRes.value.response : []);
-        setLiveBranchTables(list);
+        const rawTables = tablesRes.value.response?.data || tablesRes.value.response?.tables || (Array.isArray(tablesRes.value.response) ? tablesRes.value.response : []);
+        setLiveBranchTables(Array.isArray(rawTables) ? rawTables : (Array.isArray(rawTables?.data) ? rawTables.data : []));
       }
     } catch (e) {
       console.error("Error fetching branch operational data:", e);
@@ -241,10 +272,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   }, []);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (isRestaurantOwner) {
       fetchBranches();
     }
-  }, [isAdmin]);
+  }, [isRestaurantOwner]);
 
   const branches = apiBranches;
 
@@ -362,21 +393,31 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
       return;
     }
+    const managerNameFromBranch = (
+      (typeof branch.branchManager === 'object' && branch.branchManager !== null ? (branch.branchManager.name || branch.branchManager.managerName || branch.branchManager.username || branch.branchManager.fullName) : (typeof branch.branchManager === 'string' ? branch.branchManager : '')) ||
+      (typeof branch.managerName === 'string' ? branch.managerName : '') ||
+      (typeof branch.manager === 'object' && branch.manager !== null ? (branch.manager.name || branch.manager.managerName || branch.manager.username || branch.manager.fullName) : (typeof branch.manager === 'string' ? branch.manager : '')) ||
+      (typeof branch.branchManagerName === 'string' ? branch.branchManagerName : '') ||
+      (typeof branch.contactPerson === 'string' ? branch.contactPerson : '') ||
+      ''
+    );
+
     setBranchForm({
-      id: branch.id,
-      branchName: branch.branchName || '',
-      branchCode: branch.branchCode || '',
-      branchManager: branch.branchManager || '',
-      mobileNumber: branch.mobileNumber || '',
-      email: branch.email || '',
+      id: branch.id || branch._id,
+      branchName: branch.branchName || branch.name || '',
+      branchCode: branch.branchCode || branch.code || '',
+      branchManager: managerNameFromBranch,
+      managerName: managerNameFromBranch,
+      mobileNumber: branch.mobileNumber || branch.contactNumber || branch.phone || branch.managerMobile || '',
+      email: branch.email || branch.managerEmail || '',
       password: branch.password || '',
       confirmPassword: branch.password || '',
-      address: branch.address || '',
-      country: branch.country || '',
-      state: branch.state || '',
-      city: branch.city || '',
-      pincode: branch.pincode || '',
-      openingDate: branch.openingDate || new Date().toISOString().split('T')[0],
+      address: typeof branch.address === 'string' ? branch.address : (branch.address?.street || ''),
+      country: branch.country || branch.address?.country || 'India',
+      state: branch.state || branch.address?.state || 'Tamil Nadu',
+      city: branch.city || branch.address?.city || '',
+      pincode: branch.pincode || branch.address?.pincode || '',
+      openingDate: branch.openingDate ? branch.openingDate.split('T')[0] : (branch.branchOpeningDate ? branch.branchOpeningDate.split('T')[0] : new Date().toISOString().split('T')[0]),
       status: branch.status || 'Active',
       totalTables: branch.totalTables || 10,
       username: branch.username || '',
@@ -415,24 +456,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const branchNameErr = validateBranchName(branchNameTrimmed);
     if (branchNameErr) {
       errors.branchName = branchNameErr;
-    } else {
-      const isDuplicateName = branches.some(b => {
-        if (isEditing && (String(b.id) === String(branchForm.id) || String(b._id) === String(branchForm.id))) return false;
-        return (b.branchName || '').trim().toLowerCase() === branchNameTrimmed.toLowerCase();
-      });
-      if (isDuplicateName) {
-        errors.branchName = 'A branch with this name already exists.';
-      }
     }
 
-    // 2. Branch Code validation
+    // 2. Branch Code validation (3 to 6 uppercase alphanumeric)
     const branchCodeTrimmed = (branchForm.branchCode || '').trim();
     const branchCodeErr = validateBranchCode(branchCodeTrimmed);
     if (branchCodeErr) {
       errors.branchCode = branchCodeErr;
     } else {
+      // Check for code uniqueness locally among branches (exclude current editing branch)
       const isDuplicateCode = branches.some(b => {
-        if (isEditing && (String(b.id) === String(branchForm.id) || String(b._id) === String(branchForm.id))) return false;
+        if (isEditing && (b.id === branchForm.id || b._id === branchForm.id)) return false;
         return (b.branchCode || '').trim().toLowerCase() === branchCodeTrimmed.toLowerCase();
       });
       if (isDuplicateCode) {
@@ -447,12 +481,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
 
     // 4. Branch Manager (Manager Name) validation
-    const managerTrimmed = (branchForm.branchManager || '').trim();
+    const managerTrimmed = (branchForm.branchManager || branchForm.managerName || '').trim();
     if (!managerTrimmed) {
       errors.branchManager = 'Branch Manager name is required.';
     } else if (managerTrimmed.length < 2) {
       errors.branchManager = 'Branch Manager name must be at least 2 characters.';
-    } else if (!/^[a-zA-Z\s.]+$/.test(managerTrimmed)) {
+    } else if (!/^[a-zA-Z\s.'-]+$/.test(managerTrimmed)) {
       errors.branchManager = 'Branch Manager name must contain letters and spaces only.';
     }
 
@@ -563,28 +597,32 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
 
+    const managerVal = (branchForm.branchManager || branchForm.managerName || '').trim();
+
     const payload = {
-      branchName: branchForm.branchName,
-      branchCode: branchForm.branchCode,
+      branchName: (branchForm.branchName || '').trim(),
+      branchCode: (branchForm.branchCode || '').trim(),
       branchOpeningDate: branchForm.openingDate,
-      contactNumber: branchForm.mobileNumber,
-      mobileNumber: branchForm.mobileNumber,
-      phone: branchForm.mobileNumber,
-      email: branchForm.email,
-      street: branchForm.address,
-      city: branchForm.city,
-      state: branchForm.state,
-      country: branchForm.country,
-      pincode: branchForm.pincode,
-      managerName: branchForm.branchManager,
-      branchManager: branchForm.branchManager,
-      manager: branchForm.branchManager,
-      contactPerson: branchForm.branchManager,
-      managerMobile: branchForm.mobileNumber,
-      managerEmail: branchForm.email,
+      contactNumber: (branchForm.mobileNumber || '').trim(),
+      mobileNumber: (branchForm.mobileNumber || '').trim(),
+      phone: (branchForm.mobileNumber || '').trim(),
+      email: (branchForm.email || '').trim(),
+      street: (branchForm.address || '').trim(),
+      address: (branchForm.address || '').trim(),
+      city: (branchForm.city || '').trim(),
+      state: (branchForm.state || '').trim(),
+      country: (branchForm.country || '').trim(),
+      pincode: (branchForm.pincode || '').trim(),
+      managerName: managerVal,
+      branchManager: managerVal,
+      manager: managerVal,
+      contactPerson: managerVal,
+      branchManagerName: managerVal,
+      managerMobile: (branchForm.mobileNumber || '').trim(),
+      managerEmail: (branchForm.email || '').trim(),
       managerPassword: branchForm.password,
-      status: branchForm.status,
-      isMainBranch: branchForm.isMainBranch
+      status: branchForm.status || 'Active',
+      isMainBranch: !!branchForm.isMainBranch
     };
 
     if (isEditing) {
@@ -592,9 +630,26 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
         return;
       }
+
+      // Persist manager name locally
+      try {
+        const storedMgrs = JSON.parse(localStorage.getItem('serviq_branch_managers') || '{}');
+        if (branchForm.id) storedMgrs[branchForm.id] = managerVal;
+        if (branchForm.branchCode) storedMgrs[branchForm.branchCode] = managerVal;
+        localStorage.setItem('serviq_branch_managers', JSON.stringify(storedMgrs));
+      } catch (e) {}
+
       const res = await BranchApi.updateBranch(branchForm.id, payload);
       if (res && res.status) {
-        fetchBranches();
+        setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...payload, branchManager: managerVal, managerName: managerVal } : b));
+        if (activeRestaurant?.id && updateBranch) {
+          updateBranch(activeRestaurant.id, branchForm.id, {
+            ...payload,
+            branchManager: managerVal,
+            managerName: managerVal
+          });
+        }
+        await fetchBranches();
         setActiveView('list');
       }
     } else {
@@ -604,7 +659,24 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       }
       const res = await BranchApi.createBranch(payload);
       if (res && res.status) {
-        fetchBranches();
+        const createdId = res.response?.data?._id || res.response?.data?.id || `BR-${Date.now()}`;
+        try {
+          const storedMgrs = JSON.parse(localStorage.getItem('serviq_branch_managers') || '{}');
+          storedMgrs[createdId] = managerVal;
+          if (branchForm.branchCode) storedMgrs[branchForm.branchCode] = managerVal;
+          localStorage.setItem('serviq_branch_managers', JSON.stringify(storedMgrs));
+        } catch (e) {}
+
+        setApiBranches(prev => [...prev, { ...payload, id: createdId, _id: createdId, branchManager: managerVal, managerName: managerVal }]);
+        if (activeRestaurant?.id && addBranch) {
+          addBranch(activeRestaurant.id, {
+            ...payload,
+            id: createdId,
+            branchManager: managerVal,
+            managerName: managerVal
+          });
+        }
+        await fetchBranches();
         setActiveView('list');
       }
     }
@@ -636,15 +708,36 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   // Live computed operational data for current branch
   const opData = (() => {
-    const curBranchId = currentViewBranch?.id || currentViewBranch?._id;
+    const curBranch = currentViewBranch;
+    const curBranchId = String(curBranch?.id || curBranch?._id || '').toLowerCase();
+    const curBranchCode = String(curBranch?.branchCode || curBranch?.code || '').toLowerCase();
+    const curBranchName = String(curBranch?.branchName || curBranch?.name || '').toLowerCase();
+
+    const matchesBranch = (itemBranch) => {
+      if (!itemBranch || !curBranch) return false;
+      let targetId = '';
+      let targetCode = '';
+      let targetName = '';
+      if (typeof itemBranch === 'object' && itemBranch !== null) {
+        targetId = String(itemBranch._id || itemBranch.id || '').toLowerCase();
+        targetCode = String(itemBranch.branchCode || itemBranch.code || '').toLowerCase();
+        targetName = String(itemBranch.branchName || itemBranch.name || '').toLowerCase();
+      } else {
+        targetId = String(itemBranch).toLowerCase();
+      }
+      return (
+        (curBranchId && targetId && curBranchId === targetId) ||
+        (curBranchCode && targetCode && curBranchCode === targetCode) ||
+        (curBranchCode && targetId && curBranchCode === targetId) ||
+        (curBranchName && targetName && curBranchName === targetName) ||
+        (curBranchName && targetId && curBranchName === targetId)
+      );
+    };
 
     // 1. Staff list
     const branchStaffRaw = (liveBranchStaff.length > 0)
       ? liveBranchStaff
-      : (activeRestaurant?.staff || []).filter(s => {
-          const bId = s.branchId?._id || s.branchId || s.branch;
-          return String(bId) === String(curBranchId);
-        });
+      : (activeRestaurant?.staff || []).filter(s => matchesBranch(s.branchId || s.branch));
 
     const mappedStaff = branchStaffRaw.map(person => {
       const pName = person.name || 'Staff Member';
@@ -661,13 +754,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       };
     });
 
+    // Auto-include Branch Manager if assigned to this branch and not yet in list
+    const managerName = curBranch?.branchManager || curBranch?.managerName;
+    if (managerName && managerName.trim() && !mappedStaff.some(s => s.name.toLowerCase() === managerName.trim().toLowerCase())) {
+      mappedStaff.unshift({
+        name: managerName.trim(),
+        role: 'Branch Manager',
+        email: curBranch.email || `${managerName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`,
+        status: 'Active',
+        initial: (managerName.trim().charAt(0) || 'M').toUpperCase()
+      });
+    }
+
     // 2. Orders list
     const branchOrdersRaw = (liveBranchOrders.length > 0)
       ? liveBranchOrders
-      : (activeRestaurant?.orders || []).filter(o => {
-          const bId = o.branchId?._id || o.branchId || o.branch;
-          return String(bId) === String(curBranchId);
-        });
+      : (activeRestaurant?.orders || []).filter(o => matchesBranch(o.branchId || o.branch));
 
     const activeOrders = branchOrdersRaw.filter(o => {
       const st = String(o.status || '').toLowerCase();
@@ -676,7 +778,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     const mappedOrders = activeOrders.map(ord => {
       const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '#ORD-101');
-      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? ord.table?.tableNumber : ord.table) || 'Table 1';
+      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || 'Table 1';
       const itemsStr = Array.isArray(ord.items)
         ? ord.items.map(i => `${i.quantity || i.qty || 1}x ${i.name || i.menuItem?.name || 'Item'}`).join(', ')
         : (typeof ord.items === 'string' ? ord.items : 'Items Ordered');
@@ -701,10 +803,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     // 3. Tables list
     const branchTablesRaw = (liveBranchTables.length > 0)
       ? liveBranchTables
-      : (activeRestaurant?.tables || []).filter(t => {
-          const bId = t.branchId?._id || t.branchId || t.branch;
-          return String(bId) === String(curBranchId);
-        });
+      : (activeRestaurant?.tables || []).filter(t => matchesBranch(t.branchId || t.branch));
 
     const mappedTables = branchTablesRaw.length > 0
       ? branchTablesRaw.map((t, i) => ({
@@ -1311,10 +1410,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     <input
                       type="text"
                       placeholder="e.g. Saravana Kumaran"
-                      value={branchForm.branchManager}
+                      value={branchForm.branchManager || branchForm.managerName || ''}
                       onChange={e => {
-                        const val = sanitizeName(e.target.value);
-                        setBranchForm({ ...branchForm, branchManager: val });
+                        const val = e.target.value.replace(/[^a-zA-Z\s.'-]/g, '');
+                        setBranchForm({ ...branchForm, branchManager: val, managerName: val });
                         if (formErrors.branchManager) setFormErrors({ ...formErrors, branchManager: '' });
                       }}
                       style={{

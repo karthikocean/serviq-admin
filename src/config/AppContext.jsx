@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { initialRestaurantsData, initialState, AVAILABLE_PLANS } from './initialData';
 import { isTokenExpired } from './index.js';
 import AuthApi from '../api/Auth.js';
@@ -51,8 +51,8 @@ export const DEFAULT_ROLES = {
   Admin: {
     permissions: {
       overview: { view: true, add: true, edit: true, delete: true },
-      'branch-management': { view: true, add: true, edit: true, delete: true },
-      'plans-management': { view: true, add: true, edit: true, delete: true },
+      'branch-management': { view: false, add: false, edit: false, delete: false },
+      'plans-management': { view: false, add: false, edit: false, delete: false },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
@@ -181,7 +181,23 @@ export const AppProvider = ({ children }) => {
   const [accentColor, setAccentColor] = useState('#ff7a00');
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
   // Branch filter state (null = All Branches)
-  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+    try {
+      const stored = localStorage.getItem('selectedBranchId');
+      if (stored && stored !== 'ALL') return stored;
+      const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (user) {
+        const uType = (user.userType || '').toUpperCase();
+        const uRole = (typeof user.role === 'object' ? (user.role?.roleName || user.role?.name) : (user.role || '')).toUpperCase();
+        const isOwner = uType === 'RESTAURANT_OWNER' || uType === 'OWNER' || uType === 'SUPER ADMIN' || uType === 'SUPER_ADMIN' || uRole === 'RESTAURANT_OWNER' || uRole === 'OWNER' || uRole === 'SUPER ADMIN';
+        if (!isOwner) {
+          const bId = typeof user.branchId === 'object' && user.branchId !== null ? (user.branchId._id || user.branchId.id) : (user.branchId || user.activeBranchId);
+          if (bId && bId !== 'ALL') return bId;
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
 
   // Synchronize currentUser to localStorage whenever it changes
   useEffect(() => {
@@ -212,8 +228,8 @@ export const AppProvider = ({ children }) => {
   }, []);
 
 
-  // Active computed tenant info
-  const activeRestaurant = (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || {
+  // Fallback empty tenant
+  const FALLBACK_RESTAURANT = useMemo(() => ({
     tables: [],
     orders: [],
     menu: [],
@@ -227,7 +243,12 @@ export const AppProvider = ({ children }) => {
     inventory: [],
     inventoryLogs: [],
     inventoryCategories: DEFAULT_INVENTORY_CATEGORIES
-  };
+  }), []);
+
+  // Active computed tenant info
+  const activeRestaurant = useMemo(() => {
+    return (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || FALLBACK_RESTAURANT;
+  }, [currentRestaurantId, restaurantsData, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
     if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
@@ -449,23 +470,35 @@ export const AppProvider = ({ children }) => {
               inventoryLogs: []
             };
 
-            const mappedBranches = branchArray.map(b => ({
-              id: b._id || b.id,
-              _id: b._id || b.id,
-              branchName: b.branchName || b.name,
-              branchCode: b.branchCode || b.code,
-              branchManager: b.managerName || b.branchManager || '',
-              mobileNumber: b.contactNumber || b.mobileNumber || '',
-              email: b.email || '',
-              address: b.address?.street || b.address || '',
-              country: b.address?.country || b.country || '',
-              state: b.address?.state || b.state || '',
-              city: b.address?.city || b.city || '',
-              pincode: b.address?.pincode || b.pincode || '',
-              openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
-              status: b.status || 'Active',
-              totalTables: b.totalTables || 10
-            }));
+            const mappedBranches = branchArray.map(b => {
+              const mgr = (
+                (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username || b.branchManager.fullName) : (typeof b.branchManager === 'string' && b.branchManager.trim() ? b.branchManager : '')) ||
+                (typeof b.managerName === 'string' && b.managerName.trim() ? b.managerName : '') ||
+                (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName || b.manager.username || b.manager.fullName) : (typeof b.manager === 'string' && b.manager.trim() ? b.manager : '')) ||
+                (typeof b.branchManagerName === 'string' && b.branchManagerName.trim() ? b.branchManagerName : '') ||
+                (typeof b.contactPerson === 'string' && b.contactPerson.trim() ? b.contactPerson : '') ||
+                ''
+              );
+
+              return {
+                id: b._id || b.id,
+                _id: b._id || b.id,
+                branchName: b.branchName || b.name,
+                branchCode: b.branchCode || b.code,
+                branchManager: mgr,
+                managerName: mgr,
+                mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+                email: b.email || b.managerEmail || '',
+                address: b.address?.street || b.address || b.street || '',
+                country: b.address?.country || b.country || '',
+                state: b.address?.state || b.state || '',
+                city: b.address?.city || b.city || '',
+                pincode: b.address?.pincode || b.pincode || '',
+                openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
+                status: b.status || 'Active',
+                totalTables: b.totalTables || 10
+              };
+            });
 
             return {
               ...prev,
@@ -527,34 +560,43 @@ export const AppProvider = ({ children }) => {
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
           const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
           const roleUpper = roleStr.toUpperCase();
-          const isAdminUser = 
+          const isRestaurantOwner = 
             userTypeUpper === 'RESTAURANT_OWNER' || 
             userTypeUpper === 'OWNER' || 
-            userTypeUpper === 'ADMIN' || 
             userTypeUpper === 'SUPER ADMIN' || 
             userTypeUpper === 'SUPER_ADMIN' ||
-            roleUpper === 'ADMIN' ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
             roleUpper === 'OWNER';
+
+          const userBranchId = typeof apiUser.branchId === 'object' && apiUser.branchId !== null
+            ? (apiUser.branchId._id || apiUser.branchId.id)
+            : (apiUser.branchId || apiUser.activeBranchId || '');
 
           const user = {
             id: apiUser.id || apiUser._id,
             name: apiUser.name,
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber,
-            userType: apiUser.userType || (isAdminUser ? 'RESTAURANT_OWNER' : 'STAFF'),
-            role: userTypeUpper === 'RESTAURANT_OWNER' ? 'RESTAURANT_OWNER' : (apiUser.role || 'Admin'),
+            userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : 'BRANCH_ADMIN'),
+            role: isRestaurantOwner ? 'RESTAURANT_OWNER' : (apiUser.role || 'Branch Manager'),
             restaurantId: apiUser.restaurantId || currentRestaurantId || 'rest-1',
-            activeBranchId: isAdminUser ? 'ALL' : (apiUser.activeBranchId || apiUser.branchId || 'ALL'),
-            branchId: isAdminUser ? 'ALL' : (apiUser.activeBranchId || apiUser.branchId || 'ALL')
+            activeBranchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL'),
+            branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')
           };
 
           localStorage.setItem("currentUser", JSON.stringify(user));
           setCurrentUser(user);
           const targetRestId = apiUser.restaurantId || currentRestaurantId || 'rest-1';
           setCurrentRestaurantId(targetRestId);
-          setSelectedBranchId(null);
+
+          if (!isRestaurantOwner && userBranchId && userBranchId !== 'ALL') {
+            setSelectedBranchId(userBranchId);
+            localStorage.setItem("selectedBranchId", userBranchId);
+          } else {
+            setSelectedBranchId(null);
+            localStorage.removeItem("selectedBranchId");
+          }
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
           return { success: true, user };
@@ -1524,10 +1566,13 @@ export const AppProvider = ({ children }) => {
       if (!rest) return prev;
       const currentBranches = rest.branches || [];
       const updatedBranches = currentBranches.map(b => {
-        if (b.id === branchId) {
+        if (b.id === branchId || b._id === branchId || String(b.id) === String(branchId) || String(b._id) === String(branchId)) {
+          const mgr = updatedData.branchManager || updatedData.managerName || b.branchManager || b.managerName || '';
           return {
             ...b,
             ...updatedData,
+            branchManager: mgr,
+            managerName: mgr,
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
             operationalData: {
               ...b.operationalData,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { AVAILABLE_PLANS } from '../config/initialData';
 import SubscriptionApi from '../api/Subscription';
@@ -60,13 +61,50 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     currentUser
   } = useAppState();
 
-  const role = currentUser?.role || 'Admin';
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userType = (userTypeStr || roleStr || '').toUpperCase();
+  const userRoleLower = (roleStr || '').toLowerCase();
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
+
+  const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (role === 'Admin' || role === 'Super Admin' || currentUser?.userType === 'RESTAURANT_OWNER') return true;
+    if (isRestaurantOwner) return true;
     const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     return !!userRoleConfig.permissions?.[moduleName]?.[action];
   });
+
+  if (!isRestaurantOwner) {
+    return (
+      <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
+          🔒
+        </div>
+        <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
+          Access Denied
+        </h2>
+        <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
+          Plans & Subscription Management is strictly restricted to the <strong>Restaurant Owner</strong> only. Other roles do not have permission to view or manage subscription plans.
+        </p>
+        <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -690,14 +728,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         {/* History Table */}
         <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
           <div style={{ width: '100%', overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: '850px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '920px', tableLayout: 'auto', borderCollapse: 'collapse', fontSize: '13px' }}>
               <colgroup>
                 <col style={{ width: '16%' }} />
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '28%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '27%' }} />
                 <col style={{ width: '14%' }} />
                 <col style={{ width: '12%' }} />
-                <col style={{ width: '14%' }} />
+                <col style={{ width: '16%' }} />
               </colgroup>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
@@ -706,7 +744,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Plan & Recharge Item</th>
                   <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Amount Paid</th>
                   <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Status</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Receipt</th>
+                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '150px' }}>Receipt</th>
                 </tr>
               </thead>
             <tbody>
@@ -761,13 +799,40 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                         </span>
                       </td>
 
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <button
                           type="button"
                           onClick={() => setSelectedInvoiceForView(inv)}
-                          style={{ border: '1px solid #cbd5e1', background: '#ffffff', color: '#334155', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          style={{
+                            border: '1.5px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#1e293b',
+                            padding: '7px 14px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s ease',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = '#ff5a1f';
+                            e.currentTarget.style.color = '#ff5a1f';
+                            e.currentTarget.style.background = '#fff7ed';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.color = '#1e293b';
+                            e.currentTarget.style.background = '#ffffff';
+                          }}
                         >
-                          <ReceiptIcon size={12} /> View Receipt
+                          <ReceiptIcon size={14} />
+                          <span>View Receipt</span>
                         </button>
                       </td>
                     </tr>
