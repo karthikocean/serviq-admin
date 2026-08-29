@@ -1473,8 +1473,8 @@ div[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
 
 .menu-table-wrapper {
   overflow-x: auto;
-  overflow-y: auto;
-  max-height: 620px;
+  overflow-y: visible;
+  max-height: none;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--bg-secondary, #ffffff);

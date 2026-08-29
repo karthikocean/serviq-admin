@@ -3,6 +3,7 @@ import { Badge } from './Badge';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
+import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,9 +138,11 @@ export default function OverviewPanel({
   orders = [],
   tables = [],
   staff = [],
+  users = [],
   allOrders = [],
   allTables = [],
   allStaff = [],
+  allUsers = [],
   branches = [],
   selectedBranchId = null,
   onSelectBranch = () => {},
@@ -313,11 +316,15 @@ export default function OverviewPanel({
       return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
     }).length;
 
+    const mgr = resolveBranchManagerName(branch, allUsers || users || [], branchStaff || allStaff || staff || []);
+
     return {
       ...branch,
       id: branch._id || branch.id,
       branchName: branch.branchName || branch.name || 'Branch',
       branchCode: branch.branchCode || 'BR-001',
+      branchManager: mgr,
+      managerName: mgr,
       ordersCount: branchOrders.length,
       revenue: branchRevenue,
       tablesCount: branchTables.length || branch.totalTables || 10,
@@ -370,7 +377,7 @@ export default function OverviewPanel({
                 </span>
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{typeof selectedBranch.branchManager === 'object' && selectedBranch.branchManager !== null ? (selectedBranch.branchManager?.name || selectedBranch.branchManager?.username || 'Unassigned') : (selectedBranch.branchManager || 'Unassigned')}</strong> • Contact: {selectedBranch.mobileNumber || selectedBranch.phoneNumber || (typeof selectedBranch.contact === 'object' ? selectedBranch.contact?.phone : selectedBranch.contact) || 'N/A'}
+                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{resolveBranchManagerName(selectedBranch, allUsers || users || [], allStaff || staff || [])}</strong> • Contact: {selectedBranch.mobileNumber || selectedBranch.phoneNumber || (typeof selectedBranch.contact === 'object' ? selectedBranch.contact?.phone : selectedBranch.contact) || 'N/A'}
               </p>
             </div>
           </div>
@@ -602,7 +609,7 @@ export default function OverviewPanel({
                       {b.city || 'Tamil Nadu'}
                     </td>
                     <td style={{ padding: '14px 16px', color: '#334155', fontWeight: 600 }}>
-                      {(typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username) : b.branchManager) || b.managerName || 'Unassigned'}
+                      {b.branchManager || b.managerName || resolveBranchManagerName(b, allUsers || users || [], allStaff || staff || []) || 'Unassigned'}
                     </td>
                     <td style={{ padding: '14px 16px' }}>
                       <span style={{
@@ -810,10 +817,10 @@ export default function OverviewPanel({
       </div>
 
       {/* LOWER ROW: Live Order Feed & Dining Tables Panel */}
-      <div className="dashboard-inner-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1.2fr)', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
+      <div className="dashboard-inner-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3.2fr) minmax(210px, 1fr)', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
         
-        {/* Live Order Feed Table */}
-        <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+        {/* Live Order Feed Table (Increased Size) */}
+        <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '22px 24px', border: '1px solid var(--border)', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
           <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
@@ -822,16 +829,16 @@ export default function OverviewPanel({
             </div>
             <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
           </div>
-          <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', paddingBottom: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-            <table className="menu-items-table feed-table" style={{ width: '100%', minWidth: '580px', borderCollapse: 'collapse' }}>
+          <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', paddingBottom: '0px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
+            <table className="feed-table" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ORDER ID</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEMS</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ width: '18%', padding: '12px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>ORDER ID</th>
+                  <th style={{ width: '10%', padding: '12px 4px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>BRANCH</th>
+                  <th style={{ width: '16%', padding: '12px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>TABLE</th>
+                  <th style={{ width: '32%', padding: '12px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>ITEMS</th>
+                  <th style={{ width: '11%', padding: '12px 8px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>TOTAL</th>
+                  <th style={{ width: '13%', padding: '12px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
                 </tr>
               </thead>
               <tbody>
@@ -844,23 +851,23 @@ export default function OverviewPanel({
 
                   return (
                     <tr key={ord.id || ord.orderId || idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
+                      <td style={{ padding: '11px 12px', fontWeight: 600, color: 'var(--text-main)', fontSize: '12.5px' }}>
                         <div>{orderIdDisplay}</div>
                         {ord.time && <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>{ord.time}</div>}
                       </td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                      <td style={{ padding: '11px 4px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', whiteSpace: 'nowrap' }}>
                           {branchCode}
                         </span>
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 600, color: 'var(--text-main)' }}>
+                      <td style={{ padding: '11px 8px', fontWeight: 600, color: 'var(--text-main)', fontSize: '12.5px' }}>
                         <div>{tableDisplay}</div>
                         {ord.section && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{ord.section}</span>}
                       </td>
-                      <td className="items-cell" style={{ padding: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '160px' }} title={itemSummary}>
+                      <td className="items-cell" style={{ padding: '11px 8px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '300px', fontSize: '12.5px' }} title={itemSummary}>
                         {itemSummary}
                       </td>
-                      <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>
+                      <td style={{ padding: '11px 8px', fontWeight: 700, color: 'var(--primary)', textAlign: 'right', fontSize: '13px' }}>
                         <div>₹{ord.total}</div>
                         {ord.billingStatus && (
                           <span style={{ fontSize: '10px', textTransform: 'uppercase', color: ord.billingStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
@@ -868,7 +875,9 @@ export default function OverviewPanel({
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '12px' }}><Badge status={ord.status || 'new'} /></td>
+                      <td style={{ padding: '11px 12px', textAlign: 'center' }}>
+                        <Badge status={ord.status || 'new'} style={{ fontSize: '10px', padding: '3px 8px', textTransform: 'uppercase' }} />
+                      </td>
                     </tr>
                   );
                 })}
@@ -884,19 +893,19 @@ export default function OverviewPanel({
           </div>
         </div>
 
-        {/* Dining Tables Grid */}
-        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '8px' }}>
+        {/* Dining Tables Grid (Decreased Section Size) */}
+        <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '18px 16px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '6px' }}>
             <div>
-              <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0, whiteSpace: 'nowrap' }}>
+              <h2 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--black)', margin: 0, whiteSpace: 'nowrap' }}>
                 Live Tables Status
               </h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-              <span style={{ fontSize: '11px', background: occupiedTablesCount > 0 ? '#fef2f2' : '#f0fdf4', color: occupiedTablesCount > 0 ? '#ef4444' : '#166534', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: occupiedTablesCount > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              <span style={{ fontSize: '10.5px', background: occupiedTablesCount > 0 ? '#fef2f2' : '#f0fdf4', color: occupiedTablesCount > 0 ? '#ef4444' : '#166534', padding: '2px 6px', borderRadius: '8px', fontWeight: 700, border: occupiedTablesCount > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>
                 {occupiedTablesCount} Occupied
               </span>
-              <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '10.5px', background: '#f8fafc', color: '#64748b', padding: '2px 6px', borderRadius: '8px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
                 {displayTables.length} Total
               </span>
             </div>
@@ -907,10 +916,10 @@ export default function OverviewPanel({
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: '10px',
+              gap: '8px',
               maxHeight: '440px',
               overflowY: 'auto',
-              paddingRight: '4px'
+              paddingRight: '3px'
             }}
           >
             {displayTables.map((table, idx) => {
@@ -928,8 +937,8 @@ export default function OverviewPanel({
                     background: '#ffffff', 
                     border: '1.5px solid var(--border)', 
                     borderTop: isOccupied ? '4px solid #ef4444' : (isReserved ? '4px solid #f59e0b' : '4px solid #10b981'),
-                    borderRadius: '10px', 
-                    padding: '12px 10px', 
+                    borderRadius: '8px', 
+                    padding: '10px 8px', 
                     textAlign: 'center',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
                     transition: 'transform 0.2s ease, box-shadow 0.2s ease',
@@ -939,34 +948,34 @@ export default function OverviewPanel({
                   }}
                 >
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-main)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-main)' }}>
                         {tableNum}
                       </span>
-                      <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px', fontWeight: 600 }}>
+                      <span style={{ fontSize: '9.5px', color: '#64748b', background: '#f1f5f9', padding: '1px 4px', borderRadius: '4px', fontWeight: 600 }}>
                         🪑 {seats}
                       </span>
                     </div>
 
-                    <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 500, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={section}>
+                    <div style={{ fontSize: '9.5px', color: '#64748b', fontWeight: 500, textAlign: 'left', marginBottom: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={section}>
                       {section}
                     </div>
 
                     {waiterName && (
-                      <div style={{ fontSize: '10px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`Waiter: ${waiterName}`}>
+                      <div style={{ fontSize: '9.5px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`Waiter: ${waiterName}`}>
                         🤵 {waiterName}
                       </div>
                     )}
                   </div>
 
-                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #f1f5f9' }}>
+                  <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px dashed #f1f5f9' }}>
                     <span style={{ 
-                      fontSize: '9px', 
+                      fontSize: '8.5px', 
                       fontWeight: 800, 
-                      letterSpacing: '0.5px',
+                      letterSpacing: '0.4px', 
                       textTransform: 'uppercase',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
+                      padding: '1px 5px',
+                      borderRadius: '3px',
                       background: isOccupied ? '#fef2f2' : (isReserved ? '#fffbeb' : '#f0fdf4'),
                       color: isOccupied ? '#ef4444' : (isReserved ? '#f59e0b' : '#10b981')
                     }}>

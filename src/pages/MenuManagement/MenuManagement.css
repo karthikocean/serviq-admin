@@ -118,8 +118,9 @@
 }
 
 .menu-table-wrapper {
-  overflow-y: auto;
-  max-height: 520px;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-height: none;
 }
 
 .menu-items-table {

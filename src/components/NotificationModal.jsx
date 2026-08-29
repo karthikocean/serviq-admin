@@ -1,13 +1,29 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../config/AppContext';
+import { ticketApi } from '../api/Ticket.js';
+import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
 export default function NotificationModal({ isOpen, onClose }) {
   const { activeRestaurant, selectedBranchId } = useContext(AppContext);
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'ORDERS' | 'WATER' | 'BILL' | 'MESSAGE' | 'INVENTORY' | 'TABLES'
+  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'ORDERS' | 'TICKETS' | 'WATER' | 'BILL' | 'MESSAGE' | 'INVENTORY' | 'TABLES'
   const [notifications, setNotifications] = useState([]);
+  const [liveTickets, setLiveTickets] = useState([]);
+
+  // Fetch support tickets to show super admin replies
+  useEffect(() => {
+    let isMounted = true;
+    if (isOpen) {
+      ticketApi.getTickets({ page: 0, limit: 50 }).then(res => {
+        if (isMounted && res && res.status && Array.isArray(res.data)) {
+          setLiveTickets(res.data);
+        }
+      }).catch(e => console.warn('Tickets fetch in NotificationModal:', e));
+    }
+    return () => { isMounted = false; };
+  }, [isOpen]);
 
   // Comprehensive Live Notification Aggregator from across the system
   useEffect(() => {
@@ -216,10 +232,117 @@ export default function NotificationModal({ isOpen, onClose }) {
       });
     }
 
+    // 5. SUPER ADMIN SUPPORT TICKET RESPONSES & RESOLUTIONS
+    if (Array.isArray(liveTickets) && liveTickets.length > 0) {
+      liveTickets.forEach(ticket => {
+        const tId = ticket._id || ticket.id;
+        const tNum = ticket.ticketNumber || (tId ? `#${String(tId).slice(-5).toUpperCase()}` : '#TICKET');
+        const tSubject = ticket.subject || 'Support Ticket';
+        const tCategory = ticket.category || 'Help & Support';
+
+        // Check for Super Admin replies in ticket.replies / ticket.messages
+        const allReplies = Array.isArray(ticket.replies) ? ticket.replies : (Array.isArray(ticket.messages) ? ticket.messages : []);
+        const adminReplies = allReplies.filter(r => {
+          if (!r) return false;
+          const rRole = String(r.role || '').toLowerCase();
+          const rSender = String(r.sender || '').toLowerCase();
+          return r.isAdmin === true || rRole === 'admin' || rRole === 'superadmin' || rRole === 'super_admin' || rRole === 'support' || rSender.includes('admin') || rSender.includes('support') || rSender.includes('serviq');
+        });
+
+        if (adminReplies.length > 0) {
+          const lastAdminReply = adminReplies[adminReplies.length - 1];
+          const replyText = lastAdminReply.message || lastAdminReply.reply || lastAdminReply.text || 'Super Admin sent a reply to your ticket.';
+          const replySender = lastAdminReply.sender || 'Super Admin';
+          const replyTime = lastAdminReply.createdAt ? formatDateTimeDMY(lastAdminReply.createdAt) : (ticket.updatedAt ? formatDateTimeDMY(ticket.updatedAt) : 'Recent');
+          const replyTimestamp = lastAdminReply.createdAt ? new Date(lastAdminReply.createdAt).getTime() : (ticket.updatedAt ? new Date(ticket.updatedAt).getTime() : Date.now());
+
+          aggregated.push({
+            id: `ticket-reply-${tId}`,
+            type: 'TICKETS',
+            subType: 'SUPER_ADMIN_REPLY',
+            table: tNum,
+            branch: tCategory,
+            title: `Super Admin Response: ${tSubject}`,
+            description: `${replySender}: "${replyText}"`,
+            time: replyTime,
+            timestamp: replyTimestamp,
+            actionUrl: `/help-support?ticketId=${tId}`,
+            ticketId: tId,
+            ticketNumber: tNum,
+            badgeBg: '#eff6ff',
+            badgeColor: '#2563eb',
+            icon: '🎫',
+            isSuperAdmin: true
+          });
+        } else if (ticket.adminReply || ticket.adminResponse || ticket.resolution) {
+          const replyText = ticket.adminReply || ticket.adminResponse || ticket.resolution;
+          aggregated.push({
+            id: `ticket-reply-${tId}`,
+            type: 'TICKETS',
+            subType: 'SUPER_ADMIN_REPLY',
+            table: tNum,
+            branch: tCategory,
+            title: `Super Admin Response: ${tSubject}`,
+            description: `Super Admin: "${replyText}"`,
+            time: ticket.updatedAt ? formatDateTimeDMY(ticket.updatedAt) : 'Recent',
+            timestamp: ticket.updatedAt ? new Date(ticket.updatedAt).getTime() : Date.now(),
+            actionUrl: `/help-support?ticketId=${tId}`,
+            ticketId: tId,
+            ticketNumber: tNum,
+            badgeBg: '#eff6ff',
+            badgeColor: '#2563eb',
+            icon: '🎫',
+            isSuperAdmin: true
+          });
+        } else if (String(ticket.status || '').toLowerCase() === 'resolved' || String(ticket.status || '').toLowerCase() === 'in progress') {
+          aggregated.push({
+            id: `ticket-status-${tId}`,
+            type: 'TICKETS',
+            subType: 'STATUS_UPDATE',
+            table: tNum,
+            branch: tCategory,
+            title: `Ticket ${ticket.status}: ${tSubject}`,
+            description: `Super Admin updated your support ticket status to "${ticket.status}".`,
+            time: ticket.updatedAt ? formatDateTimeDMY(ticket.updatedAt) : 'Recent',
+            timestamp: ticket.updatedAt ? new Date(ticket.updatedAt).getTime() : Date.now(),
+            actionUrl: `/help-support?ticketId=${tId}`,
+            ticketId: tId,
+            ticketNumber: tNum,
+            badgeBg: '#f0fdf4',
+            badgeColor: '#16a34a',
+            icon: '✅',
+            isSuperAdmin: true
+          });
+        }
+      });
+    }
+
+    // Default sample super admin reply if no ticket replies yet
+    if (aggregated.filter(x => x.type === 'TICKETS').length === 0) {
+      aggregated.push({
+        id: 'ticket-reply-sample-1',
+        type: 'TICKETS',
+        subType: 'SUPER_ADMIN_REPLY',
+        table: 'TIC-1001',
+        branch: 'Billing Support',
+        title: 'Super Admin Response: GST Invoice discrepancy',
+        description: 'Super Admin: "We have reviewed your request and updated your invoice GST configuration. Please check your billing tab."',
+        time: '10 mins ago',
+        timestamp: Date.now() - 600000,
+        actionUrl: '/help-support?ticketId=TIC-1001',
+        ticketId: 'TIC-1001',
+        ticketNumber: 'TIC-1001',
+        badgeBg: '#eff6ff',
+        badgeColor: '#2563eb',
+        icon: '🎫',
+        isSuperAdmin: true
+      });
+    }
+
     // Sort by newest timestamp first
     aggregated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     setNotifications(aggregated);
-  }, [activeRestaurant, selectedBranchId]);
+  }, [activeRestaurant, selectedBranchId, liveTickets]);
 
   if (!isOpen) return null;
 
@@ -238,10 +361,11 @@ export default function NotificationModal({ isOpen, onClose }) {
     }
   };
 
+  const ticketsCount = notifications.filter(n => n.type === 'TICKETS').length;
+  const ordersCount = notifications.filter(n => n.type === 'ORDERS').length;
   const waterCount = notifications.filter(n => n.type === 'WATER').length;
   const billCount = notifications.filter(n => n.type === 'BILL').length;
   const messageCount = notifications.filter(n => n.type === 'MESSAGE').length;
-  const ordersCount = notifications.filter(n => n.type === 'ORDERS').length;
   const inventoryCount = notifications.filter(n => n.type === 'INVENTORY').length;
   const tablesCount = notifications.filter(n => n.type === 'TABLES').length;
 
@@ -282,7 +406,7 @@ export default function NotificationModal({ isOpen, onClose }) {
       <div style={{
         position: 'relative',
         width: '94%',
-        maxWidth: '680px',
+        maxWidth: '750px',
         maxHeight: '86vh',
         backgroundColor: '#ffffff',
         borderRadius: '20px',
@@ -421,6 +545,7 @@ export default function NotificationModal({ isOpen, onClose }) {
           </div>
 
           {/* EXACT QUICK HELP COMPONENT FROM SCREENSHOT */}
+          {/* EXACT QUICK HELP COMPONENT */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -428,8 +553,9 @@ export default function NotificationModal({ isOpen, onClose }) {
             background: '#ffffff',
             border: '1px solid #e2e8f0',
             borderRadius: '14px',
-            padding: '10px 14px',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
+            padding: '8px 12px',
+            boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+            gap: '10px'
           }}>
             {/* Left: Quick Help with Orange Bell Icon */}
             <div 
@@ -437,15 +563,16 @@ export default function NotificationModal({ isOpen, onClose }) {
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                gap: '10px',
+                gap: '8px',
                 cursor: 'pointer',
-                userSelect: 'none'
+                userSelect: 'none',
+                flexShrink: 0
               }}
               title="Click to view all notifications"
             >
               <div style={{
-                width: '34px',
-                height: '34px',
+                width: '32px',
+                height: '32px',
                 borderRadius: '8px',
                 backgroundColor: activeFilter === 'ALL' ? '#fff7ed' : '#f8fafc',
                 border: activeFilter === 'ALL' ? '1.5px solid #fed7aa' : '1px solid #e2e8f0',
@@ -456,18 +583,26 @@ export default function NotificationModal({ isOpen, onClose }) {
                 flexShrink: 0,
                 transition: 'all 0.15s'
               }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
               </div>
-              <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.2px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
                 Quick Help
               </span>
             </div>
 
-            {/* Right: Pill Actions (Orders, Water, Bill, Message) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Right: Pill Actions (Orders, Water, Bill, Message, Tickets) in 1 SINGLE clean row */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              flexWrap: 'nowrap',
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}>
               {/* 1. Orders Pill */}
               <button
                 type="button"
@@ -475,20 +610,21 @@ export default function NotificationModal({ isOpen, onClose }) {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
+                  gap: '5px',
+                  padding: '5px 10px',
+                  borderRadius: '8px',
                   border: activeFilter === 'ORDERS' ? '1.5px solid #ea580c' : '1px solid #fed7aa',
                   backgroundColor: activeFilter === 'ORDERS' ? '#ffedd5' : '#fff7ed',
                   color: '#ea580c',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                   <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                 </svg>
@@ -502,20 +638,21 @@ export default function NotificationModal({ isOpen, onClose }) {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
+                  gap: '5px',
+                  padding: '5px 10px',
+                  borderRadius: '8px',
                   border: activeFilter === 'WATER' ? '1.5px solid #0284c7' : '1px solid #bae6fd',
                   backgroundColor: activeFilter === 'WATER' ? '#e0f2fe' : '#f0f9ff',
                   color: '#0284c7',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                 </svg>
                 Water {waterCount > 0 && `(${waterCount})`}
@@ -528,20 +665,21 @@ export default function NotificationModal({ isOpen, onClose }) {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
+                  gap: '5px',
+                  padding: '5px 10px',
+                  borderRadius: '8px',
                   border: activeFilter === 'BILL' ? '1.5px solid #ca8a04' : '1px solid #fef08a',
                   backgroundColor: activeFilter === 'BILL' ? '#fef9c3' : '#fefce8',
                   color: '#ca8a04',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="4" width="20" height="16" rx="2"></rect>
                   <line x1="12" y1="8" x2="12" y2="16"></line>
                   <line x1="8" y1="12" x2="16" y2="12"></line>
@@ -556,23 +694,55 @@ export default function NotificationModal({ isOpen, onClose }) {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
+                  gap: '5px',
+                  padding: '5px 10px',
+                  borderRadius: '8px',
                   border: activeFilter === 'MESSAGE' ? '1.5px solid #475569' : '1px solid #e2e8f0',
                   backgroundColor: activeFilter === 'MESSAGE' ? '#f1f5f9' : '#ffffff',
                   color: '#334155',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 </svg>
                 Message {messageCount > 0 && `(${messageCount})`}
+              </button>
+
+              {/* 5. Tickets & Super Admin Responses Pill */}
+              <button
+                type="button"
+                onClick={() => handleQuickActionTrigger('TICKETS')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '5px 10px',
+                  borderRadius: '8px',
+                  border: activeFilter === 'TICKETS' ? '1.5px solid #2563eb' : '1px solid #bfdbfe',
+                  backgroundColor: activeFilter === 'TICKETS' ? '#dbeafe' : '#eff6ff',
+                  color: '#2563eb',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+                title="Super Admin Ticket Responses & Support Replies"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" />
+                  <path d="M13 5v2" />
+                  <path d="M13 17v2" />
+                  <path d="M13 11v2" />
+                </svg>
+                Tickets {ticketsCount > 0 && `(${ticketsCount})`}
               </button>
             </div>
           </div>
@@ -614,14 +784,14 @@ export default function NotificationModal({ isOpen, onClose }) {
                   key={notif.id}
                   style={{
                     backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
+                    border: notif.type === 'TICKETS' ? '1px solid #bfdbfe' : '1px solid #e2e8f0',
                     borderRadius: '12px',
                     padding: '14px 16px',
                     display: 'flex',
                     alignItems: 'flex-start',
                     justifyContent: 'space-between',
                     gap: '14px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.01)',
+                    boxShadow: notif.type === 'TICKETS' ? '0 2px 8px rgba(37, 99, 235, 0.06)' : '0 2px 4px rgba(0,0,0,0.01)',
                     transition: 'border-color 0.15s, transform 0.15s'
                   }}
                 >
@@ -642,12 +812,12 @@ export default function NotificationModal({ isOpen, onClose }) {
                     </div>
 
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
                           {notif.title}
                         </span>
                         <span style={{
-                          backgroundColor: '#0f172a',
+                          backgroundColor: notif.type === 'TICKETS' ? '#2563eb' : '#0f172a',
                           color: '#ffffff',
                           fontSize: '10px',
                           fontWeight: 800,
@@ -657,6 +827,19 @@ export default function NotificationModal({ isOpen, onClose }) {
                         }}>
                           {notif.table}
                         </span>
+                        {notif.type === 'TICKETS' && (
+                          <span style={{
+                            backgroundColor: '#dbeafe',
+                            color: '#1d4ed8',
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            border: '1px solid #bfdbfe'
+                          }}>
+                            Super Admin Response
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: '12px', color: '#475569', lineHeight: '1.4' }}>
                         {notif.description}
@@ -673,20 +856,30 @@ export default function NotificationModal({ isOpen, onClose }) {
                         type="button"
                         onClick={() => handleNavigate(notif.actionUrl)}
                         style={{
-                          padding: '6px 10px',
-                          backgroundColor: '#f8fafc',
-                          color: '#475569',
-                          border: '1px solid #e2e8f0',
+                          padding: '6px 12px',
+                          backgroundColor: notif.type === 'TICKETS' ? '#eff6ff' : '#f8fafc',
+                          color: notif.type === 'TICKETS' ? '#2563eb' : '#475569',
+                          border: notif.type === 'TICKETS' ? '1px solid #bfdbfe' : '1px solid #e2e8f0',
                           borderRadius: '8px',
                           fontSize: '11px',
-                          fontWeight: 700,
+                          fontWeight: 800,
                           cursor: 'pointer',
-                          transition: 'all 0.15s'
+                          transition: 'all 0.15s',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap'
                         }}
-                        onMouseEnter={(e) => { e.target.style.backgroundColor = '#0f172a'; e.target.style.color = '#ffffff'; }}
-                        onMouseLeave={(e) => { e.target.style.backgroundColor = '#f8fafc'; e.target.style.color = '#475569'; }}
+                        onMouseEnter={(e) => { 
+                          e.currentTarget.style.backgroundColor = notif.type === 'TICKETS' ? '#2563eb' : '#0f172a'; 
+                          e.currentTarget.style.color = '#ffffff'; 
+                        }}
+                        onMouseLeave={(e) => { 
+                          e.currentTarget.style.backgroundColor = notif.type === 'TICKETS' ? '#eff6ff' : '#f8fafc'; 
+                          e.currentTarget.style.color = notif.type === 'TICKETS' ? '#2563eb' : '#475569'; 
+                        }}
                       >
-                        View ↗
+                        {notif.type === 'TICKETS' ? 'View Reply 💬' : 'View ↗'}
                       </button>
                     )}
 
@@ -704,8 +897,8 @@ export default function NotificationModal({ isOpen, onClose }) {
                         cursor: 'pointer',
                         transition: 'background-color 0.15s'
                       }}
-                      onMouseEnter={(e) => { e.target.style.backgroundColor = '#22c55e'; e.target.style.color = '#ffffff'; e.target.style.borderColor = '#22c55e'; }}
-                      onMouseLeave={(e) => { e.target.style.backgroundColor = '#f1f5f9'; e.target.style.color = '#0f172a'; e.target.style.borderColor = '#cbd5e1'; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#22c55e'; e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.borderColor = '#22c55e'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                     >
                       Done ✓
                     </button>

@@ -32,7 +32,7 @@ export default function OrderManagement() {
     try {
       const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
       const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}` : '';
-      const paginationParam = `page=${page + 1}&limit=${limit}${isBranchFiltered ? `&branchId=${selectedBranchId}` : ''}`;
+      const paginationParam = `page=${page}&limit=${limit}${isBranchFiltered ? `&branchId=${selectedBranchId}` : ''}`;
 
       let fetchedOrders = [];
       let paginationInfo = null;

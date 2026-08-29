@@ -124,6 +124,61 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [historySearch, setHistorySearch] = useState('');
   const [localPurchases, setLocalPurchases] = useState([]);
 
+  // Popup Managed Plans State (Ordered: Premium -> Standard -> Basic to match screenshot)
+  const [plansList, setPlansList] = useState([
+    {
+      id: 'plan-premium',
+      name: 'Premium Plan',
+      status: 'Active',
+      tagline: 'Advanced operations with integrated Kitchen KDS displays and advanced billing.',
+      monthlyPrice: 4999,
+      annualPrice: 49999,
+      maxBranches: 8,
+      features: [
+        { name: 'Menu Management', included: true },
+        { name: 'Table Management', included: true },
+        { name: 'Order Management', included: true },
+        { name: 'Waiter Management', included: true },
+        { name: 'Kitchen Management', included: true },
+        { name: 'Inventory Management', included: true }
+      ]
+    },
+    {
+      id: 'plan-standard',
+      name: 'Standard Plan',
+      status: 'Active',
+      tagline: 'Includes everything in Basic, plus tableside waiter service and app integrations.',
+      monthlyPrice: 1999,
+      annualPrice: 19999,
+      maxBranches: 5,
+      features: [
+        { name: 'Menu Management', included: true },
+        { name: 'Table Management', included: true },
+        { name: 'Order Management', included: true },
+        { name: 'Waiter Management', included: true },
+        { name: 'Kitchen Management', included: true }
+      ]
+    },
+    {
+      id: 'plan-basic',
+      name: 'Basic Plan',
+      status: 'Active',
+      tagline: 'Essential tools for small eateries, QR menu ordering and simple table management.',
+      monthlyPrice: 999,
+      annualPrice: 9999,
+      maxBranches: 3,
+      features: [
+        { name: 'Menu Management', included: true },
+        { name: 'Table Management', included: true },
+        { name: 'Order Management', included: true },
+        { name: 'Waiter Management', included: false },
+        { name: 'Kitchen Management', included: false }
+      ]
+    }
+  ]);
+
+  const [editingPlan, setEditingPlan] = useState(null);
+
   // Fetch live subscription dashboard data
   const fetchDashboardData = useCallback(async (showToast = false) => {
     setIsRefreshing(true);
@@ -389,6 +444,25 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       fetchDashboardData(false);
       ShowNotifications.showAlertNotification(`Successfully updated subscription to ${targetPlan.name}!`, true);
     }, 900);
+  };
+
+  const handleTogglePlanActive = (planId) => {
+    setPlansList(prev => prev.map(p => {
+      if (p.id === planId) {
+        const nextStatus = p.status === 'Active' ? 'Deactivated' : 'Active';
+        ShowNotifications.showAlertNotification(`${p.name} has been ${nextStatus.toLowerCase()}!`, true);
+        return { ...p, status: nextStatus };
+      }
+      return p;
+    }));
+  };
+
+  const handleSaveEditPlan = (e) => {
+    e.preventDefault();
+    if (!editingPlan) return;
+    setPlansList(prev => prev.map(p => p.id === editingPlan.id ? editingPlan : p));
+    ShowNotifications.showAlertNotification(`${editingPlan.name} updated successfully!`, true);
+    setEditingPlan(null);
   };
 
   const handleToggleAutoRenew = () => {
@@ -1064,90 +1138,27 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </Modal>
       )}
 
-      {/* MODAL: SUBSCRIPTION UPGRADE & RENEW PLANS MODAL */}
+      {/* MODAL: SUBSCRIPTION UPGRADE & PLANS MANAGEMENT MODAL (EXACT MATCH TO SCREENSHOT) */}
       {isUpgradeModalOpen && (
         <Modal
           isOpen={isUpgradeModalOpen}
           onClose={() => !isProcessingUpgrade && setIsUpgradeModalOpen(false)}
-          title="Subscription Plans & Upgrade"
-          maxWidth="1050px"
+          title="Plans Management"
+          maxWidth="1140px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingTop: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 0' }}>
 
-            {/* Top Cycle Toggle & Current Status Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', background: '#f8fafc', padding: '12px 18px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Active Plan: </span>
-                <strong style={{ color: '#0f172a', fontSize: '14px' }}>{currentPlanName}</strong>
-                <span style={{ marginLeft: '8px', fontSize: '11px', background: '#dcfce7', color: '#166534', fontWeight: 800, padding: '2px 8px', borderRadius: '12px' }}>
-                  ● Active
-                </span>
-                <span style={{ marginLeft: '8px', fontSize: '11px', color: '#64748b' }}>
-                  (Valid until {validityFormatted})
-                </span>
-              </div>
-
-              {/* Monthly / Annual Billing Switcher */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', padding: '4px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-                <button
-                  type="button"
-                  onClick={() => setUpgradeBillingCycle('monthly')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '7px',
-                    border: 'none',
-                    background: upgradeBillingCycle === 'monthly' ? 'var(--primary)' : 'transparent',
-                    color: upgradeBillingCycle === 'monthly' ? '#ffffff' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s'
-                  }}
-                >
-                  Monthly Billing
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUpgradeBillingCycle('annual')}
-                  style={{
-                    padding: '6px 14px',
-                    borderRadius: '7px',
-                    border: 'none',
-                    background: upgradeBillingCycle === 'annual' ? 'var(--primary)' : 'transparent',
-                    color: upgradeBillingCycle === 'annual' ? '#ffffff' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  Annual Billing
-                  <span style={{ fontSize: '10px', background: '#ffedd5', color: '#c2410c', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>Save 17%</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3 PLAN COMPARISON CARDS (EXACT MATCH WITH SCREENSHOT) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'stretch' }}>
-              {AVAILABLE_PLANS.map(plan => {
-                const isBasic = plan.id === 'plan-basic' || plan.name.toLowerCase().includes('basic');
-                const isStandard = plan.id === 'plan-standard' || plan.name.toLowerCase().includes('standard');
-                const isPremium = plan.id === 'plan-premium' || plan.name.toLowerCase().includes('premium');
-
-                const isCurrentActive =
-                  plan.id === sub.planId ||
-                  plan.name.toLowerCase().includes((currentPlanName || '').toLowerCase().replace(' plan', '')) ||
-                  (currentPlanName || '').toLowerCase().includes(plan.name.toLowerCase().replace(' plan', ''));
+            {/* 3 PLAN COMPARISON CARDS */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' }}>
+              {plansList.map(plan => {
+                const isActive = plan.status === 'Active';
 
                 return (
                   <div
                     key={plan.id}
                     style={{
                       background: '#ffffff',
-                      borderRadius: '20px',
+                      borderRadius: '16px',
                       border: '1.5px solid #eef2f6',
                       padding: '28px 24px 22px 24px',
                       display: 'flex',
@@ -1159,66 +1170,66 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     }}
                   >
                     <div>
-                      {/* Top Row: Icon + Title + Edit Pencil */}
+                      {/* Top Row: Title + Edit Pencil Icon */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {isBasic && (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-                            </svg>
-                          )}
-                          {isStandard && (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                              <polyline points="17 6 23 6 23 12"></polyline>
-                            </svg>
-                          )}
-                          {isPremium && (
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
-                            </svg>
-                          )}
-                          <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                            {plan.name}
-                          </h3>
-                        </div>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                          {plan.name}
+                        </h3>
 
                         {/* Edit Pencil Icon */}
-                        <div style={{ color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPlan(plan)}
+                          title={`Edit ${plan.name}`}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            cursor: 'pointer',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            transition: 'color 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                        >
                           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                             <path d="m15 5 4 4" />
                           </svg>
-                        </div>
+                        </button>
                       </div>
 
                       {/* Active Status Badge */}
                       <div style={{ marginTop: '8px' }}>
                         <span style={{
                           display: 'inline-block',
-                          padding: '3px 9px',
-                          borderRadius: '6px',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
                           fontSize: '11px',
                           fontWeight: 700,
-                          backgroundColor: '#e6f9f0',
-                          color: '#10b981'
+                          backgroundColor: isActive ? '#e6f9f0' : '#f1f5f9',
+                          color: isActive ? '#10b981' : '#64748b'
                         }}>
-                          Active
+                          {plan.status || 'Active'}
                         </span>
                       </div>
 
                       {/* Tagline Description */}
-                      <p style={{ fontSize: '13px', color: '#64748b', margin: '14px 0 20px 0', lineHeight: 1.5, minHeight: '40px' }}>
+                      <p style={{ fontSize: '12.5px', color: '#64748b', margin: '14px 0 22px 0', lineHeight: 1.5, minHeight: '38px' }}>
                         {plan.tagline}
                       </p>
 
-                      {/* Rates Section (Left Label - Right Price) */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '18px', borderBottom: '1px solid #f1f5f9' }}>
+                      {/* Rates Section (Left Label - Right Value) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                           <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
                             MONTHLY RATE
                           </span>
-                          <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
                             ₹{plan.monthlyPrice ? plan.monthlyPrice.toLocaleString() : '999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/mo</span>
                           </span>
                         </div>
@@ -1227,26 +1238,35 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
                             ANNUAL RATE
                           </span>
-                          <span style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
                             ₹{plan.annualPrice ? plan.annualPrice.toLocaleString() : '9,999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/yr</span>
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
+                            MAX BRANCHES
+                          </span>
+                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
+                            {plan.maxBranches}
                           </span>
                         </div>
                       </div>
 
                       {/* Includes Features Section */}
-                      <div style={{ marginTop: '18px' }}>
+                      <div style={{ marginTop: '20px' }}>
                         <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '14px' }}>
                           INCLUDES FEATURES:
                         </div>
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {plan.featuresList.map((feat, fIdx) => (
+                          {plan.features.map((feat, fIdx) => (
                             <li key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
                               {feat.included ? (
                                 <>
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                                     <polyline points="20 6 9 17 4 12"></polyline>
                                   </svg>
-                                  <span style={{ color: '#1e293b', fontWeight: 700 }}>{feat.name}</span>
+                                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{feat.name}</span>
                                 </>
                               ) : (
                                 <>
@@ -1263,19 +1283,19 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
                     </div>
 
-                    {/* Bottom Button: Deactivate Plan */}
-                    <div style={{ marginTop: '26px' }}>
+                    {/* Bottom Action Button: Deactivate Plan */}
+                    <div style={{ marginTop: '28px' }}>
                       <button
                         type="button"
-                        onClick={() => handleConfirmPlanUpgrade(plan)}
+                        onClick={() => handleTogglePlanActive(plan.id)}
                         disabled={isProcessingUpgrade}
                         style={{
                           width: '100%',
                           padding: '11px 16px',
-                          borderRadius: '10px',
+                          borderRadius: '8px',
                           border: 'none',
-                          background: '#fff1f2',
-                          color: '#ef4444',
+                          background: isActive ? '#fff1f2' : '#f0fdf4',
+                          color: isActive ? '#ef4444' : '#16a34a',
                           fontSize: '13px',
                           fontWeight: 700,
                           cursor: 'pointer',
@@ -1286,16 +1306,17 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           transition: 'all 0.15s'
                         }}
                         onMouseEnter={e => {
-                          e.currentTarget.style.background = '#ffe4e6';
+                          e.currentTarget.style.background = isActive ? '#ffe4e6' : '#dcfce7';
                         }}
                         onMouseLeave={e => {
-                          e.currentTarget.style.background = '#fff1f2';
+                          e.currentTarget.style.background = isActive ? '#fff1f2' : '#f0fdf4';
                         }}
                       >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
                         </svg>
-                        Deactivate Plan
+                        {isActive ? 'Deactivate Plan' : 'Activate Plan'}
                       </button>
                     </div>
                   </div>
@@ -1303,39 +1324,86 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               })}
             </div>
 
-            {/* Payment Mode Selector & Modal Footer */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', background: '#f8fafc', padding: '14px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Method:</span>
-                {[
-                  { id: 'card', label: 'Credit Card (•••• 4242)' },
-                  { id: 'upi', label: 'UPI / QR Code' },
-                  { id: 'netbanking', label: 'NetBanking' }
-                ].map(pm => (
-                  <label key={pm.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#475569', cursor: 'pointer', fontWeight: 600 }}>
-                    <input
-                      type="radio"
-                      name="upgradePaymentMethod"
-                      checked={upgradePaymentMethod === pm.id}
-                      onChange={() => setUpgradePaymentMethod(pm.id)}
-                    />
-                    {pm.label}
-                  </label>
-                ))}
-              </div>
+          </div>
+        </Modal>
+      )}
 
+      {/* MODAL: EDIT PLAN MODAL */}
+      {editingPlan && (
+        <Modal
+          isOpen={!!editingPlan}
+          onClose={() => setEditingPlan(null)}
+          title={`Edit ${editingPlan.name}`}
+          maxWidth="500px"
+        >
+          <form onSubmit={handleSaveEditPlan} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '6px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                Tagline Description
+              </label>
+              <textarea
+                value={editingPlan.tagline}
+                onChange={e => setEditingPlan({ ...editingPlan, tagline: e.target.value })}
+                rows="2"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                  Monthly Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  value={editingPlan.monthlyPrice}
+                  onChange={e => setEditingPlan({ ...editingPlan, monthlyPrice: Number(e.target.value) })}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                  Annual Rate (₹)
+                </label>
+                <input
+                  type="number"
+                  value={editingPlan.annualPrice}
+                  onChange={e => setEditingPlan({ ...editingPlan, annualPrice: Number(e.target.value) })}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
+                Max Branches
+              </label>
+              <input
+                type="number"
+                value={editingPlan.maxBranches}
+                onChange={e => setEditingPlan({ ...editingPlan, maxBranches: Number(e.target.value) })}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => setIsUpgradeModalOpen(false)}
-                disabled={isProcessingUpgrade}
-                style={{ padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
+                onClick={() => setEditingPlan(null)}
+                style={{ padding: '8px 16px', fontSize: '13px' }}
               >
-                Close
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-black"
+                style={{ padding: '8px 18px', fontSize: '13px' }}
+              >
+                Save Changes
               </button>
             </div>
-
-          </div>
+          </form>
         </Modal>
       )}
 

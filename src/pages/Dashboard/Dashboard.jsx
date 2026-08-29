@@ -5,6 +5,8 @@ import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
 import StaffApi from '../../api/Staff';
+import UserApi from '../../api/User';
+import { resolveBranchManagerName } from '../../helper/BranchHelper';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -18,14 +20,16 @@ export default function Dashboard() {
   const [liveOrders, setLiveOrders] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
   const [liveStaff, setLiveStaff] = useState([]);
+  const [liveUsers, setLiveUsers] = useState([]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [tablesRes, ordersRes, branchesRes, staffRes] = await Promise.allSettled([
+      const [tablesRes, ordersRes, branchesRes, staffRes, usersRes] = await Promise.allSettled([
         TableApi.getTables(),
         OrderApi.getOrders(),
         BranchApi.getBranches(),
-        StaffApi.getStaff()
+        StaffApi.getStaff(),
+        UserApi.getUsers({ limit: 100 })
       ]);
 
       if (tablesRes.status === 'fulfilled' && tablesRes.value?.status && tablesRes.value.response?.data) {
@@ -39,6 +43,9 @@ export default function Dashboard() {
       }
       if (staffRes.status === 'fulfilled' && staffRes.value?.status && staffRes.value.response?.data) {
         setLiveStaff(staffRes.value.response.data);
+      }
+      if (usersRes.status === 'fulfilled' && usersRes.value?.status && usersRes.value.response?.data) {
+        setLiveUsers(usersRes.value.response.data);
       }
     } catch (e) {
       console.error("Dashboard fetch error:", e);
@@ -58,7 +65,17 @@ export default function Dashboard() {
   const rawOrders = (liveOrders && liveOrders.length > 0) ? liveOrders : (activeRestaurant.orders || []);
   const rawTables = (liveTables && liveTables.length > 0) ? liveTables : (activeRestaurant.tables || []);
   const rawStaff = (liveStaff && liveStaff.length > 0) ? liveStaff : (activeRestaurant.staff || []);
-  const branches = (liveBranches && liveBranches.length > 0) ? liveBranches : (activeRestaurant.branches || []);
+  const rawBranches = (liveBranches && liveBranches.length > 0) ? liveBranches : (activeRestaurant.branches || []);
+  const rawUsers = (liveUsers && liveUsers.length > 0) ? liveUsers : (activeRestaurant.users || []);
+
+  const branches = rawBranches.map(b => {
+    const mgrName = resolveBranchManagerName(b, rawUsers, rawStaff);
+    return {
+      ...b,
+      branchManager: mgrName,
+      managerName: mgrName
+    };
+  });
 
   const branchMatches = (itemBranchId, targetBranchId) => {
     if (!targetBranchId || targetBranchId === 'ALL') return true;
@@ -84,9 +101,11 @@ export default function Dashboard() {
       orders={orders}
       tables={tables}
       staff={staff}
+      users={rawUsers}
       allOrders={rawOrders}
       allTables={rawTables}
       allStaff={rawStaff}
+      allUsers={rawUsers}
       branches={branches}
       selectedBranchId={selectedBranchId}
       onSelectBranch={setSelectedBranchId}

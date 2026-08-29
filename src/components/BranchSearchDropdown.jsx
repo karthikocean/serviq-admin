@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import BranchApi from '../api/Branch.js';
+import UserApi from '../api/User.js';
+import StaffApi from '../api/Staff.js';
+import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -79,21 +82,27 @@ export default function BranchSearchDropdown() {
       if (contextFetchBranches) {
         await contextFetchBranches();
       }
-      const res = await BranchApi.getBranches();
-      if (res && res.status && res.response) {
-        const branchArray = Array.isArray(res.response) 
-          ? res.response 
-          : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
+      const [res, usersRes, staffRes] = await Promise.allSettled([
+        BranchApi.getBranches(),
+        UserApi.getUsers({ limit: 100 }),
+        StaffApi.getStaff()
+      ]);
+
+      const branchResponse = res.status === 'fulfilled' ? res.value : null;
+      const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
+        ? usersRes.value.response.data
+        : [];
+      const staffList = (staffRes.status === 'fulfilled' && staffRes.value?.status && Array.isArray(staffRes.value.response?.data))
+        ? staffRes.value.response.data
+        : [];
+
+      if (branchResponse && branchResponse.status && branchResponse.response) {
+        const branchArray = Array.isArray(branchResponse.response) 
+          ? branchResponse.response 
+          : (Array.isArray(branchResponse.response.data) ? branchResponse.response.data : (branchResponse.response.branches || []));
         if (Array.isArray(branchArray) && branchArray.length > 0) {
           const mapped = branchArray.map(b => {
-            const mgr = (
-              (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username || b.branchManager.fullName) : (typeof b.branchManager === 'string' && b.branchManager.trim() ? b.branchManager : '')) ||
-              (typeof b.managerName === 'string' && b.managerName.trim() ? b.managerName : '') ||
-              (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName || b.manager.username || b.manager.fullName) : (typeof b.manager === 'string' && b.manager.trim() ? b.manager : '')) ||
-              (typeof b.branchManagerName === 'string' && b.branchManagerName.trim() ? b.branchManagerName : '') ||
-              (typeof b.contactPerson === 'string' && b.contactPerson.trim() ? b.contactPerson : '') ||
-              ''
-            );
+            const mgr = resolveBranchManagerName(b, usersList, staffList);
             return {
               id: b._id || b.id,
               _id: b._id || b.id,

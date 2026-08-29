@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import { ticketApi } from '../../api/Ticket';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications';
 import SearchableSelect from '../../components/SearchableSelect';
-import { formatDateDMY } from '../../helper/DateHelper.js';
+import { formatDateDMY, formatDateTimeDMY } from '../../helper/DateHelper.js';
 import './HelpSupport.css';
 
 export default function HelpSupport() {
   const { activeRestaurant } = useAppState();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [tickets, setTickets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalEntries, setTotalEntries] = useState(0);
   const limit = 10;
@@ -34,6 +37,11 @@ export default function HelpSupport() {
   const [editErrors, setEditErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Ticket Replies State
+  const [replyInput, setReplyInput] = useState('');
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [isLoadingTicketDetails, setIsLoadingTicketDetails] = useState(false);
 
   const fetchTickets = async (page = currentPage) => {
     setIsLoading(true);
@@ -153,6 +161,137 @@ export default function HelpSupport() {
     }
   };
 
+  const handleOpenViewTicket = async (ticket) => {
+    setViewTicket(ticket);
+    setReplyInput('');
+    const targetId = ticket._id || ticket.id;
+    if (targetId) {
+      setIsLoadingTicketDetails(true);
+      try {
+        const res = await ticketApi.getTicketById(targetId);
+        if (res && res.status && res.data) {
+          setViewTicket(prev => (prev && (prev._id === targetId || prev.id === targetId) ? { ...prev, ...res.data } : prev));
+        }
+      } catch (err) {
+        console.error('Error fetching ticket details:', err);
+      } finally {
+        setIsLoadingTicketDetails(false);
+      }
+    }
+  };
+
+  // Auto-open ticket from Notification click
+  useEffect(() => {
+    const targetTicketId = searchParams.get('ticketId') || searchParams.get('viewTicketId') || location.state?.ticketId;
+    if (targetTicketId) {
+      const existing = tickets.find(t => String(t._id || t.id) === String(targetTicketId) || String(t.ticketNumber) === String(targetTicketId));
+      if (existing) {
+        handleOpenViewTicket(existing);
+      } else {
+        ticketApi.getTicketById(targetTicketId).then(res => {
+          if (res && res.status && res.data) {
+            handleOpenViewTicket(res.data);
+          }
+        }).catch(err => console.error("Error opening ticket from notification:", err));
+      }
+    }
+  }, [searchParams, location.state, tickets]);
+
+  const handleSendReply = async (e) => {
+    if (e) e.preventDefault();
+    const cleanText = replyInput.trim();
+    if (!cleanText || !viewTicket) return;
+
+    const targetId = viewTicket._id || viewTicket.id;
+    setIsSendingReply(true);
+
+    try {
+      const senderName = activeRestaurant?.name || 'Restaurant Admin';
+      const res = await ticketApi.addReply(targetId, cleanText, senderName);
+      if (res && res.status) {
+        ShowNotifications.showAlertNotification('Reply sent successfully!', true);
+        const newReplyObj = {
+          message: cleanText,
+          sender: senderName,
+          role: 'user',
+          isAdmin: false,
+          createdAt: new Date().toISOString()
+        };
+
+        // Update local viewTicket state
+        setViewTicket(prev => {
+          if (!prev) return prev;
+          const existingReplies = Array.isArray(prev.replies) ? prev.replies : (Array.isArray(prev.messages) ? prev.messages : []);
+          return {
+            ...prev,
+            replies: [...existingReplies, newReplyObj]
+          };
+        });
+
+        setReplyInput('');
+        fetchTickets(currentPage);
+      } else {
+        ShowNotifications.showAlertNotification(res?.error || 'Failed to send reply.', false);
+      }
+    } catch (err) {
+      console.error('Error sending reply:', err);
+      ShowNotifications.showAlertNotification('Failed to send reply.', false);
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
+
+  const getTicketReplies = (ticket) => {
+    if (!ticket) return [];
+    const list = [];
+
+    if (Array.isArray(ticket.replies)) {
+      ticket.replies.forEach(r => {
+        if (typeof r === 'string') {
+          list.push({ message: r, sender: 'Support Team', role: 'admin', isAdmin: true, createdAt: ticket.updatedAt || ticket.createdAt });
+        } else if (r && typeof r === 'object') {
+          list.push({
+            message: r.message || r.reply || r.text || r.content || '',
+            sender: r.sender || r.repliedBy || r.author || (r.isAdmin || r.role === 'admin' ? 'Support Team' : 'Restaurant Admin'),
+            role: r.role || (r.isAdmin ? 'admin' : 'user'),
+            isAdmin: r.isAdmin !== undefined ? r.isAdmin : (r.role === 'admin' || String(r.sender || '').toLowerCase().includes('support') || String(r.sender || '').toLowerCase().includes('admin')),
+            createdAt: r.createdAt || r.date || r.timestamp || ticket.updatedAt
+          });
+        }
+      });
+    }
+
+    if (Array.isArray(ticket.messages) && list.length === 0) {
+      ticket.messages.forEach(m => {
+        if (typeof m === 'string') {
+          list.push({ message: m, sender: 'Support Team', role: 'admin', isAdmin: true, createdAt: ticket.updatedAt });
+        } else if (m && typeof m === 'object') {
+          list.push({
+            message: m.message || m.text || m.content || '',
+            sender: m.sender || (m.isAdmin ? 'Support Team' : 'Restaurant Admin'),
+            role: m.role || (m.isAdmin ? 'admin' : 'user'),
+            isAdmin: m.isAdmin ?? (m.role === 'admin'),
+            createdAt: m.createdAt || ticket.updatedAt
+          });
+        }
+      });
+    }
+
+    // Single reply strings (if not already captured in replies array)
+    const singleReply = ticket.reply || ticket.adminReply || ticket.adminResponse || ticket.response || ticket.adminNote || ticket.solution;
+    if (singleReply && typeof singleReply === 'string' && list.length === 0) {
+      list.push({
+        message: singleReply,
+        sender: 'ServIQ Support Team',
+        role: 'admin',
+        isAdmin: true,
+        createdAt: ticket.resolvedAt || ticket.updatedAt || ticket.createdAt
+      });
+    }
+
+    return list.filter(item => item.message && item.message.trim().length > 0);
+  };
+
   const getPriorityClass = (priority) => {
     if (priority === 'High') return 'badge-priority-high';
     if (priority === 'Medium') return 'badge-priority-medium';
@@ -183,24 +322,29 @@ export default function HelpSupport() {
           <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '18%', textAlign: 'left' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '34%', textAlign: 'left' }}>SUBJECT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'center' }}>PRIORITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'center' }}>ACTION</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'left' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>PRIORITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>REPLIES</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
                 </tr>
               ) : tickets.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
                 </tr>
               ) : (
-                tickets.map(ticket => (
+                tickets.map(ticket => {
+                  const replies = getTicketReplies(ticket);
+                  const hasReplies = replies.length > 0 || Boolean(ticket.resolution);
+
+                  return (
                   <tr 
                     key={ticket._id || ticket.id}
                     style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
@@ -223,14 +367,54 @@ export default function HelpSupport() {
                         {ticket.status}
                       </span>
                     </td>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                      {hasReplies ? (
+                        <span 
+                          onClick={() => handleOpenViewTicket(ticket)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 9px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            border: '1px solid #bfdbfe',
+                            cursor: 'pointer'
+                          }}
+                          title="Click to view support replies"
+                        >
+                          💬 {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}` : 'Replied'}
+                        </span>
+                      ) : (
+                        <span 
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            background: '#f8fafc',
+                            color: '#94a3b8',
+                            border: '1px solid #e2e8f0'
+                          }}
+                        >
+                          ⏳ Awaiting
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: '14px 20px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        {/* View Button (Icon Only) */}
+                        {/* View & Replies Button (Icon Only) */}
                         <button 
                           type="button"
-                          onClick={() => setViewTicket(ticket)}
-                          title="View ticket details"
-                          aria-label="View ticket details"
+                          onClick={() => handleOpenViewTicket(ticket)}
+                          title="View ticket details & replies"
+                          aria-label="View ticket details & replies"
                           style={{ 
                             width: '32px',
                             height: '32px',
@@ -329,7 +513,8 @@ export default function HelpSupport() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -350,24 +535,24 @@ export default function HelpSupport() {
           }}>
             {/* Left Info Text */}
             <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-              Showing {totalEntries === 0 ? 0 : (currentPage - 1) * limit + 1} to {Math.min(currentPage * limit, totalEntries)} of {totalEntries} entries
+              Showing {totalEntries === 0 ? 0 : currentPage * limit + 1} to {Math.min((currentPage + 1) * limit, totalEntries)} of {totalEntries} entries
             </div>
 
             {/* Right Pagination Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <button
                 type="button"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 0}
+                onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
                 style={{
                   padding: '6px 14px',
                   borderRadius: '8px',
                   border: '1px solid #e2e8f0',
-                  background: currentPage <= 1 ? '#f8fafc' : '#ffffff',
-                  color: currentPage <= 1 ? '#cbd5e1' : '#334155',
+                  background: currentPage === 0 ? '#f8fafc' : '#ffffff',
+                  color: currentPage === 0 ? '#cbd5e1' : '#334155',
                   fontSize: '0.82rem',
                   fontWeight: '600',
-                  cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                  cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -377,7 +562,8 @@ export default function HelpSupport() {
               {Array.from({ length: totalPages }, (_, i) => i + 1)
                 .filter(page => {
                   const maxVisible = 5;
-                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  const current = currentPage + 1;
+                  let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
                   let endPage = Math.min(totalPages, startPage + maxVisible - 1);
                   if (endPage - startPage + 1 < maxVisible) {
                     startPage = Math.max(1, endPage - maxVisible + 1);
@@ -388,19 +574,19 @@ export default function HelpSupport() {
                 <button
                   key={page}
                   type="button"
-                  onClick={() => setCurrentPage(page)}
+                  onClick={() => setCurrentPage(page - 1)}
                   style={{
                     minWidth: '34px',
                     height: '34px',
                     padding: '0 8px',
                     borderRadius: '8px',
-                    border: page === currentPage ? 'none' : '1px solid #e2e8f0',
-                    background: page === currentPage ? '#000000' : '#ffffff',
-                    color: page === currentPage ? '#ffffff' : '#334155',
+                    border: page === (currentPage + 1) ? 'none' : '1px solid #e2e8f0',
+                    background: page === (currentPage + 1) ? '#000000' : '#ffffff',
+                    color: page === (currentPage + 1) ? '#ffffff' : '#334155',
                     fontSize: '0.85rem',
                     fontWeight: '700',
                     cursor: 'pointer',
-                    boxShadow: page === currentPage ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                    boxShadow: page === (currentPage + 1) ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
                     transition: 'all 0.15s ease'
                   }}
                 >
@@ -410,17 +596,17 @@ export default function HelpSupport() {
 
               <button
                 type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
                 style={{
                   padding: '6px 14px',
                   borderRadius: '8px',
                   border: '1px solid #e2e8f0',
-                  background: currentPage >= totalPages ? '#f8fafc' : '#ffffff',
-                  color: currentPage >= totalPages ? '#cbd5e1' : '#334155',
+                  background: (currentPage >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                  color: (currentPage >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                   fontSize: '0.82rem',
                   fontWeight: '600',
-                  cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                  cursor: (currentPage >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -431,60 +617,184 @@ export default function HelpSupport() {
         )}
       </div>
 
-      {/* View Ticket Modal */}
+      {/* View Ticket & Support Replies Modal */}
       <Modal 
         isOpen={!!viewTicket} 
         onClose={() => setViewTicket(null)}
-        title="Ticket Details"
+        title="Ticket Details & Support Replies"
+        maxWidth="640px"
       >
-        {viewTicket && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px 0' }}>
+        {viewTicket && (() => {
+          const replies = getTicketReplies(viewTicket);
+
+          return (
+          <div className="ticket-details-modal">
+            {/* Header Status & Info */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>{viewTicket.ticketNumber}</h3>
-              <span className={`badge ${getStatusClass(viewTicket.status)}`}>{viewTicket.status}</span>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>SUBJECT</p>
-                <p style={{ margin: 0, fontSize: '14px', fontWeight: '500' }}>{viewTicket.subject}</p>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>{viewTicket.ticketNumber}</h3>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                  Created on {formatDateDMY(viewTicket.createdAt)}
+                </span>
               </div>
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>CATEGORY</p>
-                <p style={{ margin: 0, fontSize: '14px', fontWeight: '500' }}>{viewTicket.category}</p>
-              </div>
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>PRIORITY</p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span className={`badge ${getPriorityClass(viewTicket.priority)}`}>{viewTicket.priority}</span>
-              </div>
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>CREATED ON</p>
-                <p style={{ margin: 0, fontSize: '14px', fontWeight: '500' }}>{formatDateDMY(viewTicket.createdAt)}</p>
+                <span className={`badge ${getStatusClass(viewTicket.status)}`}>{viewTicket.status}</span>
               </div>
             </div>
 
-            <div style={{ background: '#f9fafb', padding: '14px', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
-              <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#6b7280', fontWeight: '600' }}>DESCRIPTION</p>
-              <p style={{ margin: 0, fontSize: '14px', color: '#374151', lineHeight: '1.5' }}>
-                {viewTicket.description}
+            {/* Ticket Metadata Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div>
+                <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>SUBJECT</p>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{viewTicket.subject}</p>
+              </div>
+              <div>
+                <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>CATEGORY</p>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#334155' }}>{viewTicket.category}</p>
+              </div>
+            </div>
+
+            {/* Original Issue Description */}
+            <div style={{ background: '#ffffff', padding: '14px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  📋 Original Issue Description
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                {viewTicket.description || 'No description recorded.'}
               </p>
             </div>
 
-            {viewTicket.resolution && (
-              <div style={{ background: '#f0fdf4', padding: '14px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#166534', fontWeight: '600' }}>RESOLUTION</p>
-                <p style={{ margin: 0, fontSize: '14px', color: '#14532d', lineHeight: '1.5' }}>
-                  {viewTicket.resolution}
-                </p>
-                {viewTicket.resolvedAt && (
-                  <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
-                    Resolved on {formatDateTimeDMY(viewTicket.resolvedAt)}
-                  </span>
+            {/* Support Replies & Conversation Thread */}
+            <div style={{ marginTop: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  💬 Support Responses ({replies.length + (viewTicket.resolution ? 1 : 0)})
+                </span>
+                {isLoadingTicketDetails && (
+                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Refreshing replies...</span>
                 )}
               </div>
-            )}
+
+              <div className="ticket-reply-thread">
+                {/* Official Resolution Card (if resolved) */}
+                {viewTicket.resolution && (
+                  <div style={{ background: '#f0fdf4', padding: '14px 16px', borderRadius: '10px', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', color: '#166534', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        ✅ Official Support Resolution
+                      </span>
+                      {viewTicket.resolvedAt && (
+                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
+                          {formatDateTimeDMY(viewTicket.resolvedAt)}
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#14532d', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                      {viewTicket.resolution}
+                    </p>
+                  </div>
+                )}
+
+                {/* List of Replies */}
+                {replies.map((reply, idx) => {
+                  const isAdmin = reply.isAdmin;
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`ticket-reply-card ${isAdmin ? 'admin-reply' : 'user-reply'}`}
+                    >
+                      <div className="ticket-reply-header">
+                        <span className="ticket-reply-author" style={{ color: isAdmin ? '#0369a1' : '#c2410c' }}>
+                          {isAdmin ? '🛡️ ServIQ Support Team' : `👤 ${reply.sender || 'You (Restaurant)'}`}
+                        </span>
+                        <span className="ticket-reply-time">
+                          {formatDateTimeDMY(reply.createdAt)}
+                        </span>
+                      </div>
+                      <div className="ticket-reply-body">
+                        {reply.message}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Empty State when no replies yet */}
+                {replies.length === 0 && !viewTicket.resolution && (
+                  <div style={{
+                    padding: '20px',
+                    borderRadius: '10px',
+                    border: '1px dashed #cbd5e1',
+                    background: '#f8fafc',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>⏳</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                      Awaiting Support Team Response
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: 1.5 }}>
+                      Our technical support team has received your ticket and is reviewing it. Their reply will appear right here.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Reply Form */}
+            <form onSubmit={handleSendReply} style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                Add Follow-up Message / Reply
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <textarea
+                  rows="3"
+                  value={replyInput}
+                  onChange={(e) => setReplyInput(e.target.value)}
+                  placeholder="Type a follow-up reply or question for the support team..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    boxSizing: 'border-box',
+                    outline: 'none',
+                    resize: 'vertical'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#000'}
+                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setViewTicket(null)}
+                    style={{ padding: '8px 16px', fontSize: '12px' }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={!replyInput.trim() || isSendingReply}
+                    style={{
+                      padding: '8px 18px',
+                      fontSize: '12px',
+                      opacity: (!replyInput.trim() || isSendingReply) ? 0.6 : 1,
+                      cursor: (!replyInput.trim() || isSendingReply) ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {isSendingReply ? 'Sending Reply...' : 'Send Reply'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
-        )}
+          );
+        })()}
       </Modal>
 
       {/* Raise Ticket Modal */}

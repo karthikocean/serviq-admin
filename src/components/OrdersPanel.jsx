@@ -1155,31 +1155,36 @@ export default function OrdersPanel({
                         >
                           <PlusIcon size={13} color="#ffffff" /> Add Items to Table {newOrderTable}'s Order
                         </button>
-                        {!(
-                          (activeOrd.billingStatus || activeOrd.paymentStatus || '').toLowerCase() === 'paid' ||
-                          activeOrd.isPaid === true ||
-                          (activeOrd.payment && (activeOrd.payment.status === 'paid' || activeOrd.payment.paymentStatus === 'paid'))
-                        ) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsCreateOrderModalOpen(false);
-                              handleOpenEditOrder(activeOrd);
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              color: '#ea580c',
-                              border: '1px solid #fed7aa',
-                              padding: '7px 14px',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ✏️ Edit Existing Order
-                          </button>
-                        )}
+                        {(() => {
+                          const activeIsPaid = (activeOrd.billingStatus || activeOrd.paymentStatus || '').toLowerCase() === 'paid' ||
+                            activeOrd.isPaid === true ||
+                            (activeOrd.payment && (activeOrd.payment.status === 'paid' || activeOrd.payment.paymentStatus === 'paid'));
+                          return (
+                            <button
+                              type="button"
+                              disabled={activeIsPaid}
+                              onClick={() => {
+                                if (activeIsPaid) return;
+                                setIsCreateOrderModalOpen(false);
+                                handleOpenEditOrder(activeOrd);
+                              }}
+                              style={{
+                                background: activeIsPaid ? '#f1f5f9' : '#ffffff',
+                                color: activeIsPaid ? '#94a3b8' : '#ea580c',
+                                border: activeIsPaid ? '1px solid #e2e8f0' : '1px solid #fed7aa',
+                                padding: '7px 14px',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                cursor: activeIsPaid ? 'not-allowed' : 'pointer',
+                                opacity: activeIsPaid ? 0.6 : 1
+                              }}
+                              title={activeIsPaid ? "Paid orders cannot be edited" : "Edit Existing Order"}
+                            >
+                              ✏️ Edit Existing Order
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -2080,7 +2085,7 @@ export default function OrdersPanel({
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '200px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '240px', minWidth: '240px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -2252,11 +2257,11 @@ export default function OrdersPanel({
                       )}
                     </td>
 
-                    {/* 9. ACTION BUTTONS (MATCHING SCREENSHOT) */}
-                    <td style={{ padding: '16px', textAlign: 'right', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: '#ffffff', minWidth: '200px' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    {/* 9. ACTION BUTTONS (ALWAYS ALIGNED) */}
+                    <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: '#ffffff', width: '240px', minWidth: '240px', boxSizing: 'border-box' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
 
-                        {/* Eye Icon */}
+                        {/* 1. Eye (View) Icon */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -2267,93 +2272,152 @@ export default function OrdersPanel({
                           style={{
                             background: '#ffffff',
                             border: '1px solid #cbd5e1',
-                            color: '#475569',
+                            color: '#334155',
                             cursor: 'pointer',
-                            padding: '6px',
+                            padding: 0,
+                            width: '32px',
+                            height: '32px',
+                            minWidth: '32px',
+                            maxWidth: '32px',
                             borderRadius: '6px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
+                            flexShrink: 0,
+                            boxSizing: 'border-box',
                             transition: 'all 0.15s'
                           }}
                           onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#334155'; }}
                           title="View Order Details"
                         >
                           <EyeIcon size={14} />
                         </button>
 
-                        {/* Edit Icon */}
-                        {!isPaid && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
+                        {/* 2. Edit Icon */}
+                        <button
+                          type="button"
+                          disabled={isPaid}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isPaid) {
                               handleOpenEditOrder(ord);
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              color: '#475569',
-                              cursor: 'pointer',
-                              padding: '6px',
-                              borderRadius: '6px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#475569'; }}
-                            title="Edit Order"
-                          >
-                            <PencilIcon size={14} />
-                          </button>
-                        )}
+                            }
+                          }}
+                          style={{
+                            background: isPaid ? '#f8fafc' : '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            color: isPaid ? '#94a3b8' : '#334155',
+                            cursor: isPaid ? 'not-allowed' : 'pointer',
+                            padding: 0,
+                            width: '32px',
+                            height: '32px',
+                            minWidth: '32px',
+                            maxWidth: '32px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            boxSizing: 'border-box',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => {
+                            if (!isPaid) {
+                              e.currentTarget.style.background = '#f1f5f9';
+                              e.currentTarget.style.color = '#0f172a';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (!isPaid) {
+                              e.currentTarget.style.background = '#ffffff';
+                              e.currentTarget.style.color = '#334155';
+                            }
+                          }}
+                          title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
+                        >
+                          <PencilIcon size={14} color={isPaid ? "#94a3b8" : "currentColor"} />
+                        </button>
 
-                        {/* Trash Icon */}
-                        {['ready', 'served', 'completed'].includes(status) ? null : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setOrderToDelete(ord);
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: '6px',
-                              borderRadius: '6px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fecaca'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                            title="Delete Order"
-                          >
-                            <TrashIcon size={14} />
-                          </button>
-                        )}
+                        {/* 3. Delete / Trash Icon */}
+                        {(() => {
+                          const isDeleteDisabled = isPaid || ['ready', 'served', 'completed'].includes(status);
+                          const deleteTitle = isPaid
+                            ? "Paid orders cannot be deleted"
+                            : ['ready', 'served', 'completed'].includes(status)
+                              ? `Cannot delete ${status} order`
+                              : "Delete Order";
 
-                        {/* Status Action Trigger */}
+                          return (
+                            <button
+                              type="button"
+                              disabled={isDeleteDisabled}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (!isDeleteDisabled) {
+                                  setOrderToDelete(ord);
+                                }
+                              }}
+                              style={{
+                                background: isDeleteDisabled ? '#f8fafc' : '#ffffff',
+                                border: isDeleteDisabled ? '1px solid #cbd5e1' : '1px solid #fecaca',
+                                color: isDeleteDisabled ? '#94a3b8' : '#ef4444',
+                                cursor: isDeleteDisabled ? 'not-allowed' : 'pointer',
+                                padding: 0,
+                                width: '32px',
+                                height: '32px',
+                                minWidth: '32px',
+                                maxWidth: '32px',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                boxSizing: 'border-box',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => {
+                                if (!isDeleteDisabled) {
+                                  e.currentTarget.style.background = '#fef2f2';
+                                  e.currentTarget.style.borderColor = '#f87171';
+                                }
+                              }}
+                              onMouseLeave={e => {
+                                if (!isDeleteDisabled) {
+                                  e.currentTarget.style.background = '#ffffff';
+                                  e.currentTarget.style.borderColor = '#fecaca';
+                                }
+                              }}
+                              title={deleteTitle}
+                            >
+                              <TrashIcon size={14} color={isDeleteDisabled ? "#94a3b8" : "currentColor"} />
+                            </button>
+                          );
+                        })()}
+
+                        {/* 4. Status Action Trigger / Badge */}
                         {status === 'completed' ? (
                           <span style={{
                             fontSize: '11px',
                             color: '#15803d',
                             backgroundColor: '#dcfce7',
                             border: '1px solid #bbf7d0',
-                            padding: '5px 10px',
+                            padding: '0 6px',
                             borderRadius: '6px',
                             fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            justifyContent: 'center',
+                            gap: '4px',
+                            width: '96px',
+                            minWidth: '96px',
+                            maxWidth: '96px',
+                            height: '32px',
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                            whiteSpace: 'nowrap'
                           }}>
                             <CheckIcon size={12} /> Completed
                           </span>
@@ -2368,7 +2432,7 @@ export default function OrdersPanel({
                               handleOrderStatusUpdate(ord._id || ord.id, status, ord.branchId);
                             }}
                             style={{
-                              padding: '5px 12px',
+                              padding: '0 6px',
                               borderRadius: '6px',
                               border:
                                 status === 'new' ? '1px solid #ff5a1f' :
@@ -2390,7 +2454,15 @@ export default function OrdersPanel({
                               fontWeight: 700,
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
                               gap: '4px',
+                              width: '96px',
+                              minWidth: '96px',
+                              maxWidth: '96px',
+                              height: '32px',
+                              boxSizing: 'border-box',
+                              textAlign: 'center',
+                              whiteSpace: 'nowrap',
                               transition: 'all 0.15s'
                             }}
                             title={status === 'served' && ord.billingStatus !== 'paid' ? "Payment required to complete order" : ""}
@@ -2693,20 +2765,34 @@ export default function OrdersPanel({
                     >
                       <PlusIcon size={14} color="#ffffff" /> Add Items
                     </button>
-                    {!isPaid && (
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => {
-                          const ord = viewingOrder;
-                          setViewingOrder(null);
-                          handleOpenEditOrder(ord);
-                        }}
-                        style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                      >
-                        <PencilIcon size={14} /> Edit Order
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={isPaid}
+                      onClick={() => {
+                        if (isPaid) return;
+                        const ord = viewingOrder;
+                        setViewingOrder(null);
+                        handleOpenEditOrder(ord);
+                      }}
+                      style={{
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        background: isPaid ? '#94a3b8' : '#0284c7',
+                        color: '#fff',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        border: 'none',
+                        cursor: isPaid ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: isPaid ? 0.6 : 1
+                      }}
+                      title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
+                    >
+                      <PencilIcon size={14} /> Edit Order
+                    </button>
                   </>
                 )}
                 <button

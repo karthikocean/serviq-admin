@@ -7,6 +7,9 @@ import QrCodeApi from '../api/QrCode.js';
 import OrderApi from '../api/Order.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
+import UserApi from '../api/User.js';
+import StaffApi from '../api/Staff.js';
+import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
 export const AppContext = createContext();
@@ -447,11 +450,24 @@ export const AppProvider = ({ children }) => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await BranchApi.getBranches();
-      if (res && res.status && res.response) {
-        const branchArray = Array.isArray(res.response) 
-          ? res.response 
-          : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
+      const [res, usersRes, staffRes] = await Promise.allSettled([
+        BranchApi.getBranches(),
+        UserApi.getUsers({ limit: 100 }),
+        StaffApi.getStaff()
+      ]);
+
+      const branchResponse = res.status === 'fulfilled' ? res.value : null;
+      const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
+        ? usersRes.value.response.data
+        : [];
+      const staffList = (staffRes.status === 'fulfilled' && staffRes.value?.status && Array.isArray(staffRes.value.response?.data))
+        ? staffRes.value.response.data
+        : [];
+
+      if (branchResponse && branchResponse.status && branchResponse.response) {
+        const branchArray = Array.isArray(branchResponse.response) 
+          ? branchResponse.response 
+          : (Array.isArray(branchResponse.response.data) ? branchResponse.response.data : (branchResponse.response.branches || []));
         if (Array.isArray(branchArray)) {
           setRestaurantsData(prev => {
             const targetId = currentRestaurantId || 'rest-1';
@@ -471,14 +487,7 @@ export const AppProvider = ({ children }) => {
             };
 
             const mappedBranches = branchArray.map(b => {
-              const mgr = (
-                (typeof b.branchManager === 'object' && b.branchManager !== null ? (b.branchManager.name || b.branchManager.managerName || b.branchManager.username || b.branchManager.fullName) : (typeof b.branchManager === 'string' && b.branchManager.trim() ? b.branchManager : '')) ||
-                (typeof b.managerName === 'string' && b.managerName.trim() ? b.managerName : '') ||
-                (typeof b.manager === 'object' && b.manager !== null ? (b.manager.name || b.manager.managerName || b.manager.username || b.manager.fullName) : (typeof b.manager === 'string' && b.manager.trim() ? b.manager : '')) ||
-                (typeof b.branchManagerName === 'string' && b.branchManagerName.trim() ? b.branchManagerName : '') ||
-                (typeof b.contactPerson === 'string' && b.contactPerson.trim() ? b.contactPerson : '') ||
-                ''
-              );
+              const mgr = resolveBranchManagerName(b, usersList, staffList);
 
               return {
                 id: b._id || b.id,
