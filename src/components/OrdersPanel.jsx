@@ -487,7 +487,7 @@ export default function OrdersPanel({
           apiClient.get(`/menu?branchId=${branchId}`).catch(() => null),
           apiClient.get(`/menu/categories?branchId=${branchId}`).catch(() => null),
           apiClient.get(`/tables?branchId=${branchId}`).catch(() => null),
-          apiClient.get(`/staff?branchId=${branchId}`).catch(() => null)
+          apiClient.get(`/users?branchId=${branchId}`).catch(() => null)
         ]);
         let fetchedTables = [];
         if (menuRes && menuRes.data?.success) setApiMenuItems(menuRes.data.data);

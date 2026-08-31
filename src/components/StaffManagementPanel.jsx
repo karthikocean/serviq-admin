@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AppContext } from '../config/AppContext';
 import UserApi from '../api/User';
-import StaffApi from '../api/Staff';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
@@ -224,12 +223,11 @@ export default function StaffManagementPanel({
   const fetchData = async () => {
     setIsLoading(true);
 
-    const [usersRes, allStaffRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
+    const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
       UserApi.getUsers({
         page: 0,
         limit: 500
       }),
-      StaffApi.getStaff(),
       UserApi.getStations(),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
@@ -243,22 +241,6 @@ export default function StaffManagementPanel({
       else if (Array.isArray(raw?.data)) list = [...raw.data];
       else if (Array.isArray(raw?.users)) list = [...raw.users];
       else if (Array.isArray(raw?.staff)) list = [...raw.staff];
-    }
-
-    if (allStaffRes?.status) {
-      const staffList = allStaffRes.response?.data || allStaffRes.response?.staff || (Array.isArray(allStaffRes.response) ? allStaffRes.response : []);
-      if (Array.isArray(staffList)) {
-        staffList.forEach(st => {
-          const exists = list.some(u => 
-            String(u._id || u.id) === String(st._id || st.id) ||
-            (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
-            (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase() && u.phone === st.phone)
-          );
-          if (!exists) {
-            list.push(st);
-          }
-        });
-      }
     }
 
     // Also merge any local staff from activeRestaurant

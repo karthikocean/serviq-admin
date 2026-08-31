@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import BranchApi from '../api/Branch.js';
 import SubscriptionApi from '../api/Subscription.js';
 import UserApi from '../api/User.js';
-import StaffApi from '../api/Staff.js';
 import OrderApi from '../api/Order.js';
 import TableApi from '../api/Table.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
@@ -176,19 +175,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const fetchBranches = async () => {
     setIsLoading(true);
     try {
-      const [res, usersRes, staffRes] = await Promise.allSettled([
+      const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 }),
-        StaffApi.getStaff()
+        UserApi.getUsers({ limit: 100 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
       const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
         ? usersRes.value.response.data
         : [];
-      const staffList = (staffRes.status === 'fulfilled' && staffRes.value?.status && Array.isArray(staffRes.value.response?.data))
-        ? staffRes.value.response.data
-        : [];
+      const staffList = usersList;
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
         const rawList = Array.isArray(branchResponse.response) 
@@ -242,9 +238,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const branchId = targetBranch._id || targetBranch.id;
     setIsLoadingOpData(true);
     try {
-      const [usersRes, staffApiRes, ordersRes, tablesRes] = await Promise.allSettled([
+      const [usersRes, ordersRes, tablesRes] = await Promise.allSettled([
         UserApi.getUsers({ branchId, limit: 100 }),
-        StaffApi.getStaff(branchId),
         OrderApi.getOrders({ branchId, limit: 100 }),
         TableApi.getTables({ branchId, limit: 100 })
       ]);
@@ -253,10 +248,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       if (usersRes.status === 'fulfilled' && usersRes.value?.status) {
         const raw = usersRes.value.response?.data || usersRes.value.response?.users || usersRes.value.response?.staff || (Array.isArray(usersRes.value.response) ? usersRes.value.response : []);
         finalStaff = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.users) ? raw.users : []));
-      }
-      if (finalStaff.length === 0 && staffApiRes.status === 'fulfilled' && staffApiRes.value?.status) {
-        const rawStaff = staffApiRes.value.response?.data || (Array.isArray(staffApiRes.value.response) ? staffApiRes.value.response : []);
-        finalStaff = Array.isArray(rawStaff) ? rawStaff : [];
       }
       setLiveBranchStaff(finalStaff);
 

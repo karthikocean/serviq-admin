@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
-import StaffApi from '../api/Staff.js';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -82,19 +81,16 @@ export default function BranchSearchDropdown() {
       if (contextFetchBranches) {
         await contextFetchBranches();
       }
-      const [res, usersRes, staffRes] = await Promise.allSettled([
+      const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 }),
-        StaffApi.getStaff()
+        UserApi.getUsers({ limit: 100 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
       const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
         ? usersRes.value.response.data
         : [];
-      const staffList = (staffRes.status === 'fulfilled' && staffRes.value?.status && Array.isArray(staffRes.value.response?.data))
-        ? staffRes.value.response.data
-        : [];
+      const staffList = usersList;
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
         const branchArray = Array.isArray(branchResponse.response) 

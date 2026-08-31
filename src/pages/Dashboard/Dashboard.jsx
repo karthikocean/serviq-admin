@@ -4,7 +4,6 @@ import OverviewPanel from '../../components/OverviewPanel';
 import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
-import StaffApi from '../../api/Staff';
 import UserApi from '../../api/User';
 import { resolveBranchManagerName } from '../../helper/BranchHelper';
 import './Dashboard.css';
@@ -19,16 +18,14 @@ export default function Dashboard() {
   const [liveTables, setLiveTables] = useState([]);
   const [liveOrders, setLiveOrders] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
-  const [liveStaff, setLiveStaff] = useState([]);
   const [liveUsers, setLiveUsers] = useState([]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [tablesRes, ordersRes, branchesRes, staffRes, usersRes] = await Promise.allSettled([
+      const [tablesRes, ordersRes, branchesRes, usersRes] = await Promise.allSettled([
         TableApi.getTables(),
         OrderApi.getOrders(),
         BranchApi.getBranches(),
-        StaffApi.getStaff(),
         UserApi.getUsers({ limit: 100 })
       ]);
 
@@ -40,9 +37,6 @@ export default function Dashboard() {
       }
       if (branchesRes.status === 'fulfilled' && branchesRes.value?.status && branchesRes.value.response?.data) {
         setLiveBranches(branchesRes.value.response.data);
-      }
-      if (staffRes.status === 'fulfilled' && staffRes.value?.status && staffRes.value.response?.data) {
-        setLiveStaff(staffRes.value.response.data);
       }
       if (usersRes.status === 'fulfilled' && usersRes.value?.status && usersRes.value.response?.data) {
         setLiveUsers(usersRes.value.response.data);
@@ -64,9 +58,9 @@ export default function Dashboard() {
 
   const rawOrders = (liveOrders && liveOrders.length > 0) ? liveOrders : (activeRestaurant.orders || []);
   const rawTables = (liveTables && liveTables.length > 0) ? liveTables : (activeRestaurant.tables || []);
-  const rawStaff = (liveStaff && liveStaff.length > 0) ? liveStaff : (activeRestaurant.staff || []);
-  const rawBranches = (liveBranches && liveBranches.length > 0) ? liveBranches : (activeRestaurant.branches || []);
   const rawUsers = (liveUsers && liveUsers.length > 0) ? liveUsers : (activeRestaurant.users || []);
+  const rawStaff = rawUsers.length > 0 ? rawUsers : (activeRestaurant.staff || []);
+  const rawBranches = (liveBranches && liveBranches.length > 0) ? liveBranches : (activeRestaurant.branches || []);
 
   const branches = rawBranches.map(b => {
     const mgrName = resolveBranchManagerName(b, rawUsers, rawStaff);

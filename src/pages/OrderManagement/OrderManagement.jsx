@@ -37,10 +37,10 @@ export default function OrderManagement() {
       let fetchedOrders = [];
       let paginationInfo = null;
 
-      // 1. Fetch paginated orders, staff & tables in parallel
+      // 1. Fetch paginated orders, staff/users & tables in parallel
       const [orderRes, staffRes, tableRes] = await Promise.all([
         apiClient.get(`/orders?${paginationParam}`).catch(() => null),
-        apiClient.get(`/staff${branchParam}`).catch(() => null),
+        apiClient.get(`/users${branchParam}`).catch(() => null),
         apiClient.get(`/tables${branchParam}`).catch(() => null)
       ]);
 

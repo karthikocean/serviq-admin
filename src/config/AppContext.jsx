@@ -8,7 +8,6 @@ import OrderApi from '../api/Order.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
-import StaffApi from '../api/Staff.js';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -450,19 +449,16 @@ export const AppProvider = ({ children }) => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
     if (!token) return;
     try {
-      const [res, usersRes, staffRes] = await Promise.allSettled([
+      const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 }),
-        StaffApi.getStaff()
+        UserApi.getUsers({ limit: 100 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
       const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
         ? usersRes.value.response.data
         : [];
-      const staffList = (staffRes.status === 'fulfilled' && staffRes.value?.status && Array.isArray(staffRes.value.response?.data))
-        ? staffRes.value.response.data
-        : [];
+      const staffList = usersList;
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
         const branchArray = Array.isArray(branchResponse.response) 
