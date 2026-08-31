@@ -827,11 +827,12 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* Dashboard Inner Grid split: Live Orders (Left) vs Tables Grid (Right) */
+/* Dashboard Inner Grid: Live Orders (Top) & Tables Grid (Bottom) */
 .dashboard-inner-grid {
-  display: grid;
-  grid-template-columns: 2.2fr 1fr;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
 }
 
 .feed-card,

@@ -16,8 +16,8 @@ export default function BillingHistory() {
   const [selectedPayment, setSelectedPayment] = useState('All');
 
   // Pagination States
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(10);
+  const [page, setPage] = useState(0);
+  const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
 
   // Data States
@@ -30,9 +30,9 @@ export default function BillingHistory() {
     fetchHistory();
   }, [activeRestaurant?.id, selectedBranchId]);
 
-  // Reset page to 1 if filters change
+  // Reset page to 0 if filters change
   useEffect(() => {
-    setPage(1);
+    setPage(0);
   }, [searchTerm, dateRange, customStartDate, customEndDate, selectedBranchId, selectedPayment]);
 
   // Safe mapping function for any invoice / order / bill record
@@ -228,7 +228,7 @@ export default function BillingHistory() {
 
   // Compute pagination and current page slice
   const paginatedHistory = useMemo(() => {
-    const startIndex = (page - 1) * limit;
+    const startIndex = page * limit;
     return filteredHistory.slice(startIndex, startIndex + limit);
   }, [filteredHistory, page, limit]);
 

@@ -76,8 +76,10 @@ export default function OrdersPanel({
   tables = [],
   orderFilter = 'All',
   setOrderFilter,
-  selectedWaiterFilter = 'All',
+  selectedWaiterFilter = { id: 'All Waiters', name: 'All Waiters' },
   setSelectedWaiterFilter,
+  waiterDropdownOpen: propsWaiterDropdownOpen,
+  setWaiterDropdownOpen: propsSetWaiterDropdownOpen,
   activeRestaurant,
   selectedBranchId,
   updateOrderStatus,
@@ -106,7 +108,10 @@ export default function OrdersPanel({
     return pages;
   };
 
-  const [waiterDropdownOpen, setWaiterDropdownOpen] = useState(false);
+  const [internalWaiterDropdownOpen, setInternalWaiterDropdownOpen] = useState(false);
+  const isWaiterDropdownOpen = propsWaiterDropdownOpen !== undefined ? propsWaiterDropdownOpen : internalWaiterDropdownOpen;
+  const setIsWaiterDropdownOpen = propsSetWaiterDropdownOpen || setInternalWaiterDropdownOpen;
+
   const [viewingOrder, setViewingOrder] = useState(null);
   const [assigningOrder, setAssigningOrder] = useState(null);
   const [orderToDelete, setOrderToDelete] = useState(null);
@@ -189,8 +194,10 @@ export default function OrdersPanel({
     if (!s) return false;
     const roleName = String(
       (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : s.roleId) ||
-      s.role ||
+      (typeof s.role === 'object' && s.role !== null ? (s.role?.roleName || s.role?.name) : s.role) ||
       s.designation ||
+      s.roleName ||
+      s.title ||
       ''
     ).toLowerCase().trim();
 
@@ -220,7 +227,7 @@ export default function OrdersPanel({
       return false;
     }
 
-    return roleName.includes('waiter') || roleName.includes('server') || roleName === 'waiter';
+    return roleName.includes('waiter') || roleName.includes('server') || roleName === 'waiter' || userType === 'WAITER' || userType === 'SERVER';
   };
 
   // Waiters list (Waiters ONLY)
@@ -256,7 +263,30 @@ export default function OrdersPanel({
       });
     }
   });
-  const allWaiters = Array.from(uniqueWaitersMap.values());
+
+  // Also include any assigned waiters from active tables or orders so they are never missed
+  (apiTables || []).forEach(t => {
+    const waiterName = t.assignedWaiterId?.name || (typeof t.assignedWaiter === 'string' && t.assignedWaiter.trim() !== 'Unassigned' ? t.assignedWaiter.trim() : null);
+    if (waiterName && !uniqueWaitersMap.has(waiterName.toLowerCase()) && waiterName.toLowerCase() !== 'none' && waiterName !== '-') {
+      uniqueWaitersMap.set(waiterName.toLowerCase(), {
+        id: t.assignedWaiterId?._id || t.assignedWaiterId?.id || waiterName,
+        _id: t.assignedWaiterId?._id || t.assignedWaiterId?.id || waiterName,
+        name: waiterName
+      });
+    }
+  });
+  (orders || []).forEach(o => {
+    const waiterName = o.waiterId?.name || (typeof o.waiter === 'string' && o.waiter.trim() !== 'Unassigned' ? o.waiter.trim() : null) || (typeof o.waiterName === 'string' && o.waiterName.trim() !== 'Unassigned' ? o.waiterName.trim() : null);
+    if (waiterName && !uniqueWaitersMap.has(waiterName.toLowerCase()) && waiterName.toLowerCase() !== 'none' && waiterName !== '-') {
+      uniqueWaitersMap.set(waiterName.toLowerCase(), {
+        id: o.waiterId?._id || o.waiterId?.id || waiterName,
+        _id: o.waiterId?._id || o.waiterId?.id || waiterName,
+        name: waiterName
+      });
+    }
+  });
+
+  const allWaiters = Array.from(uniqueWaitersMap.values()).filter(w => w && w.name && w.name.trim());
 
   // Helper to accurately resolve assigned waiter from order or associated table
   const getResolvedWaiterName = (ord) => {
@@ -917,14 +947,22 @@ export default function OrdersPanel({
     });
   }
 
+  // Resolve active selected waiter filter
+  const currentSelectedWaiterId = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
+    ? (selectedWaiterFilter.id || selectedWaiterFilter.name || 'All Waiters')
+    : (selectedWaiterFilter || 'All Waiters');
+  const currentSelectedWaiterName = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
+    ? (selectedWaiterFilter.name || selectedWaiterFilter.id || 'All Waiters')
+    : (selectedWaiterFilter || 'All Waiters');
+
   // Apply Waiter Filter
-  if (selectedWaiterFilter && selectedWaiterFilter.id && selectedWaiterFilter.id !== 'All Waiters') {
+  if (currentSelectedWaiterId && currentSelectedWaiterId !== 'All Waiters' && currentSelectedWaiterId !== 'All') {
     filteredOrders = filteredOrders.filter(ord => {
       const resolvedName = getResolvedWaiterName(ord);
-      if (selectedWaiterFilter.id === 'unassigned') {
-        return !resolvedName || resolvedName === 'Unassigned';
+      if (currentSelectedWaiterId === 'unassigned' || String(currentSelectedWaiterId).toLowerCase() === 'unassigned') {
+        return !resolvedName || resolvedName === 'Unassigned' || resolvedName === 'None' || resolvedName === '-';
       }
-      return resolvedName.toLowerCase() === (selectedWaiterFilter.name || '').toLowerCase();
+      return resolvedName.toLowerCase() === (currentSelectedWaiterName || '').toLowerCase();
     });
   }
 
@@ -1896,7 +1934,7 @@ export default function OrdersPanel({
         border: '1px solid #e2e8f0',
         padding: '24px',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
-        overflow: 'hidden'
+        overflow: 'visible'
       }}>
 
         {/* TOP HEADER ROW */}
@@ -1920,54 +1958,77 @@ export default function OrdersPanel({
             <div style={{ position: 'relative' }}>
               <button
                 type="button"
-                onClick={() => setWaiterDropdownOpen(!waiterDropdownOpen)}
+                onClick={() => setIsWaiterDropdownOpen(!isWaiterDropdownOpen)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
                   padding: '8px 14px',
                   backgroundColor: '#ffffff',
-                  border: '1px solid #cbd5e1',
+                  border: isWaiterDropdownOpen ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
                   borderRadius: '8px',
                   fontSize: '13px',
                   fontWeight: 600,
                   color: '#0f172a',
                   cursor: 'pointer',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  boxShadow: isWaiterDropdownOpen ? '0 0 0 2px rgba(255, 90, 31, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 <UserIcon size={14} color="#64748b" />
-                <span>{selectedWaiterFilter?.name || 'All Waiters'}</span>
-                <span style={{ fontSize: '10px', color: '#64748b', marginLeft: '4px' }}>▼</span>
+                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentSelectedWaiterName}
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  color: '#64748b',
+                  marginLeft: '4px',
+                  display: 'inline-block',
+                  transform: isWaiterDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.15s ease'
+                }}>▼</span>
               </button>
 
-              {waiterDropdownOpen && (
+              {isWaiterDropdownOpen && (
                 <>
                   <div
                     style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 999 }}
-                    onClick={() => setWaiterDropdownOpen(false)}
+                    onClick={() => setIsWaiterDropdownOpen(false)}
                   />
-                  <div style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    right: 0,
-                    width: '180px',
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '10px',
-                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)',
-                    zIndex: 1000,
-                    overflow: 'hidden',
-                    padding: '4px'
-                  }}>
+                  <div
+                    className="waiter-dropdown-list"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      minWidth: '200px',
+                      width: 'max-content',
+                      maxWidth: '260px',
+                      maxHeight: '190px',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                      zIndex: 1050,
+                      padding: '6px 4px 6px 6px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#ff5a1f #f1f5f9'
+                    }}>
                     {[{ id: 'All Waiters', name: 'All Waiters' }, { id: 'unassigned', name: 'Unassigned (Optional)' }, ...allWaiters].map((w, idx) => {
-                      const isSelected = selectedWaiterFilter?.id === w.id;
+                      const isSelected = currentSelectedWaiterId === w.id || currentSelectedWaiterName === w.name;
                       return (
                         <div
-                          key={idx}
+                          key={w.id || idx}
                           onClick={() => {
-                            setSelectedWaiterFilter(w);
-                            setWaiterDropdownOpen(false);
+                            if (setSelectedWaiterFilter) {
+                              setSelectedWaiterFilter(w);
+                            }
+                            setIsWaiterDropdownOpen(false);
                           }}
                           style={{
                             padding: '8px 12px',
@@ -1977,7 +2038,10 @@ export default function OrdersPanel({
                             backgroundColor: isSelected ? '#ff5a1f' : 'transparent',
                             color: isSelected ? '#ffffff' : '#0f172a',
                             cursor: 'pointer',
-                            transition: 'all 0.15s'
+                            transition: 'all 0.15s ease',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
                           }}
                           onMouseEnter={(e) => {
                             if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';

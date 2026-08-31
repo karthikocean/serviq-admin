@@ -46,7 +46,7 @@ export default function ReportsPanel({
   const [kitchenData, setKitchenData] = useState([]);
   const [summary, setSummary] = useState(null);
 
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalItems: 0 });
+  const [pagination, setPagination] = useState({ page: 0, limit: 10, totalPages: 1, totalItems: 0 });
 
   const currency = activeRestaurant?.settings?.currency || '₹';
 
@@ -56,7 +56,7 @@ export default function ReportsPanel({
     }
   }, [initialTab]);
 
-  const fetchReports = async (page = 1) => {
+  const fetchReports = async (page = 0) => {
     setLoading(true);
     try {
       const filters = {
@@ -75,9 +75,9 @@ export default function ReportsPanel({
           setSummary(res.response.summary || null);
           setPagination(prev => ({
             ...prev,
-            page: res.response.page,
-            totalPages: res.response.totalPages,
-            totalItems: res.response.totalItems
+            page: typeof res.response.page === 'number' ? res.response.page : page,
+            totalPages: res.response.totalPages || 1,
+            totalItems: res.response.totalItems || 0
           }));
         }
       } else {
@@ -88,9 +88,9 @@ export default function ReportsPanel({
           setSummary(res.response.summary || null);
           setPagination(prev => ({
             ...prev,
-            page: res.response.page,
-            totalPages: res.response.totalPages,
-            totalItems: res.response.totalItems
+            page: typeof res.response.page === 'number' ? res.response.page : page,
+            totalPages: res.response.totalPages || 1,
+            totalItems: res.response.totalItems || 0
           }));
         }
       }
@@ -102,11 +102,11 @@ export default function ReportsPanel({
   };
 
   useEffect(() => {
-    fetchReports(1);
+    fetchReports(0);
   }, [activeReportTab, dateStart, dateEnd, filterKitchenCategory, searchQuery, selectedBranchId, pagination.limit]);
 
   const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.totalPages) {
+    if (newPage >= 0 && newPage < pagination.totalPages) {
       fetchReports(newPage);
     }
   };
@@ -114,8 +114,9 @@ export default function ReportsPanel({
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    const total = pagination.totalPages || 1;
-    let startPage = Math.max(1, pagination.page - Math.floor(maxVisible / 2));
+    const current = pagination.page + 1;
+    const total = Math.max(1, pagination.totalPages || 1);
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(total, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -131,7 +132,7 @@ export default function ReportsPanel({
     setDateEnd('');
     setFilterKitchenCategory('All');
     setSearchQuery('');
-    setPagination(prev => ({ ...prev, page: 1 }));
+    setPagination(prev => ({ ...prev, page: 0 }));
   };
 
   // Excel / CSV Export
@@ -528,7 +529,7 @@ export default function ReportsPanel({
               {waiterData.map((w, index) => (
                 <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {(pagination.page - 1) * pagination.limit + index + 1}
+                    {pagination.page * pagination.limit + index + 1}
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -622,7 +623,7 @@ export default function ReportsPanel({
               {kitchenData.map((k, index) => (
                 <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {(pagination.page - 1) * pagination.limit + index + 1}
+                    {pagination.page * pagination.limit + index + 1}
                   </td>
                   <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
                     {k.foodItem}
@@ -685,22 +686,22 @@ export default function ReportsPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {pagination.totalItems === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalItems)} of {pagination.totalItems} records
+            Showing {pagination.totalItems === 0 ? 0 : pagination.page * pagination.limit + 1} to {Math.min((pagination.page + 1) * pagination.limit, pagination.totalItems)} of {pagination.totalItems} records
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
               onClick={() => handlePageChange(pagination.page - 1)}
-              disabled={pagination.page <= 1}
+              disabled={pagination.page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: pagination.page <= 1 ? '#f8fafc' : '#ffffff',
-                color: pagination.page <= 1 ? '#cbd5e1' : '#334155',
+                background: pagination.page === 0 ? '#f8fafc' : '#ffffff',
+                color: pagination.page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
+                cursor: pagination.page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -711,16 +712,16 @@ export default function ReportsPanel({
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => handlePageChange(pageNum)}
+                onClick={() => handlePageChange(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: pagination.page === pageNum ? 700 : 500,
-                  border: pagination.page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: pagination.page === pageNum ? '#000000' : '#ffffff',
-                  color: pagination.page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: pagination.page + 1 === pageNum ? 700 : 500,
+                  border: pagination.page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: pagination.page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: pagination.page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -732,16 +733,16 @@ export default function ReportsPanel({
             <button
               type="button"
               onClick={() => handlePageChange(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages || pagination.totalPages === 0}
+              disabled={pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (pagination.page >= pagination.totalPages || pagination.totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

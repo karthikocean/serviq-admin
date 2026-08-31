@@ -208,7 +208,7 @@ export default function StockReductionPanel() {
   const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // View and Modals state
@@ -638,12 +638,13 @@ export default function StockReductionPanel() {
       : filteredPurchases;
 
   const totalPages = Math.ceil(activeDataList.length / rowsPerPage) || 1;
-  const paginatedData = activeDataList.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const paginatedData = activeDataList.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    const current = currentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -1467,7 +1468,7 @@ export default function StockReductionPanel() {
               onChange={e => {
                 const val = e.target.value.replace(/^\s+/, '');
                 setSearchTerm(val);
-                setCurrentPage(1);
+                setCurrentPage(0);
               }}
               style={{
                 border: 'none',
@@ -1497,7 +1498,7 @@ export default function StockReductionPanel() {
               <div style={{ flex: 1 }}>
                 <SearchableSelect
                   value={activeTab}
-                  onChange={e => { setActiveTab(e.target.value); setCurrentPage(1); }}
+                  onChange={e => { setActiveTab(e.target.value); setCurrentPage(0); }}
                   options={[
                     { value: 'reductions', label: `Stock Reduction Items (${inventory.length})` },
                     { value: 'history', label: `Reduction History Logs (${reductions.length})` },
@@ -1514,7 +1515,7 @@ export default function StockReductionPanel() {
               <div style={{ flex: 1 }}>
                 <SearchableSelect
                   value={categoryFilter}
-                  onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
+                  onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(0); }}
                   options={[
                     { value: 'All', label: 'All Categories' },
                     ...rawCategories
@@ -1536,7 +1537,7 @@ export default function StockReductionPanel() {
                 <div style={{ flex: 1 }}>
                   <SearchableSelect
                     value={reasonFilter}
-                    onChange={e => { setReasonFilter(e.target.value); setCurrentPage(1); }}
+                    onChange={e => { setReasonFilter(e.target.value); setCurrentPage(0); }}
                     options={[
                       { value: 'All', label: 'All Reasons' },
                       ...REDUCTION_REASONS.map(r => ({
@@ -1614,7 +1615,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
@@ -1729,7 +1730,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px', color: '#64748b', whiteSpace: 'nowrap' }}>
                           {dateFormatted}
@@ -1827,7 +1828,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>{invoiceNum}</div>
@@ -1905,23 +1906,23 @@ export default function StockReductionPanel() {
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {activeDataList.length === 0 ? 0 : ((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
+            Showing {activeDataList.length === 0 ? 0 : (currentPage * rowsPerPage) + 1} to {Math.min((currentPage + 1) * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
           </div>
 
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: currentPage === 1 ? '#f8fafc' : '#ffffff',
-                color: currentPage === 1 ? '#cbd5e1' : '#334155',
+                background: currentPage === 0 ? '#f8fafc' : '#ffffff',
+                color: currentPage === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1932,16 +1933,16 @@ export default function StockReductionPanel() {
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setCurrentPage(pageNum)}
+                onClick={() => setCurrentPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: currentPage === pageNum ? 700 : 500,
-                  border: currentPage === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: currentPage === pageNum ? '#000000' : '#ffffff',
-                  color: currentPage === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: currentPage + 1 === pageNum ? 700 : 500,
+                  border: currentPage + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: currentPage + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: currentPage + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -1952,17 +1953,17 @@ export default function StockReductionPanel() {
 
             <button
               type="button"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (currentPage >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (currentPage >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (currentPage >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (currentPage >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (currentPage >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (currentPage >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

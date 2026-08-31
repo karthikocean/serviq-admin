@@ -488,14 +488,15 @@ export const AppProvider = ({ children }) => {
 
             const mappedBranches = branchArray.map(b => {
               const mgr = resolveBranchManagerName(b, usersList, staffList);
+              const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
 
               return {
                 id: b._id || b.id,
                 _id: b._id || b.id,
                 branchName: b.branchName || b.name,
                 branchCode: b.branchCode || b.code,
-                branchManager: mgr,
-                managerName: mgr,
+                branchManager: resolvedMgr,
+                managerName: resolvedMgr,
                 mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
                 email: b.email || b.managerEmail || '',
                 address: b.address?.street || b.address || b.street || '',
@@ -1527,12 +1528,13 @@ export const AppProvider = ({ children }) => {
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
-      const currentBranches = rest.branches || [];
+      const mgrName = branchData.managerName || branchData.branchManager || '';
       const newBranch = {
         id: branchData.id || `BR-${Date.now()}`,
         branchCode: branchData.branchCode || `BR-${Math.floor(100 + Math.random() * 900)}`,
         branchName: branchData.branchName || 'New Branch',
-        branchManager: branchData.branchManager || 'Unassigned',
+        managerName: mgrName,
+        branchManager: mgrName,
         mobileNumber: branchData.mobileNumber || '',
         email: branchData.email || '',
         address: branchData.address || '',
@@ -1576,12 +1578,12 @@ export const AppProvider = ({ children }) => {
       const currentBranches = rest.branches || [];
       const updatedBranches = currentBranches.map(b => {
         if (b.id === branchId || b._id === branchId || String(b.id) === String(branchId) || String(b._id) === String(branchId)) {
-          const mgr = updatedData.branchManager || updatedData.managerName || b.branchManager || b.managerName || '';
+          const mgr = updatedData.managerName || updatedData.branchManager || b.managerName || b.branchManager || '';
           return {
             ...b,
             ...updatedData,
-            branchManager: mgr,
             managerName: mgr,
+            branchManager: mgr,
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
             operationalData: {
               ...b.operationalData,

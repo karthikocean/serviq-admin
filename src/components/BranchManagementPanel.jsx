@@ -74,6 +74,7 @@ const initialBranchState = {
   id: '',
   branchName: '',
   branchCode: '',
+  managerName: '',
   branchManager: '',
   mobileNumber: '',
   email: '',
@@ -197,6 +198,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         const mappedBranches = rawList.map(b => {
           const bId = b._id || b.id;
           const mgr = resolveBranchManagerName(b, usersList, staffList);
+          const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
 
           const addr = typeof b.address === 'object' && b.address !== null ? b.address : {};
           const streetStr = typeof b.address === 'string' ? b.address : (addr.street || b.street || '');
@@ -210,8 +212,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             _id: bId,
             branchName: b.branchName || b.name || '',
             branchCode: b.branchCode || b.code || '',
-            branchManager: mgr,
-            managerName: mgr,
+            branchManager: resolvedMgr,
+            managerName: resolvedMgr,
             mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
             email: b.email || b.managerEmail || '',
             password: '',
@@ -297,11 +299,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   // Filtered branches
   const filteredBranches = branches.filter(b => {
-    const matchesSearch = 
+    const matchesSearch = !searchTerm ||
       (b.branchName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.branchCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.city || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.branchManager || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (b.managerName || b.branchManager || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus = statusFilter === 'All' || b.status === statusFilter;
 
@@ -309,15 +311,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   });
 
   // Pagination for branches
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
   const totalPages = Math.ceil(filteredBranches.length / limit) || 1;
-  const paginatedBranches = filteredBranches.slice((page - 1) * limit, page * limit);
+  const paginatedBranches = filteredBranches.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -329,14 +332,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   };
 
   React.useEffect(() => {
-    setPage(1);
+    setPage(0);
   }, [searchTerm, statusFilter]);
 
   // Metrics
   const totalBranchesCount = branches.length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;
   const totalTablesCount = branches.reduce((sum, b) => sum + (parseInt(b.totalTables) || 0), 0);
-  const totalManagersCount = new Set(branches.map(b => b.branchManager).filter(Boolean)).size;
+  const totalManagersCount = new Set(branches.map(b => (b.managerName || b.branchManager || '').trim()).filter(x => x && !['unassigned', 'null', 'undefined'].includes(x.toLowerCase()))).size;
 
   const openAddBranchFormDirectly = () => {
     const autoCode = `BR-${Math.floor(100 + Math.random() * 900)}`;
@@ -395,12 +398,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
       return;
     }
+    const extractRawManagerName = (val) => {
+      if (!val) return '';
+      if (typeof val === 'object') {
+        const n = val.name || val.managerName || val.username || val.fullName;
+        return typeof n === 'string' && n.trim() && n.trim().toLowerCase() !== 'unassigned' ? n.trim() : '';
+      }
+      if (typeof val === 'string') {
+        const t = val.trim();
+        return t && t.toLowerCase() !== 'unassigned' ? t : '';
+      }
+      return '';
+    };
+
     const managerNameFromBranch = (
-      (typeof branch.branchManager === 'object' && branch.branchManager !== null ? (branch.branchManager.name || branch.branchManager.managerName || branch.branchManager.username || branch.branchManager.fullName) : (typeof branch.branchManager === 'string' ? branch.branchManager : '')) ||
-      (typeof branch.managerName === 'string' ? branch.managerName : '') ||
-      (typeof branch.manager === 'object' && branch.manager !== null ? (branch.manager.name || branch.manager.managerName || branch.manager.username || branch.manager.fullName) : (typeof branch.manager === 'string' ? branch.manager : '')) ||
-      (typeof branch.branchManagerName === 'string' ? branch.branchManagerName : '') ||
-      (typeof branch.contactPerson === 'string' ? branch.contactPerson : '') ||
+      extractRawManagerName(branch.managerName) ||
+      extractRawManagerName(branch.branchManager) ||
+      extractRawManagerName(branch.manager) ||
+      extractRawManagerName(branch.branchManagerName) ||
+      extractRawManagerName(branch.contactPerson) ||
       ''
     );
 
@@ -408,8 +424,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       id: branch.id || branch._id,
       branchName: branch.branchName || branch.name || '',
       branchCode: branch.branchCode || branch.code || '',
-      branchManager: managerNameFromBranch,
       managerName: managerNameFromBranch,
+      branchManager: managerNameFromBranch,
       mobileNumber: branch.mobileNumber || branch.contactNumber || branch.phone || branch.managerMobile || '',
       email: branch.email || branch.managerEmail || '',
       password: '',
@@ -483,12 +499,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
 
     // 4. Branch Manager (Manager Name) validation
-    const managerTrimmed = (branchForm.branchManager || branchForm.managerName || '').trim();
-    if (!managerTrimmed) {
+    const managerTrimmed = (branchForm.managerName || branchForm.branchManager || '').trim();
+    if (!managerTrimmed || managerTrimmed.toLowerCase() === 'unassigned') {
+      errors.managerName = 'Branch Manager name is required.';
       errors.branchManager = 'Branch Manager name is required.';
     } else if (managerTrimmed.length < 2) {
+      errors.managerName = 'Branch Manager name must be at least 2 characters.';
       errors.branchManager = 'Branch Manager name must be at least 2 characters.';
     } else if (!/^[a-zA-Z\s.'-]+$/.test(managerTrimmed)) {
+      errors.managerName = 'Branch Manager name must contain letters and spaces only.';
       errors.branchManager = 'Branch Manager name must contain letters and spaces only.';
     }
 
@@ -599,7 +618,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         !branchForm.branchName?.trim() ||
         !branchForm.branchCode?.trim() ||
         !branchForm.openingDate ||
-        !branchForm.branchManager?.trim() ||
+        !(branchForm.managerName?.trim() || branchForm.branchManager?.trim()) ||
         !branchForm.mobileNumber?.trim() ||
         !branchForm.email?.trim() ||
         (!isEditing && (!branchForm.password?.trim() || !branchForm.confirmPassword?.trim())) ||
@@ -933,11 +952,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)', color: '#fff', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>
-                {(currentViewBranch?.branchManager && currentViewBranch.branchManager.trim() ? currentViewBranch.branchManager.trim().charAt(0) : 'U').toUpperCase()}
+                {((currentViewBranch?.managerName || currentViewBranch?.branchManager) && (currentViewBranch?.managerName || currentViewBranch?.branchManager).trim() && !['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager).trim().toLowerCase()) ? (currentViewBranch.managerName || currentViewBranch.branchManager).trim().charAt(0) : 'U').toUpperCase()}
               </div>
               <div>
                 <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Branch Manager</span>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{currentViewBranch?.branchManager || 'Unassigned Manager'}</div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{(!currentViewBranch?.managerName && !currentViewBranch?.branchManager) || ['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager || '').toLowerCase()) ? 'Unassigned Manager' : (currentViewBranch?.managerName || currentViewBranch?.branchManager)}</div>
                 <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>{currentViewBranch?.mobileNumber}</div>
               </div>
             </div>
@@ -1420,24 +1439,26 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     <input
                       type="text"
                       placeholder="e.g. Saravana Kumaran"
-                      value={branchForm.branchManager || branchForm.managerName || ''}
+                      value={branchForm.managerName || branchForm.branchManager || ''}
                       onChange={e => {
                         const val = e.target.value.replace(/[^a-zA-Z\s.'-]/g, '');
-                        setBranchForm({ ...branchForm, branchManager: val, managerName: val });
-                        if (formErrors.branchManager) setFormErrors({ ...formErrors, branchManager: '' });
+                        setBranchForm({ ...branchForm, managerName: val, branchManager: val });
+                        if (formErrors.managerName || formErrors.branchManager) {
+                          setFormErrors({ ...formErrors, managerName: '', branchManager: '' });
+                        }
                       }}
                       style={{
                         width: '100%',
                         padding: '12px 16px',
                         borderRadius: '8px',
-                        border: formErrors.branchManager ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        border: (formErrors.managerName || formErrors.branchManager) ? '1.5px solid #ef4444' : '1px solid var(--border)',
                         fontSize: '14px',
                         boxSizing: 'border-box'
                       }}
                     />
-                    {formErrors.branchManager && (
+                    {(formErrors.managerName || formErrors.branchManager) && (
                       <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.branchManager}
+                        {formErrors.managerName || formErrors.branchManager}
                       </span>
                     )}
                   </div>
@@ -1952,27 +1973,38 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {/* 4. Manager */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{
-                        width: '28px',
-                        height: '28px',
-                        minWidth: '28px',
-                        minHeight: '28px',
-                        borderRadius: '50%',
-                        background: '#e0e7ff',
-                        color: '#4338ca',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '12px',
-                        fontWeight: 800,
-                        flexShrink: 0,
-                        lineHeight: 1
-                      }}>
-                        {(b.branchManager && b.branchManager.trim() ? b.branchManager.trim().charAt(0) : 'U').toUpperCase()}
-                      </span>
-                      <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '13px', lineHeight: '1.4' }}>
-                        {b.branchManager || 'Unassigned'}
-                      </span>
+                      {(() => {
+                        const raw = (b.managerName || b.branchManager || b.manager || '').trim();
+                        const isUnassigned = !raw || ['unassigned', 'null', 'undefined', 'none', '-'].includes(raw.toLowerCase());
+                        const managerDisplayName = isUnassigned ? 'Unassigned' : raw;
+                        const initialLetter = isUnassigned ? 'U' : managerDisplayName.charAt(0).toUpperCase();
+
+                        return (
+                          <>
+                            <span style={{
+                              width: '28px',
+                              height: '28px',
+                              minWidth: '28px',
+                              minHeight: '28px',
+                              borderRadius: '50%',
+                              background: isUnassigned ? '#f1f5f9' : '#e0e7ff',
+                              color: isUnassigned ? '#64748b' : '#4338ca',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              flexShrink: 0,
+                              lineHeight: 1
+                            }}>
+                              {initialLetter}
+                            </span>
+                            <span style={{ fontWeight: 600, color: isUnassigned ? '#64748b' : '#1e293b', fontSize: '13px', lineHeight: '1.4' }}>
+                              {managerDisplayName}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </td>
 
@@ -2060,22 +2092,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredBranches.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredBranches.length)} of {filteredBranches.length} branches
+            Showing {filteredBranches.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredBranches.length)} of {filteredBranches.length} branches
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page <= 1 ? '#f8fafc' : '#ffffff',
-                color: page <= 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -2086,16 +2118,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -2106,17 +2138,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

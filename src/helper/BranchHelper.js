@@ -6,34 +6,47 @@
 export const resolveBranchManagerName = (branch, users = [], staff = []) => {
   if (!branch) return 'Unassigned';
 
-  // 1. Direct branch manager properties on the branch object
-  const rawManager = branch.branchManager || branch.managerName || branch.manager || branch.branchManagerName || branch.contactPerson;
-  
-  if (typeof rawManager === 'object' && rawManager !== null) {
-    const objName = rawManager.name || rawManager.managerName || rawManager.username || rawManager.fullName;
-    if (objName && typeof objName === 'string' && objName.trim() && objName.trim().toLowerCase() !== 'unassigned') {
-      return objName.trim();
-    }
-  } else if (typeof rawManager === 'string' && rawManager.trim() && rawManager.trim().toLowerCase() !== 'unassigned') {
-    const trimmed = rawManager.trim();
-    // If it's a 24-character ObjectId string, try to match it with users or staff
-    if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
-      if (Array.isArray(users)) {
-        const u = users.find(x => String(x._id || x.id) === trimmed);
-        if (u) return (u.name || u.username || u.fullName || '').trim() || trimmed;
+  // 1. Check all direct candidate manager properties on the branch object
+  const candidateFields = [
+    branch.managerName,
+    branch.branchManager,
+    branch.manager,
+    branch.branchManagerName,
+    branch.contactPerson,
+    branch.managerDetails,
+    branch.managerInfo
+  ];
+
+  for (const candidate of candidateFields) {
+    if (!candidate) continue;
+    if (typeof candidate === 'object' && candidate !== null) {
+      const objName = candidate.name || candidate.managerName || candidate.username || candidate.fullName || candidate.contactPerson;
+      if (objName && typeof objName === 'string' && objName.trim() && !['unassigned', 'null', 'undefined', 'none', '-'].includes(objName.trim().toLowerCase())) {
+        return objName.trim();
       }
-      if (Array.isArray(staff)) {
-        const s = staff.find(x => String(x._id || x.id) === trimmed);
-        if (s) return (s.name || s.fullName || '').trim() || trimmed;
+    } else if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed && !['unassigned', 'null', 'undefined', 'none', '-'].includes(trimmed.toLowerCase())) {
+        // If it's a 24-character ObjectId string, try to match it with users or staff
+        if (/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+          if (Array.isArray(users)) {
+            const u = users.find(x => String(x._id || x.id) === trimmed);
+            if (u) return (u.name || u.username || u.fullName || '').trim() || trimmed;
+          }
+          if (Array.isArray(staff)) {
+            const s = staff.find(x => String(x._id || x.id) === trimmed);
+            if (s) return (s.name || s.fullName || '').trim() || trimmed;
+          }
+        }
+        return trimmed;
       }
     }
-    return trimmed;
   }
 
   const bId = String(branch._id || branch.id || '');
   const bCode = String(branch.branchCode || branch.code || '').toLowerCase().trim();
   const bEmail = String(branch.email || branch.managerEmail || '').toLowerCase().trim();
-  const bPhone = String(branch.mobileNumber || branch.contactNumber || branch.phone || '').replace(/\D/g, '');
+  const bPhone = String(branch.mobileNumber || branch.contactNumber || branch.phone || branch.managerMobile || '').replace(/\D/g, '');
 
   // 2. Check manager ID fields (managerId, branchManagerId, userId, adminId)
   const explicitId = String(branch.managerId || branch.branchManagerId || branch.userId || branch.adminId || branch.assignedManagerId || '');

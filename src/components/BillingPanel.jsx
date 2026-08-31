@@ -49,13 +49,13 @@ export default function BillingPanel({
   const orderIdDisplay = selectedBillData.orderId ? `#${selectedBillData.orderId}` : '';
 
   // Pagination for bill items
-  const [itemsPage, setItemsPage] = React.useState(1);
+  const [itemsPage, setItemsPage] = React.useState(0);
   const itemsPerPage = 6;
   const totalItemsPages = Math.ceil(billingItems.length / itemsPerPage) || 1;
-  const paginatedBillingItems = billingItems.slice((itemsPage - 1) * itemsPerPage, itemsPage * itemsPerPage);
+  const paginatedBillingItems = billingItems.slice(itemsPage * itemsPerPage, (itemsPage + 1) * itemsPerPage);
 
   React.useEffect(() => {
-    setItemsPage(1);
+    setItemsPage(0);
   }, [selectedBillingTable]);
 
   const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
@@ -268,22 +268,22 @@ export default function BillingPanel({
               border: '1px solid #e2e8f0'
             }}>
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                Showing {(itemsPage - 1) * itemsPerPage + 1} to {Math.min(itemsPage * itemsPerPage, billingItems.length)} of {billingItems.length} items
+                Showing {billingItems.length === 0 ? 0 : itemsPage * itemsPerPage + 1} to {Math.min((itemsPage + 1) * itemsPerPage, billingItems.length)} of {billingItems.length} items
               </span>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <button
                   type="button"
-                  onClick={() => setItemsPage(p => Math.max(1, p - 1))}
-                  disabled={itemsPage <= 1}
+                  onClick={() => setItemsPage(p => Math.max(0, p - 1))}
+                  disabled={itemsPage === 0}
                   style={{
                     padding: '4px 10px',
                     borderRadius: '6px',
                     border: '1px solid #cbd5e1',
-                    background: itemsPage <= 1 ? '#f1f5f9' : '#ffffff',
-                    color: itemsPage <= 1 ? '#94a3b8' : '#0f172a',
+                    background: itemsPage === 0 ? '#f1f5f9' : '#ffffff',
+                    color: itemsPage === 0 ? '#94a3b8' : '#0f172a',
                     fontSize: '11px',
                     fontWeight: 700,
-                    cursor: itemsPage <= 1 ? 'not-allowed' : 'pointer'
+                    cursor: itemsPage === 0 ? 'not-allowed' : 'pointer'
                   }}
                 >
                   Prev
@@ -300,21 +300,21 @@ export default function BillingPanel({
                   background: '#000000',
                   color: '#ffffff'
                 }}>
-                  {itemsPage}
+                  {itemsPage + 1}
                 </span>
                 <button
                   type="button"
-                  onClick={() => setItemsPage(p => Math.min(totalItemsPages, p + 1))}
-                  disabled={itemsPage >= totalItemsPages}
+                  onClick={() => setItemsPage(p => Math.min(totalItemsPages - 1, p + 1))}
+                  disabled={itemsPage >= totalItemsPages - 1 || totalItemsPages === 0}
                   style={{
                     padding: '4px 10px',
                     borderRadius: '6px',
                     border: '1px solid #cbd5e1',
-                    background: itemsPage >= totalItemsPages ? '#f1f5f9' : '#ffffff',
-                    color: itemsPage >= totalItemsPages ? '#94a3b8' : '#0f172a',
+                    background: (itemsPage >= totalItemsPages - 1 || totalItemsPages === 0) ? '#f1f5f9' : '#ffffff',
+                    color: (itemsPage >= totalItemsPages - 1 || totalItemsPages === 0) ? '#94a3b8' : '#0f172a',
                     fontSize: '11px',
                     fontWeight: 700,
-                    cursor: itemsPage >= totalItemsPages ? 'not-allowed' : 'pointer'
+                    cursor: (itemsPage >= totalItemsPages - 1 || totalItemsPages === 0) ? 'not-allowed' : 'pointer'
                   }}
                 >
                   Next

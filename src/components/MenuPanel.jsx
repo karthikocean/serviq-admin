@@ -256,7 +256,7 @@ export default function MenuPanel({
             onChange={(e) => {
               const val = e.target.value.replace(/^\s+/, '');
               setMenuSearch(val);
-              setPage(1);
+              setPage(0);
             }}
             style={{
               width: '100%',

@@ -199,7 +199,7 @@ export default function StaffManagementPanel({
   const [apiTables, setApiTables] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
@@ -226,7 +226,7 @@ export default function StaffManagementPanel({
 
     const [usersRes, allStaffRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
       UserApi.getUsers({
-        page: 1,
+        page: 0,
         limit: 500
       }),
       StaffApi.getStaff(),
@@ -353,18 +353,19 @@ export default function StaffManagementPanel({
 
   const totalRecords = filteredUsers.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
-  const paginatedUsers = filteredUsers.slice((page - 1) * limit, page * limit);
+  const paginatedUsers = filteredUsers.slice(page * limit, (page + 1) * limit);
 
   useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
+    if (page >= totalPages && totalPages > 0) {
+      setPage(totalPages - 1);
     }
   }, [totalPages, page]);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -1226,7 +1227,7 @@ export default function StaffManagementPanel({
               onChange={(e) => {
                 const val = e.target.value.replace(/^\s+/, '');
                 setSearchQuery(val);
-                setPage(1);
+                setPage(0);
               }}
               style={{
                 width: '100%',
@@ -1257,7 +1258,7 @@ export default function StaffManagementPanel({
           <div>
             <SearchableSelect
               value={roleFilter}
-              onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
+              onChange={(e) => { setRoleFilter(e.target.value); setPage(0); }}
               options={[
                 { value: 'All', label: 'All Roles' },
                 ...apiRoles.map(r => ({
@@ -1272,7 +1273,7 @@ export default function StaffManagementPanel({
           <div>
             <SearchableSelect
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
               options={[
                 { value: 'All', label: 'All Status' },
                 { value: 'Active', label: 'Active Only' },
@@ -1348,7 +1349,7 @@ export default function StaffManagementPanel({
                 <tr key={user._id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   {/* 1. S.No */}
                   <td style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {(page - 1) * limit + index + 1}
+                    {page * limit + index + 1}
                   </td>
 
                   {/* 2. Staff Member (Avatar, Name, Email) */}
@@ -1607,24 +1608,24 @@ export default function StaffManagementPanel({
       }}>
         {/* Left Info Text */}
         <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-          Showing {totalRecords === 0 ? 0 : ((page - 1) * limit) + 1} to {Math.min(page * limit, totalRecords)} of {totalRecords} entries
+          Showing {totalRecords === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, totalRecords)} of {totalRecords} entries
         </div>
 
         {/* Right Pagination Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
             type="button"
-            disabled={page === 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 0}
+            onClick={() => setPage(p => Math.max(0, p - 1))}
             style={{
               padding: '6px 14px',
               borderRadius: '8px',
               border: '1px solid #e2e8f0',
-              background: page === 1 ? '#f8fafc' : '#ffffff',
-              color: page === 1 ? '#cbd5e1' : '#334155',
+              background: page === 0 ? '#f8fafc' : '#ffffff',
+              color: page === 0 ? '#cbd5e1' : '#334155',
               fontSize: '0.82rem',
               fontWeight: '600',
-              cursor: page === 1 ? 'not-allowed' : 'pointer',
+              cursor: page === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >
@@ -1635,19 +1636,19 @@ export default function StaffManagementPanel({
             <button
               key={pageNum}
               type="button"
-              onClick={() => setPage(pageNum)}
+              onClick={() => setPage(pageNum - 1)}
               style={{
                 minWidth: '34px',
                 height: '34px',
                 padding: '0 8px',
                 borderRadius: '8px',
-                border: pageNum === page ? 'none' : '1px solid #e2e8f0',
-                background: pageNum === page ? '#000000' : '#ffffff',
-                color: pageNum === page ? '#ffffff' : '#334155',
+                border: pageNum === page + 1 ? 'none' : '1px solid #e2e8f0',
+                background: pageNum === page + 1 ? '#000000' : '#ffffff',
+                color: pageNum === page + 1 ? '#ffffff' : '#334155',
                 fontSize: '0.85rem',
                 fontWeight: '700',
                 cursor: 'pointer',
-                boxShadow: pageNum === page ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                boxShadow: pageNum === page + 1 ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1657,17 +1658,17 @@ export default function StaffManagementPanel({
 
           <button
             type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page >= totalPages - 1 || totalPages === 0}
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
             style={{
               padding: '6px 14px',
               borderRadius: '8px',
               border: '1px solid #e2e8f0',
-              background: page >= totalPages ? '#f8fafc' : '#ffffff',
-              color: page >= totalPages ? '#cbd5e1' : '#334155',
+              background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+              color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
               fontSize: '0.82rem',
               fontWeight: '600',
-              cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+              cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >

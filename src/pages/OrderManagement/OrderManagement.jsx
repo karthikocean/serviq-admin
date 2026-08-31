@@ -104,6 +104,8 @@ export default function OrderManagement() {
         else if (Array.isArray(sd?.data)) staffList = sd.data;
         else if (Array.isArray(sd?.data?.staff)) staffList = sd.data.staff;
         else if (Array.isArray(sd?.staff)) staffList = sd.staff;
+        else if (Array.isArray(sd?.response?.data)) staffList = sd.response.data;
+        else if (Array.isArray(sd?.response)) staffList = sd.response;
         setApiStaff(staffList);
       }
 
@@ -112,13 +114,20 @@ export default function OrderManagement() {
         let tableList = [];
         if (Array.isArray(td)) tableList = td;
         else if (Array.isArray(td?.data)) tableList = td.data;
+        else if (Array.isArray(td?.data?.tables)) tableList = td.data.tables;
+        else if (Array.isArray(td?.tables)) tableList = td.tables;
         else if (Array.isArray(td?.response?.data)) tableList = td.response.data;
+        else if (Array.isArray(td?.response)) tableList = td.response;
         setApiTables(tableList);
       }
     } catch (e) {
       console.error("Failed to fetch fresh orders/staff/tables:", e);
     }
   };
+
+  useEffect(() => {
+    setPage(0);
+  }, [orderFilter, selectedWaiterFilter, selectedBranchId]);
 
   useEffect(() => {
     fetchOrdersAndStaff();

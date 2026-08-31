@@ -913,11 +913,12 @@ color: #000000;
   font-weight: 600;
 }
 
-/* Dashboard Inner Grid split: Live Orders (Left) vs Tables Grid (Right) */
+/* Dashboard Inner Grid: Live Orders (Top) & Tables Grid (Bottom) */
 .dashboard-inner-grid {
-  display: grid;
-  grid-template-columns: 2.2fr 1fr;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
 }
 
 .feed-card,
@@ -963,6 +964,8 @@ color: #000000;
 .menu-table-wrapper,
 .feed-table-wrapper,
 .panel-view,
+.waiter-dropdown-list,
+.tables-status-grid,
 div[style*="overflow"],
 div[style*="overflowX"],
 div[style*="overflowY"],
@@ -977,6 +980,8 @@ div[style*="overflow-y"] {
 .table-responsive::-webkit-scrollbar,
 .menu-table-wrapper::-webkit-scrollbar,
 .feed-table-wrapper::-webkit-scrollbar,
+.waiter-dropdown-list::-webkit-scrollbar,
+.tables-status-grid::-webkit-scrollbar,
 div[style*="overflow"]::-webkit-scrollbar,
 div[style*="overflowX"]::-webkit-scrollbar,
 div[style*="overflowY"]::-webkit-scrollbar,
@@ -990,6 +995,8 @@ div[style*="overflow-y"]::-webkit-scrollbar {
 .table-responsive::-webkit-scrollbar-track,
 .menu-table-wrapper::-webkit-scrollbar-track,
 .feed-table-wrapper::-webkit-scrollbar-track,
+.waiter-dropdown-list::-webkit-scrollbar-track,
+.tables-status-grid::-webkit-scrollbar-track,
 div[style*="overflow"]::-webkit-scrollbar-track,
 div[style*="overflowX"]::-webkit-scrollbar-track,
 div[style*="overflowY"]::-webkit-scrollbar-track,
@@ -1003,6 +1010,8 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
 .table-responsive::-webkit-scrollbar-thumb,
 .menu-table-wrapper::-webkit-scrollbar-thumb,
 .feed-table-wrapper::-webkit-scrollbar-thumb,
+.waiter-dropdown-list::-webkit-scrollbar-thumb,
+.tables-status-grid::-webkit-scrollbar-thumb,
 div[style*="overflow"]::-webkit-scrollbar-thumb,
 div[style*="overflowX"]::-webkit-scrollbar-thumb,
 div[style*="overflowY"]::-webkit-scrollbar-thumb,
@@ -1016,6 +1025,8 @@ div[style*="overflow-y"]::-webkit-scrollbar-thumb {
 .table-responsive::-webkit-scrollbar-thumb:hover,
 .menu-table-wrapper::-webkit-scrollbar-thumb:hover,
 .feed-table-wrapper::-webkit-scrollbar-thumb:hover,
+.waiter-dropdown-list::-webkit-scrollbar-thumb:hover,
+.tables-status-grid::-webkit-scrollbar-thumb:hover,
 div[style*="overflow"]::-webkit-scrollbar-thumb:hover,
 div[style*="overflowX"]::-webkit-scrollbar-thumb:hover,
 div[style*="overflowY"]::-webkit-scrollbar-thumb:hover,
