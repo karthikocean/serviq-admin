@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const APP_ENV = "local";
+const APP_ENV = (typeof process !== "undefined" && process.env?.REACT_APP_ENV) || import.meta.env.VITE_APP_ENV || "local";
+
 
 let IMAGE_BASE_URL = "";
 let BASE_URL = "";
