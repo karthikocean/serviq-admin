@@ -5,12 +5,13 @@ import ShowNotifications from '../../helper/ShowNotifications';
 import TableApi from '../../api/Table';
 import StaffApi from '../../api/Staff';
 import BranchApi from '../../api/Branch';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function TableFormPage() {
   const navigate = useNavigate();
   const { tableId } = useParams();
   const location = useLocation();
-  const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, selectedBranchId, currentUser, addDiningTable, updateDiningTable } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -22,15 +23,14 @@ export default function TableFormPage() {
   const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
   const isBranchLocked = !isAdminOrOwner;
 
-  const [branches, setBranches] = useState([]);
+  const [branches, setBranches] = useState(() => activeRestaurant?.branches || []);
   const [allStaff, setAllStaff] = useState([]);
   const isEdit = !!tableId;
   const [existingTable, setExistingTable] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Get default physical branch from localStorage
-  const localUser = JSON.parse(localStorage.getItem('serviq_user') || '{}');
-  const defaultBranchId = localUser.activeBranchId || (selectedBranchId !== 'ALL' ? selectedBranchId : '');
+  // Get default branch from context
+  const defaultBranchId = currentUser?.activeBranchId || currentUser?.branchId || (selectedBranchId !== 'ALL' ? selectedBranchId : '');
 
   const [form, setForm] = useState({
     id: tableId ? (tableId.startsWith('T-') ? tableId : `T-${tableId}`) : '',
@@ -110,23 +110,50 @@ export default function TableFormPage() {
         assignedWaiterId: existingTable.assignedWaiter?._id || existingTable.assignedWaiter || existingTable.assignedWaiterId || ''
       });
     }
-  }, [existingTable, selectedBranchId]);
+  }, [existingTable]);
 
-  // Filter waiters by role and branch
-  const allWaiters = allStaff.filter(s => s.role === 'Waiter' || s.role?.name === 'Waiter' || (s.roleId && s.roleId.roleName === 'Waiter') || s.userType === 'STAFF');
+  // Filter waiters by role and branch (Waiters ONLY)
+  const isOnlyWaiter = (s) => {
+    if (!s) return false;
+    const roleName = String(
+      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : s.roleId) ||
+      s.role ||
+      s.designation ||
+      ''
+    ).toLowerCase().trim();
+    const userType = String(s.userType || '').toUpperCase().trim();
+
+    if (
+      roleName.includes('kitchen') ||
+      roleName.includes('chef') ||
+      roleName.includes('cook') ||
+      roleName.includes('manager') ||
+      roleName.includes('admin') ||
+      roleName.includes('owner') ||
+      roleName.includes('station') ||
+      roleName.includes('cashier') ||
+      userType === 'STATION' ||
+      userType === 'BRANCH_ADMIN' ||
+      userType === 'ADMIN' ||
+      userType === 'SUPER_ADMIN' ||
+      userType === 'RESTAURANT_OWNER' ||
+      userType === 'OWNER'
+    ) {
+      return false;
+    }
+    return roleName.includes('waiter') || roleName.includes('server') || roleName === 'waiter';
+  };
+
+  const allWaiters = allStaff.filter(isOnlyWaiter);
   const availableWaiters = form.branchId
     ? allWaiters.filter(s => {
       const staffBranchId = s.branchId?._id || s.branchId;
       return staffBranchId === form.branchId || staffBranchId === 'ALL';
     })
-    : [];
+    : allWaiters;
 
   const validate = () => {
     const errors = {};
-    const idTrimmed = form.id.trim();
-    if (!idTrimmed) {
-      errors.id = 'Table Number / ID is required.';
-    }
 
     const seatsNum = parseInt(form.seats);
     if (isNaN(seatsNum) || seatsNum < 1) {
@@ -143,33 +170,52 @@ export default function TableFormPage() {
     e.preventDefault();
     if (!validate()) return;
 
-    const idStr = form.id.trim();
-    const selectedWaiterObj = allStaff.find(s => String(s.id) === String(form.assignedWaiterId));
-    const assignedWaiterName = selectedWaiterObj ? selectedWaiterObj.name : null;
+    const idStr = form.id ? form.id.trim() : '';
+    const restaurantId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId;
+    const effectiveBranchId = form.branchId && form.branchId !== 'ALL'
+      ? form.branchId
+      : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (branches[0]?._id || branches[0]?.id || currentUser?.activeBranchId || undefined));
+
+    const payload = {
+      restaurantId: restaurantId,
+      branchId: effectiveBranchId,
+      seatingCapacity: parseInt(form.seats) || 4,
+      status: form.status || 'Free',
+      section: form.section || 'Main Dining',
+      assignedWaiter: form.assignedWaiterId || null
+    };
+
+    if (idStr && idStr !== 'Auto-generated') {
+      payload.tableNumber = idStr;
+    }
+
+    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const isMock = token && token.startsWith("mock_");
 
     if (isEdit) {
-      const res = await TableApi.updateTable(tableId, {
-        branchId: form.branchId,
-        seatingCapacity: parseInt(form.seats) || 4,
-        status: form.status,
-        section: form.section,
-        tableNumber: idStr,
-        assignedWaiter: form.assignedWaiterId || null
-      });
-      if (res.status) {
+      const res = await TableApi.updateTable(tableId, payload);
+      if (res?.status || isMock) {
+        if (updateDiningTable && activeRestaurant?.id) {
+          updateDiningTable(activeRestaurant.id, tableId, {
+            seats: payload.seatingCapacity,
+            status: payload.status,
+            section: payload.section
+          });
+        }
         navigate('/tables');
       }
     } else {
-      const res = await TableApi.createTable({
-        restaurantId: activeRestaurant._id,
-        branchId: form.branchId,
-        seatingCapacity: parseInt(form.seats) || 4,
-        status: form.status,
-        section: form.section,
-        tableNumber: idStr,
-        assignedWaiter: form.assignedWaiterId || null
-      });
-      if (res.status) {
+      const res = await TableApi.createTable(payload);
+      if (res?.status || isMock) {
+        if (addDiningTable && activeRestaurant?.id) {
+          addDiningTable(activeRestaurant.id, {
+            id: res?.response?.data?.tableNumber || idStr || `T-${Date.now().toString().slice(-3)}`,
+            seats: payload.seatingCapacity,
+            status: payload.status,
+            section: payload.section,
+            branchId: payload.branchId
+          });
+        }
         navigate('/tables');
       }
     }
@@ -194,26 +240,27 @@ export default function TableFormPage() {
             type="button"
             onClick={() => navigate('/tables')}
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px',
-              borderRadius: '50%',
-              color: '#0f172a'
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            ←
           </button>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               {isEdit ? 'Edit Dining Table' : 'Add Dining Table'}
             </h2>
-
           </div>
         </div>
       </div>
@@ -233,49 +280,63 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              {isAdminOrOwner ? (
-                <select
-                  value={form.branchId || ''}
-                  onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
+              {(() => {
+                const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+                const isLocked = !isAdminOrOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(form.branchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (form.branchId || '');
+
+                return (
+                  <div>
+                    <SearchableSelect
+                      value={effectiveVal}
+                      onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                  Table Number
+                </label>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>
+                  Auto Generated
+                </span>
+              </div>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={form.id || (isEdit ? '' : 'Auto-generated')}
+                  disabled={true}
+                  readOnly
+                  placeholder="Auto-generated"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="">-- Select Branch --</option>
-                  {(branches || []).map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>
-                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={(() => {
-                    const bObj = (branches || []).find(b => String(b._id || b.id) === String(form.branchId))
-                      || (branches || []).find(b => String(b._id || b.id) === String(selectedBranchId))
-                      || (branches && branches.length > 0 ? branches[0] : null);
-                    return bObj
-                      ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}`
-                      : (selectedBranchId || 'Default Branch');
-                  })()}
-                  readOnly
-                  disabled
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
                     fontSize: '14px',
                     fontWeight: 600,
                     outline: 'none',
@@ -285,44 +346,7 @@ export default function TableFormPage() {
                     boxSizing: 'border-box'
                   }}
                 />
-              )}
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label style={{ fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-                  Table Number / ID <span style={{ color: '#ef4444' }}>*</span>
-                </label>
               </div>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <input
-                  type="text"
-                  value={form.id}
-                  disabled={true}
-                  onChange={(e) => {
-                    setForm({ ...form, id: e.target.value });
-                    if (formErrors.id) setFormErrors({ ...formErrors, id: '' });
-                  }}
-                  placeholder="e.g. TBL-A-001"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: formErrors.id ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'not-allowed',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-              {formErrors.id && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.id}
-                </span>
-              )}
             </div>
           </div>
 
@@ -364,29 +388,21 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Section / Area
               </label>
-              <select
+              <SearchableSelect
                 value={form.section}
                 onChange={(e) => setForm({ ...form, section: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="Main Dining">Main Dining</option>
-                <option value="Main Hall">Main Hall</option>
-                <option value="AC Dining">AC Dining</option>
-                <option value="AC Hall">AC Hall</option>
-                <option value="Family Section">Family Section</option>
-                <option value="Outdoor Terrace">Outdoor Terrace</option>
-                <option value="Garden View">Garden View</option>
-                <option value="VIP Lounge">VIP Lounge</option>
-              </select>
+                options={[
+                  { value: 'Main Dining', label: 'Main Dining' },
+                  { value: 'Main Hall', label: 'Main Hall' },
+                  { value: 'AC Dining', label: 'AC Dining' },
+                  { value: 'AC Hall', label: 'AC Hall' },
+                  { value: 'Family Section', label: 'Family Section' },
+                  { value: 'Outdoor Terrace', label: 'Outdoor Terrace' },
+                  { value: 'Garden View', label: 'Garden View' },
+                  { value: 'VIP Lounge', label: 'VIP Lounge' }
+                ]}
+                placeholder="Select Section..."
+              />
             </div>
           </div>
 
@@ -396,27 +412,18 @@ export default function TableFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Assign Waiter (Optional)
               </label>
-              <select
+              <SearchableSelect
                 value={form.assignedWaiterId || ''}
                 onChange={(e) => setForm({ ...form, assignedWaiterId: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="">-- None (Unassigned) --</option>
-                {availableWaiters.map(w => (
-                  <option key={w._id || w.id} value={w._id || w.id}>
-                    🤵 {w.name} ({w.status || 'Active'})
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: '-- None (Unassigned) --' },
+                  ...availableWaiters.map(w => ({
+                    value: w._id || w.id,
+                    label: `🤵 ${w.name} (${w.status || 'Active'})`
+                  }))
+                ]}
+                placeholder="Select Waiter..."
+              />
             </div>
 
             {isEdit ? (
@@ -424,23 +431,15 @@ export default function TableFormPage() {
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                   Occupancy Status
                 </label>
-                <select
+                <SearchableSelect
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '14px',
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="Free">Free (Available)</option>
-                  <option value="Occupied">Occupied</option>
-                </select>
+                  options={[
+                    { value: 'Free', label: 'Free (Available)' },
+                    { value: 'Occupied', label: 'Occupied' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
             ) : (
               <div>

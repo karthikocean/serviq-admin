@@ -5,6 +5,8 @@ import InventoryApi from '../api/Inventory';
 import InventoryCategoryApi from '../api/InventoryCategory';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY, formatDateTimeDMY } from '../helper/DateHelper.js';
 
 // Clean SVG Icons
 const TrendingDownIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -79,6 +81,8 @@ export default function StockReductionPanel() {
   const [liveItems, setLiveItems] = useState([]);
   const [livePurchases, setLivePurchases] = useState([]);
   const [liveReductions, setLiveReductions] = useState([]);
+  const [reductionToDelete, setReductionToDelete] = useState(null);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
   const [apiStats, setApiStats] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -204,7 +208,7 @@ export default function StockReductionPanel() {
   const [categoryFilter, setCategoryFilter] = useState('All');
 
   // Pagination states
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // View and Modals state
@@ -219,6 +223,7 @@ export default function StockReductionPanel() {
     notes: '',
     date: new Date().toISOString().slice(0, 16)
   });
+  const [reduceErrors, setReduceErrors] = useState({});
 
   // Form: New Purchase Record
   const [purchaseForm, setPurchaseForm] = useState({
@@ -236,6 +241,7 @@ export default function StockReductionPanel() {
     paymentStatus: 'Paid',
     notes: ''
   });
+  const [purchaseErrors, setPurchaseErrors] = useState({});
 
   // Handlers for Reduce Stock Modal
   const handleOpenReduceModal = (item = null) => {
@@ -248,6 +254,7 @@ export default function StockReductionPanel() {
       notes: '',
       date: new Date().toISOString().slice(0, 16)
     });
+    setReduceErrors({});
     setViewMode('reduce-form');
   };
 
@@ -255,29 +262,39 @@ export default function StockReductionPanel() {
     const item = inventory.find(i => (i._id === itemId || i.id === itemId));
     setSelectedItemForReduction(item || null);
     setReduceForm(prev => ({ ...prev, itemId }));
+    if (reduceErrors.itemId) setReduceErrors(prev => ({ ...prev, itemId: '' }));
   };
 
   const handleReduceSubmit = async (e) => {
     if (e) e.preventDefault();
+    const errors = {};
+
     if (!reduceForm.itemId) {
-      ShowNotifications.showAlertNotification("Please select an inventory item.", false);
-      return;
+      errors.itemId = 'Please select an inventory item.';
     }
 
     const currentItem = inventory.find(i => (i._id === reduceForm.itemId || i.id === reduceForm.itemId));
     const qtyNum = parseFloat(reduceForm.quantity);
 
-    if (isNaN(qtyNum) || qtyNum <= 0) {
-      ShowNotifications.showAlertNotification("Please enter a valid reduction quantity greater than 0.", false);
+    if (!reduceForm.quantity || isNaN(qtyNum) || qtyNum <= 0) {
+      errors.quantity = 'Please enter a valid reduction quantity greater than 0.';
+    } else {
+      const availableStock = Number(currentItem?.currentStock) || 0;
+      if (currentItem && qtyNum > availableStock) {
+        errors.quantity = `Reduction quantity (${qtyNum} ${currentItem.unit || 'unit'}) exceeds available stock (${availableStock} ${currentItem.unit || 'unit'})!`;
+      }
+    }
+
+    if (!reduceForm.reason) {
+      errors.reason = 'Please select a reason for reduction.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setReduceErrors(errors);
       return;
     }
 
-    const availableStock = Number(currentItem?.currentStock) || 0;
-    if (currentItem && qtyNum > availableStock) {
-      ShowNotifications.showAlertNotification(`Reduction quantity (${qtyNum} ${currentItem.unit}) exceeds available stock (${availableStock} ${currentItem.unit})!`, false);
-      return;
-    }
-
+    setReduceErrors({});
     setIsSubmitting(true);
     const itemId = currentItem?._id || currentItem?.id || reduceForm.itemId;
     const itemCost = Number(currentItem?.costPerUnit) || 0;
@@ -301,6 +318,11 @@ export default function StockReductionPanel() {
     try {
       const res = await InventoryApi.reduceStock(payload);
       if (res?.status) {
+        if (itemId) {
+          await InventoryApi.updateItem(itemId, {
+            currentStock: Math.max(0, (Number(currentItem?.currentStock) || 0) - qtyNum)
+          }).catch(() => {});
+        }
         await fetchAllData();
         if (reduceInventoryStock && activeRestaurant?.id) {
           reduceInventoryStock(activeRestaurant.id, {
@@ -316,9 +338,16 @@ export default function StockReductionPanel() {
         }
         setViewMode('list');
         ShowNotifications.showAlertNotification('Stock reduction recorded successfully!', true);
+      } else {
+        setReduceErrors({
+          general: res?.response?.message || 'Failed to record stock reduction.'
+        });
       }
     } catch (err) {
       console.error("Reduce stock error:", err);
+      setReduceErrors({
+        general: 'Failed to record stock reduction. Please check connection and try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -342,6 +371,7 @@ export default function StockReductionPanel() {
       paymentStatus: 'Paid',
       notes: ''
     });
+    setPurchaseErrors({});
     setViewMode('purchase-form');
   };
 
@@ -370,43 +400,94 @@ export default function StockReductionPanel() {
         }));
       }
     }
+    setPurchaseErrors(prev => ({ ...prev, itemId: '', itemName: '' }));
   };
 
   const handlePurchaseSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!purchaseForm.itemName.trim()) {
-      ShowNotifications.showAlertNotification("Please enter or select an item name.", false);
-      return;
+    const errors = {};
+
+    if (!purchaseForm.itemName || !purchaseForm.itemName.trim()) {
+      errors.itemName = 'Please enter or select an item name.';
+    }
+
+    if (purchaseForm.supplierPhone && purchaseForm.supplierPhone.trim()) {
+      if (!/^\d{10}$/.test(purchaseForm.supplierPhone.trim())) {
+        errors.supplierPhone = 'Please enter a valid 10-digit phone number.';
+      }
     }
 
     const qtyNum = parseFloat(purchaseForm.quantity);
-    const rateNum = parseFloat(purchaseForm.unitPrice) || 0;
-    const totalAmt = qtyNum * rateNum;
+    if (!purchaseForm.quantity || isNaN(qtyNum) || qtyNum <= 0) {
+      errors.quantity = 'Please enter a valid quantity greater than 0.';
+    }
 
-    if (isNaN(qtyNum) || qtyNum <= 0) {
-      ShowNotifications.showAlertNotification("Please enter a valid purchase quantity greater than 0.", false);
+    const rateNum = parseFloat(purchaseForm.unitPrice);
+    if (purchaseForm.unitPrice === '' || isNaN(rateNum) || rateNum < 0) {
+      errors.unitPrice = 'Please enter a valid unit cost price (0 or greater).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPurchaseErrors(errors);
       return;
     }
 
+    setPurchaseErrors({});
     setIsSubmitting(true);
-    const currentItem = inventory.find(i => (i._id === purchaseForm.itemId || i.id === purchaseForm.itemId || i.name.toLowerCase() === purchaseForm.itemName.toLowerCase()));
-    const itemId = currentItem?._id || currentItem?.id || purchaseForm.itemId;
+
+    const totalAmt = qtyNum * (rateNum || 0);
+    let currentItem = inventory.find(i => (i._id === purchaseForm.itemId || i.id === purchaseForm.itemId || i.name.toLowerCase() === purchaseForm.itemName.toLowerCase()));
+    let itemId = currentItem?._id || currentItem?.id;
+
+    // If custom entry and item does not exist, create the item first
+    if ((!itemId || purchaseForm.itemId === 'CUSTOM') && purchaseForm.itemName.trim()) {
+      try {
+        const rawBranch = selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined;
+        const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
+        
+        const createRes = await InventoryApi.createItem({
+          name: purchaseForm.itemName.trim(),
+          category: purchaseForm.category || 'General',
+          unit: purchaseForm.unit || 'kg',
+          costPerUnit: rateNum || 0,
+          currentStock: 0,
+          minStockThreshold: 5,
+          idealStockLevel: 50,
+          supplierName: purchaseForm.supplierName.trim() || undefined,
+          supplierPhone: purchaseForm.supplierPhone.trim() || undefined,
+          branchId: cleanBranchId
+        });
+        if (createRes?.status && createRes?.response?.data) {
+          itemId = createRes.response.data._id || createRes.response.data.id;
+        }
+      } catch (createErr) {
+        console.error("Auto create item error:", createErr);
+      }
+    }
+
+    const rawBranch = currentItem?.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined);
+    const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
 
     const payload = {
-      itemId: itemId && itemId !== 'CUSTOM' ? itemId : undefined,
-      supplierName: purchaseForm.supplierName.trim(),
+      itemId: itemId || undefined,
+      supplierName: purchaseForm.supplierName.trim() || 'Direct Vendor',
       supplierPhone: purchaseForm.supplierPhone.trim(),
       purchaseQty: qtyNum,
       unitPrice: rateNum,
       totalAmount: totalAmt,
-      invoiceNumber: purchaseForm.invoiceNumber || `INV-${Date.now().toString().slice(-5)}`,
+      invoiceNumber: purchaseForm.invoiceNumber.trim() || `INV-${Date.now().toString().slice(-5)}`,
       purchaseDate: purchaseForm.purchaseDate ? new Date(purchaseForm.purchaseDate).toISOString() : new Date().toISOString(),
-      branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentItem?.branchId || undefined)
+      branchId: cleanBranchId
     };
 
     try {
       const res = await InventoryApi.recordPurchase(payload);
       if (res?.status) {
+        if (itemId) {
+          await InventoryApi.updateItem(itemId, {
+            currentStock: (Number(currentItem?.currentStock) || 0) + qtyNum
+          }).catch(() => {});
+        }
         await fetchAllData();
         if (addPurchaseRecord && activeRestaurant?.id) {
           addPurchaseRecord(activeRestaurant.id, {
@@ -420,9 +501,16 @@ export default function StockReductionPanel() {
         }
         setViewMode('list');
         ShowNotifications.showAlertNotification('Purchase record saved and stock added!', true);
+      } else {
+        setPurchaseErrors({
+          general: res?.response?.message || 'Failed to record purchase. Please check the entered values.'
+        });
       }
     } catch (err) {
       console.error("Record purchase error:", err);
+      setPurchaseErrors({
+        general: 'Failed to record purchase. Please check connection and try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -443,7 +531,7 @@ export default function StockReductionPanel() {
         r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity,
         (typeof r.itemId === 'object' && r.itemId?.unit) ? r.itemId.unit : (r.unit || 'unit'),
         r.reason || 'Kitchen Usage',
-        `"${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.date || '')}"`,
+        `"${r.createdAt ? formatDateTimeDMY(r.createdAt) : (r.date || '')}"`,
         `"${typeof r.reducedBy === 'object' ? r.reducedBy?.name : (r.reducedBy || 'Admin')}"`,
         `"${r.details || r.notes || ''}"`
       ]);
@@ -460,7 +548,7 @@ export default function StockReductionPanel() {
         (typeof p.itemId === 'object' && p.itemId?.unit) ? p.itemId.unit : (p.unit || 'kg'),
         p.unitPrice || 0,
         p.totalAmount || 0,
-        p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : ''),
+        p.purchaseDate ? formatDateDMY(p.purchaseDate) : (p.createdAt ? formatDateDMY(p.createdAt) : ''),
         p.paymentStatus || 'Paid',
         `"${typeof p.addedBy === 'object' ? p.addedBy?.name : (p.addedBy || 'Admin')}"`
       ]);
@@ -550,12 +638,13 @@ export default function StockReductionPanel() {
       : filteredPurchases;
 
   const totalPages = Math.ceil(activeDataList.length / rowsPerPage) || 1;
-  const paginatedData = activeDataList.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const paginatedData = activeDataList.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    const current = currentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -590,64 +679,75 @@ export default function StockReductionPanel() {
   if (viewMode === 'reduce-form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Reduce Inventory Stock
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                Reduce Inventory Stock
+              </h2>
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-          <form onSubmit={handleReduceSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handleReduceSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {reduceErrors.general && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                {reduceErrors.general}
+              </div>
+            )}
+
             {/* Select Item */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Select Item <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                disabled={isSubmitting}
+              <SearchableSelect
+                isDisabled={isSubmitting}
                 value={reduceForm.itemId}
                 onChange={e => handleItemSelectChange(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                {inventory.map(item => (
-                  <option key={item._id || item.id} value={item._id || item.id}>
-                    {item.name} ({item.currentStock} {item.unit} available)
-                  </option>
-                ))}
-              </select>
+                options={inventory.map(item => ({
+                  value: item._id || item.id,
+                  label: `${item.name} (${item.currentStock} ${item.unit} available)`
+                }))}
+                placeholder="Select Item..."
+              />
+              {reduceErrors.itemId && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.itemId}
+                </span>
+              )}
             </div>
 
             {/* Current Stock Banner */}
@@ -687,18 +787,26 @@ export default function StockReductionPanel() {
                 step="0.1"
                 min="0.1"
                 value={reduceForm.quantity}
-                onChange={e => setReduceForm({ ...reduceForm, quantity: e.target.value })}
+                onChange={e => {
+                  setReduceForm({ ...reduceForm, quantity: e.target.value });
+                  if (reduceErrors.quantity) setReduceErrors(prev => ({ ...prev, quantity: '' }));
+                }}
                 placeholder="e.g. 5"
                 style={{
                   width: '100%',
                   padding: '12px 16px',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: reduceErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '14px',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
               />
+              {reduceErrors.quantity && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.quantity}
+                </span>
+              )}
             </div>
 
             {/* Reason */}
@@ -706,25 +814,24 @@ export default function StockReductionPanel() {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                 Reason for Reduction <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                disabled={isSubmitting}
+              <SearchableSelect
+                isDisabled={isSubmitting}
                 value={reduceForm.reason}
-                onChange={e => setReduceForm({ ...reduceForm, reason: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  backgroundColor: '#ffffff',
-                  outline: 'none',
-                  boxSizing: 'border-box'
+                onChange={e => {
+                  setReduceForm({ ...reduceForm, reason: e.target.value });
+                  if (reduceErrors.reason) setReduceErrors(prev => ({ ...prev, reason: '' }));
                 }}
-              >
-                {REDUCTION_REASONS.map(r => (
-                  <option key={r.id} value={r.id}>{r.label} — {r.desc}</option>
-                ))}
-              </select>
+                options={REDUCTION_REASONS.map(r => ({
+                  value: r.id,
+                  label: `${r.label} — ${r.desc}`
+                }))}
+                placeholder="Select Reason..."
+              />
+              {reduceErrors.reason && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {reduceErrors.reason}
+                </span>
+              )}
             </div>
 
             {/* Notes */}
@@ -788,70 +895,79 @@ export default function StockReductionPanel() {
   if (viewMode === 'purchase-form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              Record Inbound Purchase (Vendor Restock)
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                Record Inbound Purchase (Vendor Restock)
+              </h2>
+            </div>
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-          <form onSubmit={handlePurchaseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handlePurchaseSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {purchaseErrors.general && (
+              <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                {purchaseErrors.general}
+              </div>
+            )}
+
             {/* Row 1: Item Source Selection */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Inventory Item <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={purchaseForm.itemId}
                   onChange={e => handlePurchaseItemSelect(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    backgroundColor: '#ffffff',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <optgroup label="Select Existing Item">
-                    {inventory.map(item => (
-                      <option key={item._id || item.id} value={item._id || item.id}>
-                        {item.name} ({getCategoryName(item)})
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Or Custom Entry">
-                    <option value="CUSTOM">+ New / Unlisted Item</option>
-                  </optgroup>
-                </select>
+                  options={[
+                    ...inventory.map(item => ({
+                      value: item._id || item.id,
+                      label: `${item.name} (${getCategoryName(item)})`
+                    })),
+                    { value: 'CUSTOM', label: '+ New / Unlisted Item' }
+                  ]}
+                  placeholder="Select or Enter Item..."
+                />
+                {(purchaseErrors.itemId || purchaseErrors.itemName) && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.itemId || purchaseErrors.itemName}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -862,19 +978,27 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting || purchaseForm.itemId !== 'CUSTOM'}
                   value={purchaseForm.itemName}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, itemName: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, itemName: e.target.value });
+                    if (purchaseErrors.itemName) setPurchaseErrors(prev => ({ ...prev, itemName: '' }));
+                  }}
                   placeholder="e.g. Basmati Rice 25kg"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.itemName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     backgroundColor: purchaseForm.itemId !== 'CUSTOM' ? '#f8fafc' : '#ffffff',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.itemName && purchaseForm.itemId === 'CUSTOM' && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.itemName}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -888,18 +1012,26 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting}
                   value={purchaseForm.supplierName}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, supplierName: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, supplierName: e.target.value });
+                    if (purchaseErrors.supplierName) setPurchaseErrors(prev => ({ ...prev, supplierName: '' }));
+                  }}
                   placeholder="e.g. Metro Cash & Carry"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.supplierName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.supplierName && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.supplierName}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -915,18 +1047,24 @@ export default function StockReductionPanel() {
                   onChange={e => {
                     const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 10);
                     setPurchaseForm({ ...purchaseForm, supplierPhone: val });
+                    if (purchaseErrors.supplierPhone) setPurchaseErrors(prev => ({ ...prev, supplierPhone: '' }));
                   }}
                   placeholder="10 digit mobile number"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.supplierPhone ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.supplierPhone && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.supplierPhone}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -942,48 +1080,48 @@ export default function StockReductionPanel() {
                   step="0.1"
                   min="0.1"
                   value={purchaseForm.quantity}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, quantity: e.target.value });
+                    if (purchaseErrors.quantity) setPurchaseErrors(prev => ({ ...prev, quantity: '' }));
+                  }}
                   placeholder="10"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.quantity ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.quantity && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.quantity}
+                  </span>
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
                   Unit
                 </label>
-                <select
-                  disabled={isSubmitting}
+                <SearchableSelect
+                  isDisabled={isSubmitting}
                   value={purchaseForm.unit}
                   onChange={e => setPurchaseForm({ ...purchaseForm, unit: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    backgroundColor: '#ffffff',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="kg">kg (Kilogram)</option>
-                  <option value="g">g (Grams)</option>
-                  <option value="L">L (Liter)</option>
-                  <option value="ml">ml (Milliliter)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="box">box (Boxes)</option>
-                  <option value="bag">bag (Bags)</option>
-                  <option value="pack">pack (Packets)</option>
-                </select>
+                  options={[
+                    { value: 'kg', label: 'kg (Kilogram)' },
+                    { value: 'g', label: 'g (Grams)' },
+                    { value: 'L', label: 'L (Liter)' },
+                    { value: 'ml', label: 'ml (Milliliter)' },
+                    { value: 'pcs', label: 'pcs (Pieces)' },
+                    { value: 'box', label: 'box (Boxes)' },
+                    { value: 'bag', label: 'bag (Bags)' },
+                    { value: 'pack', label: 'pack (Packets)' }
+                  ]}
+                  placeholder="Select Unit..."
+                />
               </div>
 
               <div>
@@ -996,18 +1134,26 @@ export default function StockReductionPanel() {
                   step="0.01"
                   min="0"
                   value={purchaseForm.unitPrice}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, unitPrice: e.target.value });
+                    if (purchaseErrors.unitPrice) setPurchaseErrors(prev => ({ ...prev, unitPrice: '' }));
+                  }}
                   placeholder="100"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.unitPrice ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.unitPrice && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.unitPrice}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1021,18 +1167,26 @@ export default function StockReductionPanel() {
                   type="text"
                   disabled={isSubmitting}
                   value={purchaseForm.invoiceNumber}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, invoiceNumber: e.target.value });
+                    if (purchaseErrors.invoiceNumber) setPurchaseErrors(prev => ({ ...prev, invoiceNumber: '' }));
+                  }}
                   placeholder="e.g. INV-90821"
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.invoiceNumber ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.invoiceNumber && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.invoiceNumber}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -1043,18 +1197,26 @@ export default function StockReductionPanel() {
                   type="date"
                   disabled={isSubmitting}
                   value={purchaseForm.purchaseDate}
-                  onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
+                  onChange={e => {
+                    setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value });
+                    if (purchaseErrors.purchaseDate) setPurchaseErrors(prev => ({ ...prev, purchaseDate: '' }));
+                  }}
                   style={{
                     width: '100%',
                     padding: '12px 16px',
                     borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
+                    border: purchaseErrors.purchaseDate ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                     fontSize: '14px',
                     outline: 'none',
                     backgroundColor: '#ffffff',
                     boxSizing: 'border-box'
                   }}
                 />
+                {purchaseErrors.purchaseDate && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {purchaseErrors.purchaseDate}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -1298,7 +1460,16 @@ export default function StockReductionPanel() {
               type="text"
               placeholder={activeTab === 'purchases' ? "Search invoice #, supplier, item..." : "Search items, reason, user..."}
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+                setCurrentPage(0);
+              }}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -1322,81 +1493,61 @@ export default function StockReductionPanel() {
           {/* Filter Controls & Actions */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             {/* View / Section Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '220px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>View:</label>
-              <select
-                value={activeTab}
-                onChange={e => { setActiveTab(e.target.value); setCurrentPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="reductions">Stock Reduction Items ({inventory.length})</option>
-                <option value="history">Reduction History Logs ({reductions.length})</option>
-                <option value="purchases">Purchase Records ({purchases.length})</option>
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={activeTab}
+                  onChange={e => { setActiveTab(e.target.value); setCurrentPage(0); }}
+                  options={[
+                    { value: 'reductions', label: `Stock Reduction Items (${inventory.length})` },
+                    { value: 'history', label: `Reduction History Logs (${reductions.length})` },
+                    { value: 'purchases', label: `Purchase Records (${purchases.length})` }
+                  ]}
+                  placeholder="Select View..."
+                />
+              </div>
             </div>
 
             {/* Category Filter */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Category:</label>
-              <select
-                value={categoryFilter}
-                onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  color: '#0f172a',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value="All">All Categories</option>
-                {rawCategories
-                  .filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false)
-                  .map(c => (
-                    <option key={c.id || c._id || c.name} value={c.name}>{c.name}</option>
-                  ))
-                }
-              </select>
+              <div style={{ flex: 1 }}>
+                <SearchableSelect
+                  value={categoryFilter}
+                  onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(0); }}
+                  options={[
+                    { value: 'All', label: 'All Categories' },
+                    ...rawCategories
+                      .filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false)
+                      .map(c => ({
+                        value: c.name,
+                        label: c.name
+                      }))
+                  ]}
+                  placeholder="Select Category..."
+                />
+              </div>
             </div>
 
             {/* Reason Filter (Only for history view) */}
             {activeTab === 'history' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
                 <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Reason:</label>
-                <select
-                  value={reasonFilter}
-                  onChange={e => { setReasonFilter(e.target.value); setCurrentPage(1); }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="All">All Reasons</option>
-                  {REDUCTION_REASONS.map(r => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
-                  ))}
-                </select>
+                <div style={{ flex: 1 }}>
+                  <SearchableSelect
+                    value={reasonFilter}
+                    onChange={e => { setReasonFilter(e.target.value); setCurrentPage(0); }}
+                    options={[
+                      { value: 'All', label: 'All Reasons' },
+                      ...REDUCTION_REASONS.map(r => ({
+                        value: r.id,
+                        label: r.label
+                      }))
+                    ]}
+                    placeholder="Select Reason..."
+                  />
+                </div>
               </div>
             )}
 
@@ -1425,11 +1576,11 @@ export default function StockReductionPanel() {
         </div>
 
         {/* 4. TABLE VIEWS */}
-        <div style={{ width: '100%', overflowX: 'auto' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           
           {/* TAB 1: QUICK REDUCTION ITEMS */}
           {activeTab === 'reductions' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800 }}>S.NO</th>
@@ -1464,7 +1615,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '14px' }}>
@@ -1539,7 +1690,7 @@ export default function StockReductionPanel() {
 
           {/* TAB 2: REDUCTION HISTORY LOGS */}
           {activeTab === 'history' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
@@ -1561,7 +1712,7 @@ export default function StockReductionPanel() {
                   </tr>
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((record, idx) => {
-                    const dateFormatted = record.createdAt ? new Date(record.createdAt).toLocaleString('en-IN') : (record.date || '—');
+                    const dateFormatted = record.createdAt ? formatDateTimeDMY(record.createdAt) : (record.date || '—');
                     const itemName = getItemDisplayName(record.itemName || (typeof record.itemId === 'object' ? (record.itemId?.name || record.itemId?.itemName) : ''), record.itemId);
                     const catName = (typeof record.itemId === 'object' && record.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === record.itemId.categoryId || c.id === record.itemId.categoryId))?.name || 'General')
@@ -1579,7 +1730,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px', color: '#64748b', whiteSpace: 'nowrap' }}>
                           {dateFormatted}
@@ -1603,14 +1754,7 @@ export default function StockReductionPanel() {
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete reduction log for ${itemName}?`)) {
-                                if (deleteReductionRecord && activeRestaurant?.id) {
-                                  deleteReductionRecord(activeRestaurant.id, record.id || record._id);
-                                  fetchAllData();
-                                }
-                              }
-                            }}
+                            onClick={() => setReductionToDelete({ record, itemName })}
                             style={{
                               background: '#fef2f2',
                               border: '1px solid #fecaca',
@@ -1643,7 +1787,7 @@ export default function StockReductionPanel() {
 
           {/* TAB 3: PURCHASE RECORDS */}
           {activeTab === 'purchases' && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
                 <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
@@ -1666,7 +1810,7 @@ export default function StockReductionPanel() {
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((p, idx) => {
                     const invoiceNum = p.invoiceNumber || `INV-${(p._id || '').slice(-5)}`;
-                    const dateFormatted = p.purchaseDate ? new Date(p.purchaseDate).toLocaleDateString('en-IN') : (p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN') : '—');
+                    const dateFormatted = p.purchaseDate ? formatDateDMY(p.purchaseDate) : (p.createdAt ? formatDateDMY(p.createdAt) : '—');
                     const itemName = getItemDisplayName(p.itemName || (typeof p.itemId === 'object' ? (p.itemId?.name || p.itemId?.itemName) : ''), p.itemId);
                     const catName = (typeof p.itemId === 'object' && p.itemId?.categoryId)
                       ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General')
@@ -1684,7 +1828,7 @@ export default function StockReductionPanel() {
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
                         <td style={{ padding: '14px 18px', color: '#64748b', fontWeight: 700 }}>
-                          {(currentPage - 1) * rowsPerPage + idx + 1}
+                          {currentPage * rowsPerPage + idx + 1}
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>{invoiceNum}</div>
@@ -1720,14 +1864,7 @@ export default function StockReductionPanel() {
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete purchase record #${invoiceNum}?`)) {
-                                if (deletePurchaseRecord && activeRestaurant?.id) {
-                                  deletePurchaseRecord(activeRestaurant.id, p.id || p._id);
-                                  ShowNotifications.showAlertNotification("Purchase record removed.", true);
-                                }
-                              }
-                            }}
+                            onClick={() => setPurchaseToDelete({ purchase: p, invoiceNum })}
                             style={{
                               background: '#fee2e2',
                               border: '1px solid #fecaca',
@@ -1769,23 +1906,23 @@ export default function StockReductionPanel() {
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {activeDataList.length === 0 ? 0 : ((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
+            Showing {activeDataList.length === 0 ? 0 : (currentPage * rowsPerPage) + 1} to {Math.min((currentPage + 1) * rowsPerPage, activeDataList.length)} of {activeDataList.length} entries
           </div>
 
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: currentPage === 1 ? '#f8fafc' : '#ffffff',
-                color: currentPage === 1 ? '#cbd5e1' : '#334155',
+                background: currentPage === 0 ? '#f8fafc' : '#ffffff',
+                color: currentPage === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1796,16 +1933,16 @@ export default function StockReductionPanel() {
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setCurrentPage(pageNum)}
+                onClick={() => setCurrentPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: currentPage === pageNum ? 700 : 500,
-                  border: currentPage === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: currentPage === pageNum ? '#000000' : '#ffffff',
-                  color: currentPage === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: currentPage + 1 === pageNum ? 700 : 500,
+                  border: currentPage + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: currentPage + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: currentPage + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -1816,17 +1953,17 @@ export default function StockReductionPanel() {
 
             <button
               type="button"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages || totalPages === 0}
+              onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (currentPage >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (currentPage >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (currentPage >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (currentPage >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (currentPage >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (currentPage >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1835,6 +1972,93 @@ export default function StockReductionPanel() {
           </div>
         </div>
       </div>
+
+      {/* Delete Reduction Log Confirmation Modal */}
+      {reductionToDelete && (
+        <Modal
+          isOpen={!!reductionToDelete}
+          onClose={() => setReductionToDelete(null)}
+          title="Confirm Reduction Log Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete reduction log for <strong>"{reductionToDelete.itemName}"</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setReductionToDelete(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  if (deleteReductionRecord && activeRestaurant?.id && reductionToDelete) {
+                    deleteReductionRecord(activeRestaurant.id, reductionToDelete.record.id || reductionToDelete.record._id);
+                    fetchAllData();
+                  }
+                  setReductionToDelete(null);
+                }}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Purchase Record Confirmation Modal */}
+      {purchaseToDelete && (
+        <Modal
+          isOpen={!!purchaseToDelete}
+          onClose={() => setPurchaseToDelete(null)}
+          title="Confirm Purchase Record Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete purchase record <strong>#{purchaseToDelete.invoiceNum}</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setPurchaseToDelete(null)}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={() => {
+                  if (deletePurchaseRecord && activeRestaurant?.id && purchaseToDelete) {
+                    deletePurchaseRecord(activeRestaurant.id, purchaseToDelete.purchase.id || purchaseToDelete.purchase._id);
+                    ShowNotifications.showAlertNotification("Purchase record removed.", true);
+                    fetchAllData();
+                  }
+                  setPurchaseToDelete(null);
+                }}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

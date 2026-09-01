@@ -3,11 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
 import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
   const { staffId } = useParams();
-  const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser, assignTablesToWaiter } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -27,6 +28,8 @@ export default function StaffFormPage() {
     ? activeRestaurant.staff.find(s => s.id === staffId || s.id === parseInt(staffId))
     : null;
 
+  const allTables = activeRestaurant?.tables || [];
+
   const [form, setForm] = useState({
     name: '',
     branchId: (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (branches.length > 0 ? (branches[0].id || branches[0]._id) : 'BR-001'),
@@ -34,13 +37,18 @@ export default function StaffFormPage() {
     phone: '',
     email: '',
     password: '',
-    status: 'On Duty'
+    status: 'On Duty',
+    assignedTableIds: []
   });
 
   const [formErrors, setFormErrors] = useState({});
 
   useEffect(() => {
     if (existingStaff) {
+      const staffAssignedTables = allTables
+        .filter(t => t.assignedWaiterId === existingStaff.id || t.assignedWaiterId === staffId)
+        .map(t => t.id);
+
       setForm({
         name: existingStaff.name || '',
         branchId: existingStaff.branchId || (selectedBranchId || 'BR-001'),
@@ -48,7 +56,8 @@ export default function StaffFormPage() {
         phone: existingStaff.phone || '',
         email: existingStaff.email || '',
         password: existingStaff.password || '',
-        status: existingStaff.status || 'On Duty'
+        status: existingStaff.status || 'On Duty',
+        assignedTableIds: staffAssignedTables
       });
     }
   }, [existingStaff, selectedBranchId]);
@@ -86,20 +95,28 @@ export default function StaffFormPage() {
     e.preventDefault();
     if (!validate()) return;
 
+    const targetStaffId = existingStaff ? existingStaff.id : (isEdit ? staffId : `ST-${Date.now()}`);
+
     if (isEdit) {
       if (updateStaff) {
         updateStaff(activeRestaurant.id, {
-          id: existingStaff ? existingStaff.id : staffId,
+          id: targetStaffId,
           ...form
         });
+      }
+      if (assignTablesToWaiter && form.role === 'Waiter') {
+        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
       }
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" updated successfully.`, true);
     } else {
       if (addStaff) {
         addStaff(activeRestaurant.id, {
-          id: `ST-${Date.now()}`,
+          id: targetStaffId,
           ...form
         });
+      }
+      if (assignTablesToWaiter && form.role === 'Waiter') {
+        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
       }
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" created successfully.`, true);
     }
@@ -125,23 +142,25 @@ export default function StaffFormPage() {
             type="button"
             onClick={() => navigate('/staff')}
             style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px',
-              borderRadius: '50%',
-              color: '#0f172a'
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+            ←
           </button>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               {isEdit ? 'Edit Staff Member' : 'Add New Staff Member'}
             </h2>
           </div>
@@ -184,58 +203,40 @@ export default function StaffFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              {isAdminOrOwner ? (
-                <select
-                  value={form.branchId || ''}
-                  onChange={e => setForm({ ...form, branchId: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#ffffff',
-                    color: '#0f172a',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <option value="">-- Select Branch --</option>
-                  {(rawBranches || []).map(b => (
-                    <option key={b._id || b.id} value={b._id || b.id}>
-                      {b.branchName || b.name} {b.branchCode ? `(${b.branchCode})` : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={(() => {
-                    const bObj = (branches || []).find(b => String(b.id || b._id) === String(form.branchId))
-                      || (branches && branches.length > 0 ? branches[0] : null);
-                    return bObj
-                      ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}`
-                      : (selectedBranchId || 'Default Branch');
-                  })()}
-                  readOnly
-                  disabled
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    outline: 'none',
-                    backgroundColor: '#f8fafc',
-                    color: '#64748b',
-                    cursor: 'not-allowed',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              )}
+              {(() => {
+                const allBranchesList = (rawBranches && rawBranches.length > 0) ? rawBranches : (activeRestaurant?.branches || []);
+                const isLocked = !isAdminOrOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b.id || b._id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b.id || b._id) === String(form.branchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (form.branchId || '');
+
+                return (
+                  <div>
+                    <SearchableSelect
+                      value={effectiveVal}
+                      onChange={e => setForm({ ...form, branchId: e.target.value })}
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -244,15 +245,16 @@ export default function StaffFormPage() {
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Role <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
+              <SearchableSelect
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-              >
-                <option value="Waiter">Waiter</option>
-                <option value="Kitchen">Kitchen Staff</option>
-                <option value="Manager">Branch Manager</option>
-              </select>
+                options={[
+                  { value: 'Branch manager', label: 'Branch manager' },
+                  { value: 'Kitchen', label: 'Kitchen' },
+                  { value: 'Waiter', label: 'Waiter' }
+                ]}
+                placeholder="Select Role..."
+              />
             </div>
 
             <div>
@@ -348,19 +350,22 @@ export default function StaffFormPage() {
             </div>
           </div>
 
-          <div style={{ marginBottom: '32px' }}>
+          <div style={{ marginBottom: '24px' }}>
             <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
               Duty Status
             </label>
-            <select
+            <SearchableSelect
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
-              style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '14px', outline: 'none', backgroundColor: '#ffffff', boxSizing: 'border-box' }}
-            >
-              <option value="On Duty">On Duty</option>
-              <option value="Off Duty">Off Duty</option>
-            </select>
+              options={[
+                { value: 'On Duty', label: 'On Duty' },
+                { value: 'Off Duty', label: 'Off Duty' }
+              ]}
+              placeholder="Select Status..."
+            />
           </div>
+
+
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button

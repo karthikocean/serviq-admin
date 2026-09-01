@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
 import { useAppState } from '../config/AppContext';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -35,43 +36,74 @@ export default function CategoryListPanel({
   activeRestaurant
 }) {
   const { currentUser, selectedBranchId } = useAppState();
-  const [paginatedCategories, setPaginatedCategories] = useState([]);
-  const [totalItems, setTotalItems] = useState(0);
-  const [page, setPage] = useState(1);
+  const [allCategories, setAllCategories] = useState([]);
+  const [page, setPage] = useState(0);
   const limit = 10;
-  const [totalPages, setTotalPages] = useState(1);
 
-  React.useEffect(() => {
-    fetchPaginatedCategories();
-  }, [page, activeRestaurant, selectedBranchId]);
-
-  const fetchPaginatedCategories = async () => {
+  const fetchCategoriesData = async () => {
     if (!activeRestaurant) return;
-    const params = { page, limit };
-    if (selectedBranchId) {
-      params.branchId = selectedBranchId;
-    } else {
-      params.branchId = 'all';
-    }
-    const res = await MenuApi.getCategories(params);
-    if (res?.status && res.response) {
-      if (res.response.data && res.response.data.items) {
-        setPaginatedCategories(res.response.data.items);
-        setTotalItems(res.response.data.total || 0);
-        setTotalPages(Math.ceil((res.response.data.total || 0) / limit) || 1);
+    try {
+      const params = { limit: 1000 };
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
       } else {
-        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-        setPaginatedCategories(arr);
-        setTotalItems(arr.length);
-        setTotalPages(Math.ceil(arr.length / limit) || 1);
+        params.branchId = 'all';
+      }
+      const res = await MenuApi.getCategories(params);
+      if (res?.status && res.response) {
+        const rawData = res.response.data || res.response.categories || res.response || [];
+        const arr = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.items) ? rawData.items : (Array.isArray(rawData?.data) ? rawData.data : []))).filter(c => !c?.isDelete);
+        setAllCategories(arr);
+      } else if (Array.isArray(categories) && categories.length > 0) {
+        setAllCategories(categories.filter(c => !c?.isDelete));
+      }
+    } catch (err) {
+      console.error("Error fetching categories:", err);
+      if (Array.isArray(categories) && categories.length > 0) {
+        setAllCategories(categories.filter(c => !c?.isDelete));
       }
     }
   };
 
+  React.useEffect(() => {
+    fetchCategoriesData();
+  }, [activeRestaurant, selectedBranchId]);
+
+  React.useEffect(() => {
+    if (Array.isArray(categories) && categories.length > 0) {
+      setAllCategories(categories.filter(c => !c?.isDelete));
+    }
+  }, [categories]);
+
+  const displayCategories = allCategories.filter(cat => {
+    if (selectedBranchId && selectedBranchId !== 'ALL') {
+      const catBranchId = typeof cat.branchId === 'object' ? (cat.branchId?._id || cat.branchId?.id) : cat.branchId;
+      if (catBranchId && String(catBranchId) !== String(selectedBranchId)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const totalItems = displayCategories.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / limit));
+  const paginatedCategories = displayCategories.slice(page * limit, (page + 1) * limit);
+
+  React.useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(totalPages - 1);
+    }
+  }, [totalPages, page]);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [selectedBranchId]);
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -93,9 +125,11 @@ export default function CategoryListPanel({
     userTypeStr === 'RESTAURANT_OWNER' ||
     roleStr === 'RESTAURANT_OWNER' ||
     userType === 'RESTAURANT_OWNER' ||
+    userType === 'ADMIN' ||
     userType === 'SUPER ADMIN' ||
     userType === 'SUPER_ADMIN' ||
     userType === 'OWNER' ||
+    userRoleLower === 'admin' ||
     userRoleLower === 'owner' ||
     userRoleLower === 'super admin' ||
     userRoleLower === 'restaurant_owner' ||
@@ -105,6 +139,8 @@ export default function CategoryListPanel({
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -151,7 +187,6 @@ export default function CategoryListPanel({
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      ShowNotifications.showAlertNotification('Please fix errors before submitting.', false);
       return;
     }
 
@@ -168,7 +203,7 @@ export default function CategoryListPanel({
         if (res.status) {
           ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
           if (refreshCategories) refreshCategories();
-          fetchPaginatedCategories();
+          fetchCategoriesData();
           setViewMode('list');
         } else {
           ShowNotifications.showAlertNotification('Failed to update category', false);
@@ -181,7 +216,7 @@ export default function CategoryListPanel({
       if (res.status) {
         ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
         if (refreshCategories) refreshCategories();
-        fetchPaginatedCategories();
+        fetchCategoriesData();
         setViewMode('list');
       } else {
         ShowNotifications.showAlertNotification('Failed to create category', false);
@@ -189,55 +224,71 @@ export default function CategoryListPanel({
     }
   };
 
-  const handleDelete = async (item) => {
-    if (window.confirm(`Are you sure you want to delete category "${item.name}"?`)) {
-      if (item._id) {
-        const res = await MenuApi.deleteCategory(item._id);
-        if (res.status) {
-          ShowNotifications.showAlertNotification(`Category "${item.name}" deleted!`, true);
-          if (refreshCategories) refreshCategories();
-          fetchPaginatedCategories();
-        } else {
-          ShowNotifications.showAlertNotification('Failed to delete category', false);
-        }
+  const handleDelete = (item) => {
+    setCategoryToDelete(item);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete) return;
+    setIsDeleting(true);
+    if (categoryToDelete._id) {
+      const res = await MenuApi.deleteCategory(categoryToDelete._id);
+      if (res.status) {
+        ShowNotifications.showAlertNotification(`Category "${categoryToDelete.name}" deleted!`, true);
+        if (refreshCategories) refreshCategories();
+        fetchCategoriesData();
+        setCategoryToDelete(null);
       } else {
-        ShowNotifications.showAlertNotification('Cannot delete default placeholder category', false);
+        ShowNotifications.showAlertNotification('Failed to delete category', false);
       }
+    } else {
+      ShowNotifications.showAlertNotification('Cannot delete default placeholder category', false);
+      setCategoryToDelete(null);
     }
+    setIsDeleting(false);
   };
 
   if (viewMode === 'form') {
     return (
-      <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              {editingItem ? 'Edit Category' : 'Add Category'}
-            </h2>
-            <span style={{ fontSize: '13px', color: '#64748b' }}>
-              {editingItem ? 'Update category details' : 'Create a new food and beverage menu category'}
-            </span>
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                {editingItem ? 'Edit Category' : 'Add Category'}
+              </h2>
+            </div>
           </div>
         </div>
 
@@ -276,74 +327,50 @@ export default function CategoryListPanel({
             {/* Branch Assignment Field */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Branch <span style={{ color: '#ef4444' }}>*</span>
+                Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              {isRestaurantOwner ? (
-                <div>
-                  <select
-                    value={formBranchId}
-                    onChange={e => {
-                      setFormBranchId(e.target.value);
-                      if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                      fontSize: '14px',
-                      color: '#0f172a',
-                      outline: 'none',
-                      backgroundColor: '#ffffff',
-                      boxSizing: 'border-box',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="">-- Select Branch --</option>
-                    {branches.map(b => (
-                      <option key={b._id || b.id} value={b._id || b.id}>
-                        {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.branchId && (
-                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                      {formErrors.branchId}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="text"
-                    value={(() => {
-                      const assignedBranch = (branches || []).find(b => String(b._id || b.id) === String(formBranchId || currentUser?.activeBranchId || currentUser?.branchId || selectedBranchId))
-                        || (branches && branches.length > 0 ? branches[0] : null);
-                      return assignedBranch
-                        ? `${assignedBranch.branchName || assignedBranch.name || 'Branch'}${assignedBranch.branchCode ? ` (${assignedBranch.branchCode})` : ''}`
-                        : (selectedBranchId || 'Assigned Branch');
-                    })()}
-                    disabled
-                    readOnly
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #e2e8f0',
-                      fontSize: '14px',
-                      outline: 'none',
-                      backgroundColor: '#f8fafc',
-                      color: '#64748b',
-                      cursor: 'not-allowed',
-                      fontWeight: 600,
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                    Branch is assigned to your current role.
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+                const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(formBranchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
+
+                return (
+                  <div>
+                    <SearchableSelect
+                      value={effectiveVal}
+                      onChange={e => {
+                        setFormBranchId(e.target.value);
+                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                      }}
+                      isDisabled={isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                    {formErrors.branchId && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.branchId}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div>
@@ -373,24 +400,15 @@ export default function CategoryListPanel({
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
                 Status
               </label>
-              <select
+              <SearchableSelect
                 value={formStatus}
                 onChange={e => setFormStatus(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  color: '#0f172a',
-                  outline: 'none',
-                  backgroundColor: '#ffffff',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <option value="AVAILABLE">Available</option>
-                <option value="UNAVAILABLE">Unavailable</option>
-              </select>
+                options={[
+                  { value: 'AVAILABLE', label: 'Available' },
+                  { value: 'UNAVAILABLE', label: 'Unavailable' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
@@ -506,8 +524,8 @@ export default function CategoryListPanel({
         padding: '24px',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
@@ -528,21 +546,28 @@ export default function CategoryListPanel({
               </tr>
             </thead>
             <tbody>
-              {paginatedCategories.map((item, index) => {
-                const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
-                return (
-                  <tr
-                    key={item._id || index}
-                    style={{
-                      borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-                  >
+              {paginatedCategories.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+                    No categories found. Click <strong>Add Category</strong> to create one.
+                  </td>
+                </tr>
+              ) : (
+                paginatedCategories.map((item, index) => {
+                  const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
+                  return (
+                    <tr
+                      key={item._id || index}
+                      style={{
+                        borderBottom: index < paginatedCategories.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                    >
                     {/* S.NO */}
                     <td style={{ padding: '16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', width: '5%' }}>
-                      {(page - 1) * limit + index + 1}
+                      {page * limit + index + 1}
                     </td>
 
                     {/* CATEGORY NAME */}
@@ -641,7 +666,8 @@ export default function CategoryListPanel({
                     </td>
                   </tr>
                 );
-              })}
+              })
+            )}
             </tbody>
           </table>
         </div>
@@ -650,17 +676,17 @@ export default function CategoryListPanel({
       {/* Pagination Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: '13px', color: '#64748b' }}>
-          Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+          Showing {totalItems === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalItems)} of {totalItems} entries
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
             type="button"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
             style={{
               padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
-              color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+              border: '1px solid #e2e8f0', background: page === 0 ? '#f8fafc' : '#ffffff',
+              color: page === 0 ? '#cbd5e1' : '#334155', cursor: page === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >
@@ -671,16 +697,16 @@ export default function CategoryListPanel({
             <button
               key={pageNum}
               type="button"
-              onClick={() => setPage(pageNum)}
+              onClick={() => setPage(pageNum - 1)}
               style={{
                 minWidth: '32px',
                 height: '32px',
                 borderRadius: '8px',
                 fontSize: '13px',
-                fontWeight: page === pageNum ? 700 : 500,
-                border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                background: page === pageNum ? '#000000' : '#ffffff',
-                color: page === pageNum ? '#ffffff' : '#334155',
+                fontWeight: page + 1 === pageNum ? 700 : 500,
+                border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                color: page + 1 === pageNum ? '#ffffff' : '#334155',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}
@@ -691,12 +717,12 @@ export default function CategoryListPanel({
 
           <button
             type="button"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages || totalPages === 0}
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1 || totalPages === 0}
             style={{
               padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: (page === totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-              color: (page === totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              border: '1px solid #e2e8f0', background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+              color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >
@@ -762,6 +788,45 @@ export default function CategoryListPanel({
                 style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
               >
                 Edit Category
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Category Confirmation Modal Popup */}
+      {categoryToDelete && (
+        <Modal
+          isOpen={!!categoryToDelete}
+          onClose={() => !isDeleting && setCategoryToDelete(null)}
+          title="Confirm Category Deletion"
+          maxWidth="440px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>?
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setCategoryToDelete(null)}
+                disabled={isDeleting}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

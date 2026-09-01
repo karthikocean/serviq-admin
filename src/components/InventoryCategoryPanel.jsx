@@ -6,6 +6,7 @@ import InventoryApi from '../api/Inventory';
 import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -73,9 +74,11 @@ export default function InventoryCategoryPanel() {
     userTypeStr === 'RESTAURANT_OWNER' ||
     roleStr === 'RESTAURANT_OWNER' ||
     userType === 'RESTAURANT_OWNER' ||
+    userType === 'ADMIN' ||
     userType === 'SUPER ADMIN' ||
     userType === 'SUPER_ADMIN' ||
     userType === 'OWNER' ||
+    userRoleLower === 'admin' ||
     userRoleLower === 'owner' ||
     userRoleLower === 'super admin' ||
     userRoleLower === 'restaurant_owner' ||
@@ -95,6 +98,8 @@ export default function InventoryCategoryPanel() {
   // View and Form States
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
@@ -203,15 +208,16 @@ export default function InventoryCategoryPanel() {
   });
 
   // Pagination states
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
   const totalPages = Math.ceil(filteredCategories.length / limit) || 1;
-  const paginatedCategories = filteredCategories.slice((page - 1) * limit, page * limit);
+  const paginatedCategories = filteredCategories.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -223,7 +229,7 @@ export default function InventoryCategoryPanel() {
   };
 
   useEffect(() => {
-    setPage(1);
+    setPage(0);
   }, [searchTerm, statusFilter]);
 
   const handleOpenAdd = () => {
@@ -267,7 +273,6 @@ export default function InventoryCategoryPanel() {
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
       return;
     }
 
@@ -310,22 +315,24 @@ export default function InventoryCategoryPanel() {
     }
   };
 
-  const handleDelete = async (cat) => {
-    const catId = cat._id || cat.id;
-    const count = getItemCountForCategory(cat);
-    const msg = count > 0
-      ? `Are you sure you want to delete category "${cat.name}"? It is currently used by ${count} inventory item(s).`
-      : `Are you sure you want to delete category "${cat.name}"?`;
+  const handleDelete = (cat) => {
+    setCategoryToDelete(cat);
+  };
 
-    if (window.confirm(msg)) {
-      const res = await InventoryCategoryApi.deleteCategory(catId);
-      if (res?.status) {
-        await fetchAllData();
-        if (deleteInventoryCategory && activeRestaurant?.id) {
-          deleteInventoryCategory(activeRestaurant.id, catId);
-        }
+  const handleConfirmDelete = async () => {
+    if (!categoryToDelete) return;
+    setIsDeleting(true);
+    const catId = categoryToDelete._id || categoryToDelete.id;
+    const res = await InventoryCategoryApi.deleteCategory(catId);
+    if (res?.status) {
+      ShowNotifications.showAlertNotification(`Category "${categoryToDelete.name}" deleted!`, true);
+      await fetchAllData();
+      if (deleteInventoryCategory && activeRestaurant?.id) {
+        deleteInventoryCategory(activeRestaurant.id, catId);
       }
+      setCategoryToDelete(null);
     }
+    setIsDeleting(false);
   };
 
   const handleToggleStatus = async (cat) => {
@@ -343,33 +350,44 @@ export default function InventoryCategoryPanel() {
   if (viewMode === 'form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              {editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
-            </h2>
-            
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                {editingItem ? 'Edit Inventory Category' : 'Add Inventory Category'}
+              </h2>
+            </div>
           </div>
         </div>
 
@@ -408,75 +426,50 @@ export default function InventoryCategoryPanel() {
             {/* Branch Assignment Field */}
             <div className="form-group">
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
-                Branch <span style={{ color: '#dc2626' }}>*</span>
+                Branch Assignment <span style={{ color: '#dc2626' }}>*</span>
               </label>
-              {isRestaurantOwner ? (
-                <div>
-                  <select
-                    value={formBranchId}
-                    onChange={e => {
-                      setFormBranchId(e.target.value);
-                      if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                    }}
-                    disabled={isSubmitting}
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: formErrors.branchId ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                      outline: 'none',
-                      fontSize: '14px',
-                      backgroundColor: '#ffffff',
-                      color: '#0f172a',
-                      boxSizing: 'border-box',
-                      cursor: isSubmitting ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    <option value="">-- Select Branch --</option>
-                    {branches.map(b => (
-                      <option key={b._id || b.id} value={b._id || b.id}>
-                        {b.branchName || b.name || 'Branch'}{b.branchCode ? ` (${b.branchCode})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.branchId && (
-                    <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                      {formErrors.branchId}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <input
-                    type="text"
-                    value={(() => {
-                      const assignedBranch = (branches || []).find(b => String(b._id || b.id) === String(formBranchId || currentUser?.activeBranchId || currentUser?.branchId || selectedBranchId))
-                        || (branches && branches.length > 0 ? branches[0] : null);
-                      return assignedBranch
-                        ? `${assignedBranch.branchName || assignedBranch.name || 'Branch'}${assignedBranch.branchCode ? ` (${assignedBranch.branchCode})` : ''}`
-                        : (selectedBranchId || 'Assigned Branch');
-                    })()}
-                    disabled
-                    readOnly
-                    style={{
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      fontSize: '14px',
-                      outline: 'none',
-                      backgroundColor: '#f8fafc',
-                      color: '#64748b',
-                      cursor: 'not-allowed',
-                      fontWeight: 600,
-                      boxSizing: 'border-box'
-                    }}
-                  />
-                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                    Branch is assigned to your current role.
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const allBranchesList = (liveBranches && liveBranches.length > 0) ? liveBranches : (branches && branches.length > 0 ? branches : (activeRestaurant?.branches || []));
+                const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(formBranchId))
+                  || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))
+                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
+
+                return (
+                  <div>
+                    <SearchableSelect
+                      value={effectiveVal}
+                      onChange={e => {
+                        setFormBranchId(e.target.value);
+                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                      }}
+                      isDisabled={isSubmitting || isLocked}
+                      options={allBranchesList.length === 0 ? [
+                        { value: '', label: 'Main Branch' }
+                      ] : allBranchesList.map(b => ({
+                        value: b._id || b.id,
+                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                      }))}
+                      placeholder="Select Branch..."
+                    />
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                    {formErrors.branchId && (
+                      <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.branchId}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="form-group">
@@ -506,24 +499,16 @@ export default function InventoryCategoryPanel() {
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
                 Status
               </label>
-              <select
+              <SearchableSelect
                 value={formStatus}
                 onChange={e => setFormStatus(e.target.value)}
-                disabled={isSubmitting}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  outline: 'none',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                  background: '#ffffff'
-                }}
-              >
-                <option value="AVAILABLE">AVAILABLE (Active)</option>
-                <option value="UNAVAILABLE">UNAVAILABLE (Disabled)</option>
-              </select>
+                isDisabled={isSubmitting}
+                options={[
+                  { value: 'AVAILABLE', label: 'AVAILABLE (Active)' },
+                  { value: 'UNAVAILABLE', label: 'UNAVAILABLE (Disabled)' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
@@ -725,27 +710,20 @@ export default function InventoryCategoryPanel() {
           </div>
 
           {/* Status Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
             <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '12px',
-                fontWeight: 600,
-                outline: 'none',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="AVAILABLE">Available (Active)</option>
-              <option value="UNAVAILABLE">Unavailable (Disabled)</option>
-            </select>
+            <div style={{ flex: 1 }}>
+              <SearchableSelect
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                options={[
+                  { value: 'ALL', label: 'All Statuses' },
+                  { value: 'AVAILABLE', label: 'Available (Active)' },
+                  { value: 'UNAVAILABLE', label: 'Unavailable (Disabled)' }
+                ]}
+                placeholder="Filter Status..."
+              />
+            </div>
           </div>
         </div>
 
@@ -763,8 +741,8 @@ export default function InventoryCategoryPanel() {
         padding: '20px',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>
@@ -782,7 +760,7 @@ export default function InventoryCategoryPanel() {
                 <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -819,7 +797,7 @@ export default function InventoryCategoryPanel() {
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       <td style={{ padding: '14px 20px', fontSize: '13px', fontWeight: '700', color: '#64748b' }}>
-                        {(page - 1) * limit + index + 1}
+                        {page * limit + index + 1}
                       </td>
                       <td style={{ padding: '14px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -871,8 +849,8 @@ export default function InventoryCategoryPanel() {
                           {isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
                         </button>
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
                             onClick={() => setViewingCategory(item)}
@@ -960,22 +938,22 @@ export default function InventoryCategoryPanel() {
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredCategories.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredCategories.length)} of {filteredCategories.length} categories
+            Showing {filteredCategories.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredCategories.length)} of {filteredCategories.length} categories
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page <= 1 ? '#f8fafc' : '#ffffff',
-                color: page <= 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -986,16 +964,16 @@ export default function InventoryCategoryPanel() {
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -1006,17 +984,17 @@ export default function InventoryCategoryPanel() {
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1121,6 +1099,49 @@ export default function InventoryCategoryPanel() {
                 style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
               >
                 Edit Category
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete Category Confirmation Modal Popup */}
+      {categoryToDelete && (
+        <Modal
+          isOpen={!!categoryToDelete}
+          onClose={() => !isDeleting && setCategoryToDelete(null)}
+          title="Confirm Category Deletion"
+          maxWidth="450px"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
+              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>
+              {(() => {
+                const count = getItemCountForCategory(categoryToDelete);
+                return count > 0 ? `? It is currently used by ${count} inventory item(s).` : '?';
+              })()}
+            </p>
+            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
+              ⚠️ Warning: This action cannot be undone.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setCategoryToDelete(null)}
+                disabled={isDeleting}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

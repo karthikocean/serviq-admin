@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -216,39 +217,42 @@ export default function KitchenReportsPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label className="premium-filter-label">Kitchen Staff</label>
-              <select
+              <SearchableSelect
                 value={filterStaff}
                 onChange={e => setFilterStaff(e.target.value)}
-                className="premium-filter-select"
-              >
-                <option value="All">All Staff</option>
-                {kitchenStaffList.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Staff' },
+                  ...kitchenStaffList.map(w => ({ value: w, label: w }))
+                ]}
+                placeholder="Select Staff..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label className="premium-filter-label">Dish / Menu Item</label>
-              <select
+              <SearchableSelect
                 value={filterDish}
                 onChange={e => setFilterDish(e.target.value)}
-                className="premium-filter-select"
-              >
-                <option value="All">All Dishes</option>
-                {uniqueDishes.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Dishes' },
+                  ...uniqueDishes.map(d => ({ value: d, label: d }))
+                ]}
+                placeholder="Select Dish..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label className="premium-filter-label">Priority Level</label>
-              <select
+              <SearchableSelect
                 value={filterPriority}
                 onChange={e => setFilterPriority(e.target.value)}
-                className="premium-filter-select"
-              >
-                <option value="All">All Priorities</option>
-                <option value="Normal">Normal</option>
-                <option value="Urgent">Urgent</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Priorities' },
+                  { value: 'Normal', label: 'Normal' },
+                  { value: 'Urgent', label: 'Urgent' }
+                ]}
+                placeholder="Select Priority..."
+              />
             </div>
           </div>
           <button
@@ -272,8 +276,8 @@ export default function KitchenReportsPanel({
         padding: '24px',
         boxShadow: 'var(--card-shadow)'
       }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+          <table className="menu-items-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr>
                 <th style={{ padding: '12px 14px' }}>KOT NUMBER</th>

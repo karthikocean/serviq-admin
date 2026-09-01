@@ -59,23 +59,21 @@
   
   .data-table th,
   .data-table td {
-    padding: 14px 24px;
-    text-align: left;
+    padding: 14px 20px;
     border-bottom: 1px solid #e5e7eb;
+    vertical-align: middle;
   }
   
   .data-table th {
-    background: #f9fafb;
-    font-weight: 600;
-    color: #4b5563;
-    font-size: 0.85rem;
+    font-weight: 800;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.5px;
   }
   
   .data-table td {
     color: #374151;
-    font-size: 0.95rem;
+    font-size: 13px;
   }
   
   .badge {
@@ -191,3 +189,62 @@
     background-size: 16px;
     padding-right: 40px;
   }
+
+/* Ticket Details & Reply Thread Styles */
+.ticket-details-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ticket-reply-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.ticket-reply-card {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid #e2e8f0;
+}
+
+.ticket-reply-card.admin-reply {
+  background: #f0f9ff;
+  border-left: 4px solid #0284c7;
+  border-color: #bae6fd #bae6fd #bae6fd #0284c7;
+}
+
+.ticket-reply-card.user-reply {
+  background: #fff7ed;
+  border-left: 4px solid #ea580c;
+  border-color: #fed7aa #fed7aa #fed7aa #ea580c;
+}
+
+.ticket-reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ticket-reply-author {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.ticket-reply-time {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ticket-reply-body {
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+

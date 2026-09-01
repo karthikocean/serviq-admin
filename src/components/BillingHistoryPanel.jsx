@@ -3,6 +3,8 @@ import { Modal } from './Modal';
 import * as XLSX from 'xlsx';
 import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
+import SearchableSelect from './SearchableSelect.jsx';
+import { formatDateDMY } from '../helper/DateHelper.js';
 
 export default function BillingHistoryPanel({
   billingHistory = [],
@@ -24,7 +26,8 @@ export default function BillingHistoryPanel({
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -43,62 +46,92 @@ export default function BillingHistoryPanel({
   const handleExportExcel = async () => {
     setIsExporting(true);
 
-    const filters = {
-      search: searchTerm,
-      dateRange,
-      startDate: customStartDate,
-      endDate: customEndDate,
-      branchId: selectedBranchId,
-      paymentMethod: selectedPayment,
-      isExport: 'true',
-      limit: '0' // Tell backend to fetch all for export
-    };
+    let itemsToExport = [];
 
-    const result = await BillingApi.getBillingHistory(filters);
+    try {
+      const filters = {
+        search: searchTerm,
+        dateRange,
+        startDate: customStartDate,
+        endDate: customEndDate,
+        branchId: selectedBranchId,
+        paymentMethod: selectedPayment,
+        isExport: 'true',
+        limit: '0' // Tell backend to fetch all for export
+      };
 
-    if (result.status && result.response.data && result.response.data.items) {
-      const itemsToExport = result.response.data.items;
+      const result = await BillingApi.getBillingHistory(filters);
 
-      if (itemsToExport.length === 0) {
-        ShowNotifications.showAlertNotification("No data available to export.", false);
-        setIsExporting(false);
-        return;
+      if (result && result.status) {
+        const payload = result.response?.data || result.response || result.data;
+        if (Array.isArray(payload)) {
+          itemsToExport = payload;
+        } else if (payload && typeof payload === 'object') {
+          itemsToExport = Array.isArray(payload.items) ? payload.items :
+                          Array.isArray(payload.data) ? payload.data :
+                          Array.isArray(payload.billingHistory) ? payload.billingHistory :
+                          Array.isArray(payload.history) ? payload.history : [];
+        }
       }
-
-      const exportData = itemsToExport.map(item => ({
-        'Invoice ID': item.invoiceId,
-        'Order ID': item.orderRefId,
-        'Table': `Table ${item.tableNumber}`,
-        'Date': new Date(item.createdAt).toLocaleDateString(),
-        'Time': new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        'Subtotal': item.subtotal,
-        'Tax': item.tax,
-        'Discount': item.discount,
-        'Total Amount': item.totalAmount,
-        'Payment Method': item.paymentMethod === 'upi' ? 'UPI' : (item.paymentMethod || '').charAt(0).toUpperCase() + (item.paymentMethod || '').slice(1),
-        'Payment Status': item.paymentStatus,
-        'Staff': item.staffName,
-        'Branch ID': item.branchId
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(exportData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
-
-      // Auto-size columns loosely
-      const wscols = [
-        { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-        { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
-        { wch: 15 }, { wch: 15 }, { wch: 25 }
-      ];
-      worksheet['!cols'] = wscols;
-
-      const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-    } else {
-      ShowNotifications.showAlertNotification("Failed to fetch data for export.", false);
+    } catch (e) {
+      console.error("Export API error", e);
     }
 
+    // Fallback to local table data if API didn't return full list
+    if (itemsToExport.length === 0 && billingHistory.length > 0) {
+      itemsToExport = billingHistory;
+    }
+
+    if (itemsToExport.length === 0) {
+      ShowNotifications.showAlertNotification("No data available to export.", false);
+      setIsExporting(false);
+      return;
+    }
+
+    const exportData = itemsToExport.map((item, idx) => {
+      const id = item.id || item.invoiceId || item.invoiceNumber || item._id || `INV-${String(idx + 1).padStart(4, '0')}`;
+      const orderId = item.orderId || item.orderRefId || item.orderNumber || 'N/A';
+      const table = item.table || item.tableNumber || item.tableNo || '01';
+      const rawDate = item.rawDate || item.createdAt || item.date || new Date();
+      const dateStr = item.date || formatDateDMY(rawDate);
+      const timeStr = item.time || (rawDate ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 PM');
+      const amount = Number(item.amount ?? item.totalAmount ?? item.total ?? 0);
+      const methodStr = String(item.paymentMethod || item.paymentMode || 'UPI');
+      const paymentMethod = methodStr.toLowerCase() === 'upi' ? 'UPI' : (methodStr.charAt(0).toUpperCase() + methodStr.slice(1));
+      const staff = item.staff || item.staffName || item.waiterName || 'Admin';
+      const status = item.status || item.paymentStatus || 'Paid';
+
+      return {
+        'Invoice ID': id,
+        'Order ID': orderId,
+        'Table': `Table ${String(table).replace('Table ', '').trim()}`,
+        'Date': dateStr,
+        'Time': timeStr,
+        'Subtotal': Number(item.subtotal ?? amount),
+        'Tax': Number(item.tax ?? 0),
+        'Discount': Number(item.discount ?? 0),
+        'Total Amount': amount,
+        'Payment Method': paymentMethod,
+        'Payment Status': status,
+        'Staff': staff,
+        'Branch ID': item.branchId || selectedBranchId || 'main'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
+
+    // Auto-size columns loosely
+    const wscols = [
+      { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
+      { wch: 15 }, { wch: 15 }, { wch: 25 }
+    ];
+    worksheet['!cols'] = wscols;
+
+    const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
     setIsExporting(false);
   };
 
@@ -120,24 +153,34 @@ export default function BillingHistoryPanel({
               type="text"
               placeholder="e.g. INV-10245"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={(e) => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+              }}
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }}
             />
           </div>
 
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div style={{ flex: '1', minWidth: '160px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Date Range</label>
-            <select
+            <SearchableSelect
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value="Today">Today</option>
-              <option value="Yesterday">Yesterday</option>
-              <option value="This Week">This Week</option>
-              <option value="This Month">This Month</option>
-              <option value="Custom">Custom Range</option>
-            </select>
+              options={[
+                { value: 'All', label: 'All Time' },
+                { value: 'Today', label: 'Today' },
+                { value: 'Yesterday', label: 'Yesterday' },
+                { value: 'This Week', label: 'This Week' },
+                { value: 'This Month', label: 'This Month' },
+                { value: 'Custom', label: 'Custom Range' }
+              ]}
+              placeholder="Select Date Range..."
+            />
           </div>
 
           {dateRange === 'Custom' && (
@@ -153,18 +196,19 @@ export default function BillingHistoryPanel({
             </div>
           )}
 
-          <div style={{ flex: '1', minWidth: '150px' }}>
+          <div style={{ flex: '1', minWidth: '160px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Payment Method</label>
-            <select
+            <SearchableSelect
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff' }}
-            >
-              <option value="All">All Methods</option>
-              <option value="UPI">UPI</option>
-              <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
-            </select>
+              options={[
+                { value: 'All', label: 'All Methods' },
+                { value: 'UPI', label: 'UPI' },
+                { value: 'Cash', label: 'Cash' },
+                { value: 'Card', label: 'Card' }
+              ]}
+              placeholder="Select Payment Method..."
+            />
           </div>
 
           <div>
@@ -202,8 +246,8 @@ export default function BillingHistoryPanel({
 
         {/* MAIN HISTORY TABLE */}
         <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)' }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+            <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                   <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>INVOICE</th>
@@ -275,17 +319,17 @@ export default function BillingHistoryPanel({
         {/* Pagination Controls */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: '13px', color: '#64748b' }}>
-            Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+            Showing {totalItems === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalItems)} of {totalItems} entries
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
-                color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+                border: '1px solid #e2e8f0', background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155', cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -296,16 +340,16 @@ export default function BillingHistoryPanel({
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -316,12 +360,12 @@ export default function BillingHistoryPanel({
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-                border: '1px solid #e2e8f0', background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                border: '1px solid #e2e8f0', background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -86,7 +87,7 @@ export default function WaiterReportsPanel({
   const [filterPaymentMode, setFilterPaymentMode] = useState('All');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState('All');
   const [filterOrderStatus, setFilterOrderStatus] = useState('All');
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
 
   // Modals local states
@@ -178,12 +179,13 @@ export default function WaiterReportsPanel({
   const waiterUnpaidCount = filteredWaiterReports.filter(o => o.billingStatus === 'unpaid').length;
 
   const totalPages = Math.ceil(filteredWaiterReports.length / limit) || 1;
-  const paginatedWaiterReports = filteredWaiterReports.slice((page - 1) * limit, page * limit);
+  const paginatedWaiterReports = filteredWaiterReports.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -203,7 +205,7 @@ export default function WaiterReportsPanel({
     setFilterPaymentMode('All');
     setFilterPaymentStatus('All');
     setFilterOrderStatus('All');
-    setPage(1);
+    setPage(0);
   };
 
   const handleRecordPayment = () => {
@@ -258,84 +260,90 @@ export default function WaiterReportsPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Waiter</label>
-              <select 
+              <SearchableSelect 
                 value={filterWaiter}
                 onChange={e => setFilterWaiter(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Waiters</option>
-                {waitersList.map(w => <option key={w} value={w}>{w}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Waiters' },
+                  ...waitersList.map(w => ({ value: w, label: w }))
+                ]}
+                placeholder="Select Waiter..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Table</label>
-              <select 
+              <SearchableSelect 
                 value={filterTable}
                 onChange={e => setFilterTable(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Tables</option>
-                {uniqueTables.map(t => <option key={t} value={t}>Table {t}</option>)}
-              </select>
+                options={[
+                  { value: 'All', label: 'All Tables' },
+                  ...uniqueTables.map(t => ({ value: t, label: `Table ${t}` }))
+                ]}
+                placeholder="Select Table..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Source</label>
-              <select 
+              <SearchableSelect 
                 value={filterSource}
                 onChange={e => setFilterSource(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Sources</option>
-                <option value="Dine-In">Dine-In</option>
-                <option value="Mobile">Mobile</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Sources' },
+                  { value: 'Dine-In', label: 'Dine-In' },
+                  { value: 'Mobile', label: 'Mobile' }
+                ]}
+                placeholder="Select Source..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Mode</label>
-              <select 
+              <SearchableSelect 
                 value={filterPaymentMode}
                 onChange={e => setFilterPaymentMode(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Modes</option>
-                <option value="UPI">UPI</option>
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="Pending">Pending</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Modes' },
+                  { value: 'UPI', label: 'UPI' },
+                  { value: 'Cash', label: 'Cash' },
+                  { value: 'Card', label: 'Card' },
+                  { value: 'Pending', label: 'Pending' }
+                ]}
+                placeholder="Select Mode..."
+              />
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '16px', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Payment Status</label>
-              <select 
+              <SearchableSelect 
                 value={filterPaymentStatus}
                 onChange={e => setFilterPaymentStatus(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Statuses</option>
-                <option value="Paid">Paid</option>
-                <option value="Unpaid">Unpaid</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'Paid', label: 'Paid' },
+                  { value: 'Unpaid', label: 'Unpaid' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>Order Status</label>
-              <select 
+              <SearchableSelect 
                 value={filterOrderStatus}
                 onChange={e => setFilterOrderStatus(e.target.value)}
-                style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px', color: '#475569', outline: 'none' }}
-              >
-                <option value="All">All Statuses</option>
-                <option value="New">New</option>
-                <option value="Preparing">Preparing</option>
-                <option value="Ready">Ready</option>
-                <option value="Done">Done</option>
-              </select>
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'New', label: 'New' },
+                  { value: 'Preparing', label: 'Preparing' },
+                  { value: 'Ready', label: 'Ready' },
+                  { value: 'Done', label: 'Done' }
+                ]}
+                placeholder="Select Status..."
+              />
             </div>
             <div style={{ gridColumn: 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
               <button 
@@ -357,8 +365,8 @@ export default function WaiterReportsPanel({
         padding: '24px', 
         boxShadow: 'var(--card-shadow)' 
       }}>
-        <div className="menu-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="menu-items-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div className="menu-table-wrapper" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
+          <table className="menu-items-table" style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr>
                 <th style={{ padding: '16px 14px' }}>ORDER ID</th>
@@ -474,22 +482,22 @@ export default function WaiterReportsPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredWaiterReports.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredWaiterReports.length)} of {filteredWaiterReports.length} records
+            Showing {filteredWaiterReports.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredWaiterReports.length)} of {filteredWaiterReports.length} records
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page === 1 ? '#f8fafc' : '#ffffff',
-                color: page === 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -500,16 +508,16 @@ export default function WaiterReportsPanel({
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -520,17 +528,17 @@ export default function WaiterReportsPanel({
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -708,25 +716,16 @@ export default function WaiterReportsPanel({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>Payment Type</label>
-              <select
+              <SearchableSelect
                 value={offlinePaymentType}
                 onChange={e => setOfflinePaymentType(e.target.value)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border)',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-main)',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  outline: 'none',
-                  width: '100%'
-                }}
-              >
-                <option value="Cash">Cash</option>
-                <option value="Card">Card</option>
-                <option value="UPI">UPI</option>
-              </select>
+                options={[
+                  { value: 'Cash', label: 'Cash' },
+                  { value: 'Card', label: 'Card' },
+                  { value: 'UPI', label: 'UPI' }
+                ]}
+                placeholder="Select Payment Type..."
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1.5px solid var(--border)', paddingTop: '16px', marginTop: '10px' }}>

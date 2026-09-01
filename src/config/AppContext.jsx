@@ -1,11 +1,15 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS } from './initialData';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit } from './initialData';
+import { isTokenExpired } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
 import QrCodeApi from '../api/QrCode.js';
 import OrderApi from '../api/Order.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
+import UserApi from '../api/User.js';
+import SubscriptionApi from '../api/Subscription.js';
+import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
 export const AppContext = createContext();
@@ -19,6 +23,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -37,6 +43,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -50,11 +58,13 @@ export const DEFAULT_ROLES = {
   Admin: {
     permissions: {
       overview: { view: true, add: true, edit: true, delete: true },
-      'branch-management': { view: true, add: true, edit: true, delete: true },
-      'plans-management': { view: true, add: true, edit: true, delete: true },
+      'branch-management': { view: false, add: false, edit: false, delete: false },
+      'plans-management': { view: false, add: false, edit: false, delete: false },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -73,6 +83,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -91,6 +103,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: false },
       tables: { view: true, add: true, edit: true, delete: false },
+      inventory: { view: true, add: true, edit: true, delete: false },
+      stock_reduction: { view: true, add: true, edit: true, delete: false },
       billing: { view: true, add: true, edit: true, delete: false },
       staff: { view: true, add: true, edit: true, delete: false },
       waiter: { view: true, add: true, edit: true, delete: false },
@@ -150,45 +164,85 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
   { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
 ];
 
+const loadSavedUser = () => {
+  try {
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const savedUserStr = localStorage.getItem('currentUser');
+    if (token && savedUserStr) {
+      if (isTokenExpired(token)) {
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentUser');
+        try { sessionStorage.clear(); } catch (e) { }
+        return null;
+      }
+      return JSON.parse(savedUserStr);
+    }
+  } catch (e) {
+    console.warn("Could not load saved user session", e);
+  }
+  return null;
+};
+
 export const AppProvider = ({ children }) => {
   // Core database states
   const [restaurantsData, setRestaurantsData] = useState(initialRestaurantsData);
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem('serviq_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-  const [currentRestaurantId, setCurrentRestaurantId] = useState(() => {
-    try {
-      return localStorage.getItem('serviq_rest_id') || (initialRestaurantsData['rest-1'] ? 'rest-1' : null);
-    } catch (e) {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState(loadSavedUser);
+  const [currentRestaurantId, setCurrentRestaurantId] = useState(initialRestaurantsData['rest-1'] ? 'rest-1' : null);
   // Active Tenant settings overrides / defaults
   const [darkMode, setDarkMode] = useState(false);
   const [accentColor, setAccentColor] = useState('#ff7a00');
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
   // Branch filter state (null = All Branches)
   const [selectedBranchId, setSelectedBranchId] = useState(() => {
-    return localStorage.getItem('serviq_branch_id') || null;
+    try {
+      const stored = localStorage.getItem('selectedBranchId');
+      if (stored && stored !== 'ALL') return stored;
+      const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (user) {
+        const uType = (user.userType || '').toUpperCase();
+        const uRole = (typeof user.role === 'object' ? (user.role?.roleName || user.role?.name) : (user.role || '')).toUpperCase();
+        const isOwner = uType === 'RESTAURANT_OWNER' || uType === 'OWNER' || uType === 'SUPER ADMIN' || uType === 'SUPER_ADMIN' || uRole === 'RESTAURANT_OWNER' || uRole === 'OWNER' || uRole === 'SUPER ADMIN';
+        if (!isOwner) {
+          const bId = typeof user.branchId === 'object' && user.branchId !== null ? (user.branchId._id || user.branchId.id) : (user.branchId || user.activeBranchId);
+          if (bId && bId !== 'ALL') return bId;
+        }
+      }
+    } catch (e) {}
+    return null;
   });
 
-  // Sync selectedBranchId to localStorage
+  // Synchronize currentUser to localStorage whenever it changes
   useEffect(() => {
-    if (selectedBranchId) {
-      localStorage.setItem('serviq_branch_id', selectedBranchId);
+    if (currentUser) {
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('serviq_branch_id');
+      localStorage.removeItem('currentUser');
     }
-  }, [selectedBranchId]);
+  }, [currentUser]);
+
+  // Periodic token expiration check & auto-logout
+  useEffect(() => {
+    const checkTokenExpiry = () => {
+      const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+      if (token && isTokenExpired(token)) {
+        ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
+        logout();
+      }
+    };
+
+    const interval = setInterval(checkTokenExpiry, 15000);
+    window.addEventListener('focus', checkTokenExpiry);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkTokenExpiry);
+    };
+  }, []);
 
 
-  // Active computed tenant info
-  const activeRestaurant = (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || {
+  // Fallback empty tenant with Premium plan defaults
+  const FALLBACK_RESTAURANT = useMemo(() => ({
     tables: [],
     orders: [],
     menu: [],
@@ -201,20 +255,59 @@ export const AppProvider = ({ children }) => {
     users: [],
     inventory: [],
     inventoryLogs: [],
-    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES
-  };
+    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES,
+    plan: "Premium",
+    subscription: {
+      planId: "plan-premium",
+      planName: "Premium",
+      status: "Active",
+      billingCycle: "monthly",
+      baseBranchLimit: 8,
+      extraBranchSlots: 0,
+      extraBranchPrice: 499
+    }
+  }), []);
+
+  // Active computed tenant info
+  const activeRestaurant = useMemo(() => {
+    return (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || FALLBACK_RESTAURANT;
+  }, [currentRestaurantId, restaurantsData, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
+    if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
+
+    const extractOrderTable = (o) => {
+      if (!o) return '';
+      if (typeof o.table === 'string') return o.table;
+      if (typeof o.table === 'number') return String(o.table);
+      if (o.tableId && typeof o.tableId === 'object') {
+        return String(o.tableId.tableNumber || o.tableId.tableNo || o.tableId.name || o.tableId._id || '');
+      }
+      if (typeof o.tableId === 'string' || typeof o.tableId === 'number') {
+        return String(o.tableId);
+      }
+      return '';
+    };
+
     return tablesList.map(t => {
-      const tableNum = t.id.replace('T-', '');
-      const tableLabel = `Table ${tableNum}`;
+      if (!t) return null;
+      const tIdStr = String(t.id || t.tableNumber || t.tableNo || t.name || '').trim();
+      const tableNum = tIdStr.replace(/^T-|^Table\s*/i, '').trim();
+      const tableLabel = `Table ${tableNum || tIdStr || '1'}`;
+
       const unpaidOrders = ordersList.filter(o => {
-        const oTable = o.table.replace('Table ', '').trim();
-        return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'unpaid';
+        if (!o) return false;
+        const rawTable = extractOrderTable(o);
+        const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+        const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+          (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+          (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+        const bStatus = (o.billingStatus || '').toLowerCase();
+        return isMatch && bStatus !== 'paid';
       });
 
       if (unpaidOrders.length > 0) {
-        const total = unpaidOrders.reduce((sum, o) => sum + o.total, 0);
+        const total = unpaidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
         return {
           table: tableLabel,
           orders: unpaidOrders.length,
@@ -223,10 +316,16 @@ export const AppProvider = ({ children }) => {
         };
       } else {
         const paidOrders = ordersList.filter(o => {
-          const oTable = o.table.replace('Table ', '').trim();
-          return (oTable === tableNum || parseInt(oTable) === parseInt(tableNum)) && o.billingStatus === 'paid';
+          if (!o) return false;
+          const rawTable = extractOrderTable(o);
+          const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+          const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+            (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+            (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+          const bStatus = (o.billingStatus || '').toLowerCase();
+          return isMatch && bStatus === 'paid';
         });
-        const lastPaidTotal = paidOrders.length > 0 ? paidOrders[paidOrders.length - 1].total : 0;
+        const lastPaidTotal = paidOrders.length > 0 ? (Number(paidOrders[paidOrders.length - 1].total) || 0) : 0;
         return {
           table: tableLabel,
           orders: 0,
@@ -234,36 +333,45 @@ export const AppProvider = ({ children }) => {
           status: 'Paid'
         };
       }
-    });
+    }).filter(Boolean);
   };
 
   const fetchTables = async () => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentRestaurantId) return;
+    const targetId = currentRestaurantId || 'rest-1';
+    if (!token) return;
     try {
       const res = await MemberApi.getTables();
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
-          const rest = prev[currentRestaurantId];
+          const rest = prev[targetId];
           if (!rest) return prev;
           const localTables = rest.tables || [];
           const mapped = res.response.data.map(t => {
-            const localT = localTables.find(lt => lt.id.toLowerCase() === t.tableNumber.toLowerCase());
+            const localT = localTables.find(lt => lt && lt.id && t && t.tableNumber && String(lt.id).toLowerCase() === String(t.tableNumber).toLowerCase());
+            const backendWaiterId = (typeof t.assignedWaiter === 'object' ? t.assignedWaiter?._id : t.assignedWaiter) || t.assignedWaiterId;
+            const statusStr = typeof t.status === 'string' ? t.status : (t.status ? 'Occupied' : 'Free');
+            const isOcc = ['occupied', 'busy', 'reserved'].includes(String(statusStr || t.occupancyStatus || '').toLowerCase()) || t.isOccupied === true;
             return {
               _id: t._id,
-              id: t.tableNumber,
-              seats: t.seatingCapacity,
-              status: t.status ? 'Occupied' : 'Free',
+              id: t.tableNumber || t.tableNo || t.id,
+              tableNumber: t.tableNumber || t.tableNo || t.id,
+              tableNo: t.tableNo || t.tableNumber || t.id,
+              seats: t.seatingCapacity || t.seats,
+              seatingCapacity: t.seatingCapacity || t.seats,
+              status: isOcc ? 'Occupied' : (statusStr || 'Free'),
               isActive: t.isActive,
-              assignedWaiterId: localT?.assignedWaiterId || null,
-              tempWaiterId: localT?.tempWaiterId || null,
-              assignedQrId: t.assignedQrId || null
+              assignedWaiter: t.assignedWaiter || null,
+              assignedWaiterId: backendWaiterId || localT?.assignedWaiterId || null,
+              tempWaiterId: t.coverWaiterId || t.tempWaiterId || localT?.tempWaiterId || null,
+              assignedQrId: t.assignedQrId || null,
+              branchId: t.branchId
             };
           });
           const computedBillData = computeBillingData(rest.orders || [], mapped);
           return {
             ...prev,
-            [currentRestaurantId]: {
+            [targetId]: {
               ...rest,
               tables: mapped,
               billingData: computedBillData
@@ -278,16 +386,17 @@ export const AppProvider = ({ children }) => {
 
   const fetchQrCodes = async () => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentRestaurantId) return;
+    const targetId = currentRestaurantId || 'rest-1';
+    if (!token) return;
     try {
       const res = await QrCodeApi.getQrCodes();
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
-          const rest = prev[currentRestaurantId];
+          const rest = prev[targetId];
           if (!rest) return prev;
           return {
             ...prev,
-            [currentRestaurantId]: {
+            [targetId]: {
               ...rest,
               qrCodes: res.response.data
             }
@@ -301,19 +410,28 @@ export const AppProvider = ({ children }) => {
 
   const fetchOrders = async () => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentRestaurantId) return;
+    const targetId = currentRestaurantId || 'rest-1';
+    if (!token) return;
     try {
       const res = await OrderApi.getOrders();
-      if (res && res.status && res.response && res.response.data) {
+      if (res && res.status) {
+        const payload = res.response || {};
+        const rawOrders = Array.isArray(payload) ? payload :
+          Array.isArray(payload.data) ? payload.data :
+          Array.isArray(payload.data?.orders) ? payload.data.orders :
+          Array.isArray(payload.orders) ? payload.orders :
+          Array.isArray(payload.response?.data) ? payload.response.data :
+          [];
+
         setRestaurantsData(prev => {
-          const rest = prev[currentRestaurantId];
+          const rest = prev[targetId];
           if (!rest) return prev;
-          const computedBillData = computeBillingData(res.response.data, rest.tables || []);
+          const computedBillData = computeBillingData(rawOrders, rest.tables || []);
           return {
             ...prev,
-            [currentRestaurantId]: {
+            [targetId]: {
               ...rest,
-              orders: res.response.data,
+              orders: rawOrders,
               billingData: computedBillData
             }
           };
@@ -326,16 +444,17 @@ export const AppProvider = ({ children }) => {
 
   const fetchMenu = async () => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentRestaurantId) return;
+    const targetId = currentRestaurantId || 'rest-1';
+    if (!token) return;
     try {
       const res = await MenuApi.getMenuItems();
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
-          const rest = prev[currentRestaurantId];
+          const rest = prev[targetId];
           if (!rest) return prev;
           return {
             ...prev,
-            [currentRestaurantId]: {
+            [targetId]: {
               ...rest,
               menu: res.response.data
             }
@@ -349,14 +468,27 @@ export const AppProvider = ({ children }) => {
 
   const fetchBranches = async () => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentRestaurantId || token.startsWith('mock_')) return;
+    if (!token) return;
     try {
-      const res = await BranchApi.getBranches();
-      if (res && res.status && res.response) {
-        const branchArray = Array.isArray(res.response) ? res.response : res.response.data;
+      const [res, usersRes] = await Promise.allSettled([
+        BranchApi.getBranches(),
+        UserApi.getUsers({ limit: 100 })
+      ]);
+
+      const branchResponse = res.status === 'fulfilled' ? res.value : null;
+      const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
+        ? usersRes.value.response.data
+        : [];
+      const staffList = usersList;
+
+      if (branchResponse && branchResponse.status && branchResponse.response) {
+        const branchArray = Array.isArray(branchResponse.response) 
+          ? branchResponse.response 
+          : (Array.isArray(branchResponse.response.data) ? branchResponse.response.data : (branchResponse.response.branches || []));
         if (Array.isArray(branchArray)) {
           setRestaurantsData(prev => {
-            const rest = prev[currentRestaurantId] || {
+            const targetId = currentRestaurantId || 'rest-1';
+            const rest = prev[targetId] || initialRestaurantsData[targetId] || initialRestaurantsData['rest-1'] || {
               tables: [],
               orders: [],
               menu: [],
@@ -368,29 +500,44 @@ export const AppProvider = ({ children }) => {
               branches: [],
               users: [],
               inventory: [],
-              inventoryLogs: []
+              inventoryLogs: [],
+              plan: "Premium",
+              subscription: {
+                planId: "plan-premium",
+                planName: "Premium",
+                baseBranchLimit: 8,
+                extraBranchSlots: 0,
+                extraBranchPrice: 499
+              }
             };
 
-            const mappedBranches = branchArray.map(b => ({
-              id: b._id,
-              branchName: b.branchName,
-              branchCode: b.branchCode,
-              branchManager: b.managerName || b.branchManager,
-              mobileNumber: b.contactNumber || b.mobileNumber,
-              email: b.email,
-              address: b.address?.street || b.address || '',
-              country: b.address?.country || b.country || '',
-              state: b.address?.state || b.state || '',
-              city: b.address?.city || b.city || '',
-              pincode: b.address?.pincode || b.pincode || '',
-              openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
-              status: b.status || 'Active',
-              totalTables: b.totalTables || 10
-            }));
+            const mappedBranches = branchArray.map(b => {
+              const mgr = resolveBranchManagerName(b, usersList, staffList);
+              const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
+
+              return {
+                id: b._id || b.id,
+                _id: b._id || b.id,
+                branchName: b.branchName || b.name,
+                branchCode: b.branchCode || b.code,
+                branchManager: resolvedMgr,
+                managerName: resolvedMgr,
+                mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+                email: b.email || b.managerEmail || '',
+                address: b.address?.street || b.address || b.street || '',
+                country: b.address?.country || b.country || '',
+                state: b.address?.state || b.state || '',
+                city: b.address?.city || b.city || '',
+                pincode: b.address?.pincode || b.pincode || '',
+                openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
+                status: b.status || 'Active',
+                totalTables: b.totalTables || 10
+              };
+            });
 
             return {
               ...prev,
-              [currentRestaurantId]: {
+              [targetId]: {
                 ...rest,
                 branches: mappedBranches
               }
@@ -403,12 +550,60 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const fetchSubscriptionDashboard = async () => {
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await SubscriptionApi.getDashboard();
+      if (res && res.status && res.response) {
+        const data = res.response.data || res.response;
+        const activePlan = data.activePlan;
+        if (activePlan) {
+          const rawName = activePlan.planName || activePlan.name || 'Premium';
+          const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Premium';
+          const resolvedLimit = activePlan.baseBranchLimit || 
+            (data.branchCapacity?.baseLimit) || 
+            getPlanBranchLimit(cleanName, 8);
+
+          setRestaurantsData(prev => {
+            const targetId = currentRestaurantId || 'rest-1';
+            const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
+            return {
+              ...prev,
+              [targetId]: {
+                ...baseRest,
+                plan: cleanName,
+                subscription: {
+                  ...(baseRest.subscription || {}),
+                  planId: activePlan.planId || `plan-${cleanName.toLowerCase()}`,
+                  planName: cleanName,
+                  status: activePlan.status || 'Active',
+                  billingCycle: activePlan.billingCycle || 'monthly',
+                  price: activePlan.price,
+                  baseBranchLimit: resolvedLimit,
+                  extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
+                    ? data.branchCapacity.extraSlots 
+                    : (baseRest.subscription?.extraBranchSlots || 0),
+                  extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 499
+                }
+              }
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch subscription in AppContext:", e);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    if (!token || !currentUser || !currentRestaurantId || token.startsWith('mock_')) return;
+    if (!token) return;
 
     const initData = async () => {
+      await fetchSubscriptionDashboard();
       await fetchBranches();
+      await fetchOrders();
     };
     initData();
   }, [currentUser, currentRestaurantId]);
@@ -430,9 +625,8 @@ export const AppProvider = ({ children }) => {
   // Actions
   const login = async (email, password, role) => {
     const cleanEmail = email.trim().toLowerCase();
-    let backendErrorMessage = '';
 
-    // 1. Backend API login attempt
+    // 1. Strict Backend API login attempt
     try {
       const apiRes = await AuthApi.login(cleanEmail, password);
       if (apiRes && (apiRes.status === true || apiRes.response?.success === true)) {
@@ -440,215 +634,99 @@ export const AppProvider = ({ children }) => {
         const token = payload?.data?.token;
         const apiUser = payload?.data?.user;
 
-        if (token) {
+        if (token && apiUser) {
           localStorage.setItem("userToken", token);
           localStorage.setItem("token", token);
-        }
+          try { sessionStorage.clear(); } catch (e) { }
 
-        if (apiUser) {
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
+          const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
+          const roleUpper = roleStr.toUpperCase();
+          const isRestaurantOwner = 
+            userTypeUpper === 'RESTAURANT_OWNER' || 
+            userTypeUpper === 'OWNER' || 
+            userTypeUpper === 'SUPER ADMIN' || 
+            userTypeUpper === 'SUPER_ADMIN' ||
+            roleUpper === 'SUPER ADMIN' ||
+            roleUpper === 'RESTAURANT_OWNER' ||
+            roleUpper === 'OWNER';
+
+          const userBranchId = typeof apiUser.branchId === 'object' && apiUser.branchId !== null
+            ? (apiUser.branchId._id || apiUser.branchId.id)
+            : (apiUser.branchId || apiUser.activeBranchId || '');
+
           const user = {
-            id: apiUser.id,
+            id: apiUser.id || apiUser._id,
             name: apiUser.name,
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber,
-            userType: apiUser.userType, // "RESTAURANT_OWNER"
-            role: userTypeUpper === 'RESTAURANT_OWNER' ? 'RESTAURANT_OWNER' : (apiUser.role || 'Admin'),
+            userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : 'BRANCH_ADMIN'),
+            role: isRestaurantOwner ? 'RESTAURANT_OWNER' : (apiUser.role || 'Branch Manager'),
             restaurantId: apiUser.restaurantId || currentRestaurantId || 'rest-1',
-            activeBranchId: apiUser.activeBranchId || 'ALL',
-            branchId: apiUser.activeBranchId || 'ALL'
+            activeBranchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL'),
+            branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')
           };
 
+          localStorage.setItem("currentUser", JSON.stringify(user));
           setCurrentUser(user);
           const targetRestId = apiUser.restaurantId || currentRestaurantId || 'rest-1';
           setCurrentRestaurantId(targetRestId);
-          setSelectedBranchId(user.branchId === 'ALL' ? null : user.branchId);
 
-          try {
-            localStorage.setItem('serviq_user', JSON.stringify(user));
-            localStorage.setItem('serviq_rest_id', targetRestId);
-          } catch (e) { }
+          if (!isRestaurantOwner && userBranchId && userBranchId !== 'ALL') {
+            setSelectedBranchId(userBranchId);
+            localStorage.setItem("selectedBranchId", userBranchId);
+          } else {
+            setSelectedBranchId(null);
+            localStorage.removeItem("selectedBranchId");
+          }
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
           return { success: true, user };
         }
-      } else if (apiRes && !apiRes.status) {
-        backendErrorMessage = apiRes.message || apiRes.response?.message || '';
       }
+
+      // If backend rejected login (invalid credentials, incorrect password, etc.)
+      const backendMessage =
+        apiRes?.response?.data?.message ||
+        apiRes?.response?.message ||
+        apiRes?.message ||
+        apiRes?.data?.message ||
+        apiRes?.response?.data?.error ||
+        apiRes?.error ||
+        "";
+
+      const errorMsg = backendMessage && typeof backendMessage === 'string' && backendMessage.trim()
+        ? backendMessage.trim()
+        : "Invalid credentials";
+
+      localStorage.removeItem("userToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("currentUser");
+      sessionStorage.clear();
+      setCurrentUser(null);
+
+      ShowNotifications.showAlertNotification(errorMsg, false);
+      return { success: false, error: errorMsg };
     } catch (e) {
-      console.warn("Backend API login attempt note:", e);
+      console.warn("Backend API login error:", e);
+      const backendCatchMsg =
+        e?.response?.data?.message ||
+        e?.response?.message ||
+        e?.message ||
+        "";
+
+      const errMsg = backendCatchMsg && typeof backendCatchMsg === 'string' && backendCatchMsg.trim()
+        ? backendCatchMsg.trim()
+        : "Invalid credentials";
+
+      localStorage.removeItem("userToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("currentUser");
+      sessionStorage.clear();
+      setCurrentUser(null);
+      ShowNotifications.showAlertNotification(errMsg, false);
+      return { success: false, error: errMsg };
     }
-
-    // 2. Mock/Offline Fallback for Restaurant Owner (e.g. arjun.kumar@royalspice.test or admin@serviq.com)
-    if (
-      (cleanEmail === 'arjun.kumar@royalspice.test' || cleanEmail === 'admin@serviq.com') &&
-      (password === 'admin123' || password === 'admin' || password === '123456' || password === 'password123')
-    ) {
-      const user = {
-        id: cleanEmail === 'admin@serviq.com' ? 'adm-serviq-01' : '6a7ef447d15d03c37e50ea65',
-        name: cleanEmail === 'admin@serviq.com' ? 'Admin' : 'Arjun Kumar',
-        email: cleanEmail,
-        phoneNumber: '9876543211',
-        userType: 'RESTAURANT_OWNER',
-        role: 'RESTAURANT_OWNER',
-        restaurantId: 'rest-1',
-        activeBranchId: 'BR-001',
-        branchId: 'ALL'
-      };
-      const mockToken = 'mock_jwt_token_' + cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
-      localStorage.setItem("userToken", mockToken);
-      localStorage.setItem("token", mockToken);
-      setCurrentUser(user);
-      setCurrentRestaurantId('rest-1');
-      setSelectedBranchId(null);
-      try {
-        localStorage.setItem('serviq_user', JSON.stringify(user));
-        localStorage.setItem('serviq_rest_id', 'rest-1');
-        localStorage.removeItem('serviq_branch_id');
-      } catch (e) { }
-      ShowNotifications.showAlertNotification("Login successful", true);
-      return { success: true, user };
-    }
-
-    // 3. Check Admin / users / staff in local restaurant dataset
-    for (let id in restaurantsData) {
-      const rest = restaurantsData[id];
-      if (!rest) continue;
-
-      // Check Tenant owner/admin
-      if (
-        ((rest.owner && rest.owner.toLowerCase() === cleanEmail) || (rest.email && rest.email.toLowerCase() === cleanEmail)) &&
-        (password === 'admin123' || password === 'admin' || password === '123456' || password === 'password123')
-      ) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = {
-          id: rest.id || id,
-          name: rest.ownerName || rest.name + ' Admin',
-          email: cleanEmail,
-          role: 'RESTAURANT_OWNER',
-          userType: 'RESTAURANT_OWNER',
-          restaurantId: id,
-          activeBranchId: 'ALL',
-          branchId: 'ALL'
-        };
-        const mockToken = 'mock_jwt_token_' + id;
-        localStorage.setItem("userToken", mockToken);
-        localStorage.setItem("token", mockToken);
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        setSelectedBranchId(null);
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-          localStorage.removeItem('serviq_branch_id');
-        } catch (e) { }
-        if (rest.settings) {
-          setAccentColor(rest.settings.accentColor || '#ff7a00');
-          setDarkMode(rest.settings.darkMode || false);
-        }
-        ShowNotifications.showAlertNotification("Login successful", true);
-        return { success: true, user };
-      }
-
-      // Check User accounts array
-      const matchingUser = (rest.users || []).find(u => u.email && u.email.toLowerCase() === cleanEmail);
-      if (matchingUser && (password === 'admin123' || password === matchingUser.password || password === '1234' || password === '123456')) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = {
-          id: matchingUser.id || 'usr-001',
-          name: matchingUser.name,
-          email: matchingUser.email,
-          role: matchingUser.role,
-          userType: matchingUser.role,
-          restaurantId: id,
-          branchId: matchingUser.branchId || 'ALL'
-        };
-        const mockToken = 'mock_jwt_token_' + (matchingUser.id || 'user');
-        localStorage.setItem("userToken", mockToken);
-        localStorage.setItem("token", mockToken);
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        if (user.branchId && user.branchId !== 'ALL') {
-          setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) { }
-        } else {
-          setSelectedBranchId(null);
-          try { localStorage.removeItem('serviq_branch_id'); } catch (e) { }
-        }
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) { }
-        ShowNotifications.showAlertNotification("Login successful", true);
-        return { success: true, user };
-      }
-
-      // Check Kitchen Login credentials
-      if (rest.kitchenLogin && rest.kitchenLogin.email && cleanEmail === rest.kitchenLogin.email.toLowerCase() && (password === rest.kitchenLogin.password || password === 'admin123' || password === '123456')) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the platform administration.' };
-        }
-        const user = {
-          id: 'kitchen-001',
-          name: 'Kitchen Station',
-          email: cleanEmail,
-          role: 'Kitchen',
-          userType: 'Kitchen',
-          restaurantId: id,
-          branchId: 'BR-001'
-        };
-        const mockToken = 'mock_jwt_token_kitchen';
-        localStorage.setItem("userToken", mockToken);
-        localStorage.setItem("token", mockToken);
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        setSelectedBranchId('BR-001');
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) { }
-        ShowNotifications.showAlertNotification("Login successful", true);
-        return { success: true, user };
-      }
-
-      // Check Staff credentials
-      const staffMember = (rest.staff || []).find(s => s.email && s.email.toLowerCase() === cleanEmail && (s.password === password || password === '1234' || password === 'admin123' || password === '123456'));
-      if (staffMember) {
-        if (rest.status === 'Suspended') {
-          return { success: false, error: 'This restaurant account has been suspended by the administration.' };
-        }
-        const user = {
-          id: staffMember.id,
-          name: staffMember.name,
-          email: staffMember.email,
-          role: staffMember.role,
-          userType: staffMember.role,
-          restaurantId: id,
-          branchId: staffMember.branchId || 'BR-001'
-        };
-        const mockToken = 'mock_jwt_token_staff';
-        localStorage.setItem("userToken", mockToken);
-        localStorage.setItem("token", mockToken);
-        setCurrentUser(user);
-        setCurrentRestaurantId(id);
-        if (user.branchId) {
-          setSelectedBranchId(user.branchId);
-          try { localStorage.setItem('serviq_branch_id', user.branchId); } catch (e) { }
-        }
-        try {
-          localStorage.setItem('serviq_user', JSON.stringify(user));
-          localStorage.setItem('serviq_rest_id', id);
-        } catch (e) { }
-        ShowNotifications.showAlertNotification("Login successful", true);
-        return { success: true, user };
-      }
-    }
-
-    return { success: false, error: backendErrorMessage || 'Invalid email or password. Please check your credentials.' };
   };
 
   const logout = () => {
@@ -656,12 +734,12 @@ export const AppProvider = ({ children }) => {
     setCurrentRestaurantId(null);
     setSelectedBranchId(null);
     try {
-      localStorage.removeItem('serviq_user');
-      localStorage.removeItem('serviq_rest_id');
       localStorage.removeItem('userToken');
       localStorage.removeItem('token');
-      localStorage.removeItem('serviq_branch_id');
+      localStorage.removeItem('currentUser');
+      sessionStorage.clear();
     } catch (e) { }
+    window.location.href = '/login';
   };
 
 
@@ -901,7 +979,7 @@ export const AppProvider = ({ children }) => {
       const targetPlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase()) || {
         id: `plan-${planName.toLowerCase()}`,
         name: planName,
-        branchLimit: planName === 'Enterprise' ? 100 : planName === 'Premium' ? 10 : planName === 'Standard' ? 3 : 1,
+        branchLimit: getPlanBranchLimit(planName, 5),
         monthlyPrice: planName === 'Enterprise' ? 9999 : planName === 'Premium' ? 4999 : planName === 'Standard' ? 1999 : 999,
         annualPrice: planName === 'Enterprise' ? 99990 : planName === 'Premium' ? 49999 : planName === 'Standard' ? 19999 : 9999,
         extraBranchPrice: planName === 'Enterprise' ? 399 : planName === 'Premium' ? 499 : planName === 'Standard' ? 699 : 799
@@ -947,8 +1025,8 @@ export const AppProvider = ({ children }) => {
 
   const upgradeSubscriptionPlan = (id, planId, billingCycle = 'monthly', paymentMethod = 'Credit Card (•••• 4242)') => {
     setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
+      const targetId = id || currentRestaurantId || 'rest-1';
+      const rest = prev[targetId] || initialRestaurantsData[targetId] || initialRestaurantsData['rest-1'] || {};
       const targetPlan = AVAILABLE_PLANS.find(p => p.id === planId || p.name.toLowerCase() === planId.toLowerCase()) || AVAILABLE_PLANS[1];
       const amount = billingCycle === 'annual' ? targetPlan.annualPrice : targetPlan.monthlyPrice;
 
@@ -974,7 +1052,7 @@ export const AppProvider = ({ children }) => {
 
       return {
         ...prev,
-        [id]: {
+        [targetId]: {
           ...rest,
           plan: targetPlan.name,
           subscription: {
@@ -986,7 +1064,7 @@ export const AppProvider = ({ children }) => {
             price: targetPlan.monthlyPrice,
             annualPrice: targetPlan.annualPrice,
             baseBranchLimit: targetPlan.branchLimit,
-            extraBranchPrice: targetPlan.extraBranchPrice || 699,
+            extraBranchPrice: targetPlan.extraBranchPrice || 499,
             nextBillingDate: nextDate.toISOString().split('T')[0]
           },
           subscriptionInvoices: [newInvoice, ...existingInvoices]
@@ -1001,7 +1079,7 @@ export const AppProvider = ({ children }) => {
       if (!rest) return prev;
       const currentSub = rest.subscription || {
         planName: rest.plan || 'Standard',
-        baseBranchLimit: 3,
+        baseBranchLimit: getPlanBranchLimit(rest.plan || 'Standard', 5),
         extraBranchSlots: 0,
         extraBranchPrice: 699
       };
@@ -1058,40 +1136,48 @@ export const AppProvider = ({ children }) => {
     updateDiningTable(id, tableId, { seats });
   };
 
-  const deleteDiningTable = async (id, tableId) => {
-    const rest = restaurantsData[id];
-    if (!rest) return;
-    const targetTable = rest.tables?.find(t => t.id === tableId);
-    if (!targetTable) return;
+  const deleteDiningTable = async (idOrTableId, maybeTableId) => {
+    const tableIdentifier = (typeof idOrTableId === 'object' && idOrTableId !== null)
+      ? (idOrTableId._id || idOrTableId.id)
+      : (maybeTableId || idOrTableId);
+
+    const restaurantId = activeRestaurant?._id || activeRestaurant?.id || 'rest-001';
+    const rest = restaurantsData[restaurantId] || Object.values(restaurantsData)[0];
+    const targetTable = rest?.tables?.find(t => t._id === tableIdentifier || t.id === tableIdentifier) || { _id: tableIdentifier };
 
     // Update local state optimistically
-    setRestaurantsData(prev => {
-      const restObj = prev[id];
-      if (!restObj) return prev;
-      const qrs = restObj.qrCodes || [];
-      const updatedQrCodes = qrs.map(q => {
-        if (q.tableId === tableId) {
-          return { ...q, status: 'Unassigned', tableId: null };
-        }
-        return q;
-      });
-      return {
-        ...prev,
-        [id]: {
-          ...restObj,
-          tables: restObj.tables.filter(t => t.id !== tableId),
-          qrCodes: updatedQrCodes,
-          settings: {
-            ...restObj.settings,
-            tablesCount: Math.max(0, restObj.tables.length - 1)
+    if (rest && restaurantId) {
+      setRestaurantsData(prev => {
+        const restObj = prev[restaurantId];
+        if (!restObj) return prev;
+        const qrs = restObj.qrCodes || [];
+        const updatedQrCodes = qrs.map(q => {
+          if (q.tableId === tableIdentifier || q.tableId === targetTable.id) {
+            return { ...q, status: 'Unassigned', tableId: null };
           }
-        }
-      };
-    });
+          return q;
+        });
+        return {
+          ...prev,
+          [restaurantId]: {
+            ...restObj,
+            tables: restObj.tables.filter(t => t._id !== tableIdentifier && t.id !== tableIdentifier),
+            qrCodes: updatedQrCodes,
+            settings: {
+              ...restObj.settings,
+              tablesCount: Math.max(0, restObj.tables.length - 1)
+            }
+          }
+        };
+      });
+    }
 
     try {
-      await MemberApi.deleteTable(targetTable._id);
-      await fetchTables();
+      const deleteId = targetTable._id || targetTable.id || tableIdentifier;
+      if (deleteId && deleteId !== 'undefined') {
+        await MemberApi.deleteTable(deleteId);
+        await fetchTables();
+      }
     } catch (e) {
       console.error(e);
     }
@@ -1514,12 +1600,13 @@ export const AppProvider = ({ children }) => {
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
-      const currentBranches = rest.branches || [];
+      const mgrName = branchData.managerName || branchData.branchManager || '';
       const newBranch = {
         id: branchData.id || `BR-${Date.now()}`,
         branchCode: branchData.branchCode || `BR-${Math.floor(100 + Math.random() * 900)}`,
         branchName: branchData.branchName || 'New Branch',
-        branchManager: branchData.branchManager || 'Unassigned',
+        managerName: mgrName,
+        branchManager: mgrName,
         mobileNumber: branchData.mobileNumber || '',
         email: branchData.email || '',
         address: branchData.address || '',
@@ -1562,10 +1649,13 @@ export const AppProvider = ({ children }) => {
       if (!rest) return prev;
       const currentBranches = rest.branches || [];
       const updatedBranches = currentBranches.map(b => {
-        if (b.id === branchId) {
+        if (b.id === branchId || b._id === branchId || String(b.id) === String(branchId) || String(b._id) === String(branchId)) {
+          const mgr = updatedData.managerName || updatedData.branchManager || b.managerName || b.branchManager || '';
           return {
             ...b,
             ...updatedData,
+            managerName: mgr,
+            branchManager: mgr,
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
             operationalData: {
               ...b.operationalData,
@@ -2097,6 +2187,7 @@ export const AppProvider = ({ children }) => {
         activeRestaurant,
         selectedBranchId,
         setSelectedBranchId,
+        fetchBranches,
 
         login,
         logout,

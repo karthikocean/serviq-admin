@@ -141,15 +141,16 @@ export default function TablesPanel({
   });
 
   // Pagination for tables (10 tables per page)
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
   const totalPages = Math.ceil(filteredTables.length / limit) || 1;
-  const paginatedTables = filteredTables.slice((page - 1) * limit, page * limit);
+  const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -161,7 +162,7 @@ export default function TablesPanel({
   };
 
   useEffect(() => {
-    setPage(1);
+    setPage(0);
   }, [searchTerm, statusFilter]);
 
   const totalCount = displayTables.length;
@@ -467,8 +468,8 @@ export default function TablesPanel({
         overflow: 'hidden',
         width: '100%'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
@@ -490,7 +491,7 @@ export default function TablesPanel({
                   const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
                   const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
 
-                  const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.name || (table.id && String(table.id).startsWith('T-') ? table.id : null) || table.id || `T-${String((page - 1) * limit + index + 1).padStart(2, '0')}`;
+                  const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.name || (table.id && String(table.id).startsWith('T-') ? table.id : null) || table.id || `T-${String(page * limit + index + 1).padStart(2, '0')}`;
                   const waiterName = getWaiterName(table);
                   const qrUrl = table.qrUrl || '';
                   const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
@@ -507,7 +508,7 @@ export default function TablesPanel({
                     >
                       {/* S.NO */}
                       <td style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                        {(page - 1) * limit + index + 1}
+                        {page * limit + index + 1}
                       </td>
 
                       {/* 1. Table ID & Section */}
@@ -599,48 +600,39 @@ export default function TablesPanel({
                       {/* 5. QR Code */}
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                         {table.qrUrl || table.assignedQrId ? (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                            <div
-                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                background: '#ffffff',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                padding: '2px',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              title="Click to expand QR Code"
-                            >
-                              <img
-                                src={qrImgSrc}
-                                alt={`QR ${tableIdStr}`}
-                                style={{ width: '26px', height: '26px', display: 'block', borderRadius: '4px' }}
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                              style={{
-                                background: '#f8fafc',
-                                border: '1px solid #e2e8f0',
-                                color: '#ff5a1f',
-                                cursor: 'pointer',
-                                padding: '4px 8px',
-                                borderRadius: '6px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '11px',
-                                fontWeight: 700
-                              }}
-                            >
-                              <QrIcon size={13} /> View
-                            </button>
+                          <div
+                            onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
+                            style={{
+                              width: '36px',
+                              height: '36px',
+                              background: '#ffffff',
+                              borderRadius: '8px',
+                              border: '1.5px solid #e2e8f0',
+                              padding: '2px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s ease',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.borderColor = '#ff5a1f';
+                              e.currentTarget.style.transform = 'scale(1.08)';
+                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(255,90,31,0.15)';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.borderColor = '#e2e8f0';
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.04)';
+                            }}
+                            title="Click to preview & print QR code"
+                          >
+                            <img
+                              src={qrImgSrc}
+                              alt={`QR ${tableIdStr}`}
+                              style={{ width: '28px', height: '28px', display: 'block', borderRadius: '4px' }}
+                            />
                           </div>
                         ) : (
                           <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>
@@ -747,22 +739,22 @@ export default function TablesPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredTables.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, filteredTables.length)} of {filteredTables.length} tables
+            Showing {filteredTables.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredTables.length)} of {filteredTables.length} tables
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page <= 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page <= 1 ? '#f8fafc' : '#ffffff',
-                color: page <= 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: page <= 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -773,16 +765,16 @@ export default function TablesPanel({
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -793,17 +785,17 @@ export default function TablesPanel({
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -911,23 +903,7 @@ export default function TablesPanel({
               </a>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setViewingQrTable(null)}
-              style={{
-                width: '100%',
-                padding: '8px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                background: '#f8fafc',
-                color: '#64748b',
-                fontWeight: 600,
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
-            >
-              Close Window
-            </button>
+
           </div>
         </Modal>
       )}
@@ -960,7 +936,7 @@ export default function TablesPanel({
             <div>
               <p style={{ margin: 0, fontWeight: 600, color: '#0f172a', fontSize: '15px' }}>Delete Dining Table</p>
               <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                Are you sure you want to delete Table {tableToDelete?.id}? This will also delete its linked QR ordering configuration.
+                Are you sure you want to delete Table {tableToDelete?.name || tableToDelete?.tableNumber || tableToDelete?.id || tableToDelete?._id}? This will also delete its linked QR ordering configuration.
               </p>
             </div>
           </div>
@@ -979,7 +955,8 @@ export default function TablesPanel({
               style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
               onClick={() => {
                 if (tableToDelete && deleteDiningTable) {
-                  deleteDiningTable(activeRestaurant.id, tableToDelete.id);
+                  const targetTableId = tableToDelete._id || tableToDelete.id;
+                  deleteDiningTable(targetTableId, tableToDelete);
                   setTableToDelete(null);
                 }
               }}

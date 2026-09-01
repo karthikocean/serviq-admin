@@ -5,6 +5,7 @@ import TablesPanel from '../../components/TablesPanel';
 import { Modal } from '../../components/Modal';
 import TableApi from '../../api/Table';
 import StaffApi from '../../api/Staff';
+import SearchableSelect from '../../components/SearchableSelect.jsx';
 import './TableManagement.css';
 
 export default function TableManagement() {
@@ -67,12 +68,19 @@ export default function TableManagement() {
     // We will override the context update with API later
   };
 
-  const handleDeleteDiningTable = async (id) => {
-    if (window.confirm("Are you sure you want to delete this table?")) {
-      const res = await TableApi.deleteTable(id);
-      if (res.status) {
-        fetchData();
-      }
+  const handleDeleteDiningTable = async (tableOrId, maybeId) => {
+    const targetId = (typeof tableOrId === 'object' && tableOrId !== null)
+      ? (tableOrId._id || tableOrId.id)
+      : (tableOrId && tableOrId !== 'undefined' ? tableOrId : maybeId);
+
+    if (!targetId || targetId === 'undefined') {
+      console.error("Delete table called without a valid _id:", tableOrId, maybeId);
+      return;
+    }
+
+    const res = await TableApi.deleteTable(targetId);
+    if (res.status) {
+      fetchData();
     }
   };
 
@@ -88,13 +96,74 @@ export default function TableManagement() {
     return !!modulePermissions[action];
   };
 
+  const resolveTableAssignedWaiter = (table, staffList = staff) => {
+    if (!table) return null;
+    if (table.assignedWaiter && typeof table.assignedWaiter === 'object') {
+      const id = table.assignedWaiter._id || table.assignedWaiter.id;
+      const name = table.assignedWaiter.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && staffList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+    if (table.assignedWaiterId && typeof table.assignedWaiterId === 'object') {
+      const id = table.assignedWaiterId._id || table.assignedWaiterId.id;
+      const name = table.assignedWaiterId.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && staffList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+
+    const rawId = table.assignedWaiterId || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null) || table.waiterId;
+    const rawName = table.assignedWaiterName || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null);
+
+    if (!rawId && !rawName) return null;
+
+    if (staffList && staffList.length > 0) {
+      const found = staffList.find(u => {
+        const uId = String(u._id || u.id || '');
+        const uName = String(u.name || '').trim().toLowerCase();
+        if (rawId && uId === String(rawId)) return true;
+        if (rawName && uName === String(rawName).trim().toLowerCase()) return true;
+        if (rawId && uName === String(rawId).trim().toLowerCase()) return true;
+        return false;
+      });
+      if (found) {
+        return {
+          id: found._id || found.id,
+          name: found.name
+        };
+      }
+    }
+
+    if (rawName && rawName !== 'Unassigned' && rawName !== 'null' && rawName !== 'undefined') {
+      return { id: rawId || rawName, name: rawName };
+    }
+    if (rawId && isNaN(rawId) && typeof rawId === 'string' && !rawId.match(/^[0-9a-fA-F]{24}$/)) {
+      return { id: rawId, name: rawId };
+    }
+
+    return null;
+  };
+
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
     if (waiterId) {
-      const assignedTables = tables.filter(t => t.assignedWaiter === waiterId);
+      const selectedWaiter = staff.find(s => String(s._id || s.id) === String(waiterId) || String(s.name) === String(waiterId));
+      const assignedTables = tables.filter(t => {
+        const assigned = resolveTableAssignedWaiter(t, staff);
+        if (!assigned) return false;
+        return String(assigned.id) === String(waiterId) || 
+          (selectedWaiter && String(assigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase());
+      });
       setModalTableIds(assignedTables.map(t => t._id || t.id));
-      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId);
-      setModalCoverWaiterId(firstTableWithCover ? firstTableWithCover.tempWaiterId : '');
+      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId || t.coverWaiterId);
+      setModalCoverWaiterId(firstTableWithCover ? (firstTableWithCover.tempWaiterId || firstTableWithCover.coverWaiterId) : '');
     } else {
       setModalTableIds([]);
       setModalCoverWaiterId('');
@@ -103,7 +172,7 @@ export default function TableManagement() {
 
   const handleOpenAssignTablesModal = (waiterId) => {
     const waiters = staff.filter(s => s.role === 'Waiter');
-    const targetId = waiterId || (waiters.length > 0 ? waiters[0]._id || waiters[0].id : '');
+    const targetId = waiterId || (waiters.length > 0 ? (waiters[0]._id || waiters[0].id || waiters[0].name) : '');
     loadWaiterAssignments(targetId);
     setShowAssignTablesModal(true);
   };
@@ -111,22 +180,18 @@ export default function TableManagement() {
   const handleSaveAssignments = async () => {
     if (!modalWaiterId) return;
 
-    // Find tables to unassign (currently assigned to this waiter but not in modalTableIds)
-    const toUnassign = tables.filter(t => t.assignedWaiter === modalWaiterId && !modalTableIds.includes(t._id || t.id));
+    try {
+      const selectedWaiter = staff.find(s => String(s._id || s.id) === String(modalWaiterId) || String(s.name) === String(modalWaiterId));
+      const targetWaiterId = selectedWaiter?._id || selectedWaiter?.id || modalWaiterId;
 
-    // Find tables to assign (in modalTableIds but not currently assigned to this waiter)
-    const toAssign = tables.filter(t => modalTableIds.includes(t._id || t.id) && t.assignedWaiter !== modalWaiterId);
-
-    // Call API for each
-    const promises = [];
-    for (const t of toUnassign) {
-      promises.push(TableApi.updateTable(t._id || t.id, { assignedWaiter: null }));
+      await TableApi.assignWaiter({
+        waiterId: targetWaiterId,
+        tableIds: modalTableIds,
+        coverWaiterId: modalCoverWaiterId || null
+      });
+    } catch (e) {
+      console.error(e);
     }
-    for (const t of toAssign) {
-      promises.push(TableApi.updateTable(t._id || t.id, { assignedWaiter: modalWaiterId }));
-    }
-
-    await Promise.all(promises);
 
     setShowAssignTablesModal(false);
     fetchData(); // Refresh tables
@@ -169,28 +234,15 @@ export default function TableManagement() {
           {/* Waiter Selection */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>Select Waiter</label>
-            <select
+            <SearchableSelect
               value={modalWaiterId}
               onChange={e => loadWaiterAssignments(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1.5px solid var(--border)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-main)',
-                fontSize: '14px',
-                fontWeight: '600',
-                outline: 'none',
-                width: '100%'
-              }}
-            >
-              <option value="" disabled>Select a Waiter</option>
-              {staff.filter(s => s.role === 'Waiter').map((s, sIdx) => (
-                <option key={s._id || s.id || `waiter-${sIdx}`} value={s.name}>
-                  {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
-                </option>
-              ))}
-            </select>
+              options={staff.filter(s => s.role === 'Waiter').map((s, sIdx) => ({
+                value: s.name,
+                label: `${s.name} (${s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})`
+              }))}
+              placeholder="Select a Waiter..."
+            />
           </div>
 
           {/* Tables Selection */}
@@ -209,86 +261,96 @@ export default function TableManagement() {
             }}>
               {tables.map((table, tIdx) => {
                 const tableKey = table._id || table.id || `table-${tIdx}`;
-                const tableIdent = table.id || table._id || table.tableNumber;
-                const isChecked = modalTableIds.includes(table._id || table.id || tableIdent);
-                const currentlyAssigned = table.assignedWaiterId ? staff.find(s => (s._id || s.id) === table.assignedWaiterId) : null;
-                const isAssignedToOther = currentlyAssigned && (currentlyAssigned._id || currentlyAssigned.id) !== modalWaiterId;
+                const tId = table._id || table.id;
+                const tableIdent = table.tableNumber || table.tableNo || table.id || table._id;
+                const isChecked = modalTableIds.includes(tId) || modalTableIds.includes(tableIdent);
+                const currentlyAssigned = resolveTableAssignedWaiter(table, staff);
+                const selectedWaiter = staff.find(s => String(s._id || s.id) === String(modalWaiterId) || String(s.name) === String(modalWaiterId));
+                const isAssignedToThisWaiter = currentlyAssigned && (
+                  String(currentlyAssigned.id) === String(modalWaiterId) ||
+                  (selectedWaiter && String(currentlyAssigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase())
+                );
+                const isAssignedToOther = currentlyAssigned && !isAssignedToThisWaiter;
+                const tableNameStr = `Table ${tableIdent}`;
 
                 return (
-                  <label
+                  <div
                     key={tableKey}
+                    onClick={(e) => {
+                      if (isAssignedToOther) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                      }
+                    }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
+                      gap: '10px',
                       fontSize: '13px',
                       fontWeight: '600',
-                      cursor: 'pointer',
-                      padding: '4px 0',
-                      color: 'var(--text-main)'
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: isAssignedToOther ? '1.5px solid #fecaca' : (isChecked ? '1.5px solid #ff7a00' : '1px solid var(--border)'),
+                      backgroundColor: isAssignedToOther ? '#fef2f2' : (isChecked ? '#fff7ed' : '#ffffff'),
+                      cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease',
+                      opacity: isAssignedToOther ? 0.85 : 1
                     }}
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
+                      disabled={isAssignedToOther}
                       onChange={e => {
-                        const targetId = table._id || table.id || tableIdent;
+                        const targetId = tId || tableIdent;
+                        if (isAssignedToOther) {
+                          ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                          return;
+                        }
                         if (e.target.checked) {
                           setModalTableIds([...modalTableIds, targetId]);
                         } else {
-                          setModalTableIds(modalTableIds.filter(id => id !== targetId));
+                          setModalTableIds(modalTableIds.filter(id => id !== targetId && id !== tId && id !== tableIdent));
                         }
                       }}
                       style={{
                         accentColor: 'var(--primary)',
                         width: '16px',
                         height: '16px',
-                        cursor: 'pointer'
+                        cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                        flexShrink: 0
                       }}
                     />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span>{tableIdent} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({table.seats || 4} seats)</span></span>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
+                        <span style={{ color: isAssignedToOther ? '#991b1b' : 'var(--text-main)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {tableNameStr}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                          {table.seats || table.seatingCapacity || 4} seats
+                        </span>
+                      </div>
                       {isAssignedToOther && (
-                        <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '500' }}>
-                          Assigned: {currentlyAssigned.name}
+                        <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
+                          🚫 Already assigned to {currentlyAssigned.name}
+                        </span>
+                      )}
+                      {!isAssignedToOther && isChecked && (
+                        <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
+                          ✓ Assigned to this waiter
+                        </span>
+                      )}
+                      {!isAssignedToOther && !isChecked && (
+                        <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 600, marginTop: '2px', lineHeight: '1.2' }}>
+                          Available
                         </span>
                       )}
                     </div>
-                  </label>
+                  </div>
                 );
               })}
             </div>
-          </div>
-
-          {/* Cover Waiter Selection */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>
-              Cover Waiter <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'normal' }}>(Optional)</span>
-            </label>
-            <select
-              value={modalCoverWaiterId}
-              onChange={e => setModalCoverWaiterId(e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1.5px solid var(--border)',
-                backgroundColor: 'var(--bg-primary)',
-                color: 'var(--text-main)',
-                fontSize: '14px',
-                fontWeight: '600',
-                outline: 'none',
-                width: '100%'
-              }}
-            >
-              <option value="">No Cover Waiter</option>
-              {staff
-                .filter(s => s.role === 'Waiter' && (s._id || s.id) !== modalWaiterId)
-                .map((s, sIdx) => (
-                  <option key={s._id || s.id || `cover-${sIdx}`} value={s._id || s.id}>
-                    {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
-                  </option>
-                ))}
-            </select>
           </div>
 
           {/* Save Action */}

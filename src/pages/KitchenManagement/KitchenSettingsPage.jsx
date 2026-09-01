@@ -34,7 +34,7 @@ export default function KitchenSettingsPage() {
     navigate('/staff');
   };
 
-  const email = activeRestaurant?.kitchenLogin?.email || 'kitchen@saravana.com';
+  const email = activeRestaurant?.kitchenLogin?.email || '';
 
   return (
     <section className="panel-view active" style={{ padding: '0 0 24px 0', width: '100%' }}>

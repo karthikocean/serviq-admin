@@ -80,7 +80,7 @@ export default function MenuPanel({
   const [paginatedMenu, setPaginatedMenu] = useState([]);
   const [liveCategories, setLiveCategories] = useState(Array.isArray(categories) ? categories : []);
   const [totalItems, setTotalItems] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
   const [totalPages, setTotalPages] = useState(1);
 
@@ -167,8 +167,10 @@ export default function MenuPanel({
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    const current = page + 1;
+    const total = Math.max(1, totalPages || 1);
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(total, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
     }
@@ -254,7 +256,7 @@ export default function MenuPanel({
             onChange={(e) => {
               const val = e.target.value.replace(/^\s+/, '');
               setMenuSearch(val);
-              setPage(1);
+              setPage(0);
             }}
             style={{
               width: '100%',
@@ -271,7 +273,7 @@ export default function MenuPanel({
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
-      <div className="menu-table-wrapper" style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+      <div className="menu-table-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', maxHeight: 'none', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <table className="menu-items-table" style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>
@@ -297,7 +299,7 @@ export default function MenuPanel({
               return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
                   <td className="sticky-col-1" style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
-                    {(page - 1) * limit + index + 1}
+                    {page * limit + index + 1}
                   </td>
                   {/* 1. Image */}
                   <td className="sticky-col-2" style={{ padding: '12px 12px' }}>
@@ -456,17 +458,17 @@ export default function MenuPanel({
       {/* Pagination Controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '10px 20px', background: '#fff', borderRadius: '10px', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: '13px', color: '#64748b' }}>
-          Showing {totalItems === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, totalItems)} of {totalItems} entries
+          Showing {totalItems === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalItems)} of {totalItems} entries
         </div>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
             type="button"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
             style={{
               padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: page === 1 ? '#f8fafc' : '#ffffff',
-              color: page === 1 ? '#cbd5e1' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer',
+              border: '1px solid #e2e8f0', background: page === 0 ? '#f8fafc' : '#ffffff',
+              color: page === 0 ? '#cbd5e1' : '#334155', cursor: page === 0 ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >
@@ -477,16 +479,16 @@ export default function MenuPanel({
             <button
               key={pageNum}
               type="button"
-              onClick={() => setPage(pageNum)}
+              onClick={() => setPage(pageNum - 1)}
               style={{
                 minWidth: '32px',
                 height: '32px',
                 borderRadius: '8px',
                 fontSize: '13px',
-                fontWeight: page === pageNum ? 700 : 500,
-                border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                background: page === pageNum ? '#000000' : '#ffffff',
-                color: page === pageNum ? '#ffffff' : '#334155',
+                fontWeight: (page + 1) === pageNum ? 700 : 500,
+                border: (page + 1) === pageNum ? 'none' : '1px solid #e2e8f0',
+                background: (page + 1) === pageNum ? '#000000' : '#ffffff',
+                color: (page + 1) === pageNum ? '#ffffff' : '#334155',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}
@@ -497,12 +499,12 @@ export default function MenuPanel({
 
           <button
             type="button"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages || totalPages === 0}
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1 || totalPages === 0}
             style={{
               padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              border: '1px solid #e2e8f0', background: (page === totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-              color: (page === totalPages || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              border: '1px solid #e2e8f0', background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+              color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155', cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
               transition: 'all 0.15s ease'
             }}
           >

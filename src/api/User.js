@@ -1,15 +1,34 @@
 import apiClient from "../config";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
+const extractErrorMessage = (error, defaultMsg) => {
+  const errors = error?.response?.data?.errors;
+  if (Array.isArray(errors) && errors.length > 0) {
+    const detail = errors.map(e => e.message || e.msg).filter(Boolean).join(', ');
+    if (detail) return detail;
+  }
+  return error?.response?.data?.message || error?.message || defaultMsg;
+};
+
 class UserApi {
   async getUsers(params = {}) {
     try {
-      const response = await apiClient.get("/users", { params });
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+          cleanParams[key] = params[key];
+        }
+      });
+      // Backend API pagination starts from zero (page 0 is first page)
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to fetch users.";
+      const errorMessage = extractErrorMessage(error, "Failed to fetch users.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -19,12 +38,22 @@ class UserApi {
 
   async getStations(params = {}) {
     try {
-      const response = await apiClient.get("/users/stations", { params });
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+          cleanParams[key] = params[key];
+        }
+      });
+      // Backend API pagination starts from zero (page 0 is first page)
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      const response = await apiClient.get("/users/stations", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to fetch stations.";
+      const errorMessage = extractErrorMessage(error, "Failed to fetch stations.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -40,7 +69,7 @@ class UserApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to create user.";
+      const errorMessage = extractErrorMessage(error, "Failed to create user.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -56,7 +85,7 @@ class UserApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to update user.";
+      const errorMessage = extractErrorMessage(error, "Failed to update user.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -72,7 +101,7 @@ class UserApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to delete user.";
+      const errorMessage = extractErrorMessage(error, "Failed to delete user.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
@@ -88,7 +117,7 @@ class UserApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage = error?.response?.data?.message || "Failed to update password.";
+      const errorMessage = extractErrorMessage(error, "Failed to update password.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }

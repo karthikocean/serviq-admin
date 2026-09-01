@@ -16,17 +16,26 @@ export default function BranchManagement() {
 
   const userType = (userTypeStr || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = userRoleLower === 'admin' || userRoleLower === 'super admin' || userRoleLower === 'owner' || userRoleLower === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
 
-  // Strict check: Only Admin role can access branch management
-  if (!isAdmin) {
-    ShowNotifications.showAlertNotification("Access Denied: Branch Management is restricted to Admin role only.", false);
+  // Strict check: Only Restaurant Owner can access branch management
+  if (!isRestaurantOwner) {
+    ShowNotifications.showAlertNotification("Access Denied: Branch Management is restricted to Restaurant Owner only.", false);
     return <Navigate to="/dashboard" replace />;
   }
 
   const role = currentUser?.role || 'Admin';
   const hasPermission = (moduleName, action = 'view') => {
-    if (isAdmin) return true;
+    if (isRestaurantOwner) return true;
     const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};

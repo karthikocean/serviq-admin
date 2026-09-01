@@ -25,17 +25,20 @@ export default function Billing() {
   const fetchBillingData = async () => {
     setIsLoading(true);
 
-    const tablesRes = await BillingApi.getActiveTables({ branchId: selectedBranchId });
+    const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all';
+    const params = isSingleBranch ? { branchId: selectedBranchId } : { branchId: 'ALL' };
+
+    const tablesRes = await BillingApi.getActiveTables(params);
 
     let fetchedTables = [];
-    if (tablesRes.status && tablesRes.response.data) {
+    if (tablesRes.status && tablesRes.response?.data) {
       fetchedTables = tablesRes.response.data;
     }
 
     setBillingData(fetchedTables);
 
     if (fetchedTables.length > 0 && !selectedBillingTable) {
-      setSelectedBillingTable(fetchedTables[0].tableId);
+      setSelectedBillingTable(fetchedTables[0].tableId || fetchedTables[0]._id);
     } else if (fetchedTables.length === 0) {
       setSelectedBillingTable('');
     }

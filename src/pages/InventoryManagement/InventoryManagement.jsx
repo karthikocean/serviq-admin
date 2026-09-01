@@ -12,8 +12,8 @@ export default function InventoryManagement() {
   const planId = (activeRestaurant?.subscription?.planId || '').toLowerCase();
   const isPremium = planName.includes('premium') || planId.includes('premium') || planName.includes('enterprise') || planId.includes('enterprise');
 
-  // Interactive live preview toggle for admins
-  const [isPreviewUnlocked, setIsPreviewUnlocked] = useState(true);
+  // Interactive live preview toggle for admins (default false so non-premium plans are gated)
+  const [isPreviewUnlocked, setIsPreviewUnlocked] = useState(false);
 
   const handleInstantUpgradeToPremium = () => {
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
@@ -349,14 +349,14 @@ export default function InventoryManagement() {
          
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+        <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', paddingBottom: '6px' }}>
+          <table className="admin-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', color: '#0f172a' }}>
-                <th style={{ padding: '14px 18px', fontWeight: 800 }}>FEATURES & MODULES</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>BASIC (₹999/mo)</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center' }}>STANDARD (₹1,999/mo)</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', background: '#fff7ed', color: '#c2410c' }}>PREMIUM (₹4,999/mo)</th>
+              <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 18px', fontWeight: 800, color: '#ffffff' }}>FEATURES & MODULES</th>
+                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ffffff' }}>BASIC (₹999/mo)</th>
+                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ffffff' }}>STANDARD (₹1,999/mo)</th>
+                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ff7a00' }}>PREMIUM (₹4,999/mo)</th>
               </tr>
             </thead>
             <tbody>

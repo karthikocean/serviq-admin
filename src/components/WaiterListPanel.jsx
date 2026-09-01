@@ -50,17 +50,27 @@ export default function WaiterListPanel({
   setActivePage
 }) {
   const [waiterToDelete, setWaiterToDelete] = useState(null);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const limit = 10;
 
   // Map real staff or fallback to reference image list
   const realWaiters = staff.filter(s => s.role === 'Waiter');
 
   const getAssignedTableBadges = (waiterName, waiterId) => {
-    const assigned = tables.filter(t => t.assignedWaiterId === waiterId || t.assignedWaiter === waiterName || t.assignedWaiterName === waiterName);
+    const assigned = tables.filter(t => {
+      const assignedObj = typeof t.assignedWaiter === 'object' ? t.assignedWaiter : (typeof t.assignedWaiterId === 'object' ? t.assignedWaiterId : null);
+      const rawWId = assignedObj?._id || assignedObj?.id || t.assignedWaiterId || (typeof t.assignedWaiter === 'string' ? t.assignedWaiter : null);
+      const rawWName = assignedObj?.name || t.assignedWaiterName || (typeof t.assignedWaiter === 'string' ? t.assignedWaiter : null);
+
+      if (waiterId && rawWId && String(rawWId) === String(waiterId)) return true;
+      if (waiterName && rawWName && String(rawWName).trim().toLowerCase() === String(waiterName).trim().toLowerCase()) return true;
+      if (waiterId && rawWName && String(rawWName).trim().toLowerCase() === String(waiterId).trim().toLowerCase()) return true;
+      return false;
+    });
+
     return assigned.map(t => {
-      const num = t.id.replace(/\D/g, '');
-      return `T-${num ? num.padStart(2, '0') : '01'}`;
+      const tName = t.tableNumber || t.tableNo || t.id || t._id;
+      return tName.startsWith('Table') ? tName : `Table ${tName}`;
     });
   };
 
@@ -87,12 +97,13 @@ export default function WaiterListPanel({
     : defaultWaitersList.map((w, idx) => ({ ...w, sno: idx + 1 }));
 
   const totalPages = Math.ceil(displayWaiters.length / limit) || 1;
-  const paginatedWaiters = displayWaiters.slice((page - 1) * limit, page * limit);
+  const paginatedWaiters = displayWaiters.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -175,8 +186,8 @@ export default function WaiterListPanel({
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
         overflow: 'hidden'
       }}>
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
@@ -210,7 +221,7 @@ export default function WaiterListPanel({
             </thead>
             <tbody>
               {paginatedWaiters.map((w, index) => {
-                const globalIndex = (page - 1) * limit + index;
+                const globalIndex = page * limit + index;
                 const isActive = w.status === 'Active';
 
                 return (
@@ -381,22 +392,22 @@ export default function WaiterListPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {displayWaiters.length === 0 ? 0 : (page - 1) * limit + 1} to {Math.min(page * limit, displayWaiters.length)} of {displayWaiters.length} entries
+            Showing {displayWaiters.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, displayWaiters.length)} of {displayWaiters.length} entries
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page === 1 ? '#f8fafc' : '#ffffff',
-                color: page === 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -407,16 +418,16 @@ export default function WaiterListPanel({
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '32px',
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: page === pageNum ? 700 : 500,
-                  border: page === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: page === pageNum ? '#000000' : '#ffffff',
-                  color: page === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -427,17 +438,17 @@ export default function WaiterListPanel({
 
             <button
               type="button"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (page >= totalPages || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (page >= totalPages || totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (page >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

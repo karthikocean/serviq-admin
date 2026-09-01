@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import { isModuleAllowedForPlan } from '../config/initialData';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
+import NotificationModal from '../components/NotificationModal';
 
 export default function AdminLayout() {
   const {
@@ -26,6 +28,7 @@ export default function AdminLayout() {
   const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(false);
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [dateTimeStr, setDateTimeStr] = useState('');
 
   // Live Clock
@@ -50,17 +53,37 @@ export default function AdminLayout() {
   }, []);
 
   const restaurantName = activeRestaurant?.name || 'Serviq';
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser?.role?.roleName : (currentUser?.role || '');
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? (currentUser?.role?.roleName || currentUser?.role?.name) : (currentUser?.role || '');
   const role = roleStr || 'Admin';
   const userType = (currentUser?.userType || roleStr || '').toUpperCase();
   const userRoleLower = (roleStr || '').toLowerCase();
-  const isAdmin = userType === 'SUPER ADMIN' || userType === 'RESTAURANT_OWNER';
+
+  const isRestaurantOwner = 
+    userType === 'RESTAURANT_OWNER' || 
+    userType === 'OWNER' || 
+    userType === 'SUPER ADMIN' || 
+    userType === 'SUPER_ADMIN' || 
+    userRoleLower === 'restaurant_owner' || 
+    userRoleLower === 'restaurant owner' || 
+    userRoleLower === 'owner' || 
+    userRoleLower === 'super admin' || 
+    userRoleLower === 'super_admin';
+
+  const isAdmin = 
+    isRestaurantOwner ||
+    userType === 'ADMIN' || 
+    userRoleLower === 'admin';
 
   // Permission checks
   const hasPermission = (moduleName, action = 'view') => {
-    // Branch management is ONLY accessible to Admin role
-    if (moduleName === 'branch-management' || moduleName === 'branches') {
-      return isAdmin;
+    // Branch management and Plans management are strictly ONLY accessible to Restaurant Owner
+    if (
+      moduleName === 'branch-management' || 
+      moduleName === 'branches' || 
+      moduleName === 'plans-management' || 
+      moduleName === 'plans'
+    ) {
+      return isRestaurantOwner;
     }
 
     if (isAdmin) return true;
@@ -77,10 +100,28 @@ export default function AdminLayout() {
     return !!modulePermissions[action];
   };
 
+  const rawSubPlanName = activeRestaurant?.subscription?.planName || 
+    activeRestaurant?.subscription?.planId || 
+    activeRestaurant?.plan || 
+    'Premium';
+  const cleanSubPlan = String(rawSubPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Premium';
+  const currentSubPlan = cleanSubPlan;
+
   const isTabAllowed = (permissionKey) => {
-    // If tab is branch-management or plans, ONLY Admin role (RESTAURANT_OWNER/SUPER_ADMIN) can view it
-    if (permissionKey === 'branch-management' || permissionKey === 'plans-management') {
-      return isAdmin;
+    // 1. Subscription Plan Module Gate:
+    // Only modules allowed by the current active plan are shown in sidebar
+    if (!isModuleAllowedForPlan(permissionKey, activeRestaurant || currentSubPlan)) {
+      return false;
+    }
+
+    // 2. Branch & Plans Management: restricted to Restaurant Owner only
+    if (
+      permissionKey === 'branch-management' || 
+      permissionKey === 'branches' || 
+      permissionKey === 'plans-management' || 
+      permissionKey === 'plans'
+    ) {
+      return isRestaurantOwner;
     }
 
     if (isAdmin || currentUser?.userType === 'BRANCH_ADMIN') return true;
@@ -173,8 +214,25 @@ export default function AdminLayout() {
     }
   }, [pathname]);
 
-  const currentSubPlan = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
-  const isCurrentPremium = currentSubPlan.includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
+  const isCurrentPremium = String(currentSubPlan).toLowerCase().includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
+
+  // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
+  if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Protect Plan-Gated Routes:
+  // 1. Inventory Management: Only Premium / Enterprise (Disabled for Basic & Standard)
+  if (isInventoryActive && !isModuleAllowedForPlan('inventory', activeRestaurant || currentSubPlan)) {
+    ShowNotifications.showAlertNotification("Inventory Management is exclusive to the Premium Plan. Please upgrade your subscription to access this module.", false);
+    return <Navigate to="/plans-management" replace />;
+  }
+
+  // 2. Staff Management: Standard & Premium only (Disabled for Basic)
+  if (isStaffActive && !isModuleAllowedForPlan('staff_management', activeRestaurant || currentSubPlan)) {
+    ShowNotifications.showAlertNotification("Staff Management is not included in the Basic Plan. Please upgrade your subscription to access this module.", false);
+    return <Navigate to="/plans-management" replace />;
+  }
 
   return (
     <div id="dashboard-view" className="dashboard-wrapper">
@@ -183,7 +241,7 @@ export default function AdminLayout() {
         <div className="sidebar-header-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '24px 20px', gap: '2px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '-0.5px' }}>Serviq</h2>
           <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-            {activeRestaurant?.subscription?.planName || activeRestaurant?.plan || 'Standard'} Plan
+            {cleanSubPlan} Plan
           </span>
         </div>
 
@@ -423,17 +481,54 @@ export default function AdminLayout() {
             <h1 className="header-title">{getRouteTitle()}</h1>
             <span className="header-subtitle-date">{dateTimeStr}</span>
           </div>
-          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <BranchSearchDropdown />
-            <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <button
+              className="btn btn-notify"
+              style={{
+                position: 'relative',
+                background: '#fff7ed',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
+                width: '40px',
+                height: '40px',
+                minWidth: '40px',
+                minHeight: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              title="Quick Help & Notifications"
+              onClick={() => setIsNotificationModalOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: 'auto' }}>
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
               {pendingOrdersCount > 0 && (
-                <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  width: '9px',
+                  height: '9px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ea580c',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 1px #fed7aa'
+                }}></span>
               )}
             </button>
 
             {/* PROFILE DROPDOWN */}
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <button
                 style={{
                   background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
@@ -441,6 +536,8 @@ export default function AdminLayout() {
                   border: 'none',
                   width: '40px',
                   height: '40px',
+                  minWidth: '40px',
+                  minHeight: '40px',
                   borderRadius: '50%',
                   fontWeight: 800,
                   fontSize: '18px',
@@ -448,7 +545,10 @@ export default function AdminLayout() {
                   boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxSizing: 'border-box'
                 }}
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               >
@@ -537,6 +637,12 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* QUICK HELP NOTIFICATIONS MODAL */}
+      <NotificationModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+      />
     </div>
   );
 }

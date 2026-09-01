@@ -3,12 +3,14 @@ import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from '../components/SearchableSelect.jsx';
 
-import OverviewPanel from '../components/OverviewPanel';
+import OverviewPanel, { isTableOccupied } from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
 import MenuPanel from '../components/MenuPanel';
 import BillingPanel from '../components/BillingPanel';
 import BillingHistoryPanel from '../components/BillingHistoryPanel';
+import BillingHistory from './Billing/BillingHistory';
 import TablesPanel from '../components/TablesPanel';
 import WaiterListPanel from '../components/WaiterListPanel';
 import WaiterReportsPanel from '../components/WaiterReportsPanel';
@@ -22,6 +24,7 @@ import RolesPermissionsPanel from '../components/RolesPermissionsPanel';
 import CategoryListPanel from '../components/CategoryListPanel';
 import BranchManagementPanel from '../components/BranchManagementPanel';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
+import NotificationModal from '../components/NotificationModal';
 
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -335,6 +338,7 @@ export default function Admin() {
   const [sidebarUsersOpen, setSidebarUsersOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
 
   // Roles & Permissions state
   const [selectedRole, setSelectedRole] = useState('Waiter');
@@ -430,11 +434,29 @@ export default function Admin() {
   };
 
   const isTabAllowed = (tab) => {
+    const userRoleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+      ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+      : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+    const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+    const userTypeUpper = (userTypeStr || userRoleStr || '').toUpperCase();
+    const userRoleLower = (userRoleStr || '').toLowerCase();
+    const isOwner = 
+      userTypeUpper === 'RESTAURANT_OWNER' || 
+      userTypeUpper === 'OWNER' || 
+      userTypeUpper === 'SUPER ADMIN' || 
+      userTypeUpper === 'SUPER_ADMIN' || 
+      userRoleLower === 'restaurant_owner' || 
+      userRoleLower === 'restaurant owner' || 
+      userRoleLower === 'owner' || 
+      userRoleLower === 'super admin' || 
+      userRoleLower === 'super_admin';
+
     if (tab === 'branch-management' || tab === 'plans-management') {
-      return role === 'Admin' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN';
+      return isOwner;
     }
 
-    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'SUPER_ADMIN') {
+    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || isOwner) {
       return true;
     }
 
@@ -638,15 +660,77 @@ export default function Admin() {
 
   const pendingOrdersCount = filteredOrders.filter(o => o.status === 'new').length;
   const preparingOrdersCount = filteredOrders.filter(o => o.status === 'preparing').length;
-  const occupiedTablesCount = filteredTables.filter(t => t.status === 'Occupied').length;
+  const occupiedTablesCount = filteredTables.filter(t => isTableOccupied(t, filteredOrders)).length;
+
+  const resolveTableAssignedWaiter = (table, staffList = (activeRestaurant?.staff || [])) => {
+    if (!table) return null;
+    if (table.assignedWaiter && typeof table.assignedWaiter === 'object') {
+      const id = table.assignedWaiter._id || table.assignedWaiter.id;
+      const name = table.assignedWaiter.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && staffList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+    if (table.assignedWaiterId && typeof table.assignedWaiterId === 'object') {
+      const id = table.assignedWaiterId._id || table.assignedWaiterId.id;
+      const name = table.assignedWaiterId.name;
+      if (id || name) {
+        return {
+          id: id || name,
+          name: name || (id && staffList?.find(u => String(u._id || u.id) === String(id))?.name) || 'Assigned Waiter'
+        };
+      }
+    }
+
+    const rawId = table.assignedWaiterId || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null) || table.waiterId;
+    const rawName = table.assignedWaiterName || (typeof table.assignedWaiter === 'string' ? table.assignedWaiter : null);
+
+    if (!rawId && !rawName) return null;
+
+    if (staffList && staffList.length > 0) {
+      const found = staffList.find(u => {
+        const uId = String(u._id || u.id || '');
+        const uName = String(u.name || '').trim().toLowerCase();
+        if (rawId && uId === String(rawId)) return true;
+        if (rawName && uName === String(rawName).trim().toLowerCase()) return true;
+        if (rawId && uName === String(rawId).trim().toLowerCase()) return true;
+        return false;
+      });
+      if (found) {
+        return {
+          id: found._id || found.id,
+          name: found.name
+        };
+      }
+    }
+
+    if (rawName && rawName !== 'Unassigned' && rawName !== 'null' && rawName !== 'undefined') {
+      return { id: rawId || rawName, name: rawName };
+    }
+    if (rawId && isNaN(rawId) && typeof rawId === 'string' && !rawId.match(/^[0-9a-fA-F]{24}$/)) {
+      return { id: rawId, name: rawId };
+    }
+
+    return null;
+  };
 
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
     if (waiterId) {
-      const assignedTables = (activeRestaurant?.tables || []).filter(t => t.assignedWaiterId === waiterId);
-      setModalTableIds(assignedTables.map(t => t.id));
-      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId);
-      setModalCoverWaiterId(firstTableWithCover ? firstTableWithCover.tempWaiterId : '');
+      const staffList = activeRestaurant?.staff || [];
+      const selectedWaiter = staffList.find(s => String(s._id || s.id) === String(waiterId) || String(s.name) === String(waiterId));
+      const assignedTables = (activeRestaurant?.tables || []).filter(t => {
+        const assigned = resolveTableAssignedWaiter(t, staffList);
+        if (!assigned) return false;
+        return String(assigned.id) === String(waiterId) || 
+          (selectedWaiter && String(assigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase());
+      });
+      setModalTableIds(assignedTables.map(t => t.id || t._id));
+      const firstTableWithCover = assignedTables.find(t => t.tempWaiterId || t.coverWaiterId);
+      setModalCoverWaiterId(firstTableWithCover ? (firstTableWithCover.tempWaiterId || firstTableWithCover.coverWaiterId) : '');
     } else {
       setModalTableIds([]);
       setModalCoverWaiterId('');
@@ -916,18 +1000,19 @@ export default function Admin() {
                 </div>
                 <div className="form-group" style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>Assigned Waiter</label>
-                  <select
+                  <SearchableSelect
                     value={editOrderForm.waiter}
                     onChange={e => setEditOrderForm({ ...editOrderForm, waiter: e.target.value })}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'white', color: 'black' }}
-                  >
-                    <option value="Unassigned">Unassigned</option>
-                    {staff.filter(s => s.role === 'Waiter').map(s => (
-                      <option key={s.id} value={s.name} disabled={s.status === 'Off Duty'}>
-                        {getWaiterLabel(s)}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      { value: 'Unassigned', label: 'Unassigned' },
+                      ...staff.filter(s => s.role === 'Waiter').map(s => ({
+                        value: s.name,
+                        label: getWaiterLabel(s),
+                        isDisabled: s.status === 'Off Duty'
+                      }))
+                    ]}
+                    placeholder="Select Waiter..."
+                  />
                 </div>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-main)' }}>Notes</label>
@@ -1146,20 +1231,23 @@ export default function Admin() {
                     <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Category</label>
-                        <select value={menuForm.category} onChange={(e) => {
-                          if (e.target.value === 'custom') {
-                            setPreviousCategory(menuForm.category || 'Starters');
-                            setCustomCategoryInput('');
-                            setShowCustomCategoryModal(true);
-                          } else {
-                            setMenuForm({ ...menuForm, category: e.target.value });
-                          }
-                        }} required style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
-                          {allCategories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                          <option value="custom">+ Add Custom Category...</option>
-                        </select>
+                        <SearchableSelect
+                          value={menuForm.category}
+                          onChange={(e) => {
+                            if (e.target.value === 'custom') {
+                              setPreviousCategory(menuForm.category || 'Starters');
+                              setCustomCategoryInput('');
+                              setShowCustomCategoryModal(true);
+                            } else {
+                              setMenuForm({ ...menuForm, category: e.target.value });
+                            }
+                          }}
+                          options={[
+                            ...allCategories.map(cat => ({ value: cat, label: cat })),
+                            { value: 'custom', label: '+ Add Custom Category...' }
+                          ]}
+                          placeholder="Select Category..."
+                        />
                       </div>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Price (₹)</label>
@@ -1170,20 +1258,30 @@ export default function Admin() {
                     <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Food Type</label>
-                        <select value={menuForm.foodType} onChange={(e) => setMenuForm({ ...menuForm, foodType: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
-                          <option value="Veg">Veg</option>
-                          <option value="Non-Veg">Non-Veg</option>
-                          <option value="Egg">Egg</option>
-                          <option value="Vegan">Vegan</option>
-                        </select>
+                        <SearchableSelect
+                          value={menuForm.foodType}
+                          onChange={(e) => setMenuForm({ ...menuForm, foodType: e.target.value })}
+                          options={[
+                            { value: 'Veg', label: 'Veg' },
+                            { value: 'Non-Veg', label: 'Non-Veg' },
+                            { value: 'Egg', label: 'Egg' },
+                            { value: 'Vegan', label: 'Vegan' }
+                          ]}
+                          placeholder="Select Food Type..."
+                        />
                       </div>
                       <div className="form-group" style={{ flex: 1, minWidth: '150px', marginBottom: 0 }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', marginBottom: '8px', color: '#000000' }}>Status</label>
-                        <select value={menuForm.status} onChange={(e) => setMenuForm({ ...menuForm, status: e.target.value })} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', appearance: 'none', background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E") no-repeat right 12px center / 16px', fontSize: '14px', backgroundColor: '#fff' }}>
-                          <option value="Available">Available</option>
-                          <option value="Out of Stock">Out of Stock</option>
-                          <option value="Hidden">Hidden</option>
-                        </select>
+                        <SearchableSelect
+                          value={menuForm.status}
+                          onChange={(e) => setMenuForm({ ...menuForm, status: e.target.value })}
+                          options={[
+                            { value: 'Available', label: 'Available' },
+                            { value: 'Out of Stock', label: 'Out of Stock' },
+                            { value: 'Hidden', label: 'Hidden' }
+                          ]}
+                          placeholder="Select Status..."
+                        />
                       </div>
                     </div>
 
@@ -1322,10 +1420,10 @@ export default function Admin() {
           {/* Form Card matching Image 2 */}
           <div style={{ background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
             <form onSubmit={handleAddTableSubmit} style={{ width: '100%' }}>
-              {/* Field 1: Table Number / ID */}
+              {/* Field 1: Table Number  */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                  Table Number / ID
+                  Table Number 
                 </label>
                 <input
                   type="text"
@@ -1424,14 +1522,15 @@ export default function Admin() {
               {addTableForm.isEdit && (
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Status</label>
-                  <select
+                  <SearchableSelect
                     value={addTableForm.status || 'Free'}
                     onChange={(e) => setAddTableForm({ ...addTableForm, status: e.target.value })}
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', backgroundColor: '#ffffff', fontSize: '14px', color: '#0f172a' }}
-                  >
-                    <option value="Free">Free</option>
-                    <option value="Occupied">Occupied</option>
-                  </select>
+                    options={[
+                      { value: 'Free', label: 'Free' },
+                      { value: 'Occupied', label: 'Occupied' }
+                    ]}
+                    placeholder="Select Status..."
+                  />
                 </div>
               )}
 
@@ -1518,10 +1617,15 @@ export default function Admin() {
 
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Role</label>
-                    <select value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })} required>
-                      <option value="Waiter">Waiter</option>
-                      <option value="Kitchen">Kitchen</option>
-                    </select>
+                    <SearchableSelect
+                      value={staffForm.role}
+                      onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}
+                      options={[
+                        { value: 'Waiter', label: 'Waiter' },
+                        { value: 'Kitchen', label: 'Kitchen' }
+                      ]}
+                      placeholder="Select Role..."
+                    />
                   </div>
                 </div>
 
@@ -1554,10 +1658,15 @@ export default function Admin() {
 
                 <div className="form-group" style={{ marginBottom: '20px', marginTop: '16px' }}>
                   <label>Duty Status</label>
-                  <select value={staffForm.status} onChange={(e) => setStaffForm({ ...staffForm, status: e.target.value })} required>
-                    <option value="On Duty">On Duty</option>
-                    <option value="Off Duty">Off Duty</option>
-                  </select>
+                  <SearchableSelect
+                    value={staffForm.status}
+                    onChange={(e) => setStaffForm({ ...staffForm, status: e.target.value })}
+                    options={[
+                      { value: 'On Duty', label: 'On Duty' },
+                      { value: 'Off Duty', label: 'Off Duty' }
+                    ]}
+                    placeholder="Select Duty Status..."
+                  />
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
@@ -1810,35 +1919,77 @@ export default function Admin() {
               <h1 className="header-title">{tabTitles[activeTab] || activeTab}</h1>
               <span className="header-subtitle-date">{dateTimeStr}</span>
             </div>
-            <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <BranchSearchDropdown />
-              <button className="btn btn-notify" style={{ position: 'relative' }} onClick={() => ShowNotifications.showAlertNotification('No new notifications.', false)}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                {pendingOrdersCount > 0 && (
-                  <div style={{ position: 'absolute', top: '6px', right: '6px', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></div>
-                )}
-              </button>
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <BranchSearchDropdown />
+            <button
+              className="btn btn-notify"
+              style={{
+                position: 'relative',
+                background: '#fff7ed',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
+                width: '40px',
+                height: '40px',
+                minWidth: '40px',
+                minHeight: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                flexShrink: 0,
+                padding: 0,
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              title="Quick Help & Notifications"
+              onClick={() => setIsNotificationModalOpen(true)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: 'auto' }}>
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              {pendingOrdersCount > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  width: '9px',
+                  height: '9px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ea580c',
+                  border: '2px solid #ffffff',
+                  boxShadow: '0 0 0 1px #fed7aa'
+                }}></span>
+              )}
+            </button>
 
-              {/* PROFILE DROPDOWN */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  style={{
-                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                    color: 'white',
-                    border: 'none',
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    fontWeight: 800,
-                    fontSize: '18px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                >
+            {/* PROFILE DROPDOWN */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button
+                style={{
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  color: 'white',
+                  border: 'none',
+                  width: '40px',
+                  height: '40px',
+                  minWidth: '40px',
+                  minHeight: '40px',
+                  borderRadius: '50%',
+                  fontWeight: 800,
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxSizing: 'border-box'
+                }}
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              >
                   {name.charAt(0).toUpperCase()}
                 </button>
 
@@ -1931,10 +2082,17 @@ export default function Admin() {
                   activeRestaurant={activeRestaurant}
                   orders={filteredOrders}
                   tables={filteredTables}
+                  staff={staff}
+                  allOrders={orders}
+                  allTables={tables}
+                  allStaff={staff}
                   todayRevenue={todayRevenue}
                   pendingOrdersCount={pendingOrdersCount}
                   occupiedTablesCount={occupiedTablesCount}
                   setActiveTab={setActiveTab}
+                  selectedBranchId={selectedBranchId}
+                  onSelectBranch={setSelectedBranchId}
+                  branches={branches}
                 />
               )}
               {activeTab === 'branch-management' && (
@@ -1958,6 +2116,7 @@ export default function Admin() {
                   activeRestaurant={activeRestaurant}
                   updateOrderStatus={updateOrderStatus}
                   plan={plan}
+                  currentUser={currentUser}
                 />
               )}
               {activeTab === 'menu' && (
@@ -1986,10 +2145,7 @@ export default function Admin() {
                 />
               )}
               {activeTab === 'billing-history' && (
-                <BillingHistoryPanel
-                  billingHistory={activeRestaurant?.billingHistory || []}
-                  branches={activeRestaurant?.branches || []}
-                />
+                <BillingHistory />
               )}
               {(activeTab === 'tables' || activeTab === 'qr-code-config') && (
                 <TablesPanel
@@ -2091,28 +2247,15 @@ export default function Admin() {
             {/* Waiter Selection */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>Select Waiter</label>
-              <select
+              <SearchableSelect
                 value={modalWaiterId}
                 onChange={e => loadWaiterAssignments(e.target.value)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border)',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-main)',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  outline: 'none',
-                  width: '100%'
-                }}
-              >
-                <option value="" disabled>Select a Waiter</option>
-                {staff.filter(s => s.role === 'Waiter').map(s => (
-                  <option key={s.id} value={s.name}>
-                    {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
-                  </option>
-                ))}
-              </select>
+                options={staff.filter(s => s.role === 'Waiter').map(s => ({
+                  value: s.name,
+                  label: `${s.name} (${s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})`
+                }))}
+                placeholder="Select a Waiter..."
+              />
             </div>
 
             {/* Tables Selection */}
@@ -2130,86 +2273,94 @@ export default function Admin() {
                 backgroundColor: 'var(--bg-primary)'
               }}>
                 {tables.map(table => {
-                  const isChecked = modalTableIds.includes(table.id);
-                  // Check if currently assigned to another waiter
-                  const currentlyAssigned = table.assignedWaiterId ? staff.find(s => s.id === table.assignedWaiterId) : null;
-                  const isAssignedToOther = currentlyAssigned && currentlyAssigned.id !== modalWaiterId;
+                  const tId = table.id || table._id;
+                  const currentlyAssigned = resolveTableAssignedWaiter(table, staff);
+                  const selectedWaiter = staff.find(s => String(s._id || s.id) === String(modalWaiterId) || String(s.name) === String(modalWaiterId));
+                  const isAssignedToThisWaiter = currentlyAssigned && (
+                    String(currentlyAssigned.id) === String(modalWaiterId) ||
+                    (selectedWaiter && String(currentlyAssigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase())
+                  );
+                  const isAssignedToOther = currentlyAssigned && !isAssignedToThisWaiter;
+                  const isChecked = modalTableIds.includes(tId);
+                  const tableNameStr = `Table ${table.tableNumber || table.tableNo || tId}`;
 
                   return (
-                    <label
-                      key={table.id}
+                    <div
+                      key={tId}
+                      onClick={(e) => {
+                        if (isAssignedToOther) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                        }
+                      }}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: '10px',
                         fontSize: '13px',
                         fontWeight: '600',
-                        cursor: 'pointer',
-                        padding: '4px 0',
-                        color: 'var(--text-main)'
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: isAssignedToOther ? '1.5px solid #fecaca' : (isChecked ? '1.5px solid #ff7a00' : '1px solid var(--border)'),
+                        backgroundColor: isAssignedToOther ? '#fef2f2' : (isChecked ? '#fff7ed' : '#ffffff'),
+                        cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease',
+                        opacity: isAssignedToOther ? 0.85 : 1
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
+                        disabled={isAssignedToOther}
                         onChange={e => {
+                          if (isAssignedToOther) {
+                            ShowNotifications.showAlertNotification(`${tableNameStr} is already assigned to waiter "${currentlyAssigned.name}".`, false);
+                            return;
+                          }
                           if (e.target.checked) {
-                            setModalTableIds([...modalTableIds, table.id]);
+                            setModalTableIds([...modalTableIds, tId]);
                           } else {
-                            setModalTableIds(modalTableIds.filter(id => id !== table.id));
+                            setModalTableIds(modalTableIds.filter(id => id !== tId));
                           }
                         }}
                         style={{
                           accentColor: 'var(--primary)',
                           width: '16px',
                           height: '16px',
-                          cursor: 'pointer'
+                          cursor: isAssignedToOther ? 'not-allowed' : 'pointer',
+                          flexShrink: 0
                         }}
                       />
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{table.id} <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({table.seats} seats)</span></span>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '6px' }}>
+                          <span style={{ color: isAssignedToOther ? '#991b1b' : 'var(--text-main)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {tableNameStr}
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                            {table.seats || table.seatingCapacity || 2} seats
+                          </span>
+                        </div>
                         {isAssignedToOther && (
-                          <span style={{ fontSize: '10px', color: '#f59e0b', fontWeight: '500' }}>
-                            Assigned: {currentlyAssigned.name}
+                          <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
+                            🚫 Already assigned to {currentlyAssigned.name}
+                          </span>
+                        )}
+                        {!isAssignedToOther && isChecked && (
+                          <span style={{ fontSize: '10px', color: '#ea580c', fontWeight: 700, marginTop: '2px', lineHeight: '1.2' }}>
+                            ✓ Assigned to this waiter
+                          </span>
+                        )}
+                        {!isAssignedToOther && !isChecked && (
+                          <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 600, marginTop: '2px', lineHeight: '1.2' }}>
+                            Available
                           </span>
                         )}
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-
-            {/* Cover Waiter Selection */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>
-                Cover Waiter
-              </label>
-              <select
-                value={modalCoverWaiterId}
-                onChange={e => setModalCoverWaiterId(e.target.value)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  border: '1.5px solid var(--border)',
-                  backgroundColor: 'var(--bg-primary)',
-                  color: 'var(--text-main)',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  outline: 'none',
-                  width: '100%'
-                }}
-              >
-                <option value="">No Cover Waiter</option>
-                {staff
-                  .filter(s => s.role === 'Waiter' && s.id !== modalWaiterId)
-                  .map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})
-                    </option>
-                  ))}
-              </select>
-
             </div>
 
             {/* Form Actions */}
@@ -2405,25 +2556,16 @@ export default function Admin() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)' }}>Payment Type</label>
-                <select
+                <SearchableSelect
                   value={offlinePaymentType}
                   onChange={e => setOfflinePaymentType(e.target.value)}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1.5px solid var(--border)',
-                    backgroundColor: 'var(--bg-primary)',
-                    color: 'var(--text-main)',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    outline: 'none',
-                    width: '100%'
-                  }}
-                >
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card</option>
-                  <option value="UPI">UPI</option>
-                </select>
+                  options={[
+                    { value: 'Cash', label: 'Cash' },
+                    { value: 'Card', label: 'Card' },
+                    { value: 'UPI', label: 'UPI' }
+                  ]}
+                  placeholder="Select Payment Type..."
+                />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1.5px solid var(--border)', paddingTop: '16px', marginTop: '10px' }}>
@@ -2727,6 +2869,12 @@ export default function Admin() {
             </div>
           </Modal>
         )}
+
+        {/* QUICK HELP NOTIFICATIONS MODAL */}
+        <NotificationModal
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+        />
       </main>
     </div>
   );

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useAppState } from '../config/AppContext';
 import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -43,6 +45,20 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 export default function UserListPanel() {
+  const { currentUser, selectedBranchId } = useAppState();
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase();
+  const userType = (userTypeStr || '').toUpperCase();
+  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const currentBranchId = typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId;
+  const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
+    ? selectedBranchId
+    : currentBranchId;
+
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
@@ -53,12 +69,105 @@ export default function UserListPanel() {
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
 
+  const DEFAULT_STAFF_ROLES = [
+    { _id: 'Branch manager', roleName: 'Branch manager' },
+    { _id: 'Kitchen', roleName: 'Kitchen' },
+    { _id: 'Waiter', roleName: 'Waiter' }
+  ];
+
+  const mapToStandardRoles = (rolesFromApi = []) => {
+    const targetRoles = [
+      { key: 'Branch manager', displayName: 'Branch manager', aliases: ['branch manager', 'manager', 'branch admin', 'branch_admin', 'admin'] },
+      { key: 'Kitchen', displayName: 'Kitchen', aliases: ['kitchen', 'kitchen staff', 'chef', 'cook'] },
+      { key: 'Waiter', displayName: 'Waiter', aliases: ['waiter', 'server', 'captain', 'steward'] }
+    ];
+
+    return targetRoles.map(target => {
+      const found = (rolesFromApi || []).find(r => {
+        const name = (r.roleName || r.name || '').toLowerCase().trim();
+        return target.aliases.some(a => name === a || name.includes(a));
+      });
+
+      if (found) {
+        return {
+          _id: found._id || found.id || target.displayName,
+          roleName: target.displayName,
+          originalRoleName: found.roleName || found.name
+        };
+      }
+
+      return {
+        _id: target.displayName,
+        roleName: target.displayName
+      };
+    });
+  };
+
+  const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(String(id || '').trim());
+
+  const ensureValidRoleId = async (targetRoleIdOrName, currentRoles = []) => {
+    if (isObjectId(targetRoleIdOrName)) return targetRoleIdOrName;
+
+    const clean = String(targetRoleIdOrName || '').toLowerCase().trim();
+    const matched = (currentRoles || []).find(r => {
+      if (!isObjectId(r._id)) return false;
+      const name = String(r.roleName || r.name || '').toLowerCase().trim();
+      if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+      if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+      if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+      return name === clean;
+    });
+
+    if (matched && isObjectId(matched._id)) return matched._id;
+
+    try {
+      const serverRoles = await RoleApi.getRoles();
+      if (serverRoles?.status && Array.isArray(serverRoles.response.data)) {
+        const sMatch = serverRoles.response.data.find(r => {
+          if (!isObjectId(r._id)) return false;
+          const name = String(r.roleName || r.name || '').toLowerCase().trim();
+          if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
+          if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
+          if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
+          return name === clean;
+        });
+        if (sMatch && isObjectId(sMatch._id)) return sMatch._id;
+      }
+    } catch (e) {
+      console.error("Error checking roles:", e);
+    }
+
+    let roleTitle = 'Branch manager';
+    if (clean.includes('kitchen')) roleTitle = 'Kitchen';
+    else if (clean.includes('waiter')) roleTitle = 'Waiter';
+
+    try {
+      const createRes = await RoleApi.createRole({
+        roleName: roleTitle,
+        permissions: {
+          dashboard: { view: true, add: true, edit: true, delete: false },
+          orders: { view: true, add: true, edit: true, delete: false },
+          menu: { view: true, add: false, edit: false, delete: false },
+          tables: { view: true, add: true, edit: true, delete: false }
+        }
+      }, true);
+      const createdId = createRes?.response?.data?._id || createRes?.response?.data?.id;
+      if (createdId && isObjectId(createdId)) {
+        return createdId;
+      }
+    } catch (createErr) {
+      console.error("Error creating role:", createErr);
+    }
+
+    return targetRoleIdOrName;
+  };
+
   const [apiUsers, setApiUsers] = useState([]);
   const [apiBranches, setApiBranches] = useState([]);
-  const [apiRoles, setApiRoles] = useState([]);
+  const [apiRoles, setApiRoles] = useState(DEFAULT_STAFF_ROLES);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const limit = 10;
@@ -82,7 +191,30 @@ export default function UserListPanel() {
       setTotalRecords(usersRes.response.total || 0);
     }
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
-    if (rolesRes?.status) setApiRoles(rolesRes.response.data || []);
+    if (rolesRes?.status && Array.isArray(rolesRes.response.data)) {
+      const mapped = mapToStandardRoles(rolesRes.response.data);
+      setApiRoles(mapped);
+
+      const missing = mapped.filter(r => !isObjectId(r._id));
+      if (missing.length > 0) {
+        Promise.all(missing.map(mr => RoleApi.createRole({
+          roleName: mr.roleName,
+          permissions: {
+            dashboard: { view: true, add: true, edit: true, delete: false },
+            orders: { view: true, add: true, edit: true, delete: false },
+            menu: { view: true, add: false, edit: false, delete: false },
+            tables: { view: true, add: true, edit: true, delete: false }
+          }
+        }, true))).then(async () => {
+          const freshRolesRes = await RoleApi.getRoles();
+          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data)) {
+            setApiRoles(mapToStandardRoles(freshRolesRes.response.data));
+          }
+        }).catch(err => console.error("Auto-seeding roles error:", err));
+      }
+    } else {
+      setApiRoles(DEFAULT_STAFF_ROLES);
+    }
     setIsLoading(false);
   };
 
@@ -96,7 +228,8 @@ export default function UserListPanel() {
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, page - Math.floor(maxVisible / 2));
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(totalPages, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
       startPage = Math.max(1, endPage - maxVisible + 1);
@@ -120,9 +253,12 @@ export default function UserListPanel() {
 
   const openAddUser = () => {
     setEditingUserId(null);
+    const defaultBranch = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : (activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     setUserForm({
       name: '',
-      branchId: '',
+      branchId: defaultBranch || '',
       roleId: '',
       status: 'Active',
       phone: '',
@@ -135,9 +271,10 @@ export default function UserListPanel() {
 
   const openEditUser = (user) => {
     setEditingUserId(user._id);
+    const userBranch = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
     setUserForm({
       name: user.name || '',
-      branchId: (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : ''),
+      branchId: (!isAdmin && currentBranchId) ? currentBranchId : (userBranch || (apiBranches.length > 0 ? apiBranches[0]._id : '')),
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
       status: user.isActive ? 'Active' : 'Inactive',
       phone: user.phoneNumber || '',
@@ -196,12 +333,13 @@ export default function UserListPanel() {
       return;
     }
 
-    const roleName = apiRoles.find(r => r._id === userForm.roleId)?.roleName || '';
+    const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
+    const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
 
     const payload = {
       name: userForm.name.trim(),
-      roleId: userForm.roleId,
+      roleId: resolvedRoleId,
       branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
@@ -259,7 +397,8 @@ export default function UserListPanel() {
       const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
       const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
       const uRole = u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-      const uBranch = u.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+      const branchObj = u.branchId?.branchName ? u.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+      const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
       return [
         `"${u.name}"`,
         `"${uBranch}"`,
@@ -284,27 +423,46 @@ export default function UserListPanel() {
 
   if (viewState === 'form') {
     return (
-      <section className="panel-view active" style={{ paddingBottom: '60px', width: '100%' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <button 
-            type="button"
-            onClick={() => setViewState('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: '#0f172a'
-            }}
-          >
-            <ArrowLeftIcon size={14} /> Back to Users List
-          </button>
+      <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '20px 28px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewState('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                {editingUserId ? 'Edit User Account' : 'Create User Account'}
+              </h2>
+            </div>
+          </div>
         </div>
 
         <div style={{
@@ -316,13 +474,6 @@ export default function UserListPanel() {
           width: '100%',
           boxSizing: 'border-box'
         }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0', fontFamily: "'Outfit', sans-serif" }}>
-            {editingUserId ? 'Edit User Account' : 'Create User Account'}
-          </h2>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 24px 0' }}>
-            {editingUserId ? 'Update user credentials, role, and branch assignment' : 'Add new administrator or branch staff to the system'}
-          </p>
-
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
@@ -357,21 +508,43 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
-                  value={userForm.branchId}
-                  onChange={e => {
-                    setUserForm({ ...userForm, branchId: e.target.value });
-                    if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                  }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.branchId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="" disabled>Select a branch...</option>
-                  {apiBranches.map(b => (
-                    <option key={b._id} value={b._id}>
-                      {b.branchName} ({b.branchCode})
-                    </option>
-                  ))}
-                </select>
+                {(() => {
+                  const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
+                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                    : null;
+                  const currentBranchObj = headerBranchObj 
+                    || allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId))
+                    || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))
+                    || (allBranchesList.length > 0 ? allBranchesList[0] : null);
+                  const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
+
+                  return (
+                    <>
+                      <SearchableSelect
+                        value={effectiveVal}
+                        onChange={e => {
+                          setUserForm({ ...userForm, branchId: e.target.value });
+                          if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                        }}
+                        isDisabled={isLocked}
+                        options={allBranchesList.length === 0 ? [
+                          { value: '', label: 'Main Branch' }
+                        ] : allBranchesList.map(b => ({
+                          value: b._id || b.id,
+                          label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                        }))}
+                        placeholder="Select Branch..."
+                      />
+                      {isLocked && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                          Branch is locked to currently selected branch.
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
                 {formErrors.branchId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.branchId}
@@ -385,19 +558,18 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Access Role <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.roleId}
                   onChange={e => {
                     setUserForm({ ...userForm, roleId: e.target.value });
                     if (formErrors.roleId) setFormErrors({ ...formErrors, roleId: '' });
                   }}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: formErrors.roleId ? '1.5px solid #ef4444' : '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="" disabled>Select a role...</option>
-                  {apiRoles.map(r => (
-                    <option key={r._id} value={r._id}>{r.roleName}</option>
-                  ))}
-                </select>
+                  options={apiRoles.map(r => ({
+                    value: r._id,
+                    label: r.roleName
+                  }))}
+                  placeholder="Select a role..."
+                />
                 {formErrors.roleId && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.roleId}
@@ -409,14 +581,15 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Account Status <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={userForm.status}
                   onChange={e => setUserForm({ ...userForm, status: e.target.value })}
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#ffffff', boxSizing: 'border-box' }}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
+                  options={[
+                    { value: 'Active', label: 'Active' },
+                    { value: 'Inactive', label: 'Inactive' }
+                  ]}
+                  placeholder="Select Status..."
+                />
               </div>
             </div>
 
@@ -608,7 +781,7 @@ export default function UserListPanel() {
               onChange={e => {
                 const val = e.target.value.replace(/^\s+/, '');
                 setSearchQuery(val);
-                setPage(1);
+                setPage(0);
               }}
               style={{
                 width: '100%',
@@ -621,49 +794,36 @@ export default function UserListPanel() {
               }}
             />
           </div>
-          <select
-            value={roleFilter}
-            onChange={e => { setRoleFilter(e.target.value); setPage(1); }}
-            style={{
-              padding: '10px 16px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '14px',
-              background: '#ffffff',
-              minWidth: '200px',
-              cursor: 'pointer',
-              color: '#0f172a',
-              outline: 'none'
-            }}
-          >
-            <option value="All">All Roles</option>
-            {apiRoles.map(r => (
-              <option key={r._id} value={r._id}>{r.roleName}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            style={{
-              padding: '10px 16px',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              fontSize: '14px',
-              background: '#ffffff',
-              minWidth: '150px',
-              cursor: 'pointer',
-              color: '#0f172a',
-              outline: 'none'
-            }}
-          >
-            <option value="All">All Statuses</option>
-            <option value="Active">Active Users</option>
-            <option value="Inactive">Inactive Users</option>
-          </select>
+          <div style={{ minWidth: '180px' }}>
+            <SearchableSelect
+              value={roleFilter}
+              onChange={e => { setRoleFilter(e.target.value); setPage(0); }}
+              options={[
+                { value: 'All', label: 'All Roles' },
+                ...apiRoles.map(r => ({
+                  value: r._id,
+                  label: r.roleName
+                }))
+              ]}
+              placeholder="Filter Role..."
+            />
+          </div>
+          <div style={{ minWidth: '160px' }}>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
+              options={[
+                { value: 'All', label: 'All Statuses' },
+                { value: 'Active', label: 'Active Users' },
+                { value: 'Inactive', label: 'Inactive Users' }
+              ]}
+              placeholder="Filter Status..."
+            />
+          </div>
         </div>
 
-        <div style={{ width: '100%', overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
@@ -697,7 +857,8 @@ export default function UserListPanel() {
                 const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
                 const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
-                const uBranchName = user.branchId?.branchName || (uBranchId ? (apiBranches.find(b => b._id === uBranchId)?.branchName || uBranchId) : 'All Branches');
+                const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+                const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
                 
                 let roleBadgeStyle = {
                   display: 'inline-block',
@@ -753,7 +914,7 @@ export default function UserListPanel() {
                     onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
                   >
                     <td style={{ padding: '16px 20px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                      {(page - 1) * limit + index + 1}
+                      {page * limit + index + 1}
                     </td>
                     <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
                       {user.name}
@@ -879,24 +1040,24 @@ export default function UserListPanel() {
         }}>
           {/* Left Info Text */}
           <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-            Showing {totalRecords === 0 ? 0 : ((page - 1) * limit) + 1} to {Math.min(page * limit, totalRecords)} of {totalRecords} entries
+            Showing {totalRecords === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, totalRecords)} of {totalRecords} entries
           </div>
 
           {/* Right Pagination Buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
               type="button"
-              disabled={page === 1}
-              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page === 1 ? '#f8fafc' : '#ffffff',
-                color: page === 1 ? '#cbd5e1' : '#334155',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '0.82rem',
                 fontWeight: '600',
-                cursor: page === 1 ? 'not-allowed' : 'pointer',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -907,19 +1068,19 @@ export default function UserListPanel() {
               <button
                 key={pageNum}
                 type="button"
-                onClick={() => setPage(pageNum)}
+                onClick={() => setPage(pageNum - 1)}
                 style={{
                   minWidth: '34px',
                   height: '34px',
                   padding: '0 8px',
                   borderRadius: '8px',
-                  border: pageNum === page ? 'none' : '1px solid #e2e8f0',
-                  background: pageNum === page ? '#000000' : '#ffffff',
-                  color: pageNum === page ? '#ffffff' : '#334155',
+                  border: pageNum === page + 1 ? 'none' : '1px solid #e2e8f0',
+                  background: pageNum === page + 1 ? '#000000' : '#ffffff',
+                  color: pageNum === page + 1 ? '#ffffff' : '#334155',
                   fontSize: '0.85rem',
                   fontWeight: '700',
                   cursor: 'pointer',
-                  boxShadow: pageNum === page ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                  boxShadow: pageNum === page + 1 ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -929,17 +1090,17 @@ export default function UserListPanel() {
 
             <button
               type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages - 1 || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: page >= totalPages ? '#f8fafc' : '#ffffff',
-                color: page >= totalPages ? '#cbd5e1' : '#334155',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '0.82rem',
                 fontWeight: '600',
-                cursor: page >= totalPages ? 'not-allowed' : 'pointer',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
