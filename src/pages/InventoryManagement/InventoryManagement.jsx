@@ -12,8 +12,8 @@ export default function InventoryManagement() {
   const planId = (activeRestaurant?.subscription?.planId || '').toLowerCase();
   const isPremium = planName.includes('premium') || planId.includes('premium') || planName.includes('enterprise') || planId.includes('enterprise');
 
-  // Interactive live preview toggle for admins
-  const [isPreviewUnlocked, setIsPreviewUnlocked] = useState(true);
+  // Interactive live preview toggle for admins (default false so non-premium plans are gated)
+  const [isPreviewUnlocked, setIsPreviewUnlocked] = useState(false);
 
   const handleInstantUpgradeToPremium = () => {
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {

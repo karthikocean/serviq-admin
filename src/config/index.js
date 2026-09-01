@@ -14,16 +14,16 @@ switch (APP_ENV) {
     break;
 
   case "production":
-    IMAGE_BASE_URL = "https://api.serviq.tech/public";
-    BASE_URL = "https://api.serviq.tech/api/admin";
-    server = "https://api.serviq.tech";
+    IMAGE_BASE_URL = "http://65.0.84.181:4000/public";
+    BASE_URL = "http://65.0.84.181:4000/api/admin";
+    server = "http://65.0.84.181:4000";
     break;
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.1.12:5000/public";
-    BASE_URL = "http://192.168.1.12:5000/api/admin";
-    server = "http://192.168.1.12:5000";
+    IMAGE_BASE_URL = "http://192.168.88.5:5000/public";
+    BASE_URL = "http://192.168.88.5:5000/api/admin";
+    server = "http://192.168.88.5:5000";
     break;
 }
 

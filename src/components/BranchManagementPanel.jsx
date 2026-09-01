@@ -12,6 +12,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
+import { getPlanBranchLimit } from '../config/initialData';
 import {
   sanitizeName,
   sanitizeMobile,
@@ -266,26 +267,72 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
   }, []);
 
+  const [subDashboard, setSubDashboard] = useState(null);
+
+  const fetchLiveSubscription = useCallback(async () => {
+    try {
+      const res = await SubscriptionApi.getDashboard();
+      if (res && res.status && res.response) {
+        setSubDashboard(res.response.data || res.response);
+      }
+    } catch (err) {
+      console.warn("BranchManagementPanel: Failed to fetch subscription dashboard", err);
+    }
+  }, []);
+
   useEffect(() => {
     if (isRestaurantOwner) {
       fetchBranches();
+      fetchLiveSubscription();
     }
-  }, [isRestaurantOwner]);
+  }, [isRestaurantOwner, fetchLiveSubscription]);
 
   const branches = apiBranches;
 
-  // Subscription Plan details & calculations
+  // Subscription Plan details & calculations (Premium: max 8, Standard: max 5, Basic: max 3)
+  const activePlanData = subDashboard?.activePlan;
+  const branchCap = subDashboard?.branchCapacity;
+  const extraRate = subDashboard?.extraBranchRate;
+
   const sub = activeRestaurant?.subscription || {
-    planName: activeRestaurant?.plan || 'Standard',
-    baseBranchLimit: 3,
+    planName: activeRestaurant?.plan || 'Premium',
+    baseBranchLimit: 8,
     extraBranchSlots: 0,
-    extraBranchPrice: 699
+    extraBranchPrice: 499
   };
-  const baseBranchLimit = sub.baseBranchLimit || 3;
-  const extraBranchSlots = sub.extraBranchSlots || 0;
-  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
+
+  const rawPlanName = activePlanData?.planName || sub.planName || activeRestaurant?.plan || 'Premium';
+  const cleanPlanName = String(rawPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Premium';
+  const planName = cleanPlanName;
+
+  const liveBaseLimit = activePlanData?.baseBranchLimit || branchCap?.baseLimit;
+  const planBaseLimit = liveBaseLimit || getPlanBranchLimit(planName, 8);
+
+  // Reconcile baseBranchLimit (migrates stale stored defaults if needed)
+  const baseBranchLimit = (() => {
+    if (typeof liveBaseLimit === 'number' && liveBaseLimit > 0) {
+      return liveBaseLimit;
+    }
+    if (typeof sub.baseBranchLimit === 'number' && sub.baseBranchLimit > 0) {
+      const p = planName.toLowerCase();
+      if (p.includes('premium') && (sub.baseBranchLimit === 10 || sub.baseBranchLimit === 5)) return 8;
+      if (p.includes('standard') && (sub.baseBranchLimit === 3 || sub.baseBranchLimit === 8)) return 5;
+      if (p.includes('basic') && (sub.baseBranchLimit === 1 || sub.baseBranchLimit === 5)) return 3;
+      return sub.baseBranchLimit;
+    }
+    return planBaseLimit;
+  })();
+
+  const extraBranchSlots = branchCap?.extraSlots !== undefined 
+    ? branchCap.extraSlots 
+    : (sub.extraBranchSlots || 0);
+
+  const totalAllowedBranches = branchCap?.totalLimit !== undefined
+    ? branchCap.totalLimit
+    : (baseBranchLimit + extraBranchSlots);
+
   const remainingBranchSlots = Math.max(0, totalAllowedBranches - branches.length);
-  const extraBranchUnitPrice = sub.extraBranchPrice || 699;
+  const extraBranchUnitPrice = extraRate?.rate !== undefined ? extraRate.rate : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : 699));
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
   // Filtered branches
@@ -354,8 +401,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
 
-    // Check Plan Limits
+    // Check Plan Limits (Premium: max 8, Standard: max 5, Basic: max 3 + add-ons)
     if (branches.length >= totalAllowedBranches) {
+      ShowNotifications.showAlertNotification(
+        `Branch limit reached: Your ${planName} Plan allows a maximum of ${totalAllowedBranches} branch${totalAllowedBranches > 1 ? 'es' : ''}. Upgrade plan or add slots to continue.`,
+        false
+      );
       setIsPlanLimitModalOpen(true);
       return;
     }
@@ -679,6 +730,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         setActiveView('list');
       }
     } else {
+      if (branches.length >= totalAllowedBranches) {
+        ShowNotifications.showAlertNotification(
+          `Branch limit reached: Your ${planName} Plan allows a maximum of ${totalAllowedBranches} branch${totalAllowedBranches > 1 ? 'es' : ''}. Upgrade plan or purchase add-on slots to add more branches.`,
+          false
+        );
+        setIsPlanLimitModalOpen(true);
+        return;
+      }
       if (!hasPermission('branch-management', 'add')) {
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
@@ -1806,14 +1865,38 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {hasPermission('branch-management', 'add') && (
-            <button
-              type="button"
-              className="btn btn-black"
-              onClick={handleOpenAddForm}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700 }}
-            >
-              + Add New Branch
-            </button>
+            branches.length >= totalAllowedBranches ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={handleOpenAddForm}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '10px 20px',
+                  borderRadius: '10px',
+                  background: '#ea580c',
+                  color: '#fff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                title={`Branch limit reached (${branches.length}/${totalAllowedBranches}). Click to upgrade plan or purchase branch slots.`}
+              >
+                🔒 Branch Limit Reached ({branches.length}/{totalAllowedBranches})
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-black"
+                onClick={handleOpenAddForm}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '10px', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700 }}
+              >
+                + Add New Branch
+              </button>
+            )
           )}
         </div>
       </div>
@@ -1826,7 +1909,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           </div>
           <div>
             <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              Subscription Tier: <span style={{ color: 'var(--primary)' }}>{sub.planName || 'Standard'} Plan</span>
+              Subscription Tier: <span style={{ color: 'var(--primary)' }}>{planName} Plan (Max {baseBranchLimit} Outlets)</span>
             </div>
             <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
               Branch Capacity: <strong>{branches.length}</strong> of <strong>{totalAllowedBranches}</strong> Outlets Permitted

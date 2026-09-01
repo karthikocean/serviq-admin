@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
-import { AVAILABLE_PLANS } from '../config/initialData';
+import { AVAILABLE_PLANS, getPlanBranchLimit } from '../config/initialData';
 import SubscriptionApi from '../api/Subscription';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
@@ -156,7 +156,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
         { name: 'Waiter Management', included: true },
-        { name: 'Kitchen Management', included: true }
+        { name: 'Kitchen Management', included: true },
+        { name: 'Inventory Management', included: false }
       ]
     },
     {
@@ -172,7 +173,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
         { name: 'Waiter Management', included: false },
-        { name: 'Kitchen Management', included: false }
+        { name: 'Kitchen Management', included: false },
+        { name: 'Inventory Management', included: false }
       ]
     }
   ]);
@@ -209,7 +211,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     startDate: '2026-01-15',
     expiryDate: '2027-01-15',
     nextBillingDate: '2026-09-15',
-    baseBranchLimit: 3,
+    baseBranchLimit: 5,
     extraBranchSlots: 0,
     extraBranchPrice: 699,
     userLimit: 15,
@@ -233,7 +235,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   // Branch Capacity fields
   const branches = activeRestaurant?.branches || [];
   const activeBranchesCount = branches.length;
-  const baseBranchLimit = branchCapacityData?.base !== undefined ? branchCapacityData.base : (sub.baseBranchLimit || 3);
+  const planBaseLimit = getPlanBranchLimit(currentPlanName || sub.planName, 5);
+  const resolvedBaseLimit = (() => {
+    if (typeof sub.baseBranchLimit === 'number' && sub.baseBranchLimit > 0) {
+      const p = (currentPlanName || sub.planName || '').toLowerCase();
+      if (p.includes('premium') && sub.baseBranchLimit === 10) return 8;
+      if (p.includes('standard') && sub.baseBranchLimit === 3) return 5;
+      if (p.includes('basic') && sub.baseBranchLimit === 1) return 3;
+      return sub.baseBranchLimit;
+    }
+    return planBaseLimit;
+  })();
+  const baseBranchLimit = branchCapacityData?.base !== undefined ? branchCapacityData.base : resolvedBaseLimit;
   const extraBranchSlots = branchCapacityData?.addons !== undefined ? branchCapacityData.addons : (sub.extraBranchSlots || 0);
   const totalAllowedBranches = branchCapacityData?.total !== undefined ? branchCapacityData.total : (baseBranchLimit + extraBranchSlots);
   const usedBranchesCount = branchCapacityData?.used !== undefined ? branchCapacityData.used : activeBranchesCount;
@@ -461,6 +474,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     e.preventDefault();
     if (!editingPlan) return;
     setPlansList(prev => prev.map(p => p.id === editingPlan.id ? editingPlan : p));
+    const targetIdx = AVAILABLE_PLANS.findIndex(p => p.id === editingPlan.id);
+    if (targetIdx !== -1) {
+      AVAILABLE_PLANS[targetIdx].branchLimit = Number(editingPlan.maxBranches);
+      AVAILABLE_PLANS[targetIdx].monthlyPrice = Number(editingPlan.monthlyPrice);
+      AVAILABLE_PLANS[targetIdx].annualPrice = Number(editingPlan.annualPrice);
+      AVAILABLE_PLANS[targetIdx].tagline = editingPlan.tagline;
+    }
     ShowNotifications.showAlertNotification(`${editingPlan.name} updated successfully!`, true);
     setEditingPlan(null);
   };

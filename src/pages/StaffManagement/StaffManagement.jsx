@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
+import { isModuleAllowedForPlan } from '../../config/initialData';
 import StaffManagementPanel from '../../components/StaffManagementPanel';
 import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
@@ -29,6 +30,11 @@ export default function StaffManagement() {
   const [kitchenError, setKitchenError] = useState('');
 
   if (!activeRestaurant) return null;
+
+  const currentPlan = activeRestaurant?.subscription?.planName || activeRestaurant?.plan || 'Standard';
+  if (!isModuleAllowedForPlan('staff_management', activeRestaurant || currentPlan)) {
+    return <Navigate to="/plans-management" replace />;
+  }
 
   const rawStaff = activeRestaurant.staff || [];
   const rawTables = activeRestaurant.tables || [];

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, Link, Navigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import { isModuleAllowedForPlan } from '../config/initialData';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
 import NotificationModal from '../components/NotificationModal';
@@ -99,8 +100,21 @@ export default function AdminLayout() {
     return !!modulePermissions[action];
   };
 
+  const rawSubPlanName = activeRestaurant?.subscription?.planName || 
+    activeRestaurant?.subscription?.planId || 
+    activeRestaurant?.plan || 
+    'Premium';
+  const cleanSubPlan = String(rawSubPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Premium';
+  const currentSubPlan = cleanSubPlan;
+
   const isTabAllowed = (permissionKey) => {
-    // If tab is branch-management or plans-management, ONLY Restaurant Owner can view it
+    // 1. Subscription Plan Module Gate:
+    // Only modules allowed by the current active plan are shown in sidebar
+    if (!isModuleAllowedForPlan(permissionKey, activeRestaurant || currentSubPlan)) {
+      return false;
+    }
+
+    // 2. Branch & Plans Management: restricted to Restaurant Owner only
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches' || 
@@ -200,12 +214,24 @@ export default function AdminLayout() {
     }
   }, [pathname]);
 
-  const currentSubPlan = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
-  const isCurrentPremium = currentSubPlan.includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
+  const isCurrentPremium = String(currentSubPlan).toLowerCase().includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
 
   // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
   if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Protect Plan-Gated Routes:
+  // 1. Inventory Management: Only Premium / Enterprise (Disabled for Basic & Standard)
+  if (isInventoryActive && !isModuleAllowedForPlan('inventory', activeRestaurant || currentSubPlan)) {
+    ShowNotifications.showAlertNotification("Inventory Management is exclusive to the Premium Plan. Please upgrade your subscription to access this module.", false);
+    return <Navigate to="/plans-management" replace />;
+  }
+
+  // 2. Staff Management: Standard & Premium only (Disabled for Basic)
+  if (isStaffActive && !isModuleAllowedForPlan('staff_management', activeRestaurant || currentSubPlan)) {
+    ShowNotifications.showAlertNotification("Staff Management is not included in the Basic Plan. Please upgrade your subscription to access this module.", false);
+    return <Navigate to="/plans-management" replace />;
   }
 
   return (
@@ -215,7 +241,7 @@ export default function AdminLayout() {
         <div className="sidebar-header-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '24px 20px', gap: '2px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'white', margin: 0, letterSpacing: '-0.5px' }}>Serviq</h2>
           <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-            {activeRestaurant?.subscription?.planName || activeRestaurant?.plan || 'Standard'} Plan
+            {cleanSubPlan} Plan
           </span>
         </div>
 

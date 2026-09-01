@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS } from './initialData';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit } from './initialData';
 import { isTokenExpired } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -8,6 +8,7 @@ import OrderApi from '../api/Order.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
+import SubscriptionApi from '../api/Subscription.js';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -22,6 +23,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -40,6 +43,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -58,6 +63,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -76,6 +83,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
+      inventory: { view: true, add: true, edit: true, delete: true },
+      stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
@@ -94,6 +103,8 @@ export const DEFAULT_ROLES = {
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: false },
       tables: { view: true, add: true, edit: true, delete: false },
+      inventory: { view: true, add: true, edit: true, delete: false },
+      stock_reduction: { view: true, add: true, edit: true, delete: false },
       billing: { view: true, add: true, edit: true, delete: false },
       staff: { view: true, add: true, edit: true, delete: false },
       waiter: { view: true, add: true, edit: true, delete: false },
@@ -230,7 +241,7 @@ export const AppProvider = ({ children }) => {
   }, []);
 
 
-  // Fallback empty tenant
+  // Fallback empty tenant with Premium plan defaults
   const FALLBACK_RESTAURANT = useMemo(() => ({
     tables: [],
     orders: [],
@@ -244,7 +255,17 @@ export const AppProvider = ({ children }) => {
     users: [],
     inventory: [],
     inventoryLogs: [],
-    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES
+    inventoryCategories: DEFAULT_INVENTORY_CATEGORIES,
+    plan: "Premium",
+    subscription: {
+      planId: "plan-premium",
+      planName: "Premium",
+      status: "Active",
+      billingCycle: "monthly",
+      baseBranchLimit: 8,
+      extraBranchSlots: 0,
+      extraBranchPrice: 499
+    }
   }), []);
 
   // Active computed tenant info
@@ -467,7 +488,7 @@ export const AppProvider = ({ children }) => {
         if (Array.isArray(branchArray)) {
           setRestaurantsData(prev => {
             const targetId = currentRestaurantId || 'rest-1';
-            const rest = prev[targetId] || {
+            const rest = prev[targetId] || initialRestaurantsData[targetId] || initialRestaurantsData['rest-1'] || {
               tables: [],
               orders: [],
               menu: [],
@@ -479,7 +500,15 @@ export const AppProvider = ({ children }) => {
               branches: [],
               users: [],
               inventory: [],
-              inventoryLogs: []
+              inventoryLogs: [],
+              plan: "Premium",
+              subscription: {
+                planId: "plan-premium",
+                planName: "Premium",
+                baseBranchLimit: 8,
+                extraBranchSlots: 0,
+                extraBranchPrice: 499
+              }
             };
 
             const mappedBranches = branchArray.map(b => {
@@ -521,11 +550,58 @@ export const AppProvider = ({ children }) => {
     }
   };
 
+  const fetchSubscriptionDashboard = async () => {
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await SubscriptionApi.getDashboard();
+      if (res && res.status && res.response) {
+        const data = res.response.data || res.response;
+        const activePlan = data.activePlan;
+        if (activePlan) {
+          const rawName = activePlan.planName || activePlan.name || 'Premium';
+          const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Premium';
+          const resolvedLimit = activePlan.baseBranchLimit || 
+            (data.branchCapacity?.baseLimit) || 
+            getPlanBranchLimit(cleanName, 8);
+
+          setRestaurantsData(prev => {
+            const targetId = currentRestaurantId || 'rest-1';
+            const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
+            return {
+              ...prev,
+              [targetId]: {
+                ...baseRest,
+                plan: cleanName,
+                subscription: {
+                  ...(baseRest.subscription || {}),
+                  planId: activePlan.planId || `plan-${cleanName.toLowerCase()}`,
+                  planName: cleanName,
+                  status: activePlan.status || 'Active',
+                  billingCycle: activePlan.billingCycle || 'monthly',
+                  price: activePlan.price,
+                  baseBranchLimit: resolvedLimit,
+                  extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
+                    ? data.branchCapacity.extraSlots 
+                    : (baseRest.subscription?.extraBranchSlots || 0),
+                  extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 499
+                }
+              }
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch subscription in AppContext:", e);
+    }
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('userToken') || localStorage.getItem('token');
     if (!token) return;
 
     const initData = async () => {
+      await fetchSubscriptionDashboard();
       await fetchBranches();
       await fetchOrders();
     };
@@ -903,7 +979,7 @@ export const AppProvider = ({ children }) => {
       const targetPlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase() === planName.toLowerCase()) || {
         id: `plan-${planName.toLowerCase()}`,
         name: planName,
-        branchLimit: planName === 'Enterprise' ? 100 : planName === 'Premium' ? 10 : planName === 'Standard' ? 3 : 1,
+        branchLimit: getPlanBranchLimit(planName, 5),
         monthlyPrice: planName === 'Enterprise' ? 9999 : planName === 'Premium' ? 4999 : planName === 'Standard' ? 1999 : 999,
         annualPrice: planName === 'Enterprise' ? 99990 : planName === 'Premium' ? 49999 : planName === 'Standard' ? 19999 : 9999,
         extraBranchPrice: planName === 'Enterprise' ? 399 : planName === 'Premium' ? 499 : planName === 'Standard' ? 699 : 799
@@ -949,8 +1025,8 @@ export const AppProvider = ({ children }) => {
 
   const upgradeSubscriptionPlan = (id, planId, billingCycle = 'monthly', paymentMethod = 'Credit Card (•••• 4242)') => {
     setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
+      const targetId = id || currentRestaurantId || 'rest-1';
+      const rest = prev[targetId] || initialRestaurantsData[targetId] || initialRestaurantsData['rest-1'] || {};
       const targetPlan = AVAILABLE_PLANS.find(p => p.id === planId || p.name.toLowerCase() === planId.toLowerCase()) || AVAILABLE_PLANS[1];
       const amount = billingCycle === 'annual' ? targetPlan.annualPrice : targetPlan.monthlyPrice;
 
@@ -976,7 +1052,7 @@ export const AppProvider = ({ children }) => {
 
       return {
         ...prev,
-        [id]: {
+        [targetId]: {
           ...rest,
           plan: targetPlan.name,
           subscription: {
@@ -988,7 +1064,7 @@ export const AppProvider = ({ children }) => {
             price: targetPlan.monthlyPrice,
             annualPrice: targetPlan.annualPrice,
             baseBranchLimit: targetPlan.branchLimit,
-            extraBranchPrice: targetPlan.extraBranchPrice || 699,
+            extraBranchPrice: targetPlan.extraBranchPrice || 499,
             nextBillingDate: nextDate.toISOString().split('T')[0]
           },
           subscriptionInvoices: [newInvoice, ...existingInvoices]
@@ -1003,7 +1079,7 @@ export const AppProvider = ({ children }) => {
       if (!rest) return prev;
       const currentSub = rest.subscription || {
         planName: rest.plan || 'Standard',
-        baseBranchLimit: 3,
+        baseBranchLimit: getPlanBranchLimit(rest.plan || 'Standard', 5),
         extraBranchSlots: 0,
         extraBranchPrice: 699
       };

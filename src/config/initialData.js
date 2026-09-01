@@ -16,23 +16,23 @@ export const initialRestaurantsData = {
     closingTime: "22:00",
     logo: "/logo.png",
     banner: "",
-    plan: "Standard",
+    plan: "Premium",
     status: "Active",
     subscription: {
-      planId: "plan-standard",
-      planName: "Standard",
+      planId: "plan-premium",
+      planName: "Premium",
       status: "Active",
       billingCycle: "monthly",
-      price: 1999,
-      annualPrice: 19999,
+      price: 4999,
+      annualPrice: 49999,
       startDate: "2026-01-01",
       expiryDate: "2027-01-01",
       nextBillingDate: "2026-09-15",
-      baseBranchLimit: 3,
+      baseBranchLimit: 8,
       extraBranchSlots: 0,
-      extraBranchPrice: 699,
-      userLimit: 15,
-      orderLimit: 2000,
+      extraBranchPrice: 499,
+      userLimit: 50,
+      orderLimit: 10000,
       autoRenew: true,
       paymentMethod: "Credit Card"
     },
@@ -170,9 +170,9 @@ export const initialState = {
     gateway: "stripe"
   },
   saasPlans: [
-    { id: "plan-basic", name: "Basic", monthlyPrice: 999, annualPrice: 9999, branchLimit: 1, userLimit: 5, orderLimit: 500, features: "Standard Support, Basic Analytics", status: "Active", billingCycle: "mo", autoRenewal: true },
-    { id: "plan-standard", name: "Standard", monthlyPrice: 2499, annualPrice: 24999, branchLimit: 3, userLimit: 15, orderLimit: 2000, features: "Priority Support, Advanced Analytics, QR Customizer", status: "Active", billingCycle: "mo", autoRenewal: true },
-    { id: "plan-premium", name: "Premium", monthlyPrice: 4999, annualPrice: 49999, branchLimit: 10, userLimit: 50, orderLimit: 10000, features: "24/7 Phone Support, Full Analytics, Custom Branding, API Access", status: "Active", billingCycle: "mo", autoRenewal: true },
+    { id: "plan-basic", name: "Basic", monthlyPrice: 999, annualPrice: 9999, branchLimit: 3, userLimit: 5, orderLimit: 500, features: "Standard Support, Basic Analytics", status: "Active", billingCycle: "mo", autoRenewal: true },
+    { id: "plan-standard", name: "Standard", monthlyPrice: 1999, annualPrice: 19999, branchLimit: 5, userLimit: 15, orderLimit: 2000, features: "Priority Support, Advanced Analytics, QR Customizer", status: "Active", billingCycle: "mo", autoRenewal: true },
+    { id: "plan-premium", name: "Premium", monthlyPrice: 4999, annualPrice: 49999, branchLimit: 8, userLimit: 50, orderLimit: 10000, features: "24/7 Phone Support, Full Analytics, Custom Branding, API Access", status: "Active", billingCycle: "mo", autoRenewal: true },
     { id: "plan-enterprise", name: "Enterprise", monthlyPrice: 9999, annualPrice: 99999, branchLimit: 100, userLimit: 500, orderLimit: 999999, features: "Dedicated AM, White Label, SLA, Custom Integration, Priority Onboarding", status: "Active", billingCycle: "mo", autoRenewal: true }
   ],
   saasAdmins: [],
@@ -190,7 +190,7 @@ export const AVAILABLE_PLANS = [
     tagline: "Essential tools for small eateries, QR menu ordering and simple table management.",
     monthlyPrice: 999,
     annualPrice: 9999,
-    branchLimit: 1,
+    branchLimit: 3,
     extraBranchAllowed: true,
     extraBranchPrice: 799,
     userLimit: 5,
@@ -214,7 +214,7 @@ export const AVAILABLE_PLANS = [
     tagline: "Includes everything in Basic, plus tableside waiter service and app integrations.",
     monthlyPrice: 1999,
     annualPrice: 19999,
-    branchLimit: 3,
+    branchLimit: 5,
     extraBranchAllowed: true,
     extraBranchPrice: 699,
     userLimit: 15,
@@ -228,7 +228,7 @@ export const AVAILABLE_PLANS = [
       { name: "Table Management", included: true },
       { name: "Order Management", included: true },
       { name: "Waiter Management", included: true },
-      { name: "Kitchen Management", included: false },
+      { name: "Kitchen Management", included: true },
       { name: "Inventory Management", included: false }
     ]
   },
@@ -239,7 +239,7 @@ export const AVAILABLE_PLANS = [
     tagline: "Advanced operations with integrated Kitchen KDS displays, Inventory, and advanced billing.",
     monthlyPrice: 4999,
     annualPrice: 49999,
-    branchLimit: 10,
+    branchLimit: 8,
     extraBranchAllowed: true,
     extraBranchPrice: 499,
     userLimit: 50,
@@ -257,3 +257,42 @@ export const AVAILABLE_PLANS = [
     ]
   }
 ];
+
+export const getPlanBranchLimit = (planName, defaultLimit = 5) => {
+  const name = (planName || '').toLowerCase();
+  if (name.includes('premium')) return 8;
+  if (name.includes('standard')) return 5;
+  if (name.includes('basic')) return 3;
+  if (name.includes('enterprise')) return 100;
+  return defaultLimit;
+};
+
+export const isModuleAllowedForPlan = (moduleKey, planSource = 'Standard') => {
+  let planStr = '';
+  if (typeof planSource === 'string') {
+    planStr = planSource;
+  } else if (planSource && typeof planSource === 'object') {
+    planStr = planSource.planName || 
+      planSource.plan || 
+      planSource.planId || 
+      planSource.subscription?.planName || 
+      planSource.subscription?.planId || 
+      planSource.subscription?.plan || 
+      '';
+  }
+  const plan = (planStr || 'Standard').toLowerCase();
+  const key = (moduleKey || '').toLowerCase().replace(/[-_]/g, '');
+
+  // Inventory Management: Available ONLY in Premium or Enterprise plans
+  if (key.includes('inventory') || key.includes('stock')) {
+    return plan.includes('premium') || plan.includes('enterprise');
+  }
+
+  // Staff / Waiter / Kitchen: Available in Standard, Premium, and Enterprise (Disabled on Basic)
+  if (key.includes('staff') || key.includes('waiter') || key.includes('kitchen')) {
+    return !plan.includes('basic');
+  }
+
+  // Core administrative modules (Dashboard, Tables, Menu, Orders, Billing, Reports, Branches, Plans, Settings)
+  return true;
+};

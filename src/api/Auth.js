@@ -32,9 +32,13 @@ class AuthApi {
     }
   }
 
-  async forgotPassword(email) {
+  async forgotPassword(identifier) {
     try {
-      const response = await apiClient.post("/forgot-password", { email });
+      const isEmail = String(identifier || '').includes('@');
+      const payload = isEmail
+        ? { email: identifier }
+        : { phone: identifier, phoneNumber: identifier, mobileNumber: identifier, email: identifier };
+      const response = await apiClient.post("/forgot-password", payload);
       if (response.status === 200 || response.status === 201) {
         const isSuccess = response.data?.success !== false;
         const msg = response.data?.data?.message || response.data?.message || "OTP generated successfully.";
@@ -68,7 +72,11 @@ class AuthApi {
 
   async verifyOtp({ email, otp }) {
     try {
-      const response = await apiClient.post("/verify-otp", { email, otp });
+      const isEmail = String(email || '').includes('@');
+      const payload = isEmail
+        ? { email, otp }
+        : { phone: email, phoneNumber: email, mobileNumber: email, email, otp };
+      const response = await apiClient.post("/verify-otp", payload);
       if (response.status === 200 || response.status === 201) {
         const isSuccess = response.data?.success !== false;
         return {
@@ -86,7 +94,11 @@ class AuthApi {
     } catch (error) {
       // In case the backend has /verify-reset-otp endpoint
       try {
-        const fallbackRes = await apiClient.post("/verify-reset-otp", { email, otp });
+        const isEmail = String(email || '').includes('@');
+        const payload = isEmail
+          ? { email, otp }
+          : { phone: email, phoneNumber: email, mobileNumber: email, email, otp };
+        const fallbackRes = await apiClient.post("/verify-reset-otp", payload);
         if (fallbackRes.status === 200 || fallbackRes.status === 201) {
           return {
             status: fallbackRes.data?.success !== false,
@@ -114,10 +126,14 @@ class AuthApi {
 
   async resetPassword({ email, otp, password }) {
     try {
+      const isEmail = String(email || '').includes('@');
       const response = await apiClient.post("/reset-password", { 
-        email, 
+        email,
+        phone: isEmail ? undefined : email,
+        phoneNumber: isEmail ? undefined : email,
         otp, 
         password,
+        pin: password,
         newPassword: password,
         confirmPassword: password 
       });
