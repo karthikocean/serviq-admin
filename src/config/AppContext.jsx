@@ -447,8 +447,13 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MenuApi.getMenuItems();
-      if (res && res.status && res.response && res.response.data) {
+      const res = await MenuApi.getMenuItems({ limit: 1000 });
+      if (res && res.status && res.response) {
+        const menuData = Array.isArray(res.response.data)
+          ? res.response.data
+          : (Array.isArray(res.response.data?.items)
+              ? res.response.data.items
+              : (Array.isArray(res.response) ? res.response : []));
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
@@ -456,7 +461,7 @@ export const AppProvider = ({ children }) => {
             ...prev,
             [targetId]: {
               ...rest,
-              menu: res.response.data
+              menu: menuData
             }
           };
         });

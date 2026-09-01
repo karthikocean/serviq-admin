@@ -481,48 +481,125 @@ export default function OrdersPanel({
   };
 
   const fetchModalDataForBranch = async (branchId) => {
-    if (branchId) {
-      try {
-        const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
-          apiClient.get(`/menu?branchId=${branchId}`).catch(() => null),
-          apiClient.get(`/menu/categories?branchId=${branchId}`).catch(() => null),
-          apiClient.get(`/tables?branchId=${branchId}`).catch(() => null),
-          apiClient.get(`/users?branchId=${branchId}`).catch(() => null)
-        ]);
-        let fetchedTables = [];
-        if (menuRes && menuRes.data?.success) setApiMenuItems(menuRes.data.data);
-        if (catRes && catRes.data?.success) setApiCategories(catRes.data.data);
-        if (tableRes && tableRes.data?.success) {
-          fetchedTables = tableRes.data.data;
+    try {
+      const isBranchFiltered = branchId && branchId !== 'ALL' && branchId !== 'all';
+      const branchParam = isBranchFiltered ? `branchId=${branchId}&` : '';
+      const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
+        apiClient.get(`/menu?${branchParam}limit=1000`).catch(() => null),
+        apiClient.get(`/menu/categories?${branchParam}limit=1000`).catch(() => null),
+        apiClient.get(`/tables?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null),
+        apiClient.get(`/users?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null)
+      ]);
+
+      let fetchedMenuItems = [];
+      if (menuRes && (menuRes.status === 200 || menuRes.status === 201 || menuRes.data?.success || menuRes.data?.status)) {
+        const d = menuRes.data;
+        if (Array.isArray(d)) fetchedMenuItems = d;
+        else if (Array.isArray(d?.data)) fetchedMenuItems = d.data;
+        else if (Array.isArray(d?.data?.items)) fetchedMenuItems = d.data.items;
+        else if (Array.isArray(d?.items)) fetchedMenuItems = d.items;
+        else if (Array.isArray(d?.response?.data)) fetchedMenuItems = d.response.data;
+        else if (Array.isArray(d?.response)) fetchedMenuItems = d.response;
+      }
+
+      // If branch filtering returned 0 items, fallback to all menu items
+      if (fetchedMenuItems.length === 0) {
+        try {
+          const fallbackMenuRes = await apiClient.get('/menu?limit=1000').catch(() => null);
+          if (fallbackMenuRes) {
+            const fd = fallbackMenuRes.data;
+            if (Array.isArray(fd)) fetchedMenuItems = fd;
+            else if (Array.isArray(fd?.data)) fetchedMenuItems = fd.data;
+            else if (Array.isArray(fd?.data?.items)) fetchedMenuItems = fd.data.items;
+            else if (Array.isArray(fd?.items)) fetchedMenuItems = fd.items;
+            else if (Array.isArray(fd?.response?.data)) fetchedMenuItems = fd.response.data;
+            else if (Array.isArray(fd?.response)) fetchedMenuItems = fd.response;
+          }
+        } catch (e) {
+          console.warn("Fallback menu fetch note:", e);
+        }
+      }
+
+      // Merge in any items from selectableMenuItems / activeRestaurant.menu to guarantee full list
+      if (selectableMenuItems && selectableMenuItems.length > fetchedMenuItems.length) {
+        const existingNames = new Set(fetchedMenuItems.map(i => (i.name || '').toLowerCase().trim()));
+        selectableMenuItems.forEach(it => {
+          if (it.name && !existingNames.has(it.name.toLowerCase().trim())) {
+            fetchedMenuItems.push(it);
+            existingNames.add(it.name.toLowerCase().trim());
+          }
+        });
+      }
+
+      setApiMenuItems(fetchedMenuItems);
+
+      let fetchedCategories = [];
+      if (catRes && (catRes.status === 200 || catRes.status === 201 || catRes.data?.success || catRes.data?.status)) {
+        const cd = catRes.data;
+        if (Array.isArray(cd)) fetchedCategories = cd;
+        else if (Array.isArray(cd?.data)) fetchedCategories = cd.data;
+        else if (Array.isArray(cd?.data?.items)) fetchedCategories = cd.data.items;
+        else if (Array.isArray(cd?.data?.categories)) fetchedCategories = cd.data.categories;
+        else if (Array.isArray(cd?.categories)) fetchedCategories = cd.categories;
+        else if (Array.isArray(cd?.response?.data)) fetchedCategories = cd.response.data;
+        else if (Array.isArray(cd?.response)) fetchedCategories = cd.response;
+      }
+      if (fetchedCategories.length === 0) {
+        try {
+          const fallbackCatRes = await apiClient.get('/menu/categories?limit=1000').catch(() => null);
+          if (fallbackCatRes) {
+            const fcd = fallbackCatRes.data;
+            if (Array.isArray(fcd)) fetchedCategories = fcd;
+            else if (Array.isArray(fcd?.data)) fetchedCategories = fcd.data;
+            else if (Array.isArray(fcd?.data?.categories)) fetchedCategories = fcd.data.categories;
+          }
+        } catch (e) {}
+      }
+      setApiCategories(fetchedCategories);
+
+      let fetchedTables = [];
+      if (tableRes && (tableRes.status === 200 || tableRes.data?.success || tableRes.data?.status)) {
+        const td = tableRes.data;
+        if (Array.isArray(td)) fetchedTables = td;
+        else if (Array.isArray(td?.data)) fetchedTables = td.data;
+        else if (Array.isArray(td?.data?.tables)) fetchedTables = td.data.tables;
+        else if (Array.isArray(td?.tables)) fetchedTables = td.tables;
+        if (fetchedTables.length > 0) {
           setApiTables(fetchedTables);
         }
-        
-        // Find first available table if possible
-        const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
-        const firstTable = availableT 
-          ? (availableT.tableNumber || availableT.tableNo || availableT.name)
-          : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
-        
-        setNewOrderTable(firstTable);
-
-        let staffListToUse = staff;
-        if (staffRes && staffRes.data?.success) {
-          staffListToUse = staffRes.data.data;
-        }
-        const filteredStaff = staffListToUse.filter(s => !branchId || s.branchId === branchId || s.branchId?._id === branchId || s.branch === branchId || s.branch?._id === branchId);
-        const staffWaitersList = filteredStaff.filter(isOnlyWaiter).map(s => s.name);
-        setModalWaiters(Array.from(new Set(staffWaitersList)));
-
-      } catch (error) {
-        console.error("Error fetching order creation data:", error);
-        setNewOrderTable(displayTables.length > 0 ? displayTables[0] : '');
-        setModalWaiters([]);
       }
-    } else {
+
+      // Find first available table if possible
+      const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
+      const firstTable = availableT 
+        ? (availableT.tableNumber || availableT.tableNo || availableT.name)
+        : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
+      
+      setNewOrderTable(firstTable);
+
+      let staffListToUse = staff;
+      if (staffRes && (staffRes.status === 200 || staffRes.data?.success || staffRes.data?.status)) {
+        const sd = staffRes.data;
+        if (Array.isArray(sd)) staffListToUse = sd;
+        else if (Array.isArray(sd?.data)) staffListToUse = sd.data;
+        else if (Array.isArray(sd?.data?.staff)) staffListToUse = sd.data.staff;
+        else if (Array.isArray(sd?.staff)) staffListToUse = sd.staff;
+      }
+      const filteredStaff = staffListToUse.filter(s => !isBranchFiltered || s.branchId === branchId || s.branchId?._id === branchId || s.branch === branchId || s.branch?._id === branchId);
+      const staffWaitersList = filteredStaff.filter(isOnlyWaiter).map(s => s.name);
+      setModalWaiters(Array.from(new Set(staffWaitersList)));
+
+    } catch (error) {
+      console.error("Error fetching order creation data:", error);
       setNewOrderTable(displayTables.length > 0 ? displayTables[0] : '');
       setModalWaiters([]);
     }
   };
+
+  useEffect(() => {
+    const targetBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : getFallbackBranchId();
+    fetchModalDataForBranch(targetBranchId);
+  }, [selectedBranchId]);
 
   const handleOpenCreateOrderModal = async () => {
     const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;

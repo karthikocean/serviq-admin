@@ -173,6 +173,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [liveBranchTables, setLiveBranchTables] = useState([]);
   const [isLoadingOpData, setIsLoadingOpData] = useState(false);
 
+  // View page operational tables pagination & view mode
+  const [tablesPage, setTablesPage] = useState(1);
+  const [tablesViewMode, setTablesViewMode] = useState('table'); // 'table' | 'grid'
+  const [liveTablesPagination, setLiveTablesPagination] = useState(null);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
+
   const fetchBranches = async () => {
     setIsLoading(true);
     try {
@@ -253,12 +260,67 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       setLiveBranchStaff(finalStaff);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.status) {
-        const rawOrders = ordersRes.value.response?.data || ordersRes.value.response?.orders || (Array.isArray(ordersRes.value.response) ? ordersRes.value.response : []);
-        setLiveBranchOrders(Array.isArray(rawOrders) ? rawOrders : (Array.isArray(rawOrders?.data) ? rawOrders.data : []));
+        const resp = ordersRes.value.response;
+        const d = resp?.data || resp;
+        let orderList = [];
+        if (Array.isArray(d)) {
+          orderList = d;
+        } else if (Array.isArray(d?.orders)) {
+          orderList = d.orders;
+        } else if (Array.isArray(d?.data)) {
+          orderList = d.data;
+        } else if (Array.isArray(d?.data?.orders)) {
+          orderList = d.data.orders;
+        } else if (Array.isArray(resp?.orders)) {
+          orderList = resp.orders;
+        }
+        setLiveBranchOrders(orderList);
+
+        const pag = resp?.pagination || d?.pagination || resp?.data?.pagination;
+        if (pag) {
+          setLiveOrdersPagination(pag);
+        } else if (resp?.total || d?.total || resp?.totalOrders || d?.totalOrders) {
+          const tot = resp?.total || d?.total || resp?.totalOrders || d?.totalOrders || orderList.length;
+          setLiveOrdersPagination({
+            total: tot,
+            from: resp?.from || d?.from || 1,
+            to: resp?.to || d?.to || Math.min(10, tot),
+            totalPages: resp?.totalPages || d?.totalPages || Math.ceil(tot / 10),
+            currentPage: resp?.currentPage || d?.currentPage || 1
+          });
+        }
       }
+
       if (tablesRes.status === 'fulfilled' && tablesRes.value?.status) {
-        const rawTables = tablesRes.value.response?.data || tablesRes.value.response?.tables || (Array.isArray(tablesRes.value.response) ? tablesRes.value.response : []);
-        setLiveBranchTables(Array.isArray(rawTables) ? rawTables : (Array.isArray(rawTables?.data) ? rawTables.data : []));
+        const resp = tablesRes.value.response;
+        const d = resp?.data || resp;
+        let tableList = [];
+        if (Array.isArray(d)) {
+          tableList = d;
+        } else if (Array.isArray(d?.tables)) {
+          tableList = d.tables;
+        } else if (Array.isArray(d?.data)) {
+          tableList = d.data;
+        } else if (Array.isArray(d?.data?.tables)) {
+          tableList = d.data.tables;
+        } else if (Array.isArray(resp?.tables)) {
+          tableList = resp.tables;
+        }
+        setLiveBranchTables(tableList);
+
+        const pag = resp?.pagination || d?.pagination || resp?.data?.pagination;
+        if (pag) {
+          setLiveTablesPagination(pag);
+        } else if (resp?.total || d?.total || resp?.totalTables || d?.totalTables) {
+          const tot = resp?.total || d?.total || resp?.totalTables || d?.totalTables || tableList.length;
+          setLiveTablesPagination({
+            total: tot,
+            from: resp?.from || d?.from || 1,
+            to: resp?.to || d?.to || Math.min(10, tot),
+            totalPages: resp?.totalPages || d?.totalPages || Math.ceil(tot / 10),
+            currentPage: resp?.currentPage || d?.currentPage || 1
+          });
+        }
       }
     } catch (e) {
       console.error("Error fetching branch operational data:", e);
@@ -496,6 +558,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const targetBranch = branch || (branches.length > 0 ? branches[0] : null);
     setSelectedBranchForTree(targetBranch);
     setOpSubTab('tables');
+    setTablesPage(1);
+    setOrdersPage(1);
     setActiveView('hierarchy');
   };
 
@@ -850,12 +914,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ? liveBranchOrders
       : (activeRestaurant?.orders || []).filter(o => matchesBranch(o.branchId || o.branch));
 
-    const activeOrders = branchOrdersRaw.filter(o => {
-      const st = String(o.status || '').toLowerCase();
-      return st !== 'cancelled' && st !== 'rejected';
-    });
-
-    const mappedOrders = activeOrders.map(ord => {
+    const mappedOrders = branchOrdersRaw.map(ord => {
       const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '#ORD-101');
       const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || 'Table 1';
       const itemsStr = Array.isArray(ord.items)
@@ -886,14 +945,28 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     const mappedTables = branchTablesRaw.length > 0
       ? branchTablesRaw.map((t, i) => ({
-          name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-0${i + 1}`),
+          _id: t._id || t.id || `tbl-${i + 1}`,
+          id: t._id || t.id || `tbl-${i + 1}`,
+          name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
+          tableNo: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
           seats: t.capacity || t.seats || 4,
-          status: t.status || 'Available'
+          capacity: t.capacity || t.seats || 4,
+          status: t.status || 'Available',
+          floor: t.floor || t.section || 'Main Dining Area',
+          qrUrl: t.qrUrl || t.qrCode || '',
+          assignedQrId: t.assignedQrId || ''
         }))
       : Array.from({ length: currentViewBranch?.totalTables || 10 }).map((_, i) => ({
+          _id: `tbl-${i + 1}`,
+          id: `tbl-${i + 1}`,
           name: `T-${String(i + 1).padStart(2, '0')}`,
+          tableNo: `T-${String(i + 1).padStart(2, '0')}`,
           seats: 4,
-          status: 'Available'
+          capacity: 4,
+          status: 'Available',
+          floor: 'Main Dining Area',
+          qrUrl: '',
+          assignedQrId: ''
         }));
 
     // 4. Kitchen KDS stations
@@ -932,6 +1005,82 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       kitchen: mappedKitchen
     };
   })();
+
+  // Operational View Pagination: Tables (10 per page, matching "total": 16, "from": 1, "to": 10, "totalPages": 2, "currentPage": 1)
+  const tablesLimit = 10;
+  const tablesTotal = liveTablesPagination?.total || opData.tables.length;
+  const tablesTotalPages = liveTablesPagination?.totalPages || Math.max(1, Math.ceil(tablesTotal / tablesLimit));
+  const tablesCurrentPage = Math.min(tablesPage, tablesTotalPages);
+  const tablesFrom = liveTablesPagination?.from || (tablesTotal === 0 ? 0 : (tablesCurrentPage - 1) * tablesLimit + 1);
+  const tablesTo = liveTablesPagination?.to || Math.min(tablesCurrentPage * tablesLimit, tablesTotal);
+
+  const paginatedTables = (liveTablesPagination && opData.tables.length <= tablesLimit)
+    ? opData.tables
+    : opData.tables.slice(
+        (tablesCurrentPage - 1) * tablesLimit,
+        tablesCurrentPage * tablesLimit
+      );
+
+  // Operational View Pagination: Orders (10 per page, matching "total": 16, "from": 1, "to": 10, "totalPages": 2, "currentPage": 1)
+  const ordersLimit = 10;
+  const ordersTotal = liveOrdersPagination?.total || opData.orders.length;
+  const ordersTotalPages = liveOrdersPagination?.totalPages || Math.max(1, Math.ceil(ordersTotal / ordersLimit));
+  const ordersCurrentPage = Math.min(ordersPage, ordersTotalPages);
+  const ordersFrom = liveOrdersPagination?.from || (ordersTotal === 0 ? 0 : (ordersCurrentPage - 1) * ordersLimit + 1);
+  const ordersTo = liveOrdersPagination?.to || Math.min(ordersCurrentPage * ordersLimit, ordersTotal);
+
+  const paginatedOrders = (liveOrdersPagination && opData.orders.length <= ordersLimit)
+    ? opData.orders
+    : opData.orders.slice(
+        (ordersCurrentPage - 1) * ordersLimit,
+        ordersCurrentPage * ordersLimit
+      );
+
+  const handleOrdersPageChange = async (newPage) => {
+    setOrdersPage(newPage);
+    if (currentViewBranch && liveOrdersPagination) {
+      const branchId = currentViewBranch._id || currentViewBranch.id;
+      try {
+        const res = await OrderApi.getOrders({ branchId, page: newPage, limit: ordersLimit });
+        if (res?.status && res?.response) {
+          const d = res.response.data || res.response;
+          let list = [];
+          if (Array.isArray(d)) list = d;
+          else if (Array.isArray(d?.orders)) list = d.orders;
+          else if (Array.isArray(d?.data?.orders)) list = d.data.orders;
+          else if (Array.isArray(d?.data)) list = d.data;
+          if (list.length > 0) setLiveBranchOrders(list);
+          const pag = res.response.pagination || d.pagination;
+          if (pag) setLiveOrdersPagination(pag);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch next orders page:", e);
+      }
+    }
+  };
+
+  const handleTablesPageChange = async (newPage) => {
+    setTablesPage(newPage);
+    if (currentViewBranch && liveTablesPagination) {
+      const branchId = currentViewBranch._id || currentViewBranch.id;
+      try {
+        const res = await TableApi.getTables({ branchId, page: newPage, limit: tablesLimit });
+        if (res?.status && res?.response) {
+          const d = res.response.data || res.response;
+          let list = [];
+          if (Array.isArray(d)) list = d;
+          else if (Array.isArray(d?.tables)) list = d.tables;
+          else if (Array.isArray(d?.data?.tables)) list = d.data.tables;
+          else if (Array.isArray(d?.data)) list = d.data;
+          if (list.length > 0) setLiveBranchTables(list);
+          const pag = res.response.pagination || d.pagination;
+          if (pag) setLiveTablesPagination(pag);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch next tables page:", e);
+      }
+    }
+  };
 
   // ==========================================
   // VIEW 1: REDESIGNED BRANCH VIEW PAGE UI
@@ -1048,7 +1197,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Live Orders</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b', marginTop: '8px' }}>
-                {opData.orders.filter(o => o.status !== 'served').length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
+                {ordersTotal} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
               </div>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>Real-time POS activity</span>
             </div>
@@ -1084,7 +1233,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('tables')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'tables' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'tables' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Tables ({opData.tables.length})
+              Tables ({tablesTotal})
             </button>
 
             <button
@@ -1092,7 +1241,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('orders')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Live Orders Queue ({opData.orders.filter(o => o.status !== 'served').length})
+              Live Orders Queue ({ordersTotal})
             </button>
 
             <button
@@ -1115,17 +1264,247 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           {/* Sub Tab Content */}
           {opSubTab === 'tables' && (
             <div>
-              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Configured Dining Tables</h4>
+              {/* Sub-tab Header with Count and View Mode Toggle */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Configured Dining Tables</h4>
+                  <span style={{ 
+                    background: 'var(--primary-light, #fff0e6)', 
+                    color: 'var(--primary, #ff7a00)', 
+                    fontSize: '12px', 
+                    fontWeight: 700, 
+                    padding: '2px 10px', 
+                    borderRadius: '20px' 
+                  }}>
+                    {tablesTotal} Total Tables
+                  </span>
+                </div>
+
+                {/* View Switcher: Table List / Cards Grid */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTablesViewMode('table')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: tablesViewMode === 'table' ? '#ffffff' : 'transparent',
+                      color: tablesViewMode === 'table' ? '#0f172a' : '#64748b',
+                      boxShadow: tablesViewMode === 'table' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>☰</span> Table View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTablesViewMode('grid')}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: tablesViewMode === 'grid' ? '#ffffff' : 'transparent',
+                      color: tablesViewMode === 'grid' ? '#0f172a' : '#64748b',
+                      boxShadow: tablesViewMode === 'grid' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    <span>⊞</span> Grid View
+                  </button>
+                </div>
+              </div>
+
+              {/* Table / Grid Render */}
               {opData.tables.length === 0 ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No tables configured for this branch.</div>
+                <div style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>🍽️</div>
+                  <div style={{ fontWeight: 700, color: '#475569' }}>No tables configured for this branch</div>
+                  <div style={{ fontSize: '12px', marginTop: '4px' }}>Add dining tables in Table Management to see them here.</div>
+                </div>
+              ) : tablesViewMode === 'table' ? (
+                <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+                  <div style={{ width: '100%', overflowX: 'auto' }}>
+                    <table style={{ width: '100%', minWidth: '700px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+                      <colgroup>
+                        <col style={{ width: '10%' }} />
+                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '18%' }} />
+                      </colgroup>
+                      <thead>
+                        <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid var(--primary, #ff7a00)' }}>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>#</th>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Table Name / No</th>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Seating Capacity</th>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Floor / Area</th>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedTables.map((tbl, idx) => {
+                          const rowNum = tablesFrom + idx;
+                          const isOccupied = String(tbl.status).toLowerCase() === 'occupied';
+                          const isReserved = String(tbl.status).toLowerCase() === 'reserved';
+                          const statusBg = isOccupied ? '#fef2f2' : (isReserved ? '#fefce8' : '#f0fdf4');
+                          const statusColor = isOccupied ? '#dc2626' : (isReserved ? '#ca8a04' : '#16a34a');
+                          const statusBorder = isOccupied ? '#fee2e2' : (isReserved ? '#fef08a' : '#dcfce7');
+
+                          return (
+                            <tr key={tbl._id || tbl.id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                              <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 600 }}>{rowNum}</td>
+                              <td style={{ padding: '12px 16px', fontWeight: 800, color: '#0f172a' }}>
+                                <span style={{ color: 'var(--primary, #ff7a00)', marginRight: '6px' }}>🪑</span>
+                                {tbl.name || tbl.tableNo}
+                              </td>
+                              <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 600 }}>
+                                <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>
+                                  👤 {tbl.seats || tbl.capacity || 4} Persons
+                                </span>
+                              </td>
+                              <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500 }}>
+                                {tbl.floor || 'Main Dining Area'}
+                              </td>
+                              <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '4px 10px',
+                                  borderRadius: '9999px',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  backgroundColor: statusBg,
+                                  color: statusColor,
+                                  border: `1px solid ${statusBorder}`
+                                }}>
+                                  {tbl.status || 'Available'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '12px' }}>
-                  {opData.tables.map((tbl, i) => (
-                    <div key={i} style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{tbl.name}</div>
-                      <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>{tbl.seats} Seats</span>
-                    </div>
-                  ))}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '14px' }}>
+                  {paginatedTables.map((tbl, i) => {
+                    const isOccupied = String(tbl.status).toLowerCase() === 'occupied';
+                    const isReserved = String(tbl.status).toLowerCase() === 'reserved';
+                    const statusBg = isOccupied ? '#fef2f2' : (isReserved ? '#fefce8' : '#f0fdf4');
+                    const statusColor = isOccupied ? '#dc2626' : (isReserved ? '#ca8a04' : '#16a34a');
+
+                    return (
+                      <div key={tbl._id || tbl.id || i} style={{ background: '#ffffff', padding: '16px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)', transition: 'transform 0.15s ease' }}>
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', fontSize: '16px' }}>
+                          🪑
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{tbl.name || tbl.tableNo}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>{tbl.seats || 4} Seats</div>
+                        <div style={{ marginTop: '8px' }}>
+                          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '9999px', fontWeight: 700, background: statusBg, color: statusColor }}>
+                            {tbl.status || 'Available'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* PAGINATION CONTROLS ("total": 16, "from": 1, "to": 10, "totalPages": 2, "currentPage": 1) */}
+              {tablesTotal > 0 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '18px',
+                  padding: '12px 18px',
+                  background: '#ffffff',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                  flexWrap: 'wrap',
+                  gap: '12px'
+                }}>
+                  <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+                    Showing <strong style={{ color: '#0f172a' }}>{tablesFrom}</strong> to <strong style={{ color: '#0f172a' }}>{tablesTo}</strong> of <strong style={{ color: '#0f172a' }}>{tablesTotal}</strong> tables (Page {tablesCurrentPage} of {tablesTotalPages})
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleTablesPageChange(Math.max(1, tablesCurrentPage - 1))}
+                      disabled={tablesCurrentPage <= 1}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        background: tablesCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
+                        color: tablesCurrentPage <= 1 ? '#cbd5e1' : '#334155',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: tablesCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      Prev
+                    </button>
+
+                    {Array.from({ length: tablesTotalPages }, (_, i) => i + 1).map(pageNum => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => handleTablesPageChange(pageNum)}
+                        style={{
+                          minWidth: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          fontWeight: tablesCurrentPage === pageNum ? 700 : 500,
+                          border: tablesCurrentPage === pageNum ? 'none' : '1px solid #e2e8f0',
+                          background: tablesCurrentPage === pageNum ? '#000000' : '#ffffff',
+                          color: tablesCurrentPage === pageNum ? '#ffffff' : '#334155',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => handleTablesPageChange(Math.min(tablesTotalPages, tablesCurrentPage + 1))}
+                      disabled={tablesCurrentPage >= tablesTotalPages}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        background: tablesCurrentPage >= tablesTotalPages ? '#f8fafc' : '#ffffff',
+                        color: tablesCurrentPage >= tablesTotalPages ? '#cbd5e1' : '#334155',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: tablesCurrentPage >= tablesTotalPages ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1137,7 +1516,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Active Live Orders Queue</h4>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#16a34a', fontWeight: 700 }}>
                   <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
-                  {opData.orders.filter(o => o.status !== 'served').length} Orders Processing
+                  {ordersTotal} Orders Processing
                 </div>
               </div>
               <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
@@ -1167,7 +1546,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         <td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No active orders.</td>
                       </tr>
                     ) : (
-                      opData.orders.map(order => {
+                      paginatedOrders.map(order => {
                         let badgeBg = '#fff7ed';
                         let badgeColor = '#c2410c';
                         let badgeBorder = '#ffedd5';
@@ -1214,6 +1593,70 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   </table>
                 </div>
               </div>
+
+              {/* Orders Pagination Controls */}
+              {ordersTotal > 0 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '16px',
+                  padding: '10px 16px',
+                  background: '#ffffff',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    Showing <strong>{ordersFrom}</strong> to <strong>{ordersTo}</strong> of <strong>{ordersTotal}</strong> orders (Page {ordersCurrentPage} of {ordersTotalPages})
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleOrdersPageChange(Math.max(1, ordersCurrentPage - 1))}
+                      disabled={ordersCurrentPage <= 1}
+                      style={{
+                        padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                        background: ordersCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
+                        color: ordersCurrentPage <= 1 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: ordersCurrentPage <= 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: ordersTotalPages }, (_, i) => i + 1).map(pageNum => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => handleOrdersPageChange(pageNum)}
+                        style={{
+                          minWidth: '28px', height: '28px', borderRadius: '6px', fontSize: '12px',
+                          fontWeight: ordersCurrentPage === pageNum ? 700 : 500,
+                          border: ordersCurrentPage === pageNum ? 'none' : '1px solid #e2e8f0',
+                          background: ordersCurrentPage === pageNum ? '#000000' : '#ffffff',
+                          color: ordersCurrentPage === pageNum ? '#ffffff' : '#334155', cursor: 'pointer'
+                        }}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handleOrdersPageChange(Math.min(ordersTotalPages, ordersCurrentPage + 1))}
+                      disabled={ordersCurrentPage >= ordersTotalPages}
+                      style={{
+                        padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                        background: ordersCurrentPage >= ordersTotalPages ? '#f8fafc' : '#ffffff',
+                        color: ordersCurrentPage >= ordersTotalPages ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: ordersCurrentPage >= ordersTotalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

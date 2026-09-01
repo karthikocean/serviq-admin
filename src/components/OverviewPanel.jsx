@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from './Badge';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
@@ -266,6 +266,77 @@ export default function OverviewPanel({
   const displayTables = (currentTables && currentTables.length > 0) ? currentTables : tables;
   const displayOrders = (currentOrders && currentOrders.length > 0) ? currentOrders : orders;
   const displayStaff = (currentStaff && currentStaff.length > 0) ? currentStaff : staff;
+
+  // Dynamic order breakdown calculation with safe empty state
+  const activeBreakdown = useMemo(() => {
+    // 1. If backend API provided breakdown data with valid categories and items
+    if (orderBreakdownData && Array.isArray(orderBreakdownData.categories)) {
+      const validCategories = orderBreakdownData.categories.filter(c => (Number(c.count) > 0 || (c.percentage !== undefined && Number(c.percentage) > 0)));
+      const totalItems = orderBreakdownData.totalItemsSold !== undefined
+        ? Number(orderBreakdownData.totalItemsSold)
+        : validCategories.reduce((acc, c) => acc + (Number(c.count) || 0), 0);
+
+      if (totalItems > 0 && validCategories.length > 0) {
+        return {
+          totalItemsSold: totalItems,
+          categories: validCategories
+        };
+      }
+      if (totalItems === 0 || validCategories.length === 0) {
+        return { totalItemsSold: 0, categories: [] };
+      }
+    }
+
+    // 2. Dynamic fallback: compute from displayOrders if available
+    const ordersList = (displayOrders && displayOrders.length > 0) ? displayOrders : [];
+    if (ordersList.length > 0) {
+      const catMap = new Map();
+      let totalItems = 0;
+
+      ordersList.forEach(ord => {
+        const items = Array.isArray(ord.items) ? ord.items : [];
+        items.forEach(it => {
+          const qty = Number(it.quantity || it.qty || 1);
+          const cat = it.category || it.categoryName || it.menuItem?.category || 'Main Course';
+          const rev = Number(it.price || 0) * qty;
+
+          totalItems += qty;
+          if (!catMap.has(cat)) {
+            catMap.set(cat, { name: cat, count: 0, revenue: 0 });
+          }
+          const entry = catMap.get(cat);
+          entry.count += qty;
+          entry.revenue += rev;
+        });
+      });
+
+      if (totalItems > 0) {
+        const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
+        const cats = Array.from(catMap.values())
+          .filter(c => c.count > 0)
+          .map((c, idx) => ({
+            name: c.name,
+            count: c.count,
+            revenue: c.revenue,
+            percentage: Math.round((c.count / totalItems) * 100),
+            color: defaultColors[idx % defaultColors.length]
+          }));
+
+        if (cats.length > 0) {
+          return {
+            totalItemsSold: totalItems,
+            categories: cats
+          };
+        }
+      }
+    }
+
+    // 3. No items available
+    return {
+      totalItemsSold: 0,
+      categories: []
+    };
+  }, [orderBreakdownData, displayOrders]);
 
   // Accurately computed fallback counts
   const localOccupiedCount = displayTables.filter(t => isTableOccupied(t, displayOrders)).length;
@@ -764,13 +835,13 @@ export default function OverviewPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
             <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-              {orderBreakdownData?.totalItemsSold !== undefined ? `${orderBreakdownData.totalItemsSold} Items Sold` : 'Category Share'}
+              {activeBreakdown.totalItemsSold > 0 ? `${activeBreakdown.totalItemsSold} Items Sold` : '0 Items Sold'}
             </span>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-            {orderBreakdownData?.categories && orderBreakdownData.categories.length > 0 ? (
-              orderBreakdownData.categories.map((cat, idx) => {
+            {activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
+              activeBreakdown.categories.map((cat, idx) => {
                 const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
                 const itemColor = cat.color || defaultColors[idx % defaultColors.length];
                 const pct = cat.percentage ?? 0;
@@ -795,21 +866,13 @@ export default function OverviewPanel({
                 );
               })
             ) : (
-              [
-                { name: 'Main Course', pct: 40, color: '#ff7a00' },
-                { name: 'Chicken', pct: 40, color: '#3b82f6' },
-                { name: 'Desserts', pct: 20, color: '#10b981' }
-              ].map(cat => (
-                <div key={cat.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600 }}>
-                    <span style={{ color: 'var(--text-main)' }}>{cat.name}</span>
-                    <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{cat.pct}%</span>
-                  </div>
-                  <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${cat.pct}%`, height: '100%', background: cat.color, borderRadius: '4px' }}></div>
-                  </div>
+              <div style={{ textAlign: 'center', padding: '28px 16px', color: '#64748b', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-tertiary, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                  📊
                 </div>
-              ))
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main, #0f172a)' }}>No items available</span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>No order breakdown data recorded for this selection.</span>
+              </div>
             )}
           </div>
         </div>
