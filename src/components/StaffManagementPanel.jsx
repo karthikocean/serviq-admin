@@ -6,7 +6,7 @@ import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
-import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -443,10 +443,9 @@ export default function StaffManagementPanel({
     const isKitchenEmployee = roleName.toLowerCase().includes('kitchen');
 
     if (!editingUserId && !isKitchenEmployee) {
-      if (!userForm.password || !userForm.password.trim()) {
-        errors.password = 'Password is required.';
-      } else if (userForm.password.length < 4) {
-        errors.password = 'Password must be at least 4 characters.';
+      const passwordErr = validatePassword(userForm.password);
+      if (passwordErr) {
+        errors.password = passwordErr;
       }
     }
 
@@ -525,7 +524,8 @@ export default function StaffManagementPanel({
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kitchenForm.email.trim())) {
       errors.email = 'Please enter a valid email address (e.g. name@example.com).';
     }
-    if (!kitchenForm.password.trim()) errors.password = 'Password is required.';
+    const kPasswordErr = validatePassword(kitchenForm.password, 'Kitchen Station Password');
+    if (kPasswordErr) errors.password = kPasswordErr;
 
     setKitchenFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -989,7 +989,7 @@ export default function StaffManagementPanel({
                         setUserForm({ ...userForm, password: e.target.value });
                         if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                       }}
-                      placeholder="Set a secure password"
+                      placeholder="e.g. Nivetha@123"
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -1906,7 +1906,7 @@ export default function StaffManagementPanel({
                   type="text"
                   value={kitchenForm.password}
                   onChange={e => setKitchenForm({ ...kitchenForm, password: e.target.value })}
-                  placeholder="e.g. kitchen123"
+                  placeholder="e.g. Nivetha@123"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: '8px',
                     border: kitchenFormErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',

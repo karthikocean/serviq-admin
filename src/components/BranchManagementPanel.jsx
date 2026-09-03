@@ -22,7 +22,8 @@ import {
   validateRequired,
   validatePincode,
   validateBranchName,
-  validateBranchCode
+  validateBranchCode,
+  validatePassword
 } from '../helper/ValidationHelper';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -167,6 +168,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [branchToDelete, setBranchToDelete] = useState(null);
 
   const [apiBranches, setApiBranches] = useState([]);
+  const [apiUsers, setApiUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [liveBranchStaff, setLiveBranchStaff] = useState([]);
   const [liveBranchOrders, setLiveBranchOrders] = useState([]);
@@ -193,6 +195,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         ? usersRes.value.response.data
         : [];
       const staffList = usersList;
+      setApiUsers(usersList);
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
         const rawList = Array.isArray(branchResponse.response) 
@@ -214,6 +217,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           return {
             id: bId,
             _id: bId,
+            rawManagerId: b.managerId || b.branchManagerId || b.userId || b.adminId || (typeof b.manager === 'object' ? (b.manager?._id || b.manager?.id) : b.manager) || '',
+            managerId: b.managerId || b.branchManagerId || b.userId || b.adminId || '',
             branchName: b.branchName || b.name || '',
             branchCode: b.branchCode || b.code || '',
             branchManager: resolvedMgr,
@@ -526,6 +531,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     setBranchForm({
       id: branch.id || branch._id,
+      managerId: branch.managerId || branch.rawManagerId || '',
       branchName: branch.branchName || branch.name || '',
       branchCode: branch.branchCode || branch.code || '',
       managerName: managerNameFromBranch,
@@ -624,6 +630,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.mobileNumber = mobileErr;
     } else if (!/^[6-9][0-9]{9}$/.test(mobileTrimmed)) {
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
+    } else {
+      // Check for duplicate mobile number against other branches
+      const cleanPhone = mobileTrimmed.replace(/\D/g, '');
+      const isDuplicate = (apiBranches || []).some(b => {
+        const bId = String(b.id || b._id || '');
+        const currentId = String(branchForm.id || '');
+        if (isEditing && bId && currentId && bId === currentId) {
+          return false;
+        }
+        const existingPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+        return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
+      });
+
+      if (isDuplicate) {
+        errors.mobileNumber = 'This mobile number is already registered to another branch.';
+      }
     }
 
     // 6. Email Address validation
@@ -633,35 +655,37 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.email = emailErr;
     }
 
-    // 7. Password & Confirm Password validation
-    const hasPassword = Boolean(branchForm.password && branchForm.password.trim());
-    const hasConfirm = Boolean(branchForm.confirmPassword && branchForm.confirmPassword.trim());
+    // 7. Password & Confirm Password validation (Nivetha@123 format)
+    const hasPassword = Boolean(branchForm.password && String(branchForm.password).trim());
+    const hasConfirm = Boolean(branchForm.confirmPassword && String(branchForm.confirmPassword).trim());
 
     if (!isEditing) {
       if (!hasPassword) {
         errors.password = 'Password is required.';
-      } else if (branchForm.password.length < 6) {
-        errors.password = 'Password must be at least 6 characters.';
+      } else {
+        const pErr = validatePassword(branchForm.password, 'Password');
+        if (pErr) errors.password = pErr;
       }
 
       // Confirm Password validation
       if (!hasConfirm) {
-        errors.confirmPassword = 'Confirm password is required.';
-      } else if (branchForm.password !== branchForm.confirmPassword) {
+        errors.confirmPassword = 'Confirm Password is required.';
+      } else if (String(branchForm.password).trim() !== String(branchForm.confirmPassword).trim()) {
         errors.confirmPassword = 'Passwords do not match.';
       }
     } else {
       // In edit mode: validate if user types a new password or confirm password
       if (hasPassword || hasConfirm) {
         if (!hasPassword) {
-          errors.password = 'New password is required.';
-        } else if (branchForm.password.length < 6) {
-          errors.password = 'New password must be at least 6 characters.';
+          errors.password = 'New Password is required.';
+        } else {
+          const pErr = validatePassword(branchForm.password, 'New Password');
+          if (pErr) errors.password = pErr;
         }
 
         if (!hasConfirm) {
-          errors.confirmPassword = 'Confirm password is required.';
-        } else if (branchForm.password !== branchForm.confirmPassword) {
+          errors.confirmPassword = 'Confirm Password is required.';
+        } else if (String(branchForm.password).trim() !== String(branchForm.confirmPassword).trim()) {
           errors.confirmPassword = 'Passwords do not match.';
         }
       }
@@ -769,9 +793,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       isMainBranch: !!branchForm.isMainBranch
     };
 
-    if (branchForm.password && branchForm.password.trim()) {
-      payload.managerPassword = branchForm.password.trim();
-      payload.password = branchForm.password.trim();
+    if (branchForm.password && String(branchForm.password).trim()) {
+      const pinVal = String(branchForm.password).trim();
+      payload.managerPassword = pinVal;
+      payload.password = pinVal;
+      payload.newPassword = pinVal;
+      payload.pin = pinVal;
+      payload.managerPin = pinVal;
+      payload.confirmPassword = pinVal;
     }
 
     if (isEditing) {
@@ -782,6 +811,39 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       const res = await BranchApi.updateBranch(branchForm.id, payload);
       if (res && res.status) {
+        // If a new PIN was set, also synchronize with associated manager user record if found
+        if (branchForm.password && String(branchForm.password).trim()) {
+          const pinVal = String(branchForm.password).trim();
+          const targetBranch = apiBranches.find(b => (b.id === branchForm.id || b._id === branchForm.id));
+          const matchedUser = (apiUsers || []).find(u => {
+            const uId = String(u._id || u.id || '');
+            if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
+            if (branchForm.managerId && uId === String(branchForm.managerId)) return true;
+            const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
+              ? String(u.branchId._id || u.branchId.id || '')
+              : String(u.branchId || u.branch || '');
+            if (uBranchId && uBranchId === String(branchForm.id)) {
+              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+              if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
+            }
+            const uEmail = String(u.email || '').toLowerCase().trim();
+            const uPhone = String(u.phone || u.mobileNumber || u.mobile || '').replace(/\D/g, '');
+            const bEmail = String(branchForm.email || '').toLowerCase().trim();
+            const bPhone = String(branchForm.mobileNumber || '').replace(/\D/g, '');
+            if (bEmail && uEmail && bEmail === uEmail) return true;
+            if (bPhone && uPhone && bPhone === uPhone) return true;
+            return false;
+          });
+
+          if (matchedUser?._id) {
+            try {
+              await UserApi.changePassword(matchedUser._id, pinVal);
+            } catch (passErr) {
+              console.warn("Could not update manager password via UserApi:", passErr);
+            }
+          }
+        }
+
         setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...payload, branchManager: managerVal, managerName: managerVal } : b));
         if (activeRestaurant?.id && updateBranch) {
           updateBranch(activeRestaurant.id, branchForm.id, {
@@ -792,6 +854,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         }
         await fetchBranches();
         setActiveView('list');
+      } else {
+        const rawErr = String(
+          res?.message ||
+          res?.response?.message ||
+          res?.response?.data?.message ||
+          res?.response?.data?.error ||
+          res?.response?.error ||
+          (typeof res?.response === 'string' ? res.response : '') ||
+          ''
+        );
+        if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
+          setFormErrors(prev => ({
+            ...prev,
+            mobileNumber: rawErr || 'This mobile number is already registered to another branch.'
+          }));
+        }
       }
     } else {
       if (branches.length >= totalAllowedBranches) {
@@ -821,6 +899,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         }
         await fetchBranches();
         setActiveView('list');
+      } else {
+        const rawErr = String(
+          res?.message ||
+          res?.response?.message ||
+          res?.response?.data?.message ||
+          res?.response?.data?.error ||
+          res?.response?.error ||
+          (typeof res?.response === 'string' ? res.response : '') ||
+          ''
+        );
+        if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
+          setFormErrors(prev => ({
+            ...prev,
+            mobileNumber: rawErr || 'This mobile number is already registered to another branch.'
+          }));
+        }
       }
     }
   };
@@ -2024,7 +2118,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     <div style={{ position: 'relative' }}>
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder={isEditing ? "Enter new password" : "Enter password (min 6 characters)"}
+                        placeholder={isEditing ? "Enter new password (e.g. Nivetha@123)" : "Enter password (e.g. Nivetha@123)"}
                         value={branchForm.password}
                         onChange={e => {
                           setBranchForm({ ...branchForm, password: e.target.value });
@@ -2056,7 +2150,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           justifyContent: 'center',
                           color: '#64748b'
                         }}
-                        title={showPassword ? "Hide password" : "Show password"}
+                        title={showPassword ? "Hide Password" : "Show Password"}
                       >
                         {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                       </button>
@@ -2107,7 +2201,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           justifyContent: 'center',
                           color: '#64748b'
                         }}
-                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                        title={showConfirmPassword ? "Hide Password" : "Show Password"}
                       >
                         {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                       </button>

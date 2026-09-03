@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
-import { sanitizeMobile, validateMobile } from '../../helper/ValidationHelper';
+import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/ValidationHelper';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function StaffFormPage() {
@@ -81,10 +81,9 @@ export default function StaffFormPage() {
       errors.email = 'Please enter a valid email address.';
     }
 
-    if (!form.password.trim()) {
-      errors.password = 'Password is required.';
-    } else if (form.password.length < 4) {
-      errors.password = 'Password must be at least 4 characters.';
+    const passwordErr = validatePassword(form.password);
+    if (passwordErr) {
+      errors.password = passwordErr;
     }
 
     setFormErrors(errors);
@@ -331,7 +330,7 @@ export default function StaffFormPage() {
                   setForm({ ...form, password: e.target.value });
                   if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                 }}
-                placeholder="e.g. waiter123"
+                placeholder="e.g. Nivetha@123"
                 style={{
                   width: '100%',
                   padding: '12px 16px',

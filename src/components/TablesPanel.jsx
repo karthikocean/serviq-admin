@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -188,7 +189,7 @@ export default function TablesPanel({
 
     const qrItemsHtml = displayTables.map((t, idx) => {
       const tableIdStr = t.tableNumber || t.tableNum || `T-${String(idx + 1).padStart(2, '0')}`;
-      const qrUrl = t.qrUrl || '';
+      const qrUrl = getCustomerScanUrl(t);
       const restaurantName = activeRestaurant?.name || 'SERVIQ DINING';
       const seatsText = `${t.seatingCapacity ?? t.seats ?? 4} seats`;
       const sectionText = t.section || 'Main Dining';
@@ -493,7 +494,7 @@ export default function TablesPanel({
 
                   const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.name || (table.id && String(table.id).startsWith('T-') ? table.id : null) || table.id || `T-${String(page * limit + index + 1).padStart(2, '0')}`;
                   const waiterName = getWaiterName(table);
-                  const qrUrl = table.qrUrl || '';
+                  const qrUrl = getCustomerScanUrl(table);
                   const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
 
                   return (
@@ -850,6 +851,41 @@ export default function TablesPanel({
 
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
                 Scan to View Menu & Place Order
+              </div>
+              <div style={{
+                marginTop: '10px',
+                padding: '8px 12px',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '11px', color: '#64748b', wordBreak: 'break-all', textAlign: 'left', fontFamily: 'monospace' }}>
+                  {viewingQrTable.qrUrl}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(viewingQrTable.qrUrl);
+                    ShowNotifications.showAlertNotification("Customer scan URL copied!", true);
+                  }}
+                  style={{
+                    background: '#ff5a1f',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '5px',
+                    padding: '4px 10px',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Copy URL
+                </button>
               </div>
             </div>
 

@@ -5,6 +5,7 @@ import { isModuleAllowedForPlan } from '../../config/initialData';
 import StaffManagementPanel from '../../components/StaffManagementPanel';
 import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import { validatePassword } from '../../helper/ValidationHelper';
 
 export default function StaffManagement() {
   const {
@@ -150,12 +151,9 @@ export default function StaffManagement() {
 
   const handleSaveKitchenPassword = (e) => {
     e.preventDefault();
-    if (!kitchenPasswordInput.trim()) {
-      setKitchenError('Password is required.');
-      return;
-    }
-    if (kitchenPasswordInput.trim().length < 4) {
-      setKitchenError('Password must be at least 4 characters.');
+    const pErr = validatePassword(kitchenPasswordInput, 'Kitchen Station Password');
+    if (pErr) {
+      setKitchenError(pErr);
       return;
     }
     if (updateKitchenPassword) {
@@ -365,7 +363,7 @@ export default function StaffManagement() {
                 setKitchenPasswordInput(e.target.value);
                 if (kitchenError) setKitchenError('');
               }}
-              placeholder="e.g. kitchen123"
+              placeholder="e.g. Nivetha@123"
               style={{
                 width: '100%',
                 padding: '10px 14px',

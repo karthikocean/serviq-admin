@@ -5,7 +5,7 @@ import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
-import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -315,10 +315,9 @@ export default function UserListPanel() {
     }
 
     if (!editingUserId) {
-      if (!userForm.password || !userForm.password.trim()) {
-        errors.password = 'Password is required.';
-      } else if (userForm.password.length < 4) {
-        errors.password = 'Password must be at least 4 characters.';
+      const passwordErr = validatePassword(userForm.password);
+      if (passwordErr) {
+        errors.password = passwordErr;
       }
     }
 
@@ -666,7 +665,7 @@ export default function UserListPanel() {
                     setUserForm({ ...userForm, password: e.target.value });
                     if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                   }}
-                  placeholder="Set a secure password"
+                  placeholder="e.g. Nivetha@123"
                   style={{
                     width: '100%',
                     padding: '10px 14px',

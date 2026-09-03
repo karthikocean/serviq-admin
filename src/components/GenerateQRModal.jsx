@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
+import { CUSTOMER_APP_URL } from '../config/index.js';
 
 export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-07', onGenerate }) {
   const [tableNumber, setTableNumber] = useState(defaultTableId);
@@ -12,7 +13,7 @@ export default function GenerateQRModal({ isOpen, onClose, defaultTableId = 'T-0
   const dateStr = formatDateDMY(new Date());
   const numStr = tableNumber ? tableNumber.replace(/\D/g, '') : '07';
   const displayTableId = tableNumber.startsWith('T-') ? tableNumber : `T-${numStr ? numStr.padStart(2, '0') : '07'}`;
-  const qrUrl = `http://serviq-super-admin.vercel.app:3001/table/${displayTableId}`;
+  const qrUrl = `${CUSTOMER_APP_URL}/scan/6a8bff25e04c3475c4894348`;
 
   const handleGenerateSubmit = (e) => {
     e?.preventDefault();
