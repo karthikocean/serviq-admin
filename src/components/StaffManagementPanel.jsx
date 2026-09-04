@@ -233,7 +233,7 @@ export default function StaffManagementPanel({
       UserApi.getStations(),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
-      TableApi.getTables({ limit: 100 })
+      TableApi.getTables({ limit: 10 })
     ]);
 
     let list = [];
@@ -995,7 +995,7 @@ export default function StaffManagementPanel({
                         setUserForm({ ...userForm, password: e.target.value });
                         if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                       }}
-                      placeholder="e.g. Nivetha@123"
+                      placeholder="••••••••••••"
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -1914,7 +1914,7 @@ export default function StaffManagementPanel({
                   type="text"
                   value={kitchenForm.password}
                   onChange={e => setKitchenForm({ ...kitchenForm, password: e.target.value })}
-                  placeholder="e.g. Nivetha@123"
+                  placeholder="••••••••••••"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: '8px',
                     border: kitchenFormErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',

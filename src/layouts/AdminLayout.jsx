@@ -115,9 +115,16 @@ export default function AdminLayout() {
     }
 
     // 2. Branch & Plans Management: restricted to Restaurant Owner only
+    // Branch Management is strictly shown ONLY when "All Branches" is selected
     if (
       permissionKey === 'branch-management' || 
-      permissionKey === 'branches' || 
+      permissionKey === 'branches'
+    ) {
+      const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || selectedBranchId === '';
+      return isRestaurantOwner && isAllBranches;
+    }
+
+    if (
       permissionKey === 'plans-management' || 
       permissionKey === 'plans'
     ) {

@@ -90,16 +90,16 @@ export const validatePassword = (password = '', fieldName = 'Password') => {
     return `${fieldName} must be at least 8 characters long`;
   }
   if (!/[A-Z]/.test(val)) {
-    return `${fieldName} must contain at least one uppercase letter (e.g. Nivetha@123)`;
+    return `${fieldName} must contain at least one uppercase letter (A-Z)`;
   }
   if (!/[a-z]/.test(val)) {
-    return `${fieldName} must contain at least one lowercase letter (e.g. Nivetha@123)`;
+    return `${fieldName} must contain at least one lowercase letter (a-z)`;
   }
   if (!/\d/.test(val)) {
-    return `${fieldName} must contain at least one number (e.g. Nivetha@123)`;
+    return `${fieldName} must contain at least one number (0-9)`;
   }
   if (!/[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(val)) {
-    return `${fieldName} must contain at least one special character (e.g. @, #, $, %)`;
+    return `${fieldName} must contain at least one special character (@, #, $, %)`;
   }
   return '';
 };

@@ -309,30 +309,30 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
     });
   }
 
-  // Default fallback dishes if completely empty (18 items total)
-  if (itemMap.size === 0) {
-    const fallbackDishes = [
-      { name: 'Chicken Biryani Special', cat: 'Main Course', qty: 28, prep: '22 mins', price: 320, st: 'Completed', tag: 'High Demand' },
-      { name: 'Paneer Butter Masala', cat: 'Main Course', qty: 22, prep: '18 mins', price: 240, st: 'Completed', tag: 'High Demand' },
-      { name: 'Butter Naan Basket', cat: 'Breads', qty: 45, prep: '8 mins', price: 60, st: 'Completed', tag: 'High Demand' },
-      { name: 'Tandoori Chicken Platter', cat: 'Starters', qty: 16, prep: '20 mins', price: 360, st: 'Completed', tag: 'Optimal' },
-      { name: 'Crispy Veg Spring Rolls', cat: 'Starters', qty: 14, prep: '12 mins', price: 180, st: 'Completed', tag: 'Optimal' },
-      { name: 'Fresh Lime Soda / Mojito', cat: 'Beverages', qty: 32, prep: '5 mins', price: 90, st: 'Completed', tag: 'Optimal' },
-      { name: 'Mutton Dum Biryani', cat: 'Main Course', qty: 18, prep: '25 mins', price: 380, st: 'In Progress', tag: 'High Demand' },
-      { name: 'Gulab Jamun with Ice Cream', cat: 'Desserts', qty: 15, prep: '6 mins', price: 120, st: 'Completed', tag: 'Optimal' },
-      { name: 'Garlic Butter Roti', cat: 'Breads', qty: 26, prep: '7 mins', price: 50, st: 'Completed', tag: 'Optimal' },
-      { name: 'Chilli Chicken Dry', cat: 'Starters', qty: 19, prep: '15 mins', price: 260, st: 'Completed', tag: 'Optimal' },
-      { name: 'Veg Pulao with Raita', cat: 'Main Course', qty: 12, prep: '16 mins', price: 190, st: 'Completed', tag: 'Optimal' },
-      { name: 'Cold Coffee with Ice Cream', cat: 'Beverages', qty: 11, prep: '6 mins', price: 110, st: 'Completed', tag: 'Optimal' },
-      { name: 'Chicken Tikka Masala', cat: 'Main Course', qty: 17, prep: '20 mins', price: 310, st: 'Completed', tag: 'High Demand' },
-      { name: 'Dal Makhani Royal', cat: 'Main Course', qty: 20, prep: '15 mins', price: 210, st: 'Completed', tag: 'High Demand' },
-      { name: 'Paneer Tikka Starter', cat: 'Starters', qty: 14, prep: '14 mins', price: 220, st: 'Completed', tag: 'Optimal' },
-      { name: 'Mango Lassi Delight', cat: 'Beverages', qty: 16, prep: '5 mins', price: 95, st: 'Completed', tag: 'Optimal' },
-      { name: 'Chocolate Brownie Sundae', cat: 'Desserts', qty: 13, prep: '8 mins', price: 140, st: 'Completed', tag: 'Optimal' },
-      { name: 'Stuffed Kulcha Basket', cat: 'Breads', qty: 21, prep: '10 mins', price: 75, st: 'Completed', tag: 'Optimal' }
-    ];
+  // Default fallback dishes to ensure all 18 standard kitchen preparation items are available
+  const fallbackDishes = [
+    { name: 'Chicken Biryani Special', cat: 'Main Course', qty: 28, prep: '22 mins', price: 320, st: 'Completed', tag: 'High Demand' },
+    { name: 'Paneer Butter Masala', cat: 'Main Course', qty: 22, prep: '18 mins', price: 240, st: 'Completed', tag: 'High Demand' },
+    { name: 'Butter Naan Basket', cat: 'Breads', qty: 45, prep: '8 mins', price: 60, st: 'Completed', tag: 'High Demand' },
+    { name: 'Tandoori Chicken Platter', cat: 'Starters', qty: 16, prep: '20 mins', price: 360, st: 'Completed', tag: 'Optimal' },
+    { name: 'Crispy Veg Spring Rolls', cat: 'Starters', qty: 14, prep: '12 mins', price: 180, st: 'Completed', tag: 'Optimal' },
+    { name: 'Fresh Lime Soda / Mojito', cat: 'Beverages', qty: 32, prep: '5 mins', price: 90, st: 'Completed', tag: 'Optimal' },
+    { name: 'Mutton Dum Biryani', cat: 'Main Course', qty: 18, prep: '25 mins', price: 380, st: 'In Progress', tag: 'High Demand' },
+    { name: 'Gulab Jamun with Ice Cream', cat: 'Desserts', qty: 15, prep: '6 mins', price: 120, st: 'Completed', tag: 'Optimal' },
+    { name: 'Garlic Butter Roti', cat: 'Breads', qty: 26, prep: '7 mins', price: 50, st: 'Completed', tag: 'Optimal' },
+    { name: 'Chilli Chicken Dry', cat: 'Starters', qty: 19, prep: '15 mins', price: 260, st: 'Completed', tag: 'Optimal' },
+    { name: 'Veg Pulao with Raita', cat: 'Main Course', qty: 12, prep: '16 mins', price: 190, st: 'Completed', tag: 'Optimal' },
+    { name: 'Cold Coffee with Ice Cream', cat: 'Beverages', qty: 11, prep: '6 mins', price: 110, st: 'Completed', tag: 'Optimal' },
+    { name: 'Chicken Tikka Masala', cat: 'Main Course', qty: 17, prep: '20 mins', price: 310, st: 'Completed', tag: 'High Demand' },
+    { name: 'Dal Makhani Royal', cat: 'Main Course', qty: 20, prep: '15 mins', price: 210, st: 'Completed', tag: 'High Demand' },
+    { name: 'Paneer Tikka Starter', cat: 'Starters', qty: 14, prep: '14 mins', price: 220, st: 'Completed', tag: 'Optimal' },
+    { name: 'Mango Lassi Delight', cat: 'Beverages', qty: 16, prep: '5 mins', price: 95, st: 'Completed', tag: 'Optimal' },
+    { name: 'Chocolate Brownie Sundae', cat: 'Desserts', qty: 13, prep: '8 mins', price: 140, st: 'Completed', tag: 'Optimal' },
+    { name: 'Stuffed Kulcha Basket', cat: 'Breads', qty: 21, prep: '10 mins', price: 75, st: 'Completed', tag: 'Optimal' }
+  ];
 
-    fallbackDishes.forEach(d => {
+  fallbackDishes.forEach(d => {
+    if (!itemMap.has(d.name)) {
       itemMap.set(d.name, {
         foodItem: d.name,
         itemName: d.name,
@@ -343,8 +343,8 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
         kitchenStatus: d.st,
         status: d.tag
       });
-    });
-  }
+    }
+  });
 
   let dishes = Array.from(itemMap.values());
 
@@ -438,8 +438,8 @@ export default function ReportsPanel({
 
         const [orderRes, staffRes, tableRes, catRes, menuRes] = await Promise.all([
           OrderApi.getOrders({ ...branchParam, limit: 500 }).catch(() => null),
-          UserApi.getUsers({ ...branchParam, limit: 100 }).catch(() => null),
-          TableApi.getTables({ ...branchParam, limit: 100 }).catch(() => null),
+          UserApi.getUsers({ ...branchParam, limit: 10 }).catch(() => null),
+          TableApi.getTables({ ...branchParam, limit: 10 }).catch(() => null),
           apiClient.get('/categories').catch(() => null),
           MenuApi.getMenuItems({ ...branchParam, limit: 1000 }).catch(() => null)
         ]);

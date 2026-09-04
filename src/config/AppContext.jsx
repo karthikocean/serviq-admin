@@ -365,7 +365,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MemberApi.getTables({ limit: 100 });
+      const res = await MemberApi.getTables({ limit: 10 });
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
@@ -501,7 +501,7 @@ export const AppProvider = ({ children }) => {
     try {
       const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 })
+        UserApi.getUsers({ limit: 10 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
@@ -1743,6 +1743,7 @@ export const AppProvider = ({ children }) => {
     setRestaurantsData(prev => {
       const rest = prev[restaurantId];
       if (!rest) return prev;
+      const currentBranches = rest.branches || [];
       const mgrName = branchData.managerName || branchData.branchManager || '';
       const newBranch = {
         id: branchData.id || `BR-${Date.now()}`,

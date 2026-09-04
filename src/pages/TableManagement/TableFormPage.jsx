@@ -94,7 +94,7 @@ export default function TableFormPage() {
       }
       if (staffData.length === 0) {
         try {
-          const uRes = await UserApi.getUsers({ branchId: branchId && branchId !== 'ALL' ? branchId : undefined, limit: 100 });
+          const uRes = await UserApi.getUsers({ branchId: branchId && branchId !== 'ALL' ? branchId : undefined, limit: 10 });
           if (uRes?.status && uRes.response) {
             const ud = uRes.response?.data || uRes.response?.users || (Array.isArray(uRes.response) ? uRes.response : []);
             if (Array.isArray(ud) && ud.length > 0) staffData = ud;

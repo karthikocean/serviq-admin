@@ -248,7 +248,7 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 100 });
+      const res = await TableApi.getTables({ limit: 10 });
       if (res && res.status && res.response) {
         const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
         if (tList.length > 0) {
@@ -967,13 +967,47 @@ export default function OverviewPanel({
         
         {/* Live Order Feed Table (Full Width) */}
         <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '22px 24px', border: '1px solid var(--border)', width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-          <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
                 Live Order Feed {selectedBranch ? `(${selectedBranch.branchCode})` : '(All Branches)'}
               </h2>
             </div>
-            <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
+              <button
+                type="button"
+                onClick={() => navigate('/orders')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>→</span>
+              </button>
+            </div>
           </div>
           <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', paddingBottom: '0px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
             <table className="feed-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1041,19 +1075,51 @@ export default function OverviewPanel({
 
         {/* Dining Tables Grid (Full Width, Underneath Live Order Feed) */}
         <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '22px 24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0, whiteSpace: 'nowrap' }}>
                 Live Tables Status
               </h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', background: occupiedTablesCount > 0 ? '#fef2f2' : '#f0fdf4', color: occupiedTablesCount > 0 ? '#ef4444' : '#166534', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, border: occupiedTablesCount > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>
                 {occupiedTablesCount} Occupied
               </span>
               <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
                 {displayTables.length} Total Tables
               </span>
+              <button
+                type="button"
+                onClick={() => navigate('/tables')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>→</span>
+              </button>
             </div>
           </div>
 

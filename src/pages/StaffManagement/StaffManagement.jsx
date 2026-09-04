@@ -364,7 +364,7 @@ export default function StaffManagement() {
                 setKitchenPasswordInput(e.target.value);
                 if (kitchenError) setKitchenError('');
               }}
-              placeholder="e.g. Nivetha@123"
+              placeholder="••••••••••••"
               style={{
                 width: '100%',
                 padding: '10px 14px',

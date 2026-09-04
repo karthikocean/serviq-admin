@@ -330,7 +330,7 @@ export default function StaffFormPage() {
                   setForm({ ...form, password: e.target.value });
                   if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                 }}
-                placeholder="e.g. Nivetha@123"
+                placeholder="••••••••••••"
                 style={{
                   width: '100%',
                   padding: '12px 16px',

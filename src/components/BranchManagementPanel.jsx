@@ -190,7 +190,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     try {
       const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 })
+        UserApi.getUsers({ limit: 10 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
@@ -255,9 +255,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setIsLoadingOpData(true);
     try {
       const [usersRes, ordersRes, tablesRes] = await Promise.allSettled([
-        UserApi.getUsers({ branchId, limit: 100 }),
-        OrderApi.getOrders({ branchId, limit: 100 }),
-        TableApi.getTables({ branchId, limit: 100 })
+        UserApi.getUsers({ branchId, limit: 10 }),
+        OrderApi.getOrders({ branchId, limit: 10 }),
+        TableApi.getTables({ branchId, limit: 10 })
       ]);
 
       let finalStaff = [];
@@ -620,32 +620,77 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     } else if (!/^[6-9][0-9]{9}$/.test(mobileTrimmed)) {
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     } else {
-      const cleanPhone = mobileTrimmed.replace(/\D/g, '');
+      const cleanPhone = mobileTrimmed.replace(/\D/g, '').slice(-10);
       const allBranchSources = [
         ...(apiBranches || []),
         ...(branches || []),
         ...(activeRestaurant?.branches || [])
       ];
-      const isDuplicate = allBranchSources.some(b => {
+      let isDuplicate = allBranchSources.some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
         if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
           return false;
         }
-        const existingPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+        const rawPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+        const existingPhone = rawPhone.slice(-10);
         return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
       });
 
+      if (!isDuplicate && Array.isArray(apiUsers)) {
+        isDuplicate = apiUsers.some(u => {
+          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
+          const currentId = String(branchForm.id || '');
+          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
+            return false;
+          }
+          const rawPhone = String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').replace(/\D/g, '');
+          const existingPhone = rawPhone.slice(-10);
+          return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
+        });
+      }
+
       if (isDuplicate) {
-        errors.mobileNumber = 'This mobile number is already registered to another branch.';
+        errors.mobileNumber = 'This mobile number is already registered to another branch/user.';
       }
     }
 
     // 6. Email Address validation
-    const emailTrimmed = (branchForm.email || '').trim();
+    const emailTrimmed = (branchForm.email || '').trim().toLowerCase();
     const emailErr = validateEmail(emailTrimmed);
     if (emailErr) {
       errors.email = emailErr;
+    } else {
+      const allBranchSources = [
+        ...(apiBranches || []),
+        ...(branches || []),
+        ...(activeRestaurant?.branches || [])
+      ];
+      let isDuplicateEmail = allBranchSources.some(b => {
+        const bId = String(b.id || b._id || '');
+        const currentId = String(branchForm.id || '');
+        if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
+          return false;
+        }
+        const existingEmail = String(b.email || b.managerEmail || '').trim().toLowerCase();
+        return Boolean(existingEmail && existingEmail === emailTrimmed);
+      });
+
+      if (!isDuplicateEmail && Array.isArray(apiUsers)) {
+        isDuplicateEmail = apiUsers.some(u => {
+          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
+          const currentId = String(branchForm.id || '');
+          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
+            return false;
+          }
+          const existingEmail = String(u.email || '').trim().toLowerCase();
+          return Boolean(existingEmail && existingEmail === emailTrimmed);
+        });
+      }
+
+      if (isDuplicateEmail) {
+        errors.email = 'This email is already registered to another branch/user.';
+      }
     }
 
     // 7. Password & Confirm Password validation (Nivetha@123 format)
@@ -738,39 +783,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-
-      const hasEmptyRequiredField =
-        !branchForm.branchName?.trim() ||
-        !branchForm.branchCode?.trim() ||
-        !branchForm.openingDate ||
-        !(branchForm.managerName?.trim() || branchForm.branchManager?.trim()) ||
-        !branchForm.mobileNumber?.trim() ||
-        !branchForm.email?.trim() ||
-        (!isEditing && (!branchForm.password?.trim() || !branchForm.confirmPassword?.trim())) ||
-        (isEditing && ((branchForm.password?.trim() && !branchForm.confirmPassword?.trim()) || (!branchForm.password?.trim() && branchForm.confirmPassword?.trim()))) ||
-        !branchForm.address?.trim() ||
-        !branchForm.city?.trim() ||
-        !branchForm.state?.trim() ||
-        !branchForm.country?.trim() ||
-        !branchForm.pincode?.trim();
-
-      const hasRequiredError = Object.values(errors).some(
-        msg => typeof msg === 'string' && msg.toLowerCase().includes('required')
-      );
-
-      if (hasRequiredError || hasEmptyRequiredField) {
-        ShowNotifications.showAlertNotification('Please fill in all required fields', false);
-      } else if (errors.mobileNumber) {
-        ShowNotifications.showAlertNotification(errors.mobileNumber, false);
-      } else if (errors.email) {
-        ShowNotifications.showAlertNotification(errors.email, false);
-      } else if (errors.password) {
-        ShowNotifications.showAlertNotification(errors.password, false);
-      } else if (errors.confirmPassword) {
-        ShowNotifications.showAlertNotification(errors.confirmPassword, false);
-      } else {
-        ShowNotifications.showAlertNotification('Please fill in all required fields', false);
-      }
       return;
     }
 
@@ -848,7 +860,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           // If not found in apiUsers, query backend for users assigned to this branch
           if (!matchedUser) {
             try {
-              const branchUsersRes = await UserApi.getUsers({ branchId: branchForm.id, limit: 100 });
+              const branchUsersRes = await UserApi.getUsers({ branchId: branchForm.id, limit: 10 });
               const branchUsers = branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data)
                 ? branchUsersRes.response.data
                 : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []);
@@ -909,15 +921,26 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           (typeof res?.response === 'string' ? res.response : '') ||
           ''
         );
-        if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
-          const dupMsg = 'This mobile number is already registered to another branch.';
+        const hasEmailErr = /email/i.test(rawErr);
+        const hasMobileErr = /mobile|phone|contact/i.test(rawErr);
+        const hasDuplicateErr = /duplicate|already exists/i.test(rawErr);
+
+        if (hasEmailErr && hasMobileErr) {
           setFormErrors(prev => ({
             ...prev,
-            mobileNumber: dupMsg
+            email: 'A user with this email already exists.',
+            mobileNumber: 'A user with this mobile number already exists.'
           }));
-          ShowNotifications.showAlertNotification(dupMsg, false);
-        } else if (rawErr) {
-          ShowNotifications.showAlertNotification(rawErr, false);
+        } else if (hasEmailErr) {
+          setFormErrors(prev => ({
+            ...prev,
+            email: 'This email is already registered to another branch/user.'
+          }));
+        } else if (hasMobileErr || (hasDuplicateErr && !/name|code/i.test(rawErr))) {
+          setFormErrors(prev => ({
+            ...prev,
+            mobileNumber: 'This mobile number is already registered to another branch/user.'
+          }));
         }
       }
     } else {
@@ -959,15 +982,26 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           (typeof res?.response === 'string' ? res.response : '') ||
           ''
         );
-        if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
-          const dupMsg = 'This mobile number is already registered to another branch.';
+        const hasEmailErr = /email/i.test(rawErr);
+        const hasMobileErr = /mobile|phone|contact/i.test(rawErr);
+        const hasDuplicateErr = /duplicate|already exists/i.test(rawErr);
+
+        if (hasEmailErr && hasMobileErr) {
           setFormErrors(prev => ({
             ...prev,
-            mobileNumber: dupMsg
+            email: 'A user with this email already exists.',
+            mobileNumber: 'A user with this mobile number already exists.'
           }));
-          ShowNotifications.showAlertNotification(dupMsg, false);
-        } else if (rawErr) {
-          ShowNotifications.showAlertNotification(rawErr, false);
+        } else if (hasEmailErr) {
+          setFormErrors(prev => ({
+            ...prev,
+            email: 'This email is already registered to another branch/user.'
+          }));
+        } else if (hasMobileErr || (hasDuplicateErr && !/name|code/i.test(rawErr))) {
+          setFormErrors(prev => ({
+            ...prev,
+            mobileNumber: 'This mobile number is already registered to another branch/user.'
+          }));
         }
       }
     }
@@ -2176,7 +2210,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
         {/* Page Style Form Card (noValidate disabled HTML browser popups) */}
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px 36px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-          <form onSubmit={handleFormSubmit} noValidate style={{ width: '100%' }}>
+          <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               
               {/* Section 1: Basic Information */}
@@ -2360,23 +2394,35 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       onBlur={() => {
                         const val = (branchForm.mobileNumber || '').trim();
                         if (val.length === 10) {
-                          const cleanPhone = val.replace(/\D/g, '');
+                          const cleanPhone = val.replace(/\D/g, '').slice(-10);
                           const allBranchSources = [
                             ...(apiBranches || []),
                             ...(branches || []),
                             ...(activeRestaurant?.branches || [])
                           ];
-                          const isDuplicate = allBranchSources.some(b => {
+                          let isDuplicate = allBranchSources.some(b => {
                             const bId = String(b.id || b._id || '');
                             const currentId = String(branchForm.id || '');
                             if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) return false;
-                            const existingPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+                            const rawPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+                            const existingPhone = rawPhone.slice(-10);
                             return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
                           });
+
+                          if (!isDuplicate && Array.isArray(apiUsers)) {
+                            isDuplicate = apiUsers.some(u => {
+                              const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
+                              const currentId = String(branchForm.id || '');
+                              if (isEditing && uBranchId && currentId && uBranchId === currentId) return false;
+                              const rawPhone = String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').replace(/\D/g, '');
+                              const existingPhone = rawPhone.slice(-10);
+                              return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
+                            });
+                          }
+
                           if (isDuplicate) {
-                            const dupMsg = 'This mobile number is already registered to another branch.';
+                            const dupMsg = 'This mobile number is already registered to another branch/user.';
                             setFormErrors(prev => ({ ...prev, mobileNumber: dupMsg }));
-                            ShowNotifications.showAlertNotification(dupMsg, false);
                           }
                         }
                       }}
@@ -2409,6 +2455,37 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         setBranchForm({ ...branchForm, email: e.target.value });
                         if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
                       }}
+                      onBlur={() => {
+                        const val = (branchForm.email || '').trim().toLowerCase();
+                        if (val && !validateEmail(val)) {
+                          const allBranchSources = [
+                            ...(apiBranches || []),
+                            ...(branches || []),
+                            ...(activeRestaurant?.branches || [])
+                          ];
+                          let isDuplicateEmail = allBranchSources.some(b => {
+                            const bId = String(b.id || b._id || '');
+                            const currentId = String(branchForm.id || '');
+                            if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) return false;
+                            const existingEmail = String(b.email || b.managerEmail || '').trim().toLowerCase();
+                            return Boolean(existingEmail && existingEmail === val);
+                          });
+
+                          if (!isDuplicateEmail && Array.isArray(apiUsers)) {
+                            isDuplicateEmail = apiUsers.some(u => {
+                              const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
+                              const currentId = String(branchForm.id || '');
+                              if (isEditing && uBranchId && currentId && uBranchId === currentId) return false;
+                              const existingEmail = String(u.email || '').trim().toLowerCase();
+                              return Boolean(existingEmail && existingEmail === val);
+                            });
+                          }
+
+                          if (isDuplicateEmail) {
+                            setFormErrors(prev => ({ ...prev, email: 'This email is already registered to another branch/user.' }));
+                          }
+                        }
+                      }}
                       style={{
                         width: '100%',
                         padding: '12px 16px',
@@ -2431,9 +2508,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       {isEditing ? 'New Password' : 'Password'} {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
                     </label>
                     <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ec4899',
+                        pointerEvents: 'none'
+                      }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect width="18" height="11" x="3" y="11" rx="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                      </span>
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder={isEditing ? "Enter new password (e.g. Nivetha@123)" : "Enter password (e.g. Nivetha@123)"}
+                        placeholder="••••••••••••"
                         value={branchForm.password}
                         onChange={e => {
                           setBranchForm({ ...branchForm, password: e.target.value });
@@ -2441,7 +2534,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         }}
                         style={{
                           width: '100%',
-                          padding: '12px 42px 12px 16px',
+                          padding: '12px 42px 12px 40px',
                           borderRadius: '8px',
                           border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
                           fontSize: '14px',
@@ -2475,6 +2568,75 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         {formErrors.password}
                       </span>
                     )}
+
+                    {/* Password Rules Checklist */}
+                    <div style={{
+                      marginTop: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '3px',
+                      textAlign: 'left'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: /[A-Z]/.test(branchForm.password || '') ? '#15803d' : '#64748b',
+                          transition: 'all 0.15s ease'
+                        }}>
+                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[A-Z]/.test(branchForm.password || '') ? '✓' : '•'}</span>
+                          Must have one capital letter
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: /\d/.test(branchForm.password || '') ? '#15803d' : '#64748b',
+                          transition: 'all 0.15s ease'
+                        }}>
+                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/\d/.test(branchForm.password || '') ? '✓' : '•'}</span>
+                          Must have a number digit
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: (branchForm.password || '').length >= 8 ? '#15803d' : '#64748b',
+                          transition: 'all 0.15s ease'
+                        }}>
+                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{(branchForm.password || '').length >= 8 ? '✓' : '•'}</span>
+                          Must be at least 8 characters long
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: /[!@#$%^&*(),.?":{}|<>_\-+=~/\\\[\]]/.test(branchForm.password || '') ? '#15803d' : '#64748b',
+                          transition: 'all 0.15s ease'
+                        }}>
+                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[!@#$%^&*(),.?":{}|<>_\-+=~/\\\[\]]/.test(branchForm.password || '') ? '✓' : '•'}</span>
+                          Must have a special character (@, #, $, %)
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   <div>
@@ -2482,9 +2644,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       Confirm Password {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
                     </label>
                     <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ec4899',
+                        pointerEvents: 'none'
+                      }}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect width="18" height="11" x="3" y="11" rx="2" />
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                      </span>
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="Confirm password"
+                        placeholder="••••••••••••"
                         value={branchForm.confirmPassword}
                         onChange={e => {
                           setBranchForm({ ...branchForm, confirmPassword: e.target.value });
@@ -2492,7 +2670,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         }}
                         style={{
                           width: '100%',
-                          padding: '12px 42px 12px 16px',
+                          padding: '12px 42px 12px 40px',
                           borderRadius: '8px',
                           border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
                           fontSize: '14px',

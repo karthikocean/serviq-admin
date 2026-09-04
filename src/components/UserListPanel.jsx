@@ -666,7 +666,7 @@ export default function UserListPanel() {
                     setUserForm({ ...userForm, password: e.target.value });
                     if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                   }}
-                  placeholder="e.g. Nivetha@123"
+                  placeholder="••••••••••••"
                   style={{
                     width: '100%',
                     padding: '10px 14px',
