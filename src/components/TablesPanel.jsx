@@ -393,8 +393,9 @@ export default function TablesPanel({
           background: '#f8fafc',
           border: '1px solid #cbd5e1',
           borderRadius: '8px',
-          padding: '8px 12px',
+          padding: '0 12px',
           width: '320px',
+          height: '38px',
           boxSizing: 'border-box'
         }}>
           <SearchIcon size={15} color="#64748b" />

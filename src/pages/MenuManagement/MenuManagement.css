@@ -98,14 +98,14 @@
 
 .menu-search-wrapper {
   position: relative;
-  flex: 1;
-  max-width: 320px;
+  width: 320px;
 }
 
 .menu-search-wrapper input {
   padding-left: 32px;
-  height: 36px;
+  height: 38px;
   font-size: 13px;
+  box-sizing: border-box;
 }
 
 .search-input-icon {

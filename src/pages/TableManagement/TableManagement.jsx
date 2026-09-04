@@ -50,8 +50,19 @@ export default function TableManagement() {
         setTables(tablesRes.response.data);
       }
       const staffRes = await StaffApi.getStaff(params.branchId);
-      if (staffRes.status && staffRes.response?.data) {
-        setStaff(staffRes.response.data);
+      let staffData = [];
+      if (staffRes?.status && staffRes.response) {
+        if (Array.isArray(staffRes.response?.data)) staffData = staffRes.response.data;
+        else if (Array.isArray(staffRes.response?.users)) staffData = staffRes.response.users;
+        else if (Array.isArray(staffRes.response?.staff)) staffData = staffRes.response.staff;
+        else if (Array.isArray(staffRes.response)) staffData = staffRes.response;
+      }
+      if (staffData.length === 0) {
+        const localStaff = activeRestaurant?.staff || activeRestaurant?.users || [];
+        if (localStaff.length > 0) staffData = localStaff;
+      }
+      if (staffData.length > 0) {
+        setStaff(staffData);
       }
       // Orders dummy for now
       const rawOrders = activeRestaurant.orders || [];
@@ -94,6 +105,50 @@ export default function TableManagement() {
     const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
+  };
+
+  // Filter waiters by role (Waiters ONLY)
+  const isOnlyWaiter = (s) => {
+    if (!s) return false;
+    const roleName = String(
+      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : (s.roleId && !String(s.roleId).match(/^[0-9a-fA-F]{24}$/) ? s.roleId : '')) ||
+      (typeof s.role === 'object' && s.role !== null ? (s.role?.roleName || s.role?.name) : (s.role && !String(s.role).match(/^[0-9a-fA-F]{24}$/) ? s.role : '')) ||
+      s.roleName ||
+      s.designation ||
+      s.title ||
+      ''
+    ).toLowerCase().trim();
+    const userType = String(s.userType || '').toUpperCase().trim();
+
+    if (
+      roleName.includes('kitchen') ||
+      roleName.includes('chef') ||
+      roleName.includes('cook') ||
+      roleName.includes('manager') ||
+      roleName.includes('admin') ||
+      roleName.includes('owner') ||
+      roleName.includes('station') ||
+      roleName.includes('cashier') ||
+      roleName.includes('accountant') ||
+      roleName.includes('inventory') ||
+      roleName.includes('helper') ||
+      roleName.includes('cleaner') ||
+      userType === 'STATION' ||
+      userType === 'BRANCH_ADMIN' ||
+      userType === 'ADMIN' ||
+      userType === 'SUPER_ADMIN' ||
+      userType === 'RESTAURANT_OWNER' ||
+      userType === 'OWNER'
+    ) {
+      return false;
+    }
+    return (
+      roleName.includes('waiter') ||
+      roleName.includes('server') ||
+      roleName === 'waiter' ||
+      userType === 'WAITER' ||
+      userType === 'SERVER'
+    );
   };
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {
@@ -237,9 +292,9 @@ export default function TableManagement() {
             <SearchableSelect
               value={modalWaiterId}
               onChange={e => loadWaiterAssignments(e.target.value)}
-              options={staff.filter(s => s.role === 'Waiter').map((s, sIdx) => ({
+              options={((staff.filter(isOnlyWaiter).length > 0 ? staff.filter(isOnlyWaiter) : staff)).map((s, sIdx) => ({
                 value: s.name,
-                label: `${s.name} (${s.status === 'On Duty' ? 'On Duty' : 'Off Duty'})`
+                label: `${s.name} (${s.status === 'On Duty' ? 'On Duty' : (s.status || 'Active')})`
               }))}
               placeholder="Select a Waiter..."
             />

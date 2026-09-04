@@ -1604,8 +1604,9 @@ export default function InventoryPanel() {
             background: '#f8fafc',
             border: '1px solid #cbd5e1',
             borderRadius: '8px',
-            padding: '7px 10px',
-            width: '190px',
+            padding: '0 10px',
+            width: '320px',
+            height: '38px',
             boxSizing: 'border-box'
           }}>
             <SearchIcon size={14} color="#64748b" />

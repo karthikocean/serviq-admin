@@ -4,7 +4,7 @@ import { useAppState } from '../config/AppContext';
 import AuthApi from '../api/Auth';
 import ShowNotifications from '../helper/ShowNotifications';
 import { Modal } from '../components/Modal';
-import { validatePassword } from '../helper/ValidationHelper';
+import { validatePassword, isStrongPassword } from '../helper/ValidationHelper';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -184,25 +184,21 @@ export default function Login() {
 
     if (isEmailEmpty && isPasswordEmpty) {
       setFormErrors({ email: true, password: true, passwordMsg: 'Please enter your password' });
-      ShowNotifications.showAlertNotification('Please enter your email and password', false);
       return false;
     }
 
     if (!isEmailValid && !isPasswordValid) {
       setFormErrors({ email: true, password: true, passwordMsg: 'Please enter your password' });
-      ShowNotifications.showAlertNotification('Invalid credentials', false);
       return false;
     }
 
     if (!isEmailValid) {
       setFormErrors({ email: true, password: false, passwordMsg: '' });
-      ShowNotifications.showAlertNotification('Email is invalid', false);
       return false;
     }
 
     if (!isPasswordValid) {
       setFormErrors({ email: false, password: true, passwordMsg: 'Password must be at least 4 characters' });
-      ShowNotifications.showAlertNotification('Password must be at least 4 characters', false);
       return false;
     }
 
@@ -310,7 +306,6 @@ export default function Login() {
       } else {
         const errMsg = res?.message || 'Failed to send OTP. Please check your credentials.';
         setForgotErrors({ identifier: errMsg });
-        ShowNotifications.showAlertNotification(errMsg, false);
       }
     } catch (err) {
       console.error('Error sending reset OTP:', err);
@@ -338,11 +333,9 @@ export default function Login() {
           setOtpDigits(sOtp.split('').concat(['', '', '', '']).slice(0, 4));
         }
         setResendCountdown(60);
-      } else {
-        ShowNotifications.showAlertNotification(res?.message || 'Failed to resend OTP.', false);
       }
     } catch (err) {
-      ShowNotifications.showAlertNotification('Failed to resend OTP.', false);
+      console.error('Error resending OTP:', err);
     } finally {
       setForgotLoading(false);
     }
@@ -412,13 +405,11 @@ export default function Login() {
       } else {
         const errMsg = res?.message || 'Invalid OTP. Please check and try again.';
         setForgotErrors({ otp: errMsg });
-        ShowNotifications.showAlertNotification(errMsg, false);
       }
     } catch (err) {
       console.error('Error verifying OTP:', err);
       const errMsg = err?.message || 'Failed to verify OTP. Please try again.';
       setForgotErrors({ otp: errMsg });
-      ShowNotifications.showAlertNotification(errMsg, false);
     } finally {
       setForgotLoading(false);
     }
@@ -479,18 +470,27 @@ export default function Login() {
     }
   };
 
+  const isPasswordRulesMet = (pass) => {
+    const p = String(pass || '');
+    return /[A-Z]/.test(p) && /\d/.test(p) && p.length >= 8 && /[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(p);
+  };
+
   const handleResetPasswordSubmit = async (e) => {
     if (e) e.preventDefault();
-    const pErr = validatePassword(newPassword, 'New Password');
-    if (pErr) {
-      setForgotErrors({ newPassword: pErr });
+    const cleanNewPass = String(newPassword || '').trim();
+    const cleanConfirmPass = String(confirmPassword || '').trim();
+
+    if (!cleanNewPass || !isPasswordRulesMet(cleanNewPass)) {
+      setForgotErrors({ newPassword: 'Please fill following instruction' });
       return;
     }
-    if (!confirmPassword || !confirmPassword.trim()) {
+
+    if (!cleanConfirmPass) {
       setForgotErrors({ confirmPassword: 'Confirm Password is required.' });
       return;
     }
-    if (newPassword.trim() !== confirmPassword.trim()) {
+
+    if (cleanNewPass !== cleanConfirmPass) {
       setForgotErrors({ confirmPassword: 'Passwords do not match. Please try again.' });
       return;
     }
@@ -517,13 +517,11 @@ export default function Login() {
       } else {
         const errMsg = res?.message || 'Failed to reset password. Please try again.';
         setForgotErrors({ newPassword: errMsg });
-        ShowNotifications.showAlertNotification(errMsg, false);
       }
     } catch (err) {
       console.error('Error resetting password:', err);
       const errMsg = err?.message || 'An unexpected error occurred. Please try again.';
       setForgotErrors({ newPassword: errMsg });
-      ShowNotifications.showAlertNotification(errMsg, false);
     } finally {
       setForgotLoading(false);
     }
@@ -1302,18 +1300,15 @@ export default function Login() {
                 <KeyIcon size={22} color="var(--primary, #ff7a00)" />
               </div>
 
-              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#1e293b', margin: '0 0 6px 0', textAlign: 'center', letterSpacing: '-0.3px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#1e293b', margin: '0 0 18px 0', textAlign: 'center', letterSpacing: '-0.3px' }}>
                 Set New Password
               </h2>
-              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px 0', lineHeight: 1.45, textAlign: 'center' }}>
-                Choose a strong password for your account (e.g. Nivetha@123).
-              </p>
 
               <form onSubmit={handleResetPasswordSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                 {/* New Password */}
                 <div style={{ marginBottom: '16px', textAlign: 'left' }}>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#1e293b', marginBottom: '6px' }}>
-                    New Password
+                    Enter a password
                   </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: forgotErrors.newPassword ? '#dc2626' : '#db2777' }}>
@@ -1329,12 +1324,12 @@ export default function Login() {
                         setNewPassword(e.target.value);
                         if (forgotErrors.newPassword) setForgotErrors((prev) => ({ ...prev, newPassword: '' }));
                       }}
-                      placeholder="Enter new password (e.g. Nivetha@123)"
+                      placeholder="••••••••••••"
                       style={{
                         width: '100%',
                         padding: '11px 42px 11px 40px',
                         borderRadius: '10px',
-                        border: forgotErrors.newPassword ? '1.5px solid #dc2626' : '1px solid #dbeafe',
+                        border: forgotErrors.newPassword ? '1.5px solid #ef4444' : (isPasswordRulesMet(newPassword) ? '1.5px solid #10b981' : '1px solid #dbeafe'),
                         background: '#eff6ff',
                         color: '#1e293b',
                         fontSize: '0.92rem',
@@ -1344,13 +1339,13 @@ export default function Login() {
                         transition: 'all 0.2s ease'
                       }}
                       onFocus={(e) => {
-                        e.target.style.borderColor = 'var(--primary, #ff7a00)';
+                        e.target.style.borderColor = isPasswordRulesMet(newPassword) ? '#10b981' : 'var(--primary, #ff7a00)';
                         e.target.style.boxShadow = '0 0 0 3px rgba(255, 122, 0, 0.15)';
                         e.target.style.background = '#ffffff';
                       }}
                       onBlur={(e) => {
                         if (!forgotErrors.newPassword) {
-                          e.target.style.borderColor = '#dbeafe';
+                          e.target.style.borderColor = isPasswordRulesMet(newPassword) ? '#10b981' : '#dbeafe';
                           e.target.style.boxShadow = 'none';
                           e.target.style.background = '#eff6ff';
                         }
@@ -1380,10 +1375,91 @@ export default function Login() {
                     </button>
                   </div>
                   {forgotErrors.newPassword && (
-                    <span style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '5px', display: 'block', fontWeight: 600 }}>
                       {forgotErrors.newPassword}
                     </span>
                   )}
+
+                  {/* Real-time Password Rules Checklist (matching user reference) */}
+                  <div style={{
+                    marginTop: '8px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: /[A-Z]/.test(newPassword) ? '#dcfce7' : 'transparent',
+                        color: /[A-Z]/.test(newPassword) ? '#15803d' : '#64748b',
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[A-Z]/.test(newPassword) ? '✓' : '•'}</span>
+                        Must have one capital letter
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: /\d/.test(newPassword) ? '#dcfce7' : 'transparent',
+                        color: /\d/.test(newPassword) ? '#15803d' : '#64748b',
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/\d/.test(newPassword) ? '✓' : '•'}</span>
+                        Must have a number digit
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: newPassword.length >= 8 ? '#dcfce7' : 'transparent',
+                        color: newPassword.length >= 8 ? '#15803d' : '#64748b',
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{newPassword.length >= 8 ? '✓' : '•'}</span>
+                        Must be at least 8 characters long
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: /[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '#dcfce7' : 'transparent',
+                        color: /[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '#15803d' : '#64748b',
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '✓' : '•'}</span>
+                        Must have a special character (@, #, $, %)
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Confirm Password */}
@@ -1392,7 +1468,7 @@ export default function Login() {
                     Confirm Password
                   </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: forgotErrors.confirmPassword ? '#dc2626' : '#db2777' }}>
+                    <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', color: forgotErrors.confirmPassword ? '#ef4444' : '#db2777' }}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect width="18" height="11" x="3" y="11" rx="2" />
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
@@ -1405,12 +1481,12 @@ export default function Login() {
                         setConfirmPassword(e.target.value);
                         if (forgotErrors.confirmPassword) setForgotErrors((prev) => ({ ...prev, confirmPassword: '' }));
                       }}
-                      placeholder="Confirm new password"
+                      placeholder="••••••••••••"
                       style={{
                         width: '100%',
                         padding: '11px 42px 11px 40px',
                         borderRadius: '10px',
-                        border: forgotErrors.confirmPassword ? '1.5px solid #dc2626' : '1px solid #dbeafe',
+                        border: forgotErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid #dbeafe',
                         background: '#eff6ff',
                         color: '#1e293b',
                         fontSize: '0.92rem',
@@ -1456,7 +1532,7 @@ export default function Login() {
                     </button>
                   </div>
                   {forgotErrors.confirmPassword && (
-                    <span style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '5px', display: 'block', fontWeight: 600 }}>
                       {forgotErrors.confirmPassword}
                     </span>
                   )}
@@ -1470,14 +1546,14 @@ export default function Login() {
                     padding: '13px 18px',
                     borderRadius: '10px',
                     border: 'none',
-                    background: '#c2410c',
+                    background: isPasswordRulesMet(newPassword) ? '#2563eb' : '#c2410c',
                     color: '#ffffff',
                     fontSize: '15px',
                     fontWeight: 700,
                     cursor: forgotLoading ? 'not-allowed' : 'pointer',
                     opacity: forgotLoading ? 0.75 : 1,
                     marginBottom: '16px',
-                    boxShadow: '0 3px 12px rgba(194, 65, 12, 0.25)',
+                    boxShadow: isPasswordRulesMet(newPassword) ? '0 4px 14px rgba(37, 99, 235, 0.35)' : '0 3px 12px rgba(194, 65, 12, 0.25)',
                     transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
@@ -1485,10 +1561,10 @@ export default function Login() {
                     gap: '8px'
                   }}
                   onMouseEnter={(e) => {
-                    if (!forgotLoading) e.currentTarget.style.background = '#9a3412';
+                    if (!forgotLoading) e.currentTarget.style.background = isPasswordRulesMet(newPassword) ? '#1e40af' : '#9a3412';
                   }}
                   onMouseLeave={(e) => {
-                    if (!forgotLoading) e.currentTarget.style.background = '#c2410c';
+                    if (!forgotLoading) e.currentTarget.style.background = isPasswordRulesMet(newPassword) ? '#2563eb' : '#c2410c';
                   }}
                 >
                   {forgotLoading ? (
@@ -1504,7 +1580,7 @@ export default function Login() {
                       <span>Resetting Password...</span>
                     </>
                   ) : (
-                    <span>Reset Password</span>
+                    <span>{isPasswordRulesMet(newPassword) ? 'Password Validated' : 'Reset Password'}</span>
                   )}
                 </button>
 

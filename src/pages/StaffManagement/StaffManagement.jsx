@@ -42,9 +42,10 @@ export default function StaffManagement() {
   const rawOrders = activeRestaurant.orders || [];
   const rawBranches = activeRestaurant.branches || [];
 
-  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
+  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
   const branches = rawBranches;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {

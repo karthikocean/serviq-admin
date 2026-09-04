@@ -3,6 +3,7 @@ import { Badge } from './Badge';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
+import TableApi from '../api/Table.js';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -193,6 +194,7 @@ export default function OverviewPanel({
   // Live Dashboard Live Tables State
   const [liveTablesData, setLiveTablesData] = useState(null);
   const [isLoadingLiveTables, setIsLoadingLiveTables] = useState(false);
+  const [fetchedAllTables, setFetchedAllTables] = useState([]);
 
   const fetchDashboardStats = async () => {
     setIsLoadingStats(true);
@@ -244,12 +246,36 @@ export default function OverviewPanel({
     setIsLoadingLiveTables(false);
   };
 
+  const fetchAllBranchTables = async () => {
+    try {
+      const res = await TableApi.getTables({ limit: 100 });
+      if (res && res.status && res.response) {
+        const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        if (tList.length > 0) {
+          setFetchedAllTables(tList);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch tables for branch overview:", e);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardStats();
     fetchRevenueGrowth();
     fetchOrderBreakdown();
     fetchLiveOrders();
     fetchLiveTables();
+    fetchAllBranchTables();
+
+    const interval = setInterval(() => {
+      fetchDashboardStats();
+      fetchLiveOrders();
+      fetchLiveTables();
+      fetchAllBranchTables();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [selectedBranchId]);
 
   // Current view tables and orders
@@ -271,20 +297,28 @@ export default function OverviewPanel({
   const activeBreakdown = useMemo(() => {
     // 1. If backend API provided breakdown data with valid categories and items
     if (orderBreakdownData && Array.isArray(orderBreakdownData.categories)) {
-      const validCategories = orderBreakdownData.categories.filter(c => (Number(c.count) > 0 || (c.percentage !== undefined && Number(c.percentage) > 0)));
+      // Strictly require count > 0; categories without items must never be included
+      const validCategories = orderBreakdownData.categories.filter(c => Number(c.count) > 0);
       const totalItems = orderBreakdownData.totalItemsSold !== undefined
         ? Number(orderBreakdownData.totalItemsSold)
         : validCategories.reduce((acc, c) => acc + (Number(c.count) || 0), 0);
 
       if (totalItems > 0 && validCategories.length > 0) {
+        const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
         return {
           totalItemsSold: totalItems,
-          categories: validCategories
+          categories: validCategories.map((c, idx) => {
+            const calculatedPct = totalItems > 0 ? Math.round((Number(c.count) / totalItems) * 100) : 0;
+            return {
+              ...c,
+              count: Number(c.count),
+              percentage: c.percentage !== undefined && Number(c.percentage) > 0 ? Number(c.percentage) : calculatedPct,
+              color: c.color || defaultColors[idx % defaultColors.length]
+            };
+          })
         };
       }
-      if (totalItems === 0 || validCategories.length === 0) {
-        return { totalItemsSold: 0, categories: [] };
-      }
+      return { totalItemsSold: 0, categories: [] };
     }
 
     // 2. Dynamic fallback: compute from displayOrders if available
@@ -296,7 +330,8 @@ export default function OverviewPanel({
       ordersList.forEach(ord => {
         const items = Array.isArray(ord.items) ? ord.items : [];
         items.forEach(it => {
-          const qty = Number(it.quantity || it.qty || 1);
+          const qty = it.quantity !== undefined ? Number(it.quantity) : (it.qty !== undefined ? Number(it.qty) : 0);
+          if (qty <= 0) return;
           const cat = it.category || it.categoryName || it.menuItem?.category || 'Main Course';
           const rev = Number(it.price || 0) * qty;
 
@@ -375,13 +410,61 @@ export default function OverviewPanel({
   const topItemFallback = getTopOrderedItem();
 
   // Branch statistics computation for All Branches view
+  const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
+
   const branchAnalytics = branches.map(branch => {
-    const branchOrders = allOrders.filter(o => branchMatches(o.branchId || o.branch, branch));
-    const branchTables = allTables.filter(t => branchMatches(t.branchId || t.branch, branch));
-    const branchStaff = allStaff.filter(s => branchMatches(s.branchId || s.branch, branch));
+    const branchOrders = (allOrders || orders || []).filter(o => branchMatches(o.branchId || o.branch, branch));
+    const branchTables = (combinedTables || []).filter(t => branchMatches(t.branchId || t.branch, branch));
+    const branchStaff = (allStaff || staff || []).filter(s => branchMatches(s.branchId || s.branch, branch));
     const branchRevenue = branchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
-    const occupied = branchTables.filter(t => isTableOccupied(t, branchOrders)).length;
+    // Collect all occupied table identifiers accurately
+    const occupiedTableIds = new Set();
+
+    // 1. Direct table status and matches from branchTables
+    branchTables.forEach(t => {
+      if (isTableOccupied(t, branchOrders)) {
+        const idStr = String(t._id || t.id || t.tableNumber || t.tableNo || t.name || '').toLowerCase().trim();
+        if (idStr) occupiedTableIds.add(idStr);
+      }
+    });
+
+    // 2. Active dining orders in this branch also reflect occupied tables
+    const activeBranchOrders = branchOrders.filter(o => {
+      if (!o) return false;
+      const status = String(o.status || '').toLowerCase().trim();
+      const billing = String(o.billingStatus || o.paymentStatus || '').toLowerCase().trim();
+      const isClosed = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(status);
+      const isPaidAndDone = billing === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(status);
+      return !isClosed && !isPaidAndDone;
+    });
+
+    activeBranchOrders.forEach(o => {
+      const ordTableObj = typeof o.tableId === 'object' && o.tableId !== null 
+        ? o.tableId 
+        : (typeof o.table === 'object' && o.table !== null ? o.table : null);
+      
+      const tId = String(
+        ordTableObj?._id || 
+        ordTableObj?.id || 
+        ordTableObj?.tableNumber || 
+        ordTableObj?.tableNo || 
+        o.tableNumber || 
+        o.tableNo || 
+        (typeof o.table === 'string' ? o.table : '') || 
+        o.tableName || 
+        (typeof o.tableId === 'string' ? o.tableId : '') || 
+        ''
+      ).toLowerCase().trim();
+
+      if (tId) {
+        occupiedTableIds.add(tId);
+      }
+    });
+
+    const occupied = occupiedTableIds.size;
+    const totalBranchTables = Math.max(branchTables.length || branch.totalTables || 10, occupied);
+
     const activeStaff = branchStaff.filter(s => {
       const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
       return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
@@ -398,7 +481,7 @@ export default function OverviewPanel({
       managerName: mgr,
       ordersCount: branchOrders.length,
       revenue: branchRevenue,
-      tablesCount: branchTables.length || branch.totalTables || 10,
+      tablesCount: totalBranchTables,
       occupiedTables: occupied,
       staffCount: branchStaff.length || 5,
       activeStaff: activeStaff || (branchStaff.length > 0 ? branchStaff.length : 3)
@@ -840,11 +923,11 @@ export default function OverviewPanel({
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-            {activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
-              activeBreakdown.categories.map((cat, idx) => {
+            {activeBreakdown.totalItemsSold > 0 && activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
+              activeBreakdown.categories.filter(c => Number(c.count) > 0).map((cat, idx) => {
                 const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
                 const itemColor = cat.color || defaultColors[idx % defaultColors.length];
-                const pct = cat.percentage ?? 0;
+                const pct = cat.percentage ?? (activeBreakdown.totalItemsSold > 0 ? Math.round((cat.count / activeBreakdown.totalItemsSold) * 100) : 0);
                 return (
                   <div key={cat.categoryId || cat.name || idx} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600 }}>

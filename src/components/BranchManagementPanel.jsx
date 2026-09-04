@@ -97,7 +97,7 @@ const initialBranchState = {
 
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
   const navigate = useNavigate();
-  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots } = useAppState();
+  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -175,11 +175,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [liveBranchTables, setLiveBranchTables] = useState([]);
   const [isLoadingOpData, setIsLoadingOpData] = useState(false);
 
-  // View page operational tables pagination & view mode
+  // View page operational tables & orders & staff pagination & filters
   const [tablesPage, setTablesPage] = useState(1);
   const [tablesViewMode, setTablesViewMode] = useState('table'); // 'table' | 'grid'
   const [liveTablesPagination, setLiveTablesPagination] = useState(null);
   const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersFilter, setOrdersFilter] = useState('all'); // 'all' | 'queue' | 'preparing' | 'ready' | 'completed' | 'cancelled'
+  const [staffPage, setStaffPage] = useState(1);
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
 
   const fetchBranches = async () => {
@@ -356,50 +359,34 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const branches = apiBranches;
 
-  // Subscription Plan details & calculations (Premium: max 8, Standard: max 5, Basic: max 3)
+  // Subscription Plan details & calculations (Basic: max 3, Standard: max 5, Premium: max 8)
   const activePlanData = subDashboard?.activePlan;
   const branchCap = subDashboard?.branchCapacity;
   const extraRate = subDashboard?.extraBranchRate;
 
   const sub = activeRestaurant?.subscription || {
-    planName: activeRestaurant?.plan || 'Premium',
-    baseBranchLimit: 8,
+    planName: activeRestaurant?.plan || 'Standard',
+    baseBranchLimit: 5,
     extraBranchSlots: 0,
-    extraBranchPrice: 499
+    extraBranchPrice: 699
   };
 
-  const rawPlanName = activePlanData?.planName || sub.planName || activeRestaurant?.plan || 'Premium';
-  const cleanPlanName = String(rawPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Premium';
+  // Prioritize activeRestaurant subscription and plan over API dashboard fallbacks
+  const rawPlanName = activeRestaurant?.subscription?.planName || activeRestaurant?.plan || activePlanData?.planName || 'Standard';
+  const cleanPlanName = String(rawPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Standard';
   const planName = cleanPlanName;
 
-  const liveBaseLimit = activePlanData?.baseBranchLimit || branchCap?.baseLimit;
-  const planBaseLimit = liveBaseLimit || getPlanBranchLimit(planName, 8);
+  // Base limit strictly derived from active plan (Basic: 3, Standard: 5, Premium: 8)
+  const baseBranchLimit = getPlanBranchLimit(planName, 5);
+  const extraBranchSlots = (activeRestaurant?.subscription?.extraBranchSlots !== undefined)
+    ? activeRestaurant.subscription.extraBranchSlots
+    : (branchCap?.extraSlots || 0);
 
-  // Reconcile baseBranchLimit (migrates stale stored defaults if needed)
-  const baseBranchLimit = (() => {
-    if (typeof liveBaseLimit === 'number' && liveBaseLimit > 0) {
-      return liveBaseLimit;
-    }
-    if (typeof sub.baseBranchLimit === 'number' && sub.baseBranchLimit > 0) {
-      const p = planName.toLowerCase();
-      if (p.includes('premium') && (sub.baseBranchLimit === 10 || sub.baseBranchLimit === 5)) return 8;
-      if (p.includes('standard') && (sub.baseBranchLimit === 3 || sub.baseBranchLimit === 8)) return 5;
-      if (p.includes('basic') && (sub.baseBranchLimit === 1 || sub.baseBranchLimit === 5)) return 3;
-      return sub.baseBranchLimit;
-    }
-    return planBaseLimit;
-  })();
-
-  const extraBranchSlots = branchCap?.extraSlots !== undefined 
-    ? branchCap.extraSlots 
-    : (sub.extraBranchSlots || 0);
-
-  const totalAllowedBranches = branchCap?.totalLimit !== undefined
-    ? branchCap.totalLimit
-    : (baseBranchLimit + extraBranchSlots);
-
+  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
   const remainingBranchSlots = Math.max(0, totalAllowedBranches - branches.length);
-  const extraBranchUnitPrice = extraRate?.rate !== undefined ? extraRate.rate : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : 699));
+  const extraBranchUnitPrice = extraRate?.rate !== undefined 
+    ? extraRate.rate 
+    : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : (planName.toLowerCase().includes('basic') ? 799 : 699)));
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
   // Filtered branches
@@ -566,6 +553,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setOpSubTab('tables');
     setTablesPage(1);
     setOrdersPage(1);
+    setStaffPage(1);
+    setOrdersFilter('all');
     setActiveView('hierarchy');
   };
 
@@ -631,12 +620,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     } else if (!/^[6-9][0-9]{9}$/.test(mobileTrimmed)) {
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     } else {
-      // Check for duplicate mobile number against other branches
       const cleanPhone = mobileTrimmed.replace(/\D/g, '');
-      const isDuplicate = (apiBranches || []).some(b => {
+      const allBranchSources = [
+        ...(apiBranches || []),
+        ...(branches || []),
+        ...(activeRestaurant?.branches || [])
+      ];
+      const isDuplicate = allBranchSources.some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
-        if (isEditing && bId && currentId && bId === currentId) {
+        if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
           return false;
         }
         const existingPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
@@ -729,22 +722,24 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.country = 'Country must contain letters and spaces only.';
     }
 
-    // 12. Pincode validation
+    // 12. Pincode (Postal Code) - Exactly 6 digits
     const pincodeTrimmed = (branchForm.pincode || '').trim();
-    const pincodeErr = validatePincode(pincodeTrimmed);
-    if (pincodeErr) {
-      errors.pincode = pincodeErr;
+    const pinErr = validatePincode(pincodeTrimmed);
+    if (pinErr) {
+      errors.pincode = pinErr;
     }
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    return errors;
   };
 
-  const handleFormSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      const hasEmptyRequiredField = 
+
+    const errors = validateForm();
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+
+      const hasEmptyRequiredField =
         !branchForm.branchName?.trim() ||
         !branchForm.branchCode?.trim() ||
         !branchForm.openingDate ||
@@ -752,16 +747,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         !branchForm.mobileNumber?.trim() ||
         !branchForm.email?.trim() ||
         (!isEditing && (!branchForm.password?.trim() || !branchForm.confirmPassword?.trim())) ||
+        (isEditing && ((branchForm.password?.trim() && !branchForm.confirmPassword?.trim()) || (!branchForm.password?.trim() && branchForm.confirmPassword?.trim()))) ||
         !branchForm.address?.trim() ||
         !branchForm.city?.trim() ||
         !branchForm.state?.trim() ||
         !branchForm.country?.trim() ||
         !branchForm.pincode?.trim();
 
-      if (hasEmptyRequiredField) {
-        ShowNotifications.showAlertNotification('Please fill in the all required fields', false);
+      const hasRequiredError = Object.values(errors).some(
+        msg => typeof msg === 'string' && msg.toLowerCase().includes('required')
+      );
+
+      if (hasRequiredError || hasEmptyRequiredField) {
+        ShowNotifications.showAlertNotification('Please fill in all required fields', false);
+      } else if (errors.mobileNumber) {
+        ShowNotifications.showAlertNotification(errors.mobileNumber, false);
+      } else if (errors.email) {
+        ShowNotifications.showAlertNotification(errors.email, false);
+      } else if (errors.password) {
+        ShowNotifications.showAlertNotification(errors.password, false);
+      } else if (errors.confirmPassword) {
+        ShowNotifications.showAlertNotification(errors.confirmPassword, false);
       } else {
-        ShowNotifications.showAlertNotification('Please fix the errors in the form before submitting.', false);
+        ShowNotifications.showAlertNotification('Please fill in all required fields', false);
       }
       return;
     }
@@ -811,11 +819,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       const res = await BranchApi.updateBranch(branchForm.id, payload);
       if (res && res.status) {
-        // If a new PIN was set, also synchronize with associated manager user record if found
+        // If a new password was set, synchronize with associated manager user record
         if (branchForm.password && String(branchForm.password).trim()) {
           const pinVal = String(branchForm.password).trim();
           const targetBranch = apiBranches.find(b => (b.id === branchForm.id || b._id === branchForm.id));
-          const matchedUser = (apiUsers || []).find(u => {
+          
+          // Match manager user across current user pool
+          let matchedUser = (apiUsers || []).find(u => {
             const uId = String(u._id || u.id || '');
             if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
             if (branchForm.managerId && uId === String(branchForm.managerId)) return true;
@@ -827,7 +837,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
             }
             const uEmail = String(u.email || '').toLowerCase().trim();
-            const uPhone = String(u.phone || u.mobileNumber || u.mobile || '').replace(/\D/g, '');
+            const uPhone = String(u.phone || u.mobileNumber || u.mobile || u.phoneNumber || '').replace(/\D/g, '');
             const bEmail = String(branchForm.email || '').toLowerCase().trim();
             const bPhone = String(branchForm.mobileNumber || '').replace(/\D/g, '');
             if (bEmail && uEmail && bEmail === uEmail) return true;
@@ -835,11 +845,45 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             return false;
           });
 
-          if (matchedUser?._id) {
+          // If not found in apiUsers, query backend for users assigned to this branch
+          if (!matchedUser) {
             try {
-              await UserApi.changePassword(matchedUser._id, pinVal);
+              const branchUsersRes = await UserApi.getUsers({ branchId: branchForm.id, limit: 100 });
+              const branchUsers = branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data)
+                ? branchUsersRes.response.data
+                : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []);
+              matchedUser = branchUsers.find(u => {
+                const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+                return roleStr.includes('manager') || roleStr.includes('admin');
+              }) || branchUsers[0];
+            } catch (e) {
+              console.warn("Could not query branch users for password sync:", e);
+            }
+          }
+
+          const targetUserId = matchedUser?._id || matchedUser?.id;
+          if (targetUserId) {
+            try {
+              await Promise.allSettled([
+                UserApi.changePassword(targetUserId, pinVal),
+                UserApi.updateUser(targetUserId, { password: pinVal })
+              ]);
             } catch (passErr) {
               console.warn("Could not update manager password via UserApi:", passErr);
+            }
+          } else {
+            // If no user exists for this branch manager yet, create one
+            try {
+              await UserApi.createUser({
+                name: managerVal,
+                email: branchForm.email,
+                phoneNumber: branchForm.mobileNumber,
+                password: pinVal,
+                role: 'Manager',
+                branchId: branchForm.id
+              });
+            } catch (createErr) {
+              console.warn("Could not create manager user on branch edit:", createErr);
             }
           }
         }
@@ -853,6 +897,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           });
         }
         await fetchBranches();
+        ShowNotifications.showAlertNotification("Branch updated successfully!", true);
         setActiveView('list');
       } else {
         const rawErr = String(
@@ -865,10 +910,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           ''
         );
         if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
+          const dupMsg = 'This mobile number is already registered to another branch.';
           setFormErrors(prev => ({
             ...prev,
-            mobileNumber: rawErr || 'This mobile number is already registered to another branch.'
+            mobileNumber: dupMsg
           }));
+          ShowNotifications.showAlertNotification(dupMsg, false);
+        } else if (rawErr) {
+          ShowNotifications.showAlertNotification(rawErr, false);
         }
       }
     } else {
@@ -898,6 +947,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           });
         }
         await fetchBranches();
+        ShowNotifications.showAlertNotification("Branch created successfully!", true);
         setActiveView('list');
       } else {
         const rawErr = String(
@@ -910,10 +960,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           ''
         );
         if (/mobile|phone|contact/i.test(rawErr) || (/duplicate/i.test(rawErr) && !/name|code/i.test(rawErr))) {
+          const dupMsg = 'This mobile number is already registered to another branch.';
           setFormErrors(prev => ({
             ...prev,
-            mobileNumber: rawErr || 'This mobile number is already registered to another branch.'
+            mobileNumber: dupMsg
           }));
+          ShowNotifications.showAlertNotification(dupMsg, false);
+        } else if (rawErr) {
+          ShowNotifications.showAlertNotification(rawErr, false);
         }
       }
     }
@@ -940,8 +994,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   useEffect(() => {
     if (activeView === 'hierarchy' && currentViewBranch) {
       fetchBranchOperationalData(currentViewBranch);
+      const pollTimer = setInterval(() => {
+        fetchBranchOperationalData(currentViewBranch);
+        if (typeof fetchOrders === 'function') {
+          fetchOrders();
+        }
+      }, 10000);
+      return () => clearInterval(pollTimer);
     }
-  }, [activeView, currentViewBranch, fetchBranchOperationalData]);
+  }, [activeView, currentViewBranch, fetchBranchOperationalData, fetchOrders]);
 
   // Live computed operational data for current branch
   const opData = (() => {
@@ -1003,32 +1064,99 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       });
     }
 
-    // 2. Orders list
-    const branchOrdersRaw = (liveBranchOrders.length > 0)
-      ? liveBranchOrders
-      : (activeRestaurant?.orders || []).filter(o => matchesBranch(o.branchId || o.branch));
+    // 2. Orders list - Merge live branch orders and activeRestaurant orders to display complete history
+    const localOrders = (activeRestaurant?.orders || []).filter(o => matchesBranch(o.branchId || o.branch));
+    const combinedOrdersMap = new Map();
 
-    const mappedOrders = branchOrdersRaw.map(ord => {
-      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '#ORD-101');
+    localOrders.forEach(ord => {
+      const key = String(ord.orderId || ord.id || ord._id || '').toLowerCase();
+      if (key) combinedOrdersMap.set(key, ord);
+    });
+
+    liveBranchOrders.forEach(ord => {
+      const key = String(ord.orderId || ord.id || ord._id || '').toLowerCase();
+      if (key) combinedOrdersMap.set(key, ord);
+      else combinedOrdersMap.set(`live_ord_${Math.random()}`, ord);
+    });
+
+    const branchOrdersRaw = Array.from(combinedOrdersMap.values());
+    branchOrdersRaw.sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.date || a.timestamp || 0).getTime();
+      const timeB = new Date(b.createdAt || b.date || b.timestamp || 0).getTime();
+      return timeB - timeA;
+    });
+
+    const mappedOrders = branchOrdersRaw.map((ord, idx) => {
+      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : `#ORD-${String(idx + 1).padStart(3, '0')}`);
       const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || 'Table 1';
       const itemsStr = Array.isArray(ord.items)
         ? ord.items.map(i => `${i.quantity || i.qty || 1}x ${i.name || i.menuItem?.name || 'Item'}`).join(', ')
         : (typeof ord.items === 'string' ? ord.items : 'Items Ordered');
       const totalAmount = typeof ord.total === 'number' ? `₹${ord.total.toLocaleString('en-IN')}` : (ord.total || '₹0');
-      const timeStr = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '5 mins ago';
 
+      const rawDate = ord.createdAt || ord.date || ord.timestamp;
+      const formattedTime = rawDate 
+        ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : 'Just now';
+      const formattedDate = rawDate
+        ? new Date(rawDate).toLocaleDateString([], { day: '2-digit', month: 'short' })
+        : 'Today';
+
+      const rawSt = String(ord.status || '').toLowerCase().trim();
       let st = 'preparing';
-      const rawSt = String(ord.status || '').toLowerCase();
-      if (rawSt === 'ready' || rawSt === 'ready to serve') st = 'ready';
-      else if (rawSt === 'served' || rawSt === 'delivered' || rawSt === 'completed') st = 'served';
+      let statusLabel = 'Preparing';
+      let badgeBg = '#fff7ed';
+      let badgeColor = '#c2410c';
+      let badgeBorder = '#ffedd5';
+
+      if (rawSt === 'ready' || rawSt === 'ready to serve' || rawSt === 'prepared') {
+        st = 'ready';
+        statusLabel = 'Ready to Serve';
+        badgeBg = '#fefce8';
+        badgeColor = '#854d0e';
+        badgeBorder = '#fef9c3';
+      } else if (rawSt === 'served' || rawSt === 'delivered') {
+        st = 'served';
+        statusLabel = 'Served';
+        badgeBg = '#f0fdf4';
+        badgeColor = '#166534';
+        badgeBorder = '#dcfce7';
+      } else if (rawSt === 'completed' || rawSt === 'paid') {
+        st = 'completed';
+        statusLabel = 'Completed';
+        badgeBg = '#ecfdf5';
+        badgeColor = '#047857';
+        badgeBorder = '#a7f3d0';
+      } else if (rawSt === 'cancelled' || rawSt === 'rejected') {
+        st = 'cancelled';
+        statusLabel = 'Cancelled';
+        badgeBg = '#fef2f2';
+        badgeColor = '#b91c1c';
+        badgeBorder = '#fecaca';
+      } else if (rawSt === 'new' || rawSt === 'pending' || rawSt === 'in queue' || rawSt === 'placed') {
+        st = 'new';
+        statusLabel = 'New Order';
+        badgeBg = '#eff6ff';
+        badgeColor = '#1d4ed8';
+        badgeBorder = '#bfdbfe';
+      }
+
+      const isInQueue = st === 'new' || st === 'preparing' || st === 'ready';
 
       return {
         id: ordId,
+        rawId: ord._id || ord.id,
         table: String(tableStr).startsWith('Table') ? tableStr : `Table ${tableStr}`,
         items: itemsStr,
         total: totalAmount,
-        time: timeStr,
-        status: st
+        time: `${formattedDate}, ${formattedTime}`,
+        status: st,
+        statusLabel,
+        badgeBg,
+        badgeColor,
+        badgeBorder,
+        isInQueue,
+        createdAt: rawDate
       };
     });
 
@@ -1115,42 +1243,66 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         tablesCurrentPage * tablesLimit
       );
 
-  // Operational View Pagination: Orders (10 per page, matching "total": 16, "from": 1, "to": 10, "totalPages": 2, "currentPage": 1)
+  // Operational View: Orders calculation, filtering & pagination
+  const filteredOrders = (opData.orders || []).filter(ord => {
+    if (ordersFilter === 'all') return true;
+    if (ordersFilter === 'queue') return ord.isInQueue;
+    if (ordersFilter === 'preparing') return ord.status === 'preparing';
+    if (ordersFilter === 'ready') return ord.status === 'ready';
+    if (ordersFilter === 'completed') return ord.status === 'completed' || ord.status === 'served';
+    if (ordersFilter === 'cancelled') return ord.status === 'cancelled';
+    return true;
+  });
+
+  const allOrdersCount = (opData.orders || []).length;
+  const inQueueCount = (opData.orders || []).filter(o => o.isInQueue).length;
+  const preparingCount = (opData.orders || []).filter(o => o.status === 'preparing').length;
+  const readyCount = (opData.orders || []).filter(o => o.status === 'ready').length;
+  const completedCount = (opData.orders || []).filter(o => o.status === 'completed' || o.status === 'served').length;
+  const cancelledCount = (opData.orders || []).filter(o => o.status === 'cancelled').length;
+
   const ordersLimit = 10;
-  const ordersTotal = liveOrdersPagination?.total || opData.orders.length;
-  const ordersTotalPages = liveOrdersPagination?.totalPages || Math.max(1, Math.ceil(ordersTotal / ordersLimit));
+  const ordersTotal = filteredOrders.length;
+  const ordersTotalPages = Math.max(1, Math.ceil(ordersTotal / ordersLimit));
   const ordersCurrentPage = Math.min(ordersPage, ordersTotalPages);
-  const ordersFrom = liveOrdersPagination?.from || (ordersTotal === 0 ? 0 : (ordersCurrentPage - 1) * ordersLimit + 1);
-  const ordersTo = liveOrdersPagination?.to || Math.min(ordersCurrentPage * ordersLimit, ordersTotal);
+  const ordersFrom = ordersTotal === 0 ? 0 : (ordersCurrentPage - 1) * ordersLimit + 1;
+  const ordersTo = Math.min(ordersCurrentPage * ordersLimit, ordersTotal);
 
-  const paginatedOrders = (liveOrdersPagination && opData.orders.length <= ordersLimit)
-    ? opData.orders
-    : opData.orders.slice(
-        (ordersCurrentPage - 1) * ordersLimit,
-        ordersCurrentPage * ordersLimit
-      );
+  const paginatedOrders = filteredOrders.slice(
+    (ordersCurrentPage - 1) * ordersLimit,
+    ordersCurrentPage * ordersLimit
+  );
 
-  const handleOrdersPageChange = async (newPage) => {
+  const handleOrdersPageChange = (newPage) => {
     setOrdersPage(newPage);
-    if (currentViewBranch && liveOrdersPagination) {
-      const branchId = currentViewBranch._id || currentViewBranch.id;
-      try {
-        const res = await OrderApi.getOrders({ branchId, page: newPage, limit: ordersLimit });
-        if (res?.status && res?.response) {
-          const d = res.response.data || res.response;
-          let list = [];
-          if (Array.isArray(d)) list = d;
-          else if (Array.isArray(d?.orders)) list = d.orders;
-          else if (Array.isArray(d?.data?.orders)) list = d.data.orders;
-          else if (Array.isArray(d?.data)) list = d.data;
-          if (list.length > 0) setLiveBranchOrders(list);
-          const pag = res.response.pagination || d.pagination;
-          if (pag) setLiveOrdersPagination(pag);
-        }
-      } catch (e) {
-        console.warn("Failed to fetch next orders page:", e);
-      }
+  };
+
+  const handleRefreshOrders = async () => {
+    if (!currentViewBranch) return;
+    setIsRefreshingOrders(true);
+    await fetchBranchOperationalData(currentViewBranch);
+    if (typeof fetchOrders === 'function') {
+      await fetchOrders();
     }
+    setTimeout(() => setIsRefreshingOrders(false), 400);
+    ShowNotifications.showAlertNotification("Live orders queue refreshed successfully.", true);
+  };
+
+  // Operational View: Staff Pagination (8 per page)
+  const staffLimit = 8;
+  const staffTotal = (opData.staff || []).length;
+  const staffTotalPages = Math.max(1, Math.ceil(staffTotal / staffLimit));
+  const staffCurrentPage = Math.min(staffPage, staffTotalPages);
+  const staffFrom = staffTotal === 0 ? 0 : (staffCurrentPage - 1) * staffLimit + 1;
+  const staffTo = Math.min(staffCurrentPage * staffLimit, staffTotal);
+
+  const paginatedStaff = (opData.staff || []).slice(
+    (staffCurrentPage - 1) * staffLimit,
+    staffCurrentPage * staffLimit
+  );
+
+  const handleStaffPageChange = (newPage) => {
+    setStaffPage(newPage);
   };
 
   const handleTablesPageChange = async (newPage) => {
@@ -1287,20 +1439,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>✓ Operational</span>
             </div>
 
-            {/* Card 2: Active Orders */}
+            {/* Card 2: Live Orders Queue & History */}
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Live Orders</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Orders Queue</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b', marginTop: '8px' }}>
-                {ordersTotal} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
+                {inQueueCount} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
               </div>
-              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>Real-time POS activity</span>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>
+                Total History: {allOrdersCount} Orders
+              </span>
             </div>
 
             {/* Card 3: Assigned Staff */}
             <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Staff</span>
               <div style={{ fontSize: '24px', fontWeight: 800, color: '#6366f1', marginTop: '8px' }}>
-                {opData.staff.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Staff Members</span>
+                {staffTotal} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Staff Members</span>
               </div>
               <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>Waiters & Kitchen team</span>
             </div>
@@ -1335,7 +1489,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('orders')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Live Orders Queue ({ordersTotal})
+              Live Orders Queue ({inQueueCount})
             </button>
 
             <button
@@ -1343,7 +1497,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => setOpSubTab('staff')}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'staff' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'staff' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Staff ({opData.staff.length})
+              Staff ({staffTotal})
             </button>
 
             <button
@@ -1606,65 +1760,132 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
           {opSubTab === 'orders' && (
             <div style={{ padding: '8px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Active Live Orders Queue</h4>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#16a34a', fontWeight: 700 }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
-                  {ordersTotal} Orders Processing
+              {/* Header with Title, Live Indicator & Manual Refresh Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                    Live Orders Queue & History
+                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: inQueueCount > 0 ? '#22c55e' : '#94a3b8', display: 'inline-block' }}></span>
+                    <strong style={{ color: '#0f172a' }}>{inQueueCount} Orders</strong> currently in queue • <span style={{ color: '#64748b' }}>{allOrdersCount} total records</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={handleRefreshOrders}
+                    disabled={isRefreshingOrders}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: isRefreshingOrders ? 'wait' : 'pointer'
+                    }}
+                  >
+                    <span style={{ display: 'inline-block', transform: isRefreshingOrders ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>
+                      🔄
+                    </span>
+                    {isRefreshingOrders ? 'Refreshing...' : 'Refresh Orders'}
+                  </button>
                 </div>
               </div>
+
+              {/* Status Filter Chips */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                {[
+                  { key: 'all', label: 'All History', count: allOrdersCount },
+                  { key: 'queue', label: 'Live Queue', count: inQueueCount },
+                  { key: 'preparing', label: 'Preparing', count: preparingCount },
+                  { key: 'ready', label: 'Ready to Serve', count: readyCount },
+                  { key: 'completed', label: 'Completed / Served', count: completedCount },
+                  { key: 'cancelled', label: 'Cancelled', count: cancelledCount }
+                ].map(chip => {
+                  const isSelected = ordersFilter === chip.key;
+                  return (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => {
+                        setOrdersFilter(chip.key);
+                        setOrdersPage(1);
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        border: isSelected ? '1.5px solid var(--primary)' : '1px solid #e2e8f0',
+                        background: isSelected ? 'var(--primary)' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#475569',
+                        fontSize: '12px',
+                        fontWeight: isSelected ? 800 : 600,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <span>{chip.label}</span>
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        background: isSelected ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
+                        color: isSelected ? '#ffffff' : '#64748b'
+                      }}>
+                        {chip.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Table */}
               <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
                 <div style={{ width: '100%', overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: '800px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <table style={{ width: '100%', minWidth: '850px', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <colgroup>
-                      <col style={{ width: '12%' }} />
-                      <col style={{ width: '10%' }} />
-                      <col style={{ width: '40%' }} />
                       <col style={{ width: '12%' }} />
                       <col style={{ width: '14%' }} />
                       <col style={{ width: '12%' }} />
+                      <col style={{ width: '36%' }} />
+                      <col style={{ width: '12%' }} />
+                      <col style={{ width: '14%' }} />
                     </colgroup>
                     <thead>
                       <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Order ID</th>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Table</th>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Ordered Items</th>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Amount</th>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', verticalAlign: 'middle' }}>Time Elapsed</th>
-                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', verticalAlign: 'middle' }}>Status</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Order ID</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Date / Time</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Table</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Ordered Items</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Amount</th>
+                        <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Status</th>
                       </tr>
                     </thead>
-                  <tbody>
-                    {opData.orders.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No active orders.</td>
-                      </tr>
-                    ) : (
-                      paginatedOrders.map(order => {
-                        let badgeBg = '#fff7ed';
-                        let badgeColor = '#c2410c';
-                        let badgeBorder = '#ffedd5';
-                        let statusText = 'Preparing';
-
-                        if (order.status === 'ready') {
-                          badgeBg = '#fefce8';
-                          badgeColor = '#854d0e';
-                          badgeBorder = '#fef9c3';
-                          statusText = 'Ready to Serve';
-                        } else if (order.status === 'served') {
-                          badgeBg = '#f0fdf4';
-                          badgeColor = '#166534';
-                          badgeBorder = '#dcfce7';
-                          statusText = 'Served';
-                        }
-
-                        return (
+                    <tbody>
+                      {filteredOrders.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" style={{ padding: '36px', textAlign: 'center', color: '#94a3b8' }}>
+                            No orders found matching the selected filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedOrders.map(order => (
                           <tr key={order.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                             <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--primary)', verticalAlign: 'middle' }}>{order.id}</td>
-                            <td style={{ padding: '12px 14px', fontWeight: 800, verticalAlign: 'middle' }}>{order.table}</td>
+                            <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '12px', verticalAlign: 'middle' }}>{order.time}</td>
+                            <td style={{ padding: '12px 14px', fontWeight: 800, color: '#0f172a', verticalAlign: 'middle' }}>{order.table}</td>
                             <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 500, verticalAlign: 'middle', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={order.items}>{order.items}</td>
                             <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', verticalAlign: 'middle' }}>{order.total}</td>
-                            <td style={{ padding: '12px 14px', color: '#64748b', verticalAlign: 'middle' }}>{order.time}</td>
                             <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
                               <span style={{ 
                                 display: 'inline-block', 
@@ -1672,18 +1893,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                                 borderRadius: '9999px', 
                                 fontSize: '11px', 
                                 fontWeight: 700, 
-                                backgroundColor: badgeBg, 
-                                color: badgeColor, 
-                                border: `1px solid ${badgeBorder}` 
+                                backgroundColor: order.badgeBg, 
+                                color: order.badgeColor, 
+                                border: `1px solid ${order.badgeBorder}` 
                               }}>
-                                {statusText}
+                                {order.statusLabel}
                               </span>
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
+                        ))
+                      )}
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -1756,9 +1976,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
           {opSubTab === 'staff' && (
             <div style={{ padding: '8px 0' }}>
-              <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Assigned Personnel & Roster</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                  Assigned Personnel & Roster
+                </h4>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  {staffTotal} Total Staff Members
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' }}>
-                {opData.staff.map(person => (
+                {paginatedStaff.map(person => (
                   <div key={person.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 2px 4px rgba(0,0,0,0.01)' }}>
                     <div style={{ 
                       width: '40px', 
@@ -1798,6 +2026,70 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   </div>
                 ))}
               </div>
+
+              {/* Staff Pagination Controls */}
+              {staffTotal > 0 && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginTop: '16px',
+                  padding: '10px 16px',
+                  background: '#ffffff',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    Showing <strong>{staffFrom}</strong> to <strong>{staffTo}</strong> of <strong>{staffTotal}</strong> staff (Page {staffCurrentPage} of {staffTotalPages})
+                  </div>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleStaffPageChange(Math.max(1, staffCurrentPage - 1))}
+                      disabled={staffCurrentPage <= 1}
+                      style={{
+                        padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                        background: staffCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
+                        color: staffCurrentPage <= 1 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: staffCurrentPage <= 1 ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: staffTotalPages }, (_, i) => i + 1).map(pageNum => (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => handleStaffPageChange(pageNum)}
+                        style={{
+                          minWidth: '28px', height: '28px', borderRadius: '6px', fontSize: '12px',
+                          fontWeight: staffCurrentPage === pageNum ? 700 : 500,
+                          border: staffCurrentPage === pageNum ? 'none' : '1px solid #e2e8f0',
+                          background: staffCurrentPage === pageNum ? '#000000' : '#ffffff',
+                          color: staffCurrentPage === pageNum ? '#ffffff' : '#334155', cursor: 'pointer'
+                        }}
+                      >
+                        {pageNum}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => handleStaffPageChange(Math.min(staffTotalPages, staffCurrentPage + 1))}
+                      disabled={staffCurrentPage >= staffTotalPages}
+                      style={{
+                        padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                        background: staffCurrentPage >= staffTotalPages ? '#f8fafc' : '#ffffff',
+                        color: staffCurrentPage >= staffTotalPages ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: staffCurrentPage >= staffTotalPages ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2064,6 +2356,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         const val = sanitizeMobile(e.target.value);
                         setBranchForm({ ...branchForm, mobileNumber: val });
                         if (formErrors.mobileNumber) setFormErrors({ ...formErrors, mobileNumber: '' });
+                      }}
+                      onBlur={() => {
+                        const val = (branchForm.mobileNumber || '').trim();
+                        if (val.length === 10) {
+                          const cleanPhone = val.replace(/\D/g, '');
+                          const allBranchSources = [
+                            ...(apiBranches || []),
+                            ...(branches || []),
+                            ...(activeRestaurant?.branches || [])
+                          ];
+                          const isDuplicate = allBranchSources.some(b => {
+                            const bId = String(b.id || b._id || '');
+                            const currentId = String(branchForm.id || '');
+                            if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) return false;
+                            const existingPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
+                            return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
+                          });
+                          if (isDuplicate) {
+                            const dupMsg = 'This mobile number is already registered to another branch.';
+                            setFormErrors(prev => ({ ...prev, mobileNumber: dupMsg }));
+                            ShowNotifications.showAlertNotification(dupMsg, false);
+                          }
+                        }
                       }}
                       style={{
                         width: '100%',
@@ -2481,7 +2796,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       {/* 3. Search & Filter Bar */}
       <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '380px' }}>
+          <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
             <input
               type="text"
               placeholder="Search branch name, code, manager, city..."
@@ -2495,7 +2810,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 const val = e.target.value.replace(/^\s+/, '');
                 setSearchTerm(val);
               }}
-              style={{ width: '100%', padding: '10px 16px 10px 38px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '14px', outline: 'none' }}
+              style={{ width: '100%', height: '38px', padding: '0 16px 0 38px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
             />
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
               <circle cx="11" cy="11" r="8" />
@@ -2819,7 +3134,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 Branch Capacity Reached
               </h4>
               <p style={{ margin: 0, fontSize: '13px', color: '#9a3412', lineHeight: 1.4 }}>
-                Your current <strong>{sub.planName} Plan</strong> allows up to <strong>{totalAllowedBranches} branch outlet{totalAllowedBranches > 1 ? 's' : ''}</strong> ({branches.length} currently in use).
+                Your current <strong>{planName} Plan</strong> allows up to <strong>{totalAllowedBranches} branch outlet{totalAllowedBranches > 1 ? 's' : ''}</strong> ({branches.length} currently in use).
               </p>
             </div>
 

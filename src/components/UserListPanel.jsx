@@ -54,10 +54,11 @@ export default function UserListPanel() {
   const userRole = (roleStr || '').toLowerCase();
   const userType = (userTypeStr || '').toUpperCase();
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
-  const currentBranchId = typeof currentUser?.branchId === 'object' ? currentUser?.branchId?._id : currentUser?.branchId;
-  const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
+  const currentBranchId = typeof currentUser?.branchId === 'object' ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : currentUser?.branchId;
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const activeFilteredBranchId = !isAllBranches
     ? selectedBranchId
-    : currentBranchId;
+    : (!isAdmin && currentBranchId ? currentBranchId : null);
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -762,8 +763,8 @@ export default function UserListPanel() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '16px', marginBottom: '20px', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '100%' }}>
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: '320px' }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -784,10 +785,11 @@ export default function UserListPanel() {
               }}
               style={{
                 width: '100%',
-                padding: '10px 14px 10px 38px',
+                height: '38px',
+                padding: '0 14px 0 38px',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
-                fontSize: '14px',
+                fontSize: '13px',
                 outline: 'none',
                 boxSizing: 'border-box'
               }}

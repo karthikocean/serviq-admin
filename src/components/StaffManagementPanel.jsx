@@ -65,11 +65,7 @@ export default function StaffManagementPanel({
   handleOpenAssignTablesModal,
   openKitchenSettingsModal
 }) {
-  const { currentUser: user, selectedBranchId } = useContext(AppContext);
-  const currentBranchId = typeof user?.branchId === 'object' ? user?.branchId?._id : user?.branchId;
-  const activeFilteredBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
-    ? selectedBranchId
-    : currentBranchId;
+  const { currentUser: user, selectedBranchId, activeRestaurant } = useContext(AppContext);
   const roleStr = typeof user?.role === 'object' && user?.role !== null
     ? (user?.role?.roleName || user?.role?.name || '')
     : (typeof user?.role === 'string' ? user.role : '');
@@ -78,6 +74,12 @@ export default function StaffManagementPanel({
   const userRole = (roleStr || '').toLowerCase();
   const userType = (userTypeStr || '').toUpperCase();
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+
+  const currentBranchId = typeof user?.branchId === 'object' ? (user?.branchId?._id || user?.branchId?.id) : user?.branchId;
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const activeFilteredBranchId = !isAllBranches
+    ? selectedBranchId
+    : (!isAdmin && currentBranchId ? currentBranchId : null);
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -244,18 +246,20 @@ export default function StaffManagementPanel({
     }
 
     // Also merge any local staff from activeRestaurant
-    if (Array.isArray(activeRestaurant?.staff)) {
-      activeRestaurant.staff.forEach(st => {
-        const exists = list.some(u => 
-          String(u._id || u.id) === String(st._id || st.id) ||
-          (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
-          (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
-        );
-        if (!exists) {
-          list.push(st);
-        }
-      });
-    }
+    const localStaffPool = [
+      ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
+      ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
+    ];
+    localStaffPool.forEach(st => {
+      const exists = list.some(u => 
+        String(u._id || u.id) === String(st._id || st.id) ||
+        (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
+        (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
+      );
+      if (!exists) {
+        list.push(st);
+      }
+    });
 
     setApiUsers(list);
     if (stationsRes?.status) setApiStations(stationsRes.response.data || stationsRes.response || []);
@@ -295,9 +299,11 @@ export default function StaffManagementPanel({
 
   const filteredUsers = apiUsers.filter(u => {
     // 1. Branch filter
-    if (activeFilteredBranchId) {
-      const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
-      if (uBranchId && String(uBranchId) !== String(activeFilteredBranchId)) {
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
+      const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+      const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
+      const effectiveStaffBranch = uBranchId || uBranch;
+      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(activeFilteredBranchId) && effectiveStaffBranch !== 'ALL') {
         return false;
       }
     }
@@ -649,7 +655,7 @@ export default function StaffManagementPanel({
     setShowAssignTablesModal(true);
   };
 
-  const { assignTablesToWaiter, activeRestaurant } = useContext(AppContext);
+  const { assignTablesToWaiter } = useContext(AppContext);
   const handleSaveAssignments = async () => {
     if (!modalWaiterId) {
       ShowNotifications.showAlertNotification("Please select a waiter.", false);
@@ -1196,7 +1202,7 @@ export default function StaffManagementPanel({
           alignItems: 'center',
           width: '100%'
         }}>
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', width: '320px' }}>
             <input
               type="text"
               placeholder="Search by staff name, email, phone..."
@@ -1213,16 +1219,18 @@ export default function StaffManagementPanel({
               }}
               style={{
                 width: '100%',
-                padding: '9px 14px 9px 36px',
+                height: '38px',
+                padding: '0 14px 0 36px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
                 fontSize: '13px',
                 outline: 'none',
-                backgroundColor: '#f8fafc'
+                backgroundColor: '#f8fafc',
+                boxSizing: 'border-box'
               }}
             />
             <svg
-              style={{ position: 'absolute', left: '12px', top: '10px', color: '#94a3b8' }}
+              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
               width="15"
               height="15"
               viewBox="0 0 24 24"

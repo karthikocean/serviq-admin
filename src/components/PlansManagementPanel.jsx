@@ -56,6 +56,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const {
     activeRestaurant,
     upgradeSubscriptionPlan,
+    upgradeRestaurantPlan,
     purchaseExtraBranchSlots,
     toggleSubscriptionAutoRenew,
     currentUser
@@ -225,39 +226,39 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const branchCapacityData = dashboardData?.branchCapacity;
   const extraBranchRateData = dashboardData?.extraBranchRate;
 
-  // Active Plan fields
-  const currentPlanName = activePlanData?.planName || sub.planName || 'Standard Plan';
+  // Active Plan fields - Prioritize activeRestaurant and local selections over API fallbacks
+  const cleanPlanSlug = String(activeRestaurant?.subscription?.planName || activeRestaurant?.plan || activePlanData?.planName || sub.planName || 'Standard')
+    .replace(/^plan-/i, '')
+    .replace(/\s*plan$/i, '')
+    .trim() || 'Standard';
+  const currentPlanName = `${cleanPlanSlug.charAt(0).toUpperCase() + cleanPlanSlug.slice(1)} Plan`;
   const currentBillingCycle = activePlanData?.billingCycle || (sub.billingCycle === 'annual' ? 'Annual' : 'Monthly');
-  const currentPlanPrice = activePlanData?.price !== undefined ? activePlanData.price : (sub.price || 1999);
-  const nextRenewalFormatted = formatDate(activePlanData?.nextRenewal || sub.nextBillingDate || '2026-09-23');
-  const validityFormatted = formatDate(activePlanData?.validity || sub.expiryDate || '2026-09-23');
-
-  // Branch Capacity fields
-  const branches = activeRestaurant?.branches || [];
-  const activeBranchesCount = branches.length;
-  const planBaseLimit = getPlanBranchLimit(currentPlanName || sub.planName, 5);
-  const resolvedBaseLimit = (() => {
-    if (typeof sub.baseBranchLimit === 'number' && sub.baseBranchLimit > 0) {
-      const p = (currentPlanName || sub.planName || '').toLowerCase();
-      if (p.includes('premium') && sub.baseBranchLimit === 10) return 8;
-      if (p.includes('standard') && sub.baseBranchLimit === 3) return 5;
-      if (p.includes('basic') && sub.baseBranchLimit === 1) return 3;
-      return sub.baseBranchLimit;
-    }
-    return planBaseLimit;
-  })();
-  const baseBranchLimit = branchCapacityData?.base !== undefined ? branchCapacityData.base : resolvedBaseLimit;
-  const extraBranchSlots = branchCapacityData?.addons !== undefined ? branchCapacityData.addons : (sub.extraBranchSlots || 0);
-  const totalAllowedBranches = branchCapacityData?.total !== undefined ? branchCapacityData.total : (baseBranchLimit + extraBranchSlots);
-  const usedBranchesCount = branchCapacityData?.used !== undefined ? branchCapacityData.used : activeBranchesCount;
-  const remainingSlots = branchCapacityData?.available !== undefined ? branchCapacityData.available : Math.max(0, totalAllowedBranches - usedBranchesCount);
-  const branchUsagePercent = branchCapacityData?.percentUsed !== undefined ? branchCapacityData.percentUsed : Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
 
   const matchedActivePlan = AVAILABLE_PLANS.find(p =>
     p.id === sub.planId ||
-    p.name.toLowerCase().includes((currentPlanName || '').toLowerCase().replace(' plan', '')) ||
-    (currentPlanName || '').toLowerCase().includes(p.name.toLowerCase().replace(' plan', ''))
-  );
+    p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase()) ||
+    cleanPlanSlug.toLowerCase().includes(p.name.toLowerCase().replace(/\s*plan$/i, '').trim())
+  ) || AVAILABLE_PLANS[1];
+
+  const currentPlanPrice = currentBillingCycle.toLowerCase().includes('annual')
+    ? (matchedActivePlan.annualPrice || 19999)
+    : (matchedActivePlan.monthlyPrice || 1999);
+
+  const nextRenewalFormatted = formatDate(activePlanData?.nextRenewal || sub.nextBillingDate || '2026-09-23');
+  const validityFormatted = formatDate(activePlanData?.validity || sub.expiryDate || '2026-09-23');
+
+  // Branch Capacity fields - calculated strictly from selected active plan
+  const branches = activeRestaurant?.branches || [];
+  const activeBranchesCount = branches.length;
+  const baseBranchLimit = getPlanBranchLimit(cleanPlanSlug, 5);
+  const extraBranchSlots = branchCapacityData?.addons !== undefined 
+    ? branchCapacityData.addons 
+    : (sub.extraBranchSlots || 0);
+  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
+  const usedBranchesCount = activeBranchesCount;
+  const remainingSlots = Math.max(0, totalAllowedBranches - usedBranchesCount);
+  const branchUsagePercent = Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
+
   const extraBranchUnitPrice = extraBranchRateData?.rate !== undefined ? extraBranchRateData.rate : (matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699);
   const isAutoRenewActive = extraBranchRateData?.autoRenew !== undefined ? extraBranchRateData.autoRenew : (sub.autoRenew !== false);
 
@@ -443,20 +444,65 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   };
 
-  const handleConfirmPlanUpgrade = (targetPlan) => {
+  const handleSelectOrSwitchPlan = (targetPlan) => {
+    if (!targetPlan) return;
     setIsProcessingUpgrade(true);
+    const billing = (currentBillingCycle.toLowerCase().includes('annual') || upgradeBillingCycle === 'annual') ? 'annual' : 'monthly';
     const methodStr = upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)';
+    const cleanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
+    const branchLimit = targetPlan.maxBranches || targetPlan.branchLimit || getPlanBranchLimit(cleanName, 5);
+    const planPrice = billing === 'annual' ? (targetPlan.annualPrice || 9999) : (targetPlan.monthlyPrice || 999);
 
-    setTimeout(() => {
-      if (upgradeSubscriptionPlan) {
-        upgradeSubscriptionPlan(activeRestaurant.id, targetPlan.id, upgradeBillingCycle, methodStr);
+    if (upgradeSubscriptionPlan && activeRestaurant?.id) {
+      upgradeSubscriptionPlan(activeRestaurant.id, targetPlan.id, billing, methodStr);
+    }
+    if (upgradeRestaurantPlan && activeRestaurant?.id) {
+      upgradeRestaurantPlan(activeRestaurant.id, cleanName);
+    }
+
+    setDashboardData(prev => ({
+      ...prev,
+      activePlan: {
+        ...(prev?.activePlan || {}),
+        planId: targetPlan.id,
+        planName: `${cleanName} Plan`,
+        billingCycle: billing === 'annual' ? 'Annual' : 'Monthly',
+        price: planPrice,
+        baseBranchLimit: branchLimit,
+        status: 'Active'
+      },
+      branchCapacity: {
+        ...(prev?.branchCapacity || {}),
+        base: branchLimit,
+        total: branchLimit + extraBranchSlots,
+        used: activeBranchesCount,
+        available: Math.max(0, branchLimit + extraBranchSlots - activeBranchesCount),
+        percentUsed: Math.min(100, Math.round((activeBranchesCount / (branchLimit + extraBranchSlots || 1)) * 100))
       }
-      setIsProcessingUpgrade(false);
-      setIsUpgradeModalOpen(false);
-      setSelectedPlanForUpgrade(null);
-      fetchDashboardData(false);
-      ShowNotifications.showAlertNotification(`Successfully updated subscription to ${targetPlan.name}!`, true);
-    }, 900);
+    }));
+
+    setPlansList(prev => prev.map(p => ({
+      ...p,
+      status: p.id === targetPlan.id ? 'Active' : 'Available'
+    })));
+
+    const newInvoice = {
+      id: `INV-PLN-${Date.now().toString().slice(-6)}`,
+      planName: `${cleanName} Plan`,
+      description: `Plan Upgrade to ${cleanName} Plan (${billing})`,
+      branchesIncluded: branchLimit,
+      amount: planPrice,
+      date: new Date().toISOString(),
+      paymentMethod: methodStr,
+      status: 'Paid',
+      type: 'plan'
+    };
+    setLocalPurchases(prev => [newInvoice, ...prev]);
+
+    setIsProcessingUpgrade(false);
+    setIsUpgradeModalOpen(false);
+    setSelectedPlanForUpgrade(null);
+    ShowNotifications.showAlertNotification(`Subscription tier successfully updated to ${cleanName} Plan (Max ${branchLimit} Outlets)!`, true);
   };
 
   const handleTogglePlanActive = (planId) => {
@@ -533,7 +579,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <button
             type="button"
             className="btn btn-outline"
-            onClick={() => setIsExtraBranchModalOpen(true)}
+            onClick={() => {
+              setExtraSlotsToAdd(1);
+              setIsExtraBranchModalOpen(true);
+            }}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a', background: '#ffffff' }}
           >
             <BuildingIcon size={16} /> + Buy Addons
@@ -790,7 +839,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             ))}
           </div>
 
-          <div style={{ position: 'relative', width: '280px' }}>
+          <div style={{ position: 'relative', width: '320px' }}>
             <input
               type="text"
               placeholder="Search invoice, plan, date..."
@@ -806,11 +855,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               }}
               style={{
                 width: '100%',
-                padding: '8px 14px 8px 34px',
+                height: '38px',
+                padding: '0 14px 0 34px',
                 borderRadius: '8px',
                 border: '1px solid #cbd5e1',
                 fontSize: '12px',
-                outline: 'none'
+                outline: 'none',
+                boxSizing: 'border-box'
               }}
             />
             <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>
@@ -943,7 +994,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       {isExtraBranchModalOpen && (
         <Modal
           isOpen={isExtraBranchModalOpen}
-          onClose={() => !isProcessingPayment && setIsExtraBranchModalOpen(false)}
+          onClose={() => {
+            if (!isProcessingPayment) {
+              setExtraSlotsToAdd(1);
+              setIsExtraBranchModalOpen(false);
+            }
+          }}
           title="Branch-Based Plan Calculation & Add-on Calculator"
           maxWidth="580px"
         >
@@ -1064,7 +1120,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => setIsExtraBranchModalOpen(false)}
+                onClick={() => {
+                  setExtraSlotsToAdd(1);
+                  setIsExtraBranchModalOpen(false);
+                }}
                 disabled={isProcessingPayment}
                 style={{ padding: '10px 20px', borderRadius: '8px', fontWeight: 600 }}
               >
@@ -1171,7 +1230,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             {/* 3 PLAN COMPARISON CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' }}>
               {plansList.map(plan => {
-                const isActive = plan.status === 'Active';
+                const planClean = plan.name.toLowerCase().replace(/\s*plan$/i, '').trim();
+                const currentClean = cleanPlanSlug.toLowerCase();
+                const isCurrentPlan = currentClean === planClean || 
+                  plan.id === sub.planId || 
+                  (sub.planName && plan.name.toLowerCase().includes(sub.planName.toLowerCase()));
 
                 return (
                   <div
@@ -1179,22 +1242,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     style={{
                       background: '#ffffff',
                       borderRadius: '16px',
-                      border: '1.5px solid #eef2f6',
+                      border: isCurrentPlan ? '2px solid var(--primary)' : '1.5px solid #eef2f6',
                       padding: '28px 24px 22px 24px',
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
                       position: 'relative',
-                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+                      boxShadow: isCurrentPlan ? '0 6px 24px rgba(255, 90, 31, 0.12)' : '0 4px 20px rgba(0, 0, 0, 0.03)',
                       transition: 'transform 0.15s, box-shadow 0.15s'
                     }}
                   >
                     <div>
                       {/* Top Row: Title + Edit Pencil Icon */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                          {plan.name}
-                        </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                            {plan.name}
+                          </h3>
+                          {isCurrentPlan && (
+                            <span style={{ fontSize: '10px', background: 'var(--primary)', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                              CURRENT
+                            </span>
+                          )}
+                        </div>
 
                         {/* Edit Pencil Icon */}
                         <button
@@ -1227,14 +1297,15 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       <div style={{ marginTop: '8px' }}>
                         <span style={{
                           display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
+                          padding: '3px 9px',
+                          borderRadius: '6px',
                           fontSize: '11px',
-                          fontWeight: 700,
-                          backgroundColor: isActive ? '#e6f9f0' : '#f1f5f9',
-                          color: isActive ? '#10b981' : '#64748b'
+                          fontWeight: 800,
+                          backgroundColor: isCurrentPlan ? '#e6f9f0' : '#f1f5f9',
+                          color: isCurrentPlan ? '#10b981' : '#64748b',
+                          border: isCurrentPlan ? '1px solid #bbf7d0' : '1px solid #e2e8f0'
                         }}>
-                          {plan.status || 'Active'}
+                          {isCurrentPlan ? '● Active' : 'Available'}
                         </span>
                       </div>
 
@@ -1268,7 +1339,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             MAX BRANCHES
                           </span>
                           <span style={{ fontSize: '17px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
-                            {plan.maxBranches}
+                            {plan.maxBranches} Outlets
                           </span>
                         </div>
                       </div>
@@ -1303,41 +1374,64 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
                     </div>
 
-                    {/* Bottom Action Button: Deactivate Plan */}
+                    {/* Bottom Action Button: Current Active Plan vs Switch to this Plan */}
                     <div style={{ marginTop: '28px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePlanActive(plan.id)}
-                        disabled={isProcessingUpgrade}
-                        style={{
-                          width: '100%',
-                          padding: '11px 16px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: isActive ? '#fff1f2' : '#f0fdf4',
-                          color: isActive ? '#ef4444' : '#16a34a',
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = isActive ? '#ffe4e6' : '#dcfce7';
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = isActive ? '#fff1f2' : '#f0fdf4';
-                        }}
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-                        </svg>
-                        {isActive ? 'Deactivate Plan' : 'Activate Plan'}
-                      </button>
+                      {isCurrentPlan ? (
+                        <button
+                          type="button"
+                          disabled
+                          style={{
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            border: '1.5px solid #10b981',
+                            background: '#e6f9f0',
+                            color: '#059669',
+                            fontSize: '13px',
+                            fontWeight: 800,
+                            cursor: 'default',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                          ✓ Current Active Plan
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectOrSwitchPlan(plan)}
+                          disabled={isProcessingUpgrade}
+                          style={{
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: 'var(--primary)',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            transition: 'all 0.15s',
+                            boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                          </svg>
+                          Switch to {plan.name}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

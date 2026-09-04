@@ -141,7 +141,10 @@ export default function KitchenReportsPanel({
 
   // Filter dropdown lists
   const kitchenStaffList = staff.filter(s => s.role === 'Kitchen').map(s => s.name);
-  const uniqueDishes = Array.from(new Set(menu.map(m => m.name))).sort();
+  const uniqueDishes = Array.from(new Set([
+    ...menu.map(m => m.name),
+    ...orders.flatMap(o => (Array.isArray(o.items) ? o.items : (Array.isArray(o.orderItems) ? o.orderItems : [])).map(i => i?.name || i?.dishName)).filter(Boolean)
+  ])).sort();
 
   // Get filtered orders
   const filteredKitchenReports = orders.filter(ord => {
@@ -153,7 +156,8 @@ export default function KitchenReportsPanel({
     if (dateEnd && date > dateEnd) return false;
     if (filterStaff !== 'All' && kitchenStaffName !== filterStaff) return false;
     if (filterDish !== 'All') {
-      const hasDish = ord.items.some(item => item.name === filterDish);
+      const ordItems = Array.isArray(ord.items) ? ord.items : (Array.isArray(ord.orderItems) ? ord.orderItems : []);
+      const hasDish = ordItems.some(item => (item.name || item.dishName) === filterDish);
       if (!hasDish) return false;
     }
     if (filterPriority !== 'All' && priority !== filterPriority) return false;
@@ -307,7 +311,7 @@ export default function KitchenReportsPanel({
                       <td style={{ padding: '12px 14px', fontWeight: 600, fontFamily: 'monospace', fontSize: '13px' }}>#ORD-{ord.id}</td>
                       <td style={{ padding: '12px 14px', maxWidth: '240px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {ord.items.map((it, i) => (
+                          {(Array.isArray(ord.items) ? ord.items : (Array.isArray(ord.orderItems) ? ord.orderItems : [])).map((it, i) => (
                             <span key={i} style={{
                               fontSize: '11px',
                               backgroundColor: 'var(--bg-tertiary)',
@@ -316,7 +320,7 @@ export default function KitchenReportsPanel({
                               fontWeight: 500,
                               color: 'var(--text-main)'
                             }}>
-                              {it.name} × {it.qty}
+                              {it.name || it.dishName || 'Item'} × {it.qty || it.quantity || 1}
                             </span>
                           ))}
                         </div>

@@ -243,7 +243,7 @@ export default function MenuPanel({
         </div>
 
         {/* Row for Search input */}
-        <div style={{ marginTop: '20px', maxWidth: '320px' }} className="menu-search-wrapper">
+        <div style={{ marginTop: '20px', width: '320px' }} className="menu-search-wrapper">
           <input
             type="text"
             placeholder="Search menu items or categories..."
@@ -260,10 +260,12 @@ export default function MenuPanel({
             }}
             style={{
               width: '100%',
-              padding: '8px 12px 8px 36px',
+              height: '38px',
+              padding: '0 12px 0 36px',
               fontSize: '13px',
               border: '1.5px solid var(--border)',
-              borderRadius: '8px'
+              borderRadius: '8px',
+              boxSizing: 'border-box'
             }}
           />
           <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>

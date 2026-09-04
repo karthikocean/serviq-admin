@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../config/index.js';
+import MenuApi from '../api/Menu.js';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -366,18 +367,27 @@ export default function OrdersPanel({
   };
 
   // Extract menu items from activeRestaurant
-  const menuCategories = activeRestaurant?.menu || [];
+  const rawMenu = activeRestaurant?.menu || [];
   const allMenuItems = [];
-  if (Array.isArray(menuCategories)) {
-    menuCategories.forEach(cat => {
-      if (Array.isArray(cat.items)) {
-        cat.items.forEach(item => {
+  if (Array.isArray(rawMenu)) {
+    rawMenu.forEach(entry => {
+      if (Array.isArray(entry.items)) {
+        entry.items.forEach(item => {
           allMenuItems.push({
             _id: item._id || item.id,
             name: item.name,
             price: Number(item.price) || 100,
-            category: cat.categoryName || 'General'
+            category: entry.categoryName || entry.name || item.category || 'General',
+            ...item
           });
+        });
+      } else if (entry && (entry.name || entry._id || entry.id)) {
+        allMenuItems.push({
+          _id: entry._id || entry.id,
+          name: entry.name,
+          price: Number(entry.price) || 100,
+          category: entry.categoryId?.name || entry.category?.name || entry.category || 'General',
+          ...entry
         });
       }
     });
@@ -484,16 +494,21 @@ export default function OrdersPanel({
     try {
       const isBranchFiltered = branchId && branchId !== 'ALL' && branchId !== 'all';
       const branchParam = isBranchFiltered ? `branchId=${branchId}&` : '';
+      const menuParams = { limit: 1000 };
+      if (isBranchFiltered) {
+        menuParams.branchId = branchId;
+      }
+
       const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
-        apiClient.get(`/menu?${branchParam}limit=1000`).catch(() => null),
+        MenuApi.getMenuItems(menuParams).catch(() => null),
         apiClient.get(`/menu/categories?${branchParam}limit=1000`).catch(() => null),
         apiClient.get(`/tables?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null),
         apiClient.get(`/users?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null)
       ]);
 
       let fetchedMenuItems = [];
-      if (menuRes && (menuRes.status === 200 || menuRes.status === 201 || menuRes.data?.success || menuRes.data?.status)) {
-        const d = menuRes.data;
+      if (menuRes?.status && menuRes.response) {
+        const d = menuRes.response;
         if (Array.isArray(d)) fetchedMenuItems = d;
         else if (Array.isArray(d?.data)) fetchedMenuItems = d.data;
         else if (Array.isArray(d?.data?.items)) fetchedMenuItems = d.data.items;
@@ -502,26 +517,40 @@ export default function OrdersPanel({
         else if (Array.isArray(d?.response)) fetchedMenuItems = d.response;
       }
 
-      // If branch filtering returned 0 items, fallback to all menu items
-      if (fetchedMenuItems.length === 0) {
-        try {
-          const fallbackMenuRes = await apiClient.get('/menu?limit=1000').catch(() => null);
-          if (fallbackMenuRes) {
-            const fd = fallbackMenuRes.data;
-            if (Array.isArray(fd)) fetchedMenuItems = fd;
-            else if (Array.isArray(fd?.data)) fetchedMenuItems = fd.data;
-            else if (Array.isArray(fd?.data?.items)) fetchedMenuItems = fd.data.items;
-            else if (Array.isArray(fd?.items)) fetchedMenuItems = fd.items;
-            else if (Array.isArray(fd?.response?.data)) fetchedMenuItems = fd.response.data;
-            else if (Array.isArray(fd?.response)) fetchedMenuItems = fd.response;
+      // Always ensure full menu catalog from MenuApi is available so all items from Menu Management appear
+      try {
+        const allMenuRes = await MenuApi.getMenuItems({ limit: 1000 });
+        if (allMenuRes?.status && allMenuRes.response) {
+          const allD = allMenuRes.response;
+          const allArr = Array.isArray(allD)
+            ? allD
+            : (Array.isArray(allD?.data)
+                ? allD.data
+                : (Array.isArray(allD?.data?.items)
+                    ? allD.data.items
+                    : (Array.isArray(allD?.items) ? allD.items : [])));
+          if (allArr.length > 0) {
+            if (fetchedMenuItems.length === 0 || (!isBranchFiltered && allArr.length > fetchedMenuItems.length)) {
+              fetchedMenuItems = allArr;
+            } else {
+              // Merge missing items
+              const existingIds = new Set(fetchedMenuItems.map(i => String(i._id || i.id)));
+              allArr.forEach(item => {
+                const itemId = String(item._id || item.id);
+                if (!existingIds.has(itemId)) {
+                  fetchedMenuItems.push(item);
+                  existingIds.add(itemId);
+                }
+              });
+            }
           }
-        } catch (e) {
-          console.warn("Fallback menu fetch note:", e);
         }
+      } catch (e) {
+        console.warn("Full menu catalog fetch note:", e);
       }
 
-      // Merge in any items from selectableMenuItems / activeRestaurant.menu to guarantee full list
-      if (selectableMenuItems && selectableMenuItems.length > fetchedMenuItems.length) {
+      // Merge in any items from selectableMenuItems / activeRestaurant.menu to guarantee full 12-item list
+      if (selectableMenuItems && selectableMenuItems.length > 0) {
         const existingNames = new Set(fetchedMenuItems.map(i => (i.name || '').toLowerCase().trim()));
         selectableMenuItems.forEach(it => {
           if (it.name && !existingNames.has(it.name.toLowerCase().trim())) {
@@ -597,7 +626,7 @@ export default function OrdersPanel({
   };
 
   useEffect(() => {
-    const targetBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : getFallbackBranchId();
+    const targetBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : 'ALL';
     fetchModalDataForBranch(targetBranchId);
   }, [selectedBranchId]);
 
@@ -605,7 +634,7 @@ export default function OrdersPanel({
     const defaultBranchId = activeRestaurant?.branches?.[0]?.id || activeRestaurant?.branches?.[0]?._id;
     const targetBranchId = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (modalSelectedBranchId || defaultBranchId || getFallbackBranchId());
     setModalSelectedBranchId(targetBranchId);
-    await fetchModalDataForBranch(targetBranchId);
+    await fetchModalDataForBranch((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : 'ALL');
 
     setNewOrderWaiter('Unassigned');
     setNewOrderNotes('');
@@ -1387,7 +1416,8 @@ export default function OrdersPanel({
                     placeholder="Search dishes..."
                     style={{
                       width: '100%',
-                      padding: '10px 14px',
+                      height: '38px',
+                      padding: '0 14px',
                       borderRadius: '8px',
                       border: '1px solid #cbd5e1',
                       fontSize: '13px',
@@ -1679,7 +1709,8 @@ export default function OrdersPanel({
                   placeholder="Search to add more items..."
                   style={{
                     flex: 1,
-                    padding: '10px 14px',
+                    height: '38px',
+                    padding: '0 14px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -1877,7 +1908,8 @@ export default function OrdersPanel({
                   }}
                   style={{
                     flex: 1,
-                    padding: '10px 14px',
+                    height: '38px',
+                    padding: '0 14px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
@@ -3196,7 +3228,8 @@ export default function OrdersPanel({
                   }}
                   style={{
                     width: '100%',
-                    padding: '10px 12px 10px 36px',
+                    height: '38px',
+                    padding: '0 12px 0 36px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
                     fontSize: '13px',
