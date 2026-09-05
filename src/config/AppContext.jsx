@@ -730,8 +730,8 @@ export const AppProvider = ({ children }) => {
 
       if (apiRes && (apiRes.status === true || apiRes.response?.success === true)) {
         const payload = apiRes.response || apiRes.data;
-        const token = payload?.data?.token;
-        const apiUser = payload?.data?.user;
+        const token = payload?.data?.token || payload?.token || payload?.data?.accessToken || payload?.accessToken;
+        const apiUser = payload?.data?.user || payload?.data?.admin || payload?.data?.restaurant || payload?.user || payload?.admin || payload?.restaurant || payload?.data;
 
         if (token && apiUser) {
           localStorage.setItem("userToken", token);
@@ -758,19 +758,19 @@ export const AppProvider = ({ children }) => {
 
           const user = {
             id: apiUser.id || apiUser._id,
-            name: apiUser.name,
+            name: apiUser.name || apiUser.ownerName || apiUser.restaurantName || 'Restaurant Admin',
             email: apiUser.email || cleanEmail,
-            phoneNumber: apiUser.phoneNumber,
+            phoneNumber: apiUser.phoneNumber || '',
             userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : 'BRANCH_ADMIN'),
             role: isRestaurantOwner ? 'RESTAURANT_OWNER' : (apiUser.role || 'Branch Manager'),
-            restaurantId: apiUser.restaurantId || currentRestaurantId || 'rest-1',
+            restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
             activeBranchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL'),
             branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')
           };
 
           localStorage.setItem("currentUser", JSON.stringify(user));
           setCurrentUser(user);
-          const targetRestId = apiUser.restaurantId || currentRestaurantId || 'rest-1';
+          const targetRestId = user.restaurantId;
           setCurrentRestaurantId(targetRestId);
 
           if (!isRestaurantOwner && userBranchId && userBranchId !== 'ALL') {

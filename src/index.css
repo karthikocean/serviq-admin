@@ -452,7 +452,7 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   color: #ffffff;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: none;
   z-index: 100;
   transition: var(--transition);
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
@@ -1511,6 +1511,7 @@ div[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
   background: #ffffff;
   border-radius: 14px;
   border: 1px solid #e2e8f0;
+  
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
@@ -1549,7 +1550,7 @@ table thead th {
   border-bottom: 3px solid #ff5a1f !important;
   border-top: none !important;
   border-left: none !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-right: none !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
   letter-spacing: 0.6px !important;
   white-space: nowrap !important;
@@ -3627,7 +3628,7 @@ body.dark-theme .table-selection-row.active {
   width: 260px;
   background-color: #0c0a09 !important;
   /* Deep black sidebar */
-  border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-right: none !important;
   color: #ffffff;
   display: flex;
   flex-direction: column;
@@ -4521,4 +4522,90 @@ body.dark-theme .branch-option-subtext {
   transform: translateY(-50%);
   color: #94a3b8;
   pointer-events: none;
-}
+}
+
+/* Universal Table Header Seamless Styling - Prevents white gaps and border bleeding */
+.menu-table-wrapper,
+.table-responsive,
+.admin-table-container,
+.table-container,
+.feed-table-wrapper {
+  background-color: #000000 !important;
+}
+
+.menu-items-table,
+.admin-table,
+.data-table,
+.custom-table,
+.panel-view table,
+.feed-table,
+table {
+  background-color: #ffffff;
+}
+
+.menu-items-table thead,
+.admin-table thead,
+.data-table thead,
+.custom-table thead,
+.panel-view table thead,
+.feed-table thead,
+table thead {
+  background-color: #000000 !important;
+  background: #000000 !important;
+}
+
+.menu-items-table thead tr,
+.admin-table thead tr,
+.data-table thead tr,
+.custom-table thead tr,
+.panel-view table thead tr,
+.feed-table thead tr,
+table thead tr {
+  background-color: #000000 !important;
+  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
+  border-bottom: 3px solid #ff5a1f !important;
+}
+
+.menu-items-table thead th,
+.admin-table thead th,
+.data-table thead th,
+.custom-table thead th,
+.panel-view table thead th,
+.feed-table thead th,
+table thead th {
+  background-color: #000000 !important;
+  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 3px solid #ff5a1f !important;
+  box-sizing: border-box !important;
+}
+
+
+/* Seamless Universal Table Headers */
+table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
+table thead, .menu-items-table thead, .admin-table thead, .data-table thead, .custom-table thead, .panel-view table thead {
+  background-color: #000000 !important;
+}
+
+table thead tr, .menu-items-table thead tr, .admin-table thead tr, .data-table thead tr, .custom-table thead tr, .panel-view table thead tr {
+  background-color: #000000 !important;
+  border-bottom: 3px solid #ff5a1f !important;
+}
+
+table thead th, .menu-items-table thead th, .admin-table thead th, .data-table thead th, .custom-table thead th, .panel-view table thead th {
+  background: #000000 !important;
+  background-color: #000000 !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: 3px solid #ff5a1f !important;
+  border-spacing: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}

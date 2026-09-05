@@ -617,11 +617,11 @@ export default function HelpSupport() {
         )}
       </div>
 
-      {/* View Ticket & Support Replies Modal */}
+      {/* View Ticket Modal */}
       <Modal 
         isOpen={!!viewTicket} 
         onClose={() => setViewTicket(null)}
-        title="Ticket Details & Support Replies"
+        title="Ticket Details"
         maxWidth="640px"
       >
         {viewTicket && (() => {
@@ -742,56 +742,17 @@ export default function HelpSupport() {
               </div>
             </div>
 
-            {/* Quick Reply Form */}
-            <form onSubmit={handleSendReply} style={{ marginTop: '8px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Add Follow-up Message / Reply
-              </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <textarea
-                  rows="3"
-                  value={replyInput}
-                  onChange={(e) => setReplyInput(e.target.value)}
-                  placeholder="Type a follow-up reply or question for the support team..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    lineHeight: '1.5',
-                    boxSizing: 'border-box',
-                    outline: 'none',
-                    resize: 'vertical'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#000'}
-                  onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={() => setViewTicket(null)}
-                    style={{ padding: '8px 16px', fontSize: '12px' }}
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={!replyInput.trim() || isSendingReply}
-                    style={{
-                      padding: '8px 18px',
-                      fontSize: '12px',
-                      opacity: (!replyInput.trim() || isSendingReply) ? 0.6 : 1,
-                      cursor: (!replyInput.trim() || isSendingReply) ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {isSendingReply ? 'Sending Reply...' : 'Send Reply'}
-                  </button>
-                </div>
-              </div>
-            </form>
+            {/* Modal Actions Footer */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setViewTicket(null)}
+                style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
           </div>
           );
         })()}

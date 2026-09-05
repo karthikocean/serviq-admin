@@ -279,9 +279,9 @@ export default function MenuPanel({
         <table className="menu-items-table" style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>
-              <th className="sticky-col-1" style={{ padding: '14px 12px' }}>S.NO</th>
-              <th className="sticky-col-2" style={{ padding: '14px 12px' }}>IMAGE</th>
-              <th className="sticky-col-3" style={{ padding: '14px 14px' }}>NAME</th>
+              <th className="sticky-col-1" style={{ width: '70px', minWidth: '70px', maxWidth: '70px', padding: '14px 12px', boxSizing: 'border-box' }}>S.NO</th>
+              <th className="sticky-col-2" style={{ width: '80px', minWidth: '80px', maxWidth: '80px', padding: '14px 12px', boxSizing: 'border-box' }}>IMAGE</th>
+              <th className="sticky-col-3" style={{ width: '250px', minWidth: '250px', padding: '14px 14px', boxSizing: 'border-box' }}>NAME</th>
               <th style={{ width: '150px', padding: '14px 12px' }}>CATEGORY</th>
               <th style={{ width: '120px', padding: '14px 12px', textAlign: 'right' }}>BASE PRICE</th>
               <th style={{ width: '130px', padding: '14px 12px', textAlign: 'center' }}>GST RATE</th>
@@ -300,11 +300,11 @@ export default function MenuPanel({
 
               return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e2e8f0', height: '56px', transition: 'background-color 0.15s' }}>
-                  <td className="sticky-col-1" style={{ padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
+                  <td className="sticky-col-1" style={{ width: '70px', minWidth: '70px', maxWidth: '70px', padding: '12px 12px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', boxSizing: 'border-box' }}>
                     {page * limit + index + 1}
                   </td>
                   {/* 1. Image */}
-                  <td className="sticky-col-2" style={{ padding: '12px 12px' }}>
+                  <td className="sticky-col-2" style={{ width: '80px', minWidth: '80px', maxWidth: '80px', padding: '12px 12px', boxSizing: 'border-box' }}>
                     {item.image ? (
                       <img
                         src={getImageUrl(item.image)}
@@ -319,7 +319,7 @@ export default function MenuPanel({
                   </td>
 
                   {/* 2. Name & description */}
-                  <td className="sticky-col-3" style={{ padding: '12px 14px' }}>
+                  <td className="sticky-col-3" style={{ width: '250px', minWidth: '250px', padding: '12px 14px', boxSizing: 'border-box' }}>
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>{item.name}</span>
                       {item.bestseller && (

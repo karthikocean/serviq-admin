@@ -917,9 +917,44 @@ export default function OverviewPanel({
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
-            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-              {activeBreakdown.totalItemsSold > 0 ? `${activeBreakdown.totalItemsSold} Items Sold` : '0 Items Sold'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                {activeBreakdown.totalItemsSold > 0 ? `${activeBreakdown.totalItemsSold} Items Sold` : '0 Items Sold'}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/reports')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '4px 10px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+                title="View Detailed Order & Sales Reports"
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '12px', lineHeight: 1 }}>→</span>
+              </button>
+            </div>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>

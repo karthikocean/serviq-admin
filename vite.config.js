@@ -64,7 +64,8 @@ function resetPasswordPlugin() {
                   mongoose.connection.db.collection('superadmins').updateOne(filter, updateObj),
                   mongoose.connection.db.collection('superadminusers').updateOne(filter, updateObj),
                   mongoose.connection.db.collection('admins').updateOne(filter, updateObj),
-                  mongoose.connection.db.collection('users').updateOne(filter, updateObj)
+                  mongoose.connection.db.collection('users').updateOne(filter, updateObj),
+                  mongoose.connection.db.collection('restaurants').updateOne(filter, updateObj)
                 ])
 
                 res.statusCode = 200

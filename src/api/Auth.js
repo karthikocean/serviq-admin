@@ -4,7 +4,13 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class AuthApi {
   async login(email, password) {
     try {
-      const response = await apiClient.post("/login", { email, password });
+      const cleanEmail = (email || '').trim();
+      const response = await apiClient.post("/login", { 
+        email: cleanEmail,
+        phoneNumber: cleanEmail,
+        identifier: cleanEmail,
+        password 
+      });
       if (response.status === 200 || response.status === 201) {
         const isSuccess = response.data?.success !== false;
         return { 
