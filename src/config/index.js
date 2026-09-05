@@ -22,13 +22,43 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.88.5:5000/public";
-    BASE_URL = "http://192.168.88.5:5000/api/admin";
-    server = "http://192.168.88.5:5000";
+
+
+    IMAGE_BASE_URL = "http://192.168.88.9:5000/public";
+    BASE_URL = "http://192.168.88.9:5000/api/admin";
+    server = "http://192.168.88.9:5000";
     break;
 }
 
 export { IMAGE_BASE_URL, BASE_URL, server };
+
+export const CUSTOMER_APP_URL =
+  (typeof process !== "undefined" && process.env?.REACT_APP_CUSTOMER_APP_URL) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_CUSTOMER_APP_URL) ||
+  "http://192.168.88.25:5173";
+
+export const getCustomerScanUrl = (item) => {
+  if (typeof item === 'string' && item.startsWith('http')) {
+    if (item.includes('/scan/')) return item;
+    const parts = item.split('/');
+    const last = parts[parts.length - 1];
+    return `${CUSTOMER_APP_URL}/scan/${last || '6a8bff25e04c3475c4894348'}`;
+  }
+
+  if (item?.qrUrl && typeof item.qrUrl === 'string' && item.qrUrl.includes('/scan/')) {
+    return item.qrUrl;
+  }
+
+  const qrId =
+    (typeof item?.assignedQrId === 'object' ? item?.assignedQrId?._id || item?.assignedQrId?.id : item?.assignedQrId) ||
+    item?._id ||
+    item?.qrCodeId ||
+    item?.code ||
+    (item?.id && !String(item?.id).startsWith('T-') && !String(item?.id).startsWith('QR-') ? item?.id : null) ||
+    '6a8bff25e04c3475c4894348';
+
+  return `${CUSTOMER_APP_URL}/scan/${qrId}`;
+};
 
 export const apiClient = axios.create({
   baseURL: BASE_URL

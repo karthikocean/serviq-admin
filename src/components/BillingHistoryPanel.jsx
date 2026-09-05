@@ -147,7 +147,7 @@ export default function BillingHistoryPanel({
         {/* FILTERS AREA */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '24px', alignItems: 'flex-end' }}>
 
-          <div style={{ flex: '1', minWidth: '200px' }}>
+          <div style={{ width: '320px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Search Invoice / Order</label>
             <input
               type="text"
@@ -162,7 +162,7 @@ export default function BillingHistoryPanel({
                 const val = e.target.value.replace(/^\s+/, '');
                 setSearchTerm(val);
               }}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }}
+              style={{ width: '100%', height: '38px', padding: '0 14px', borderRadius: '8px', border: '1px solid var(--border)', boxSizing: 'border-box' }}
             />
           </div>
 

@@ -80,3 +80,30 @@ export const validateBranchCode = (code = '') => {
   }
   return '';
 };
+
+// Validate password format (e.g. Nivetha@123)
+// Requires: at least 8 characters, at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character
+export const validatePassword = (password = '', fieldName = 'Password') => {
+  const val = String(password || '').trim();
+  if (!val) return `${fieldName} is required`;
+  if (val.length < 8) {
+    return `${fieldName} must be at least 8 characters long`;
+  }
+  if (!/[A-Z]/.test(val)) {
+    return `${fieldName} must contain at least one uppercase letter (A-Z)`;
+  }
+  if (!/[a-z]/.test(val)) {
+    return `${fieldName} must contain at least one lowercase letter (a-z)`;
+  }
+  if (!/\d/.test(val)) {
+    return `${fieldName} must contain at least one number (0-9)`;
+  }
+  if (!/[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(val)) {
+    return `${fieldName} must contain at least one special character (@, #, $, %)`;
+  }
+  return '';
+};
+
+export const isStrongPassword = (password = '') => {
+  return !validatePassword(password);
+};

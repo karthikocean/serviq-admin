@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from './Badge';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
+import TableApi from '../api/Table.js';
 import { resolveBranchManagerName } from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -193,6 +194,7 @@ export default function OverviewPanel({
   // Live Dashboard Live Tables State
   const [liveTablesData, setLiveTablesData] = useState(null);
   const [isLoadingLiveTables, setIsLoadingLiveTables] = useState(false);
+  const [fetchedAllTables, setFetchedAllTables] = useState([]);
 
   const fetchDashboardStats = async () => {
     setIsLoadingStats(true);
@@ -244,12 +246,36 @@ export default function OverviewPanel({
     setIsLoadingLiveTables(false);
   };
 
+  const fetchAllBranchTables = async () => {
+    try {
+      const res = await TableApi.getTables({ limit: 10 });
+      if (res && res.status && res.response) {
+        const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        if (tList.length > 0) {
+          setFetchedAllTables(tList);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not fetch tables for branch overview:", e);
+    }
+  };
+
   useEffect(() => {
     fetchDashboardStats();
     fetchRevenueGrowth();
     fetchOrderBreakdown();
     fetchLiveOrders();
     fetchLiveTables();
+    fetchAllBranchTables();
+
+    const interval = setInterval(() => {
+      fetchDashboardStats();
+      fetchLiveOrders();
+      fetchLiveTables();
+      fetchAllBranchTables();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, [selectedBranchId]);
 
   // Current view tables and orders
@@ -266,6 +292,86 @@ export default function OverviewPanel({
   const displayTables = (currentTables && currentTables.length > 0) ? currentTables : tables;
   const displayOrders = (currentOrders && currentOrders.length > 0) ? currentOrders : orders;
   const displayStaff = (currentStaff && currentStaff.length > 0) ? currentStaff : staff;
+
+  // Dynamic order breakdown calculation with safe empty state
+  const activeBreakdown = useMemo(() => {
+    // 1. If backend API provided breakdown data with valid categories and items
+    if (orderBreakdownData && Array.isArray(orderBreakdownData.categories)) {
+      // Strictly require count > 0; categories without items must never be included
+      const validCategories = orderBreakdownData.categories.filter(c => Number(c.count) > 0);
+      const totalItems = orderBreakdownData.totalItemsSold !== undefined
+        ? Number(orderBreakdownData.totalItemsSold)
+        : validCategories.reduce((acc, c) => acc + (Number(c.count) || 0), 0);
+
+      if (totalItems > 0 && validCategories.length > 0) {
+        const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
+        return {
+          totalItemsSold: totalItems,
+          categories: validCategories.map((c, idx) => {
+            const calculatedPct = totalItems > 0 ? Math.round((Number(c.count) / totalItems) * 100) : 0;
+            return {
+              ...c,
+              count: Number(c.count),
+              percentage: c.percentage !== undefined && Number(c.percentage) > 0 ? Number(c.percentage) : calculatedPct,
+              color: c.color || defaultColors[idx % defaultColors.length]
+            };
+          })
+        };
+      }
+      return { totalItemsSold: 0, categories: [] };
+    }
+
+    // 2. Dynamic fallback: compute from displayOrders if available
+    const ordersList = (displayOrders && displayOrders.length > 0) ? displayOrders : [];
+    if (ordersList.length > 0) {
+      const catMap = new Map();
+      let totalItems = 0;
+
+      ordersList.forEach(ord => {
+        const items = Array.isArray(ord.items) ? ord.items : [];
+        items.forEach(it => {
+          const qty = it.quantity !== undefined ? Number(it.quantity) : (it.qty !== undefined ? Number(it.qty) : 0);
+          if (qty <= 0) return;
+          const cat = it.category || it.categoryName || it.menuItem?.category || 'Main Course';
+          const rev = Number(it.price || 0) * qty;
+
+          totalItems += qty;
+          if (!catMap.has(cat)) {
+            catMap.set(cat, { name: cat, count: 0, revenue: 0 });
+          }
+          const entry = catMap.get(cat);
+          entry.count += qty;
+          entry.revenue += rev;
+        });
+      });
+
+      if (totalItems > 0) {
+        const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
+        const cats = Array.from(catMap.values())
+          .filter(c => c.count > 0)
+          .map((c, idx) => ({
+            name: c.name,
+            count: c.count,
+            revenue: c.revenue,
+            percentage: Math.round((c.count / totalItems) * 100),
+            color: defaultColors[idx % defaultColors.length]
+          }));
+
+        if (cats.length > 0) {
+          return {
+            totalItemsSold: totalItems,
+            categories: cats
+          };
+        }
+      }
+    }
+
+    // 3. No items available
+    return {
+      totalItemsSold: 0,
+      categories: []
+    };
+  }, [orderBreakdownData, displayOrders]);
 
   // Accurately computed fallback counts
   const localOccupiedCount = displayTables.filter(t => isTableOccupied(t, displayOrders)).length;
@@ -304,13 +410,61 @@ export default function OverviewPanel({
   const topItemFallback = getTopOrderedItem();
 
   // Branch statistics computation for All Branches view
+  const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
+
   const branchAnalytics = branches.map(branch => {
-    const branchOrders = allOrders.filter(o => branchMatches(o.branchId || o.branch, branch));
-    const branchTables = allTables.filter(t => branchMatches(t.branchId || t.branch, branch));
-    const branchStaff = allStaff.filter(s => branchMatches(s.branchId || s.branch, branch));
+    const branchOrders = (allOrders || orders || []).filter(o => branchMatches(o.branchId || o.branch, branch));
+    const branchTables = (combinedTables || []).filter(t => branchMatches(t.branchId || t.branch, branch));
+    const branchStaff = (allStaff || staff || []).filter(s => branchMatches(s.branchId || s.branch, branch));
     const branchRevenue = branchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
-    const occupied = branchTables.filter(t => isTableOccupied(t, branchOrders)).length;
+    // Collect all occupied table identifiers accurately
+    const occupiedTableIds = new Set();
+
+    // 1. Direct table status and matches from branchTables
+    branchTables.forEach(t => {
+      if (isTableOccupied(t, branchOrders)) {
+        const idStr = String(t._id || t.id || t.tableNumber || t.tableNo || t.name || '').toLowerCase().trim();
+        if (idStr) occupiedTableIds.add(idStr);
+      }
+    });
+
+    // 2. Active dining orders in this branch also reflect occupied tables
+    const activeBranchOrders = branchOrders.filter(o => {
+      if (!o) return false;
+      const status = String(o.status || '').toLowerCase().trim();
+      const billing = String(o.billingStatus || o.paymentStatus || '').toLowerCase().trim();
+      const isClosed = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(status);
+      const isPaidAndDone = billing === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(status);
+      return !isClosed && !isPaidAndDone;
+    });
+
+    activeBranchOrders.forEach(o => {
+      const ordTableObj = typeof o.tableId === 'object' && o.tableId !== null 
+        ? o.tableId 
+        : (typeof o.table === 'object' && o.table !== null ? o.table : null);
+      
+      const tId = String(
+        ordTableObj?._id || 
+        ordTableObj?.id || 
+        ordTableObj?.tableNumber || 
+        ordTableObj?.tableNo || 
+        o.tableNumber || 
+        o.tableNo || 
+        (typeof o.table === 'string' ? o.table : '') || 
+        o.tableName || 
+        (typeof o.tableId === 'string' ? o.tableId : '') || 
+        ''
+      ).toLowerCase().trim();
+
+      if (tId) {
+        occupiedTableIds.add(tId);
+      }
+    });
+
+    const occupied = occupiedTableIds.size;
+    const totalBranchTables = Math.max(branchTables.length || branch.totalTables || 10, occupied);
+
     const activeStaff = branchStaff.filter(s => {
       const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
       return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
@@ -327,7 +481,7 @@ export default function OverviewPanel({
       managerName: mgr,
       ordersCount: branchOrders.length,
       revenue: branchRevenue,
-      tablesCount: branchTables.length || branch.totalTables || 10,
+      tablesCount: totalBranchTables,
       occupiedTables: occupied,
       staffCount: branchStaff.length || 5,
       activeStaff: activeStaff || (branchStaff.length > 0 ? branchStaff.length : 3)
@@ -763,17 +917,52 @@ export default function OverviewPanel({
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
-            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-              {orderBreakdownData?.totalItemsSold !== undefined ? `${orderBreakdownData.totalItemsSold} Items Sold` : 'Category Share'}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                {activeBreakdown.totalItemsSold > 0 ? `${activeBreakdown.totalItemsSold} Items Sold` : '0 Items Sold'}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/reports')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '4px 10px',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+                title="View Detailed Order & Sales Reports"
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '12px', lineHeight: 1 }}>→</span>
+              </button>
+            </div>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-            {orderBreakdownData?.categories && orderBreakdownData.categories.length > 0 ? (
-              orderBreakdownData.categories.map((cat, idx) => {
+            {activeBreakdown.totalItemsSold > 0 && activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
+              activeBreakdown.categories.filter(c => Number(c.count) > 0).map((cat, idx) => {
                 const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
                 const itemColor = cat.color || defaultColors[idx % defaultColors.length];
-                const pct = cat.percentage ?? 0;
+                const pct = cat.percentage ?? (activeBreakdown.totalItemsSold > 0 ? Math.round((cat.count / activeBreakdown.totalItemsSold) * 100) : 0);
                 return (
                   <div key={cat.categoryId || cat.name || idx} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 600 }}>
@@ -795,21 +984,13 @@ export default function OverviewPanel({
                 );
               })
             ) : (
-              [
-                { name: 'Main Course', pct: 40, color: '#ff7a00' },
-                { name: 'Chicken', pct: 40, color: '#3b82f6' },
-                { name: 'Desserts', pct: 20, color: '#10b981' }
-              ].map(cat => (
-                <div key={cat.name} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600 }}>
-                    <span style={{ color: 'var(--text-main)' }}>{cat.name}</span>
-                    <span style={{ color: 'var(--text-main)', fontWeight: 700 }}>{cat.pct}%</span>
-                  </div>
-                  <div style={{ width: '100%', height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${cat.pct}%`, height: '100%', background: cat.color, borderRadius: '4px' }}></div>
-                  </div>
+              <div style={{ textAlign: 'center', padding: '28px 16px', color: '#64748b', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--bg-tertiary, #f1f5f9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>
+                  📊
                 </div>
-              ))
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main, #0f172a)' }}>No items available</span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>No order breakdown data recorded for this selection.</span>
+              </div>
             )}
           </div>
         </div>
@@ -821,13 +1002,47 @@ export default function OverviewPanel({
         
         {/* Live Order Feed Table (Full Width) */}
         <div className="feed-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '22px 24px', border: '1px solid var(--border)', width: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
-          <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
                 Live Order Feed {selectedBranch ? `(${selectedBranch.branchCode})` : '(All Branches)'}
               </h2>
             </div>
-            <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span className="live-dot-indicator"><span className="pulse-dot"></span>Live</span>
+              <button
+                type="button"
+                onClick={() => navigate('/orders')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>→</span>
+              </button>
+            </div>
           </div>
           <div className="feed-table-wrapper" style={{ borderRadius: '14px', border: '1px solid #e2e8f0', overflowX: 'auto', paddingBottom: '0px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
             <table className="feed-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -895,19 +1110,51 @@ export default function OverviewPanel({
 
         {/* Dining Tables Grid (Full Width, Underneath Live Order Feed) */}
         <div className="tables-widget-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '22px 24px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0, whiteSpace: 'nowrap' }}>
                 Live Tables Status
               </h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', background: occupiedTablesCount > 0 ? '#fef2f2' : '#f0fdf4', color: occupiedTablesCount > 0 ? '#ef4444' : '#166534', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, border: occupiedTablesCount > 0 ? '1px solid #fecaca' : '1px solid #bbf7d0', whiteSpace: 'nowrap' }}>
                 {occupiedTablesCount} Occupied
               </span>
               <span style={{ fontSize: '11px', background: '#f8fafc', color: '#64748b', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
                 {displayTables.length} Total Tables
               </span>
+              <button
+                type="button"
+                onClick={() => navigate('/tables')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: '#fff0e6',
+                  color: '#ff5a1f',
+                  border: '1px solid #fed7aa',
+                  borderRadius: '8px',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(255, 90, 31, 0.08)'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#ff5a1f';
+                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.borderColor = '#ff5a1f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#fff0e6';
+                  e.currentTarget.style.color = '#ff5a1f';
+                  e.currentTarget.style.borderColor = '#fed7aa';
+                }}
+              >
+                <span>View All</span>
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>→</span>
+              </button>
             </div>
           </div>
 

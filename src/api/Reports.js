@@ -7,7 +7,7 @@ class ReportsApi {
       const cleanParams = {};
       Object.keys(filters).forEach(key => {
         const val = filters[key];
-        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
           cleanParams[key] = val;
         }
       });
@@ -19,14 +19,6 @@ class ReportsApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to fetch waiter reports.";
-        
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
       return {
         status: false,
         response: error?.response?.data || error,
@@ -39,7 +31,7 @@ class ReportsApi {
       const cleanParams = {};
       Object.keys(filters).forEach(key => {
         const val = filters[key];
-        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
           cleanParams[key] = val;
         }
       });
@@ -51,14 +43,6 @@ class ReportsApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to fetch kitchen reports.";
-        
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
       return {
         status: false,
         response: error?.response?.data || error,

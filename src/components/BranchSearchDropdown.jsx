@@ -83,7 +83,7 @@ export default function BranchSearchDropdown() {
       }
       const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 })
+        UserApi.getUsers({ limit: 10 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;

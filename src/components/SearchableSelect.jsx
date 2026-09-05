@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import Select from 'react-select';
 
 /**
  * Universal Searchable / Autocomplete Select Box for Serviq Admin Panel
- * Powered by react-select with Serviq brand styling and modal-safe portal rendering.
+ * Powered by react-select with Serviq brand styling, viewport collision detection,
+ * and modal-safe portal rendering so menus never jump off-screen.
  */
 export default function SearchableSelect({
   options = [],
@@ -22,6 +23,32 @@ export default function SearchableSelect({
   noOptionsMessage = () => 'No options found',
   ...rest
 }) {
+  const containerRef = useRef(null);
+  const [dynamicPlacement, setDynamicPlacement] = useState('bottom');
+  const [dynamicMaxHeight, setDynamicMaxHeight] = useState(220);
+
+  // Calculate available space in viewport to prevent dropdown from jumping off screen
+  const updatePlacementAndHeight = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || (typeof document !== 'undefined' ? document.documentElement.clientHeight : 800);
+    const spaceBelow = viewportHeight - rect.bottom - 16;
+    const spaceAbove = rect.top - 16;
+
+    // If space below is cramped (< 230px) and there's more space above, open upwards
+    const shouldPlaceTop = spaceBelow < 230 && spaceAbove > spaceBelow;
+    const chosenPlacement = shouldPlaceTop ? 'top' : 'bottom';
+    const availableSpace = shouldPlaceTop ? spaceAbove : spaceBelow;
+    const safeMaxHeight = Math.max(120, Math.min(220, Math.floor(availableSpace) - 20));
+
+    setDynamicPlacement(chosenPlacement);
+    setDynamicMaxHeight(safeMaxHeight);
+  }, []);
+
+  useEffect(() => {
+    updatePlacementAndHeight();
+  }, [updatePlacementAndHeight]);
+
   // Normalize options array into [{ value, label }] format
   const normalizedOptions = useMemo(() => {
     if (!Array.isArray(options)) return [];
@@ -58,7 +85,7 @@ export default function SearchableSelect({
     return normalizedOptions.find(opt => String(opt.value) === String(value)) || { value, label: String(value) };
   }, [value, normalizedOptions, isMulti]);
 
-  // Custom styles for Serviq design system matching screenshot
+  // Custom styles for Serviq design system with responsive bounds
   const customStyles = useMemo(() => ({
     control: (provided, state) => ({
       ...provided,
@@ -108,8 +135,10 @@ export default function SearchableSelect({
       zIndex: 99999,
       overflow: 'hidden',
       padding: '6px',
-      marginTop: '6px',
-      backgroundColor: '#ffffff'
+      marginTop: '4px',
+      marginBottom: '4px',
+      backgroundColor: '#ffffff',
+      boxSizing: 'border-box'
     }),
     menuPortal: (provided) => ({
       ...provided,
@@ -118,7 +147,8 @@ export default function SearchableSelect({
     menuList: (provided) => ({
       ...provided,
       padding: '2px',
-      maxHeight: '220px',
+      maxHeight: `${dynamicMaxHeight}px`,
+      overflowY: 'auto',
       '&::-webkit-scrollbar': {
         width: '6px'
       },
@@ -173,7 +203,7 @@ export default function SearchableSelect({
         color: '#ef4444'
       }
     })
-  }), [style]);
+  }), [style, dynamicMaxHeight]);
 
   // Handle value change supporting both direct string/value or standard event object
   const handleChange = (selected) => {
@@ -187,7 +217,6 @@ export default function SearchableSelect({
         target: { name: name || id || '', value: val },
         currentTarget: { name: name || id || '', value: val }
       };
-      // Pass synthetic event as 1st arg if needed or value
       onChange(syntheticEvent, selected);
     }
   };
@@ -215,28 +244,42 @@ export default function SearchableSelect({
     return inputValue;
   };
 
+  const effectivePlacement = menuPlacement !== 'auto' ? menuPlacement : dynamicPlacement;
+
   return (
-    <Select
-      id={id || name}
-      name={name}
-      options={normalizedOptions}
-      value={selectedOption}
-      onChange={handleChange}
-      onKeyDown={handleKeyDown}
-      onInputChange={handleInputChange}
-      placeholder={placeholder}
-      isClearable={isClearable}
-      isDisabled={isDisabled}
-      isSearchable={isSearchable}
-      isMulti={isMulti}
-      styles={customStyles}
-      menuPlacement={menuPlacement}
-      menuPosition="fixed"
-      menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
-      noOptionsMessage={noOptionsMessage}
-      className={`serviq-searchable-select ${className}`}
-      classNamePrefix="serviq-select"
-      {...rest}
-    />
+    <div ref={containerRef} style={{ width: '100%' }}>
+      <Select
+        id={id || name}
+        name={name}
+        options={normalizedOptions}
+        value={selectedOption}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onInputChange={handleInputChange}
+        onMenuOpen={() => {
+          updatePlacementAndHeight();
+          if (rest.onMenuOpen) rest.onMenuOpen();
+        }}
+        onFocus={(e) => {
+          updatePlacementAndHeight();
+          if (rest.onFocus) rest.onFocus(e);
+        }}
+        placeholder={placeholder}
+        isClearable={isClearable}
+        isDisabled={isDisabled}
+        isSearchable={isSearchable}
+        isMulti={isMulti}
+        styles={customStyles}
+        menuPlacement={effectivePlacement}
+        maxMenuHeight={dynamicMaxHeight}
+        menuShouldScrollIntoView={false}
+        menuPosition="fixed"
+        menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+        noOptionsMessage={noOptionsMessage}
+        className={`serviq-searchable-select ${className}`}
+        classNamePrefix="serviq-select"
+        {...rest}
+      />
+    </div>
   );
 }

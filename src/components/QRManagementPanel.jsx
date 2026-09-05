@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import GenerateQRModal from './GenerateQRModal';
+import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 
 const PrintIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -58,9 +59,9 @@ export default function QRManagementPanel({
 
   // Default display items
   const displayQrs = scopedQrCodes.length > 0 ? scopedQrCodes : [
-    { id: "QR-101", tableId: "T-01", branchId: "BR-001", createdAt: "2024-10-24" },
-    { id: "QR-102", tableId: "T-02", branchId: "BR-001", createdAt: "2024-10-24" },
-    { id: "QR-103", tableId: "T-03", branchId: "BR-002", createdAt: "2024-10-24" }
+    { id: "6a8bff25e04c3475c4894348", _id: "6a8bff25e04c3475c4894348", tableId: "T-01", branchId: "BR-001", createdAt: "2024-10-24" },
+    { id: "6a8bff25e04c3475c4894349", _id: "6a8bff25e04c3475c4894349", tableId: "T-02", branchId: "BR-001", createdAt: "2024-10-24" },
+    { id: "6a8bff25e04c3475c489434a", _id: "6a8bff25e04c3475c489434a", tableId: "T-03", branchId: "BR-002", createdAt: "2024-10-24" }
   ];
 
   const formatDate = (dateStr) => {
@@ -161,7 +162,7 @@ export default function QRManagementPanel({
           const table = tables.find(t => t.id === qr.tableId);
           const tableNumStr = qr.tableId ? qr.tableId.replace('T-', '') : String(index + 1).padStart(2, '0');
           const tableTitle = `Table T-${tableNumStr}`;
-          const qrUrl = `http://serviq-super-admin.vercel.app/menu/${activeRestaurant.id || 'rest-1'}?table=${tableNumStr}`;
+          const qrUrl = getCustomerScanUrl(qr);
 
           // Status & Color matching screenshot defaults
           let statusText = localStatuses[qr.id] || (table?.status ? table.status.toUpperCase() : 'OCCUPIED');

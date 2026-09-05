@@ -26,7 +26,7 @@ export default function Dashboard() {
         TableApi.getTables(),
         OrderApi.getOrders(),
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 100 })
+        UserApi.getUsers({ limit: 10 })
       ]);
 
       if (tablesRes.status === 'fulfilled' && tablesRes.value?.status && tablesRes.value.response?.data) {

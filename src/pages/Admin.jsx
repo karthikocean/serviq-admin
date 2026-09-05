@@ -452,7 +452,12 @@ export default function Admin() {
       userRoleLower === 'super admin' || 
       userRoleLower === 'super_admin';
 
-    if (tab === 'branch-management' || tab === 'plans-management') {
+    if (tab === 'branch-management' || tab === 'branches') {
+      const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || selectedBranchId === '';
+      return isOwner && isAllBranches;
+    }
+
+    if (tab === 'plans-management' || tab === 'plans') {
       return isOwner;
     }
 

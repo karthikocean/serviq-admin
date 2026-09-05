@@ -4,7 +4,8 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class MenuApi {
   async getMenuItems(params = {}) {
     try {
-      const response = await apiClient.get("/menu", { params });
+      const cleanParams = { limit: 1000, ...params };
+      const response = await apiClient.get("/menu", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -25,7 +26,8 @@ class MenuApi {
 
   async getCategories(params = {}) {
     try {
-      const response = await apiClient.get("/menu/categories", { params });
+      const cleanParams = { limit: 1000, ...params };
+      const response = await apiClient.get("/menu/categories", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

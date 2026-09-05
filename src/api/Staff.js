@@ -13,7 +13,7 @@ const extractErrorMessage = (error, defaultMsg) => {
 class StaffApi {
   async getStaff(branchId = "") {
     try {
-      const cleanParams = { limit: 100, page: 0 };
+      const cleanParams = { limit: 10, page: 0 };
       if (branchId && branchId !== 'ALL') {
         cleanParams.branchId = branchId;
       }

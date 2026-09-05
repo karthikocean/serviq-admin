@@ -5,6 +5,7 @@ import { isModuleAllowedForPlan } from '../../config/initialData';
 import StaffManagementPanel from '../../components/StaffManagementPanel';
 import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import { validatePassword } from '../../helper/ValidationHelper';
 
 export default function StaffManagement() {
   const {
@@ -41,9 +42,10 @@ export default function StaffManagement() {
   const rawOrders = activeRestaurant.orders || [];
   const rawBranches = activeRestaurant.branches || [];
 
-  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
+  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
   const branches = rawBranches;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {
@@ -150,12 +152,9 @@ export default function StaffManagement() {
 
   const handleSaveKitchenPassword = (e) => {
     e.preventDefault();
-    if (!kitchenPasswordInput.trim()) {
-      setKitchenError('Password is required.');
-      return;
-    }
-    if (kitchenPasswordInput.trim().length < 4) {
-      setKitchenError('Password must be at least 4 characters.');
+    const pErr = validatePassword(kitchenPasswordInput, 'Kitchen Station Password');
+    if (pErr) {
+      setKitchenError(pErr);
       return;
     }
     if (updateKitchenPassword) {
@@ -365,7 +364,7 @@ export default function StaffManagement() {
                 setKitchenPasswordInput(e.target.value);
                 if (kitchenError) setKitchenError('');
               }}
-              placeholder="e.g. kitchen123"
+              placeholder="••••••••••••"
               style={{
                 width: '100%',
                 padding: '10px 14px',
