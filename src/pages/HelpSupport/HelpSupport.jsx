@@ -322,28 +322,24 @@ export default function HelpSupport() {
           <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'left' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>PRIORITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>REPLIES</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>ACTION</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '20%', textAlign: 'left' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '40%', textAlign: 'left' }}>SUBJECT</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>PRIORITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
                 </tr>
               ) : tickets.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
                 </tr>
               ) : (
                 tickets.map(ticket => {
-                  const replies = getTicketReplies(ticket);
-                  const hasReplies = replies.length > 0 || Boolean(ticket.resolution);
-
                   return (
                   <tr 
                     key={ticket._id || ticket.id}
@@ -366,46 +362,6 @@ export default function HelpSupport() {
                       <span className={`badge ${getStatusClass(ticket.status)}`}>
                         {ticket.status}
                       </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
-                      {hasReplies ? (
-                        <span 
-                          onClick={() => handleOpenViewTicket(ticket)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 9px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            background: '#eff6ff',
-                            color: '#1d4ed8',
-                            border: '1px solid #bfdbfe',
-                            cursor: 'pointer'
-                          }}
-                          title="Click to view support replies"
-                        >
-                          💬 {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}` : 'Replied'}
-                        </span>
-                      ) : (
-                        <span 
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            background: '#f8fafc',
-                            color: '#94a3b8',
-                            border: '1px solid #e2e8f0'
-                          }}
-                        >
-                          ⏳ Awaiting
-                        </span>
-                      )}
                     </td>
                     <td style={{ padding: '14px 20px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
