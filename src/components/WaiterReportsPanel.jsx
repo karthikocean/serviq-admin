@@ -322,7 +322,7 @@ export default function WaiterReportsPanel({
                 value={filterPaymentStatus}
                 onChange={e => setFilterPaymentStatus(e.target.value)}
                 options={[
-                  { value: 'All', label: 'All Statuses' },
+                  { value: 'All', label: 'All Status' },
                   { value: 'Paid', label: 'Paid' },
                   { value: 'Unpaid', label: 'Unpaid' }
                 ]}
@@ -336,7 +336,7 @@ export default function WaiterReportsPanel({
                 value={filterOrderStatus}
                 onChange={e => setFilterOrderStatus(e.target.value)}
                 options={[
-                  { value: 'All', label: 'All Statuses' },
+                  { value: 'All', label: 'All Status' },
                   { value: 'New', label: 'New' },
                   { value: 'Preparing', label: 'Preparing' },
                   { value: 'Ready', label: 'Ready' },

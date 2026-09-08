@@ -5,6 +5,11 @@ import App from './App'
 import { AppProvider } from './config/AppContext'
 import './index.css'
 
+// Guarantee no local storage retention
+try {
+  localStorage.clear();
+} catch (e) {}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppProvider>

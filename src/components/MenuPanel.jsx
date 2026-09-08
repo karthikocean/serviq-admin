@@ -559,7 +559,13 @@ export default function MenuPanel({
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
-                  <span style={{ fontSize: '24px' }}>🍽️</span>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8"></path>
+                    <path d="M12 2v6"></path>
+                    <path d="M10 2v3"></path>
+                    <path d="M14 2v3"></path>
+                    <line x1="4" y1="22" x2="20" y2="22"></line>
+                  </svg>
                 )}
               </div>
             </div>

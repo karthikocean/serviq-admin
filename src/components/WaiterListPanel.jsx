@@ -28,15 +28,6 @@ const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const defaultWaitersList = [
-  { id: 'S-01', name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@serviq.com', assignedTables: [], activeOrders: 0, completedOrders: 0, status: 'Active' },
-  { id: 'S-02', name: 'Anitha Selvam', phone: '9876543212', email: 'anitha@serviq.com', assignedTables: ['T-04'], activeOrders: 1, completedOrders: 0, status: 'Active' },
-  { id: 'S-03', name: 'Vikram Rathore', phone: '9876543213', email: 'vikram@serviq.com', assignedTables: [], activeOrders: 0, completedOrders: 0, status: 'Inactive' },
-  { id: 'S-04', name: 'Ravi M.', phone: '9876543215', email: 'ravi@serviq.com', assignedTables: ['T-07'], activeOrders: 1, completedOrders: 1, status: 'Active' },
-  { id: 'S-05', name: 'Rahul S.', phone: '9876543216', email: 'rahul@serviq.com', assignedTables: ['T-01'], activeOrders: 1, completedOrders: 0, status: 'Active' },
-  { id: 'S-06', name: 'Arjun K.', phone: '9876543217', email: 'arjun@serviq.com', assignedTables: ['T-05'], activeOrders: 1, completedOrders: 0, status: 'Active' }
-];
-
 export default function WaiterListPanel({
   staff = [],
   tables = [],
@@ -53,7 +44,7 @@ export default function WaiterListPanel({
   const [page, setPage] = useState(0);
   const limit = 10;
 
-  // Map real staff or fallback to reference image list
+  // Map real staff from active restaurant
   const realWaiters = staff.filter(s => s.role === 'Waiter');
 
   const getAssignedTableBadges = (waiterName, waiterId) => {
@@ -74,27 +65,25 @@ export default function WaiterListPanel({
     });
   };
 
-  const displayWaiters = realWaiters.length > 0
-    ? realWaiters.map((s, idx) => {
-        const assigned = getAssignedTableBadges(s.name, s.id);
-        const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
-        const completedOrdersCount = orders.filter(o => o.waiter === s.name && o.status === 'completed').length;
-        const isActive = s.status !== 'Off Duty' && s.status !== 'Inactive';
+  const displayWaiters = realWaiters.map((s, idx) => {
+    const assigned = getAssignedTableBadges(s.name, s.id);
+    const activeOrdersCount = orders.filter(o => o.waiter === s.name && ['new', 'preparing', 'ready'].includes(o.status)).length;
+    const completedOrdersCount = orders.filter(o => o.waiter === s.name && o.status === 'completed').length;
+    const isActive = s.status !== 'Off Duty' && s.status !== 'Inactive';
 
-        return {
-          raw: s,
-          sno: idx + 1,
-          id: s.id,
-          name: s.name,
-          phone: s.phone || '9876543210',
-          email: s.email || `${s.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
-          assignedTables: assigned,
-          activeOrders: activeOrdersCount,
-          completedOrders: completedOrdersCount,
-          status: isActive ? 'Active' : 'Inactive'
-        };
-      })
-    : defaultWaitersList.map((w, idx) => ({ ...w, sno: idx + 1 }));
+    return {
+      raw: s,
+      sno: idx + 1,
+      id: s.id,
+      name: s.name,
+      phone: s.phone || '9876543210',
+      email: s.email || `${s.name.toLowerCase().replace(/\s+/g, '')}@serviq.com`,
+      assignedTables: assigned,
+      activeOrders: activeOrdersCount,
+      completedOrders: completedOrdersCount,
+      status: isActive ? 'Active' : 'Inactive'
+    };
+  });
 
   const totalPages = Math.ceil(displayWaiters.length / limit) || 1;
   const paginatedWaiters = displayWaiters.slice(page * limit, (page + 1) * limit);

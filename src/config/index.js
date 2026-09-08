@@ -66,7 +66,7 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   function (config) {
-    const token = localStorage.getItem("userToken") || localStorage.getItem("token") || sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
+    const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
 
     if (token && token !== "null" && token !== "undefined") {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -115,13 +115,13 @@ apiClient.interceptors.response.use(
         errorMsg.includes('token missing') ||
         error.response.status === 401;
 
-      const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+      const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
 
       if (token && isAuthIssue) {
-        localStorage.removeItem("userToken");
-        localStorage.removeItem("token");
-        localStorage.removeItem("currentUser");
-        try { sessionStorage.clear(); } catch (e) { }
+        sessionStorage.removeItem("userToken");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("currentUser");
+        try { sessionStorage.clear(); localStorage.clear(); } catch (e) { }
 
         // Automatically redirect to login page when token is expired/invalid
         if (!window.location.pathname.includes('/login')) {

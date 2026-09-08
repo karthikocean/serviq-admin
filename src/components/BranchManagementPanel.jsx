@@ -26,6 +26,23 @@ import {
   validatePassword
 } from '../helper/ValidationHelper';
 
+const TableIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M4 6h16" />
+    <path d="M5 6v12" />
+    <path d="M19 6v12" />
+    <path d="M10 6v6" />
+    <path d="M14 6v6" />
+  </svg>
+);
+
+const UserIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -1200,18 +1217,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       : (activeRestaurant?.tables || []).filter(t => matchesBranch(t.branchId || t.branch));
 
     const mappedTables = branchTablesRaw.length > 0
-      ? branchTablesRaw.map((t, i) => ({
-          _id: t._id || t.id || `tbl-${i + 1}`,
-          id: t._id || t.id || `tbl-${i + 1}`,
-          name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
-          tableNo: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
-          seats: t.capacity || t.seats || 4,
-          capacity: t.capacity || t.seats || 4,
-          status: t.status || 'Available',
-          floor: t.floor || t.section || 'Main Dining Area',
-          qrUrl: t.qrUrl || t.qrCode || '',
-          assignedQrId: t.assignedQrId || ''
-        }))
+      ? branchTablesRaw.map((t, i) => {
+          const seatingVal = t.seatingCapacity ?? t.seats ?? t.capacity ?? t.tableCapacity ?? 4;
+          return {
+            _id: t._id || t.id || `tbl-${i + 1}`,
+            id: t._id || t.id || `tbl-${i + 1}`,
+            name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
+            tableNo: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
+            seats: Number(seatingVal) || 4,
+            capacity: Number(seatingVal) || 4,
+            seatingCapacity: Number(seatingVal) || 4,
+            status: t.status || 'Available',
+            floor: t.floor || t.section || 'Main Dining Area',
+            qrUrl: t.qrUrl || t.qrCode || '',
+            assignedQrId: t.assignedQrId || ''
+          };
+        })
       : Array.from({ length: currentViewBranch?.totalTables || 10 }).map((_, i) => ({
           _id: `tbl-${i + 1}`,
           id: `tbl-${i + 1}`,
@@ -1219,6 +1240,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           tableNo: `T-${String(i + 1).padStart(2, '0')}`,
           seats: 4,
           capacity: 4,
+          seatingCapacity: 4,
           status: 'Available',
           floor: 'Main Dining Area',
           qrUrl: '',
@@ -1612,7 +1634,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               {/* Table / Grid Render */}
               {opData.tables.length === 0 ? (
                 <div style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>🍽️</div>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto' }}>
+                    <TableIcon size={22} color="#64748b" />
+                  </div>
                   <div style={{ fontWeight: 700, color: '#475569' }}>No tables configured for this branch</div>
                   <div style={{ fontSize: '12px', marginTop: '4px' }}>Add dining tables in Table Management to see them here.</div>
                 </div>
@@ -1649,12 +1673,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                             <tr key={tbl._id || tbl.id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                               <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 600 }}>{rowNum}</td>
                               <td style={{ padding: '12px 16px', fontWeight: 800, color: '#0f172a' }}>
-                                <span style={{ color: 'var(--primary, #ff7a00)', marginRight: '6px' }}>🪑</span>
+                                <span style={{ color: 'var(--primary, #ff7a00)', marginRight: '6px', display: 'inline-flex', verticalAlign: 'middle' }}>
+                                  <TableIcon size={15} color="var(--primary, #ff7a00)" />
+                                </span>
                                 {tbl.name || tbl.tableNo}
                               </td>
                               <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 600 }}>
-                                <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>
-                                  👤 {tbl.seats || tbl.capacity || 4} Persons
+                                <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                  <UserIcon size={13} color="#64748b" />
+                                  <span>{tbl.seatingCapacity ?? tbl.seats ?? tbl.capacity ?? 4} seats</span>
                                 </span>
                               </td>
                               <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500 }}>
@@ -1691,11 +1718,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                     return (
                       <div key={tbl._id || tbl.id || i} style={{ background: '#ffffff', padding: '16px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)', transition: 'transform 0.15s ease' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', fontSize: '16px' }}>
-                          🪑
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto' }}>
+                          <TableIcon size={18} color="var(--primary, #ff7a00)" />
                         </div>
                         <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{tbl.name || tbl.tableNo}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>{tbl.seats || 4} Seats</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>{tbl.seatingCapacity ?? tbl.seats ?? tbl.capacity ?? 4} seats</div>
                         <div style={{ marginTop: '8px' }}>
                           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '9999px', fontWeight: 700, background: statusBg, color: statusColor }}>
                             {tbl.status || 'Available'}
@@ -1839,9 +1866,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   { key: 'all', label: 'All History', count: allOrdersCount },
                   { key: 'queue', label: 'Live Queue', count: inQueueCount },
                   { key: 'preparing', label: 'Preparing', count: preparingCount },
-                  { key: 'ready', label: 'Ready to Serve', count: readyCount },
-                  { key: 'completed', label: 'Completed / Served', count: completedCount },
-                  { key: 'cancelled', label: 'Cancelled', count: cancelledCount }
+                  { key: 'ready', label: 'Ready to Serve', count: readyCount }
                 ].map(chip => {
                   const isSelected = ordersFilter === chip.key;
                   return (
@@ -3004,7 +3029,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               options={[
-                { value: 'All', label: 'All Statuses' },
+                { value: 'All', label: 'All Status' },
                 { value: 'Active', label: 'Active Only' },
                 { value: 'Inactive', label: 'Inactive Only' }
               ]}

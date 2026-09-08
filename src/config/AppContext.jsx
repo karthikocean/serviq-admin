@@ -166,13 +166,18 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
 
 const loadSavedUser = () => {
   try {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
-    const savedUserStr = localStorage.getItem('currentUser');
+    // Clear any legacy localStorage items
+    localStorage.clear();
+  } catch (e) {}
+
+  try {
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
+    const savedUserStr = sessionStorage.getItem('currentUser');
     if (token && savedUserStr) {
       if (isTokenExpired(token)) {
-        localStorage.removeItem('userToken');
-        localStorage.removeItem('token');
-        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('userToken');
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('currentUser');
         try { sessionStorage.clear(); } catch (e) { }
         return null;
       }
@@ -187,7 +192,7 @@ const loadSavedUser = () => {
 export const AppProvider = ({ children }) => {
   const [restaurantsData, setRestaurantsData] = useState(() => {
     try {
-      const raw = localStorage.getItem('activePlanSelection');
+      const raw = sessionStorage.getItem('activePlanSelection');
       if (raw) {
         const savedPlan = JSON.parse(raw);
         if (savedPlan && savedPlan.cleanName) {
@@ -220,9 +225,9 @@ export const AppProvider = ({ children }) => {
   // Branch filter state (null = All Branches)
   const [selectedBranchId, setSelectedBranchId] = useState(() => {
     try {
-      const stored = localStorage.getItem('selectedBranchId');
+      const stored = sessionStorage.getItem('selectedBranchId');
       if (stored && stored !== 'ALL') return stored;
-      const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const user = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
       if (user) {
         const uType = (user.userType || '').toUpperCase();
         const uRole = (typeof user.role === 'object' ? (user.role?.roleName || user.role?.name) : (user.role || '')).toUpperCase();
@@ -236,19 +241,23 @@ export const AppProvider = ({ children }) => {
     return null;
   });
 
-  // Synchronize currentUser to localStorage whenever it changes
+  // Synchronize currentUser to sessionStorage whenever it changes
   useEffect(() => {
+    try {
+      localStorage.clear();
+    } catch (e) {}
+
     if (currentUser) {
-      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('currentUser');
+      sessionStorage.removeItem('currentUser');
     }
   }, [currentUser]);
 
   // Periodic token expiration check & auto-logout
   useEffect(() => {
     const checkTokenExpiry = () => {
-      const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+      const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
       if (token && isTokenExpired(token)) {
         ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
         logout();
@@ -361,7 +370,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchTables = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
@@ -409,7 +418,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchQrCodes = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
@@ -433,7 +442,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchOrders = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
@@ -467,7 +476,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchMenu = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
@@ -496,7 +505,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchBranches = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
       const [res, usersRes] = await Promise.allSettled([
@@ -580,7 +589,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const fetchSubscriptionDashboard = async () => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
       const res = await SubscriptionApi.getDashboard();
@@ -590,7 +599,7 @@ export const AppProvider = ({ children }) => {
 
         let savedPlan = null;
         try {
-          const raw = localStorage.getItem('activePlanSelection');
+          const raw = sessionStorage.getItem('activePlanSelection');
           if (raw) savedPlan = JSON.parse(raw);
         } catch (e) {}
 
@@ -661,7 +670,7 @@ export const AppProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
 
     const initData = async () => {
@@ -734,9 +743,9 @@ export const AppProvider = ({ children }) => {
         const apiUser = payload?.data?.user || payload?.data?.admin || payload?.data?.restaurant || payload?.user || payload?.admin || payload?.restaurant || payload?.data;
 
         if (token && apiUser) {
-          localStorage.setItem("userToken", token);
-          localStorage.setItem("token", token);
-          try { sessionStorage.clear(); } catch (e) { }
+          sessionStorage.setItem("userToken", token);
+          sessionStorage.setItem("token", token);
+          try { localStorage.clear(); } catch (e) { }
 
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
           const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
@@ -768,17 +777,17 @@ export const AppProvider = ({ children }) => {
             branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')
           };
 
-          localStorage.setItem("currentUser", JSON.stringify(user));
+          sessionStorage.setItem("currentUser", JSON.stringify(user));
           setCurrentUser(user);
           const targetRestId = user.restaurantId;
           setCurrentRestaurantId(targetRestId);
 
           if (!isRestaurantOwner && userBranchId && userBranchId !== 'ALL') {
             setSelectedBranchId(userBranchId);
-            localStorage.setItem("selectedBranchId", userBranchId);
+            sessionStorage.setItem("selectedBranchId", userBranchId);
           } else {
             setSelectedBranchId(null);
-            localStorage.removeItem("selectedBranchId");
+            sessionStorage.removeItem("selectedBranchId");
           }
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
@@ -800,10 +809,11 @@ export const AppProvider = ({ children }) => {
         ? backendMessage.trim()
         : "Invalid credentials";
 
-      localStorage.removeItem("userToken");
-      localStorage.removeItem("token");
-      localStorage.removeItem("currentUser");
+      sessionStorage.removeItem("userToken");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("currentUser");
       sessionStorage.clear();
+      try { localStorage.clear(); } catch (e) { }
       setCurrentUser(null);
 
       // No error toast popup on login page per requirement
@@ -820,10 +830,11 @@ export const AppProvider = ({ children }) => {
         ? backendCatchMsg.trim()
         : "Invalid credentials";
 
-      localStorage.removeItem("userToken");
-      localStorage.removeItem("token");
-      localStorage.removeItem("currentUser");
+      sessionStorage.removeItem("userToken");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("currentUser");
       sessionStorage.clear();
+      try { localStorage.clear(); } catch (e) { }
       setCurrentUser(null);
       // No error toast popup on login page per requirement
       return { success: false, error: errMsg };
@@ -835,10 +846,11 @@ export const AppProvider = ({ children }) => {
     setCurrentRestaurantId(null);
     setSelectedBranchId(null);
     try {
-      localStorage.removeItem('userToken');
-      localStorage.removeItem('token');
-      localStorage.removeItem('currentUser');
+      sessionStorage.removeItem('userToken');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('currentUser');
       sessionStorage.clear();
+      localStorage.clear();
     } catch (e) { }
     window.location.href = '/login';
   };
@@ -1038,10 +1050,10 @@ export const AppProvider = ({ children }) => {
       return item;
     });
 
-    const statuses = updatedItems.map(item => item.status || 'new');
-    const allServed = statuses.every(s => s === 'completed' || s === 'served');
-    const allReadyOrServed = statuses.every(s => s === 'ready' || s === 'completed' || s === 'served');
-    const anyPreparingOrReady = statuses.some(s => s === 'preparing' || s === 'ready');
+    const status = updatedItems.map(item => item.status || 'new');
+    const allServed = status.every(s => s === 'completed' || s === 'served');
+    const allReadyOrServed = status.every(s => s === 'ready' || s === 'completed' || s === 'served');
+    const anyPreparingOrReady = status.some(s => s === 'preparing' || s === 'ready');
 
     let newOrderStatus = order.status;
     if (allServed) {
@@ -1095,7 +1107,7 @@ export const AppProvider = ({ children }) => {
     const baseLimit = targetPlan.branchLimit || getPlanBranchLimit(cleanPlanName, 5);
 
     try {
-      localStorage.setItem('activePlanSelection', JSON.stringify({
+      sessionStorage.setItem('activePlanSelection', JSON.stringify({
         planId: targetPlan.id,
         planName: targetPlan.name,
         cleanName: cleanPlanName,
@@ -1160,7 +1172,7 @@ export const AppProvider = ({ children }) => {
     const amount = billingCycle === 'annual' ? targetPlan.annualPrice : targetPlan.monthlyPrice;
 
     try {
-      localStorage.setItem('activePlanSelection', JSON.stringify({
+      sessionStorage.setItem('activePlanSelection', JSON.stringify({
         planId: targetPlan.id,
         planName: targetPlan.name,
         cleanName: cleanPlanName,

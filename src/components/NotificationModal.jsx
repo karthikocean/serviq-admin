@@ -4,6 +4,95 @@ import { AppContext } from '../config/AppContext';
 import { ticketApi } from '../api/Ticket.js';
 import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
+const renderNotificationIcon = (notif) => {
+  const color = notif.badgeColor || '#ea580c';
+  switch (notif.type) {
+    case 'ORDERS':
+      if (notif.subType === 'READY') {
+        return (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8"></path>
+            <path d="M12 2v6"></path>
+            <line x1="4" y1="22" x2="20" y2="22"></line>
+          </svg>
+        );
+      }
+      if (notif.subType === 'PREPARING') {
+        return (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"></path>
+          </svg>
+        );
+      }
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+      );
+    case 'WATER':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+        </svg>
+      );
+    case 'BILL':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+          <line x1="2" y1="10" x2="22" y2="10"></line>
+        </svg>
+      );
+    case 'MESSAGE':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      );
+    case 'INVENTORY':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+      );
+    case 'TABLES':
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="3" width="16" height="13" rx="2" />
+          <path d="M4 16v5" />
+          <path d="M20 16v5" />
+          <path d="M8 16v3" />
+          <path d="M16 16v3" />
+        </svg>
+      );
+    case 'TICKETS':
+      if (notif.subType === 'STATUS_UPDATE') {
+        return (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        );
+      }
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"></path>
+          <path d="M13 5v2"></path>
+          <path d="M13 17v2"></path>
+          <path d="M13 11v2"></path>
+        </svg>
+      );
+    default:
+      return (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+      );
+  }
+};
+
 export default function NotificationModal({ isOpen, onClose }) {
   const { activeRestaurant, selectedBranchId } = useContext(AppContext);
   const navigate = useNavigate();
@@ -63,8 +152,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
             actionUrl: '/orders',
             badgeBg: '#f0fdf4',
-            badgeColor: '#16a34a',
-            icon: '🍽️'
+            badgeColor: '#16a34a'
           });
         }
         // New Incoming Orders
@@ -81,8 +169,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
             actionUrl: '/orders',
             badgeBg: '#fff7ed',
-            badgeColor: '#ea580c',
-            icon: '🔔'
+            badgeColor: '#ea580c'
           });
         }
         // Active preparing orders
@@ -99,8 +186,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: o.createdAt ? new Date(o.createdAt).getTime() : Date.now(),
             actionUrl: '/orders',
             badgeBg: '#fefce8',
-            badgeColor: '#ca8a04',
-            icon: '🔥'
+            badgeColor: '#ca8a04'
           });
         }
       });
@@ -109,7 +195,7 @@ export default function NotificationModal({ isOpen, onClose }) {
     // 2. QUICK HELP TABLE SERVICE REQUESTS (Water, Bill, Messages)
     const storedQuickCalls = (() => {
       try {
-        return JSON.parse(localStorage.getItem('serviq_table_service_calls') || '[]');
+        return JSON.parse(sessionStorage.getItem('serviq_table_service_calls') || '[]');
       } catch (e) {
         return [];
       }
@@ -127,8 +213,7 @@ export default function NotificationModal({ isOpen, onClose }) {
         time: 'Just now',
         timestamp: Date.now() - 30000,
         badgeBg: '#f0f9ff',
-        badgeColor: '#0284c7',
-        icon: '💧'
+        badgeColor: '#0284c7'
       },
       {
         id: 'svc-bill-1',
@@ -140,8 +225,7 @@ export default function NotificationModal({ isOpen, onClose }) {
         time: '2 mins ago',
         timestamp: Date.now() - 120000,
         badgeBg: '#fefce8',
-        badgeColor: '#ca8a04',
-        icon: '💵'
+        badgeColor: '#ca8a04'
       },
       {
         id: 'svc-msg-1',
@@ -153,8 +237,7 @@ export default function NotificationModal({ isOpen, onClose }) {
         time: '5 mins ago',
         timestamp: Date.now() - 300000,
         badgeBg: '#eef2ff',
-        badgeColor: '#4f46e5',
-        icon: '💬'
+        badgeColor: '#4f46e5'
       }
     ];
 
@@ -183,8 +266,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: Date.now() - 600000,
             actionUrl: '/inventory',
             badgeBg: '#fef2f2',
-            badgeColor: '#dc2626',
-            icon: '🚨'
+            badgeColor: '#dc2626'
           });
         } else if (qty <= minStock) {
           aggregated.push({
@@ -198,8 +280,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: Date.now() - 720000,
             actionUrl: '/inventory',
             badgeBg: '#fff7ed',
-            badgeColor: '#ea580c',
-            icon: '📦'
+            badgeColor: '#ea580c'
           });
         }
       });
@@ -225,8 +306,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             timestamp: Date.now() - 180000,
             actionUrl: '/staff',
             badgeBg: '#fff1f2',
-            badgeColor: '#e11d48',
-            icon: '🪑'
+            badgeColor: '#e11d48'
           });
         }
       });
@@ -271,7 +351,6 @@ export default function NotificationModal({ isOpen, onClose }) {
             ticketNumber: tNum,
             badgeBg: '#eff6ff',
             badgeColor: '#2563eb',
-            icon: '🎫',
             isSuperAdmin: true
           });
         } else if (ticket.adminReply || ticket.adminResponse || ticket.resolution) {
@@ -291,7 +370,6 @@ export default function NotificationModal({ isOpen, onClose }) {
             ticketNumber: tNum,
             badgeBg: '#eff6ff',
             badgeColor: '#2563eb',
-            icon: '🎫',
             isSuperAdmin: true
           });
         } else if (String(ticket.status || '').toLowerCase() === 'resolved' || String(ticket.status || '').toLowerCase() === 'in progress') {
@@ -310,7 +388,6 @@ export default function NotificationModal({ isOpen, onClose }) {
             ticketNumber: tNum,
             badgeBg: '#f0fdf4',
             badgeColor: '#16a34a',
-            icon: '✅',
             isSuperAdmin: true
           });
         }
@@ -334,7 +411,6 @@ export default function NotificationModal({ isOpen, onClose }) {
         ticketNumber: 'TIC-1001',
         badgeBg: '#eff6ff',
         badgeColor: '#2563eb',
-        icon: '🎫',
         isSuperAdmin: true
       });
     }
@@ -777,7 +853,6 @@ export default function NotificationModal({ isOpen, onClose }) {
             filteredNotifications.map(notif => {
               const badgeColor = notif.badgeColor || '#ea580c';
               const badgeBg = notif.badgeBg || '#fff7ed';
-              const icon = notif.icon || '🔔';
 
               return (
                 <div
@@ -805,10 +880,9 @@ export default function NotificationModal({ isOpen, onClose }) {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '18px',
                       flexShrink: 0
                     }}>
-                      {icon}
+                      {renderNotificationIcon(notif)}
                     </div>
 
                     <div>
@@ -867,7 +941,7 @@ export default function NotificationModal({ isOpen, onClose }) {
                           transition: 'all 0.15s',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '4px',
+                          gap: '5px',
                           whiteSpace: 'nowrap'
                         }}
                         onMouseEnter={(e) => { 
@@ -879,7 +953,23 @@ export default function NotificationModal({ isOpen, onClose }) {
                           e.currentTarget.style.color = notif.type === 'TICKETS' ? '#2563eb' : '#475569'; 
                         }}
                       >
-                        {notif.type === 'TICKETS' ? 'View Reply 💬' : 'View ↗'}
+                        {notif.type === 'TICKETS' ? (
+                          <>
+                            View Reply
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                              <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                          </>
+                        ) : (
+                          <>
+                            View
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="7" y1="17" x2="17" y2="7"></line>
+                              <polyline points="7 7 17 7 17 17"></polyline>
+                            </svg>
+                          </>
+                        )}
                       </button>
                     )}
 
@@ -895,12 +985,18 @@ export default function NotificationModal({ isOpen, onClose }) {
                         fontSize: '11px',
                         fontWeight: 700,
                         cursor: 'pointer',
-                        transition: 'background-color 0.15s'
+                        transition: 'background-color 0.15s',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px'
                       }}
                       onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#22c55e'; e.currentTarget.style.color = '#ffffff'; e.currentTarget.style.borderColor = '#22c55e'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                     >
-                      Done ✓
+                      Done
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
                     </button>
                   </div>
                 </div>

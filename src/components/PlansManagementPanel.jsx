@@ -676,7 +676,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             </div>
 
             <div style={{ fontSize: '11px', color: '#334155', fontWeight: 600, marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              📦 {lastRechargeData?.planName || lastRechargeData?.description || currentPlanName}
+              {lastRechargeData?.planName || lastRechargeData?.description || currentPlanName}
             </div>
 
           </div>

@@ -17,6 +17,20 @@ const ReceiptIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const UserIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const ChefIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z" />
+    <line x1="6" y1="17" x2="18" y2="17" />
+  </svg>
+);
+
 import ReportsApi from '../api/Reports';
 import OrderApi from '../api/Order.js';
 import UserApi from '../api/User.js';
@@ -25,6 +39,16 @@ import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
+
+// Safe text extractor to avoid React child object errors
+const toDisplayText = (val, fallback = '') => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string' || typeof val === 'number') return String(val);
+  if (typeof val === 'object') {
+    return val.name || val.categoryName || val.title || val.tableNumber || val.tableNo || val.label || fallback;
+  }
+  return String(val);
+};
 
 // Safe helper to extract records array from any server response shape
 const extractServerList = (res) => {
@@ -58,38 +82,119 @@ const extractOrderItems = (order) => {
   return [];
 };
 
-// Helper: Calculate Waiter Reports from restaurant orders and staff
-const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], filters = {}) => {
-  const { dateStart, dateEnd, selectedBranchId, searchQuery, page = 0, limit = 10 } = filters;
+// Helper: Safe extractor for branch IDs and names
+const extractBranchIdentifiers = (val) => {
+  if (!val) return [];
+  const ids = [];
+  if (typeof val === 'string' || typeof val === 'number') {
+    const s = String(val).trim();
+    if (s && s !== 'null' && s !== 'undefined') ids.push(s, s.toLowerCase());
+  } else if (typeof val === 'object' && val !== null) {
+    if (val._id) ids.push(String(val._id).trim(), String(val._id).trim().toLowerCase());
+    if (val.id) ids.push(String(val.id).trim(), String(val.id).trim().toLowerCase());
+    if (val.branchId) ids.push(String(val.branchId).trim(), String(val.branchId).trim().toLowerCase());
+    if (val.branchCode || val.code) ids.push(String(val.branchCode || val.code).trim(), String(val.branchCode || val.code).trim().toLowerCase());
+    if (val.branchName || val.name) ids.push(String(val.branchName || val.name).trim(), String(val.branchName || val.name).trim().toLowerCase());
+    if (val.city) ids.push(String(val.city).trim().toLowerCase());
+  }
+  return Array.from(new Set(ids.filter(Boolean)));
+};
 
-  // 1. Filter orders by branch and date
-  const filteredOrders = ordersList.filter(o => {
-    if (selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL') {
-      const oBranch = o.branchId || o.branch?._id || o.branch?.id || o.branch;
-      if (oBranch && String(oBranch) !== String(selectedBranchId)) return false;
+// Helper: Check if an entity belongs to a selected branch
+const isEntityInBranch = (entity, targetBranchId, branchesList = []) => {
+  if (!targetBranchId || targetBranchId === 'All' || targetBranchId === 'ALL' || String(targetBranchId).toLowerCase() === 'all branches') {
+    return true; // All Branches scope
+  }
+  if (!entity) return false;
+
+  // 1. Resolve all target branch identifiers (IDs, codes, names)
+  const targetIdStr = String(targetBranchId).trim().toLowerCase();
+  const targetKeys = new Set([targetIdStr]);
+
+  if (Array.isArray(branchesList) && branchesList.length > 0) {
+    const matchedBranch = branchesList.find(b => {
+      const bIds = extractBranchIdentifiers(b);
+      return bIds.some(k => k.toLowerCase() === targetIdStr);
+    });
+    if (matchedBranch) {
+      extractBranchIdentifiers(matchedBranch).forEach(k => targetKeys.add(k.toLowerCase()));
     }
+  }
+
+  // 2. Extract entity's branch identifiers
+  const entityBranchCandidates = [
+    entity.branchId,
+    entity.branch,
+    entity.branch_id,
+    entity.outletId,
+    entity.restaurantBranchId,
+    entity.activeBranchId,
+    entity.branchCode,
+    entity.branchName
+  ];
+
+  if (Array.isArray(entity.branches)) {
+    entity.branches.forEach(b => entityBranchCandidates.push(b));
+  }
+  if (Array.isArray(entity.branchIds)) {
+    entity.branchIds.forEach(b => entityBranchCandidates.push(b));
+  }
+
+  const entityKeys = [];
+  entityBranchCandidates.forEach(c => {
+    if (c) {
+      extractBranchIdentifiers(c).forEach(k => entityKeys.push(k.toLowerCase()));
+    }
+  });
+
+  // If entity has explicitly defined branch keys, check for match
+  if (entityKeys.length > 0) {
+    return entityKeys.some(k => targetKeys.has(k));
+  }
+
+  return false;
+};
+
+// Helper: Calculate Waiter Reports from restaurant orders and staff
+const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], filters = {}, branchesList = []) => {
+  const { dateStart, dateEnd, selectedBranchId, searchQuery, page = 0, limit = 10 } = filters;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL';
+
+  // 1. Filter orders strictly by branch and date
+  const filteredOrders = (ordersList || []).filter(o => {
+    if (isBranchFiltered && !isEntityInBranch(o, selectedBranchId, branchesList)) return false;
     const ordDate = o.createdAt ? o.createdAt.split('T')[0] : (o.date || '');
     if (dateStart && ordDate && ordDate < dateStart) return false;
     if (dateEnd && ordDate && ordDate > dateEnd) return false;
     return true;
   });
 
-  // 2. Identify Waiters
-  let waiters = staffList.filter(s => {
+  // 2. Filter staff strictly by branch if specific branch is active
+  const branchStaff = isBranchFiltered 
+    ? (staffList || []).filter(s => isEntityInBranch(s, selectedBranchId, branchesList))
+    : (staffList || []);
+
+  // Filter tables strictly by branch
+  const branchTables = isBranchFiltered
+    ? (tablesList || []).filter(t => isEntityInBranch(t, selectedBranchId, branchesList))
+    : (tablesList || []);
+
+  // 3. Identify Waiters
+  let waiters = branchStaff.filter(s => {
     const roleStr = String(s.role || s.roleName || s.designation || '').toLowerCase();
     return roleStr.includes('waiter') || roleStr.includes('server') || roleStr.includes('steward');
   });
 
-  // If no explicit waiters, include all non-admin staff
-  if (waiters.length === 0) {
-    const nonAdmin = staffList.filter(s => {
+  // If no explicit waiters, include all non-admin staff of this branch
+  if (waiters.length === 0 && branchStaff.length > 0) {
+    const nonAdmin = branchStaff.filter(s => {
       const roleStr = String(s.role || s.roleName || '').toLowerCase();
-      return !roleStr.includes('kitchen') && !roleStr.includes('superadmin') && !roleStr.includes('chef');
+      return !roleStr.includes('kitchen') && !roleStr.includes('superadmin') && !roleStr.includes('chef') && !roleStr.includes('cook');
     });
     if (nonAdmin.length > 0) waiters = nonAdmin;
   }
 
-  // If still empty, infer from orders or fallback to standard staff
+  // If still empty, infer from branch orders
   if (waiters.length === 0) {
     const orderWaiterNames = Array.from(new Set(filteredOrders.map(o => o.waiter || o.waiterName || o.server).filter(Boolean)));
     if (orderWaiterNames.length > 0) {
@@ -98,37 +203,28 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
         _id: `waiter-${i + 1}`,
         name,
         email: `${name.toLowerCase().replace(/\s+/g, '.')}@serviq.in`,
-        phone: `+91 98765 ${43210 + i}`,
+        phone: '',
         status: 'Active',
-        dutyStatus: 'ON_DUTY'
+        dutyStatus: 'ON_DUTY',
+        branchId: selectedBranchId
       }));
     } else {
-      waiters = [
-        { id: 'w-1', _id: 'w-1', name: 'Ramesh Kumar', email: 'ramesh.k@serviq.in', phone: '+91 98765 43210', status: 'Active', dutyStatus: 'ON_DUTY' },
-        { id: 'w-2', _id: 'w-2', name: 'Suresh Pillai', email: 'suresh.p@serviq.in', phone: '+91 98765 43211', status: 'Active', dutyStatus: 'ON_DUTY' },
-        { id: 'w-3', _id: 'w-3', name: 'Anand Sharma', email: 'anand.s@serviq.in', phone: '+91 98765 43212', status: 'Active', dutyStatus: 'ON_DUTY' },
-        { id: 'w-4', _id: 'w-4', name: 'Priya Patel', email: 'priya.p@serviq.in', phone: '+91 98765 43213', status: 'Active', dutyStatus: 'OFF_DUTY' }
-      ];
+      waiters = [];
     }
   }
 
-  // 3. Map orders to waiters and aggregate metrics
+  // 4. Map orders to waiters and aggregate metrics
   const waiterRows = waiters.map((w, wIdx) => {
     const wId = String(w.id || w._id || '');
     const wName = w.name || w.userName || w.fullName || `Waiter ${wIdx + 1}`;
     const wNameLower = wName.toLowerCase();
 
     // Find orders matched by waiter name or ID
-    let assignedOrders = filteredOrders.filter(o => {
+    const assignedOrders = filteredOrders.filter(o => {
       const ordWaiter = String(o.waiter || o.waiterName || o.server || o.assignedStaff || '').toLowerCase();
       const ordWaiterId = String(o.waiterId || o.userId || '');
       return (ordWaiter && ordWaiter.includes(wNameLower)) || (ordWaiterId && ordWaiterId === wId);
     });
-
-    // If orders don't have assigned waiter names explicitly, distribute evenly across waiters
-    if (assignedOrders.length === 0 && filteredOrders.length > 0) {
-      assignedOrders = filteredOrders.filter((_, idx) => (idx % waiters.length) === wIdx);
-    }
 
     const ordersServedCount = assignedOrders.filter(o => {
       const st = String(o.status || '').toLowerCase();
@@ -156,17 +252,15 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     const normalizedOrders = assignedOrders.map((o, idx) => {
       const oId = o.orderId || o.id || (o._id ? String(o._id).slice(-5).toUpperCase() : `ORD-${idx + 101}`);
       const tNum = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table) || (typeof o.tableId === 'object' ? (o.tableId?.tableNumber || o.tableId?.name) : o.tableId) || `${idx + 1}`;
-      const oTotal = typeof o.total === 'number' ? o.total : (parseFloat(String(o.total || 0).replace(/[^0-9.]/g, '')) || 250);
+      const oTotal = typeof o.total === 'number' ? o.total : (parseFloat(String(o.total || 0).replace(/[^0-9.]/g, '')) || 0);
 
       let oItems = [];
       if (Array.isArray(o.items) && o.items.length > 0) {
         oItems = o.items.map(it => ({
           qty: it.quantity || it.qty || 1,
           name: it.name || it.menuItem?.name || 'Dish',
-          price: it.price || 150
+          price: it.price || 0
         }));
-      } else {
-        oItems = [{ qty: 1, name: 'Special Platter', price: oTotal }];
       }
 
       return {
@@ -185,48 +279,52 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     return {
       id: w.id || w._id || wId || `w-${wIdx}`,
       name: w.name || wName || 'Staff Member',
-      phone: w.phone || w.mobileNumber || '9876543210',
-      email: w.email || `${wNameLower.replace(/\s+/g, '.')}@serviq.in`,
+      phone: w.phone || w.mobileNumber || '',
+      email: w.email || '',
       dutyStatus: isDutyActive ? 'ON_DUTY' : 'OFF_DUTY',
-      assignedTablesList,
-      ordersServed,
-      totalRevenue,
-      averageOrderValue: avgOrderVal,
+      assignedTablesList: assignedTables.length > 0 ? assignedTables : (Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList : []),
+      ordersServed: ordersServedCount,
+      totalRevenue: totalRevenueNum,
+      averageOrderValue: aov,
       totalOrders: assignedOrders.length,
       orders: normalizedOrders
     };
   });
 
-  let data = waiterMetrics;
+  let data = waiterRows;
 
-  // 4. Search Filter
+  // 5. Search Filter
   if (searchQuery && searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
     data = data.filter(w => 
-      w.name.toLowerCase().includes(q) || 
-      w.email.toLowerCase().includes(q) || 
-      w.phone.toLowerCase().includes(q) ||
-      w.assignedTablesList.some(t => String(t).toLowerCase().includes(q))
+      (w.name || '').toLowerCase().includes(q) || 
+      (w.email || '').toLowerCase().includes(q) || 
+      (w.phone || '').toLowerCase().includes(q) ||
+      (Array.isArray(w.assignedTablesList) && w.assignedTablesList.some(t => String(t).toLowerCase().includes(q)))
     );
   }
 
-  // 5. Summary metrics
+  // 6. Summary metrics
   const totalWaiters = data.length;
-  const totalOrdersServed = data.reduce((acc, w) => acc + w.ordersServed, 0);
-  const totalWaiterRevenue = data.reduce((acc, w) => acc + w.totalRevenue, 0);
-  const avgEfficiency = totalOrdersServed > 0 ? (totalWaiterRevenue / totalOrdersServed).toFixed(2) : '0.00';
+  const activeWaitersOnDuty = data.filter(w => w.dutyStatus === 'ON_DUTY').length;
+  const totalOrdersServed = data.reduce((acc, w) => acc + (w.ordersServed || 0), 0);
+  const totalWaiterRevenue = data.reduce((acc, w) => acc + (w.totalRevenue || 0), 0);
+  const averageOrderValue = totalOrdersServed > 0 ? (totalWaiterRevenue / totalOrdersServed).toFixed(2) : '0.00';
+  const avgEfficiency = averageOrderValue;
 
   const summary = {
     totalWaiters,
+    activeWaitersOnDuty,
     totalOrdersServed,
     totalWaiterRevenue,
+    averageOrderValue,
     avgEfficiency: `${avgEfficiency}`
   };
 
-  // 6. Pagination
+  // 7. Pagination
   const totalItems = data.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
-  const safePage = Math.min(page, totalPages - 1);
+  const safePage = Math.max(0, Math.min(page, Math.max(0, totalPages - 1)));
   const paginatedData = data.slice(safePage * limit, (safePage + 1) * limit);
 
   return {
@@ -237,23 +335,21 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
   };
 };
 
-// Helper: Calculate Kitchen Preparation Reports from orders & menu
-const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = [], filters = {}) => {
+// Helper: Calculate Kitchen Preparation Reports strictly by branch
+const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = [], filters = {}, branchesList = []) => {
   const { dateStart, dateEnd, selectedBranchId, filterCategory = 'All', searchQuery, page = 0, limit = 10 } = filters;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL';
 
-  // 1. Filter orders by branch and date
-  const filteredOrders = ordersList.filter(o => {
-    if (selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL') {
-      const oBranch = o.branchId || o.branch?._id || o.branch?.id || o.branch;
-      if (oBranch && String(oBranch) !== String(selectedBranchId)) return false;
-    }
+  // 1. Filter orders strictly by branch and date
+  const filteredOrders = (ordersList || []).filter(o => {
+    if (isBranchFiltered && !isEntityInBranch(o, selectedBranchId, branchesList)) return false;
     const ordDate = o.createdAt ? o.createdAt.split('T')[0] : (o.date || '');
     if (dateStart && ordDate && ordDate < dateStart) return false;
     if (dateEnd && ordDate && ordDate > dateEnd) return false;
     return true;
   });
 
-  // 2. Aggregate food items prepared
+  // 2. Aggregate dishes cooked / ordered in this branch
   const itemMap = new Map();
 
   filteredOrders.forEach(order => {
@@ -261,14 +357,29 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
     const orderItems = extractOrderItems(order);
 
     orderItems.forEach(it => {
-      const name = (it.name || it.menuItem?.name || it.dishName || 'Special Item').trim();
+      const name = toDisplayText(it.name || it.menuItem?.name || it.dishName || '').trim();
+      if (!name) return;
+      const nameLower = name.toLowerCase();
       const qty = Number(it.quantity || it.qty || 1);
-      const price = Number(it.price || it.rate || 180);
-      const cat = it.category || it.categoryName || it.menuItem?.category || 'Main Course';
-      const prep = it.prepTime || it.preparationTime || (cat === 'Beverages' ? '5 mins' : (cat === 'Starters' ? '12 mins' : (cat === 'Breads' ? '8 mins' : '18 mins')));
 
-      if (!itemMap.has(name)) {
-        itemMap.set(name, {
+      const matchedMenu = (menuList || []).find(m => {
+        const mName = toDisplayText(m.name || m.dishName || '').trim().toLowerCase();
+        return mName === nameLower || (m._id && (m._id === it.menuItemId || m._id === it.menuItem));
+      });
+
+      const price = Number(it.price || it.rate || matchedMenu?.price || 0);
+      let cat = toDisplayText(it.category || it.categoryName || it.menuItem?.category || matchedMenu?.category || matchedMenu?.categoryName);
+      if (!cat || cat === 'Uncategorized' || cat === 'null' || cat === 'undefined' || cat === 'N/A') {
+        cat = 'Main Course';
+      }
+
+      let prep = toDisplayText(it.prepTime || it.preparationTime || matchedMenu?.prepTime || matchedMenu?.preparationTime);
+      if (!prep || prep === 'N/A' || prep === 'null' || prep === 'undefined') {
+        prep = '15 mins';
+      }
+
+      if (!itemMap.has(nameLower)) {
+        itemMap.set(nameLower, {
           foodItem: name,
           itemName: name,
           category: cat,
@@ -280,70 +391,12 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
         });
       }
 
-      const entry = itemMap.get(name);
+      const entry = itemMap.get(nameLower);
       entry.quantityPrepared += qty;
       entry.revenueGenerated += (qty * price);
       if (oStatus === 'preparing') entry.kitchenStatus = 'In Progress';
       if (entry.quantityPrepared >= 8) entry.status = 'High Demand';
     });
-  });
-
-  // Supplement with menu items so all registered dishes appear in kitchen reports
-  if (menuList && menuList.length > 0) {
-    menuList.forEach((mItem, mIdx) => {
-      const name = (mItem.name || mItem.dishName || '').trim();
-      if (!name || itemMap.has(name)) return;
-      const cat = mItem.category || (mIdx % 3 === 0 ? 'Main Course' : (mIdx % 3 === 1 ? 'Starters' : 'Beverages'));
-      const price = Number(mItem.price || 200);
-      const qty = Math.max(1, ((mIdx * 3 + 4) % 15));
-      itemMap.set(name, {
-        foodItem: name,
-        itemName: name,
-        category: cat,
-        quantityPrepared: qty,
-        avgPrepTime: mItem.prepTime || (cat === 'Beverages' ? '6 mins' : (cat === 'Starters' ? '14 mins' : '20 mins')),
-        revenueGenerated: qty * price,
-        kitchenStatus: 'Completed',
-        status: qty >= 8 ? 'High Demand' : 'Optimal'
-      });
-    });
-  }
-
-  // Default fallback dishes to ensure all 18 standard kitchen preparation items are available
-  const fallbackDishes = [
-    { name: 'Chicken Biryani Special', cat: 'Main Course', qty: 28, prep: '22 mins', price: 320, st: 'Completed', tag: 'High Demand' },
-    { name: 'Paneer Butter Masala', cat: 'Main Course', qty: 22, prep: '18 mins', price: 240, st: 'Completed', tag: 'High Demand' },
-    { name: 'Butter Naan Basket', cat: 'Breads', qty: 45, prep: '8 mins', price: 60, st: 'Completed', tag: 'High Demand' },
-    { name: 'Tandoori Chicken Platter', cat: 'Starters', qty: 16, prep: '20 mins', price: 360, st: 'Completed', tag: 'Optimal' },
-    { name: 'Crispy Veg Spring Rolls', cat: 'Starters', qty: 14, prep: '12 mins', price: 180, st: 'Completed', tag: 'Optimal' },
-    { name: 'Fresh Lime Soda / Mojito', cat: 'Beverages', qty: 32, prep: '5 mins', price: 90, st: 'Completed', tag: 'Optimal' },
-    { name: 'Mutton Dum Biryani', cat: 'Main Course', qty: 18, prep: '25 mins', price: 380, st: 'In Progress', tag: 'High Demand' },
-    { name: 'Gulab Jamun with Ice Cream', cat: 'Desserts', qty: 15, prep: '6 mins', price: 120, st: 'Completed', tag: 'Optimal' },
-    { name: 'Garlic Butter Roti', cat: 'Breads', qty: 26, prep: '7 mins', price: 50, st: 'Completed', tag: 'Optimal' },
-    { name: 'Chilli Chicken Dry', cat: 'Starters', qty: 19, prep: '15 mins', price: 260, st: 'Completed', tag: 'Optimal' },
-    { name: 'Veg Pulao with Raita', cat: 'Main Course', qty: 12, prep: '16 mins', price: 190, st: 'Completed', tag: 'Optimal' },
-    { name: 'Cold Coffee with Ice Cream', cat: 'Beverages', qty: 11, prep: '6 mins', price: 110, st: 'Completed', tag: 'Optimal' },
-    { name: 'Chicken Tikka Masala', cat: 'Main Course', qty: 17, prep: '20 mins', price: 310, st: 'Completed', tag: 'High Demand' },
-    { name: 'Dal Makhani Royal', cat: 'Main Course', qty: 20, prep: '15 mins', price: 210, st: 'Completed', tag: 'High Demand' },
-    { name: 'Paneer Tikka Starter', cat: 'Starters', qty: 14, prep: '14 mins', price: 220, st: 'Completed', tag: 'Optimal' },
-    { name: 'Mango Lassi Delight', cat: 'Beverages', qty: 16, prep: '5 mins', price: 95, st: 'Completed', tag: 'Optimal' },
-    { name: 'Chocolate Brownie Sundae', cat: 'Desserts', qty: 13, prep: '8 mins', price: 140, st: 'Completed', tag: 'Optimal' },
-    { name: 'Stuffed Kulcha Basket', cat: 'Breads', qty: 21, prep: '10 mins', price: 75, st: 'Completed', tag: 'Optimal' }
-  ];
-
-  fallbackDishes.forEach(d => {
-    if (!itemMap.has(d.name)) {
-      itemMap.set(d.name, {
-        foodItem: d.name,
-        itemName: d.name,
-        category: d.cat,
-        quantityPrepared: d.qty,
-        avgPrepTime: d.prep,
-        revenueGenerated: d.qty * d.price,
-        kitchenStatus: d.st,
-        status: d.tag
-      });
-    }
   });
 
   let dishes = Array.from(itemMap.values());
@@ -377,7 +430,7 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
   // 6. Pagination
   const totalItems = dishes.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
-  const safePage = Math.min(page, totalPages - 1);
+  const safePage = Math.max(0, Math.min(page, Math.max(0, totalPages - 1)));
   const paginatedData = dishes.slice(safePage * limit, (safePage + 1) * limit);
 
   return {
@@ -422,76 +475,107 @@ export default function ReportsPanel({
   const [loading, setLoading] = useState(false);
   const [waiterData, setWaiterData] = useState([]);
   const [kitchenData, setKitchenData] = useState([]);
+  const [waiterTotalCount, setWaiterTotalCount] = useState(0);
+  const [kitchenTotalCount, setKitchenTotalCount] = useState(0);
   const [summary, setSummary] = useState(null);
 
   const [pagination, setPagination] = useState({ page: 0, limit: 10, totalPages: 1, totalItems: 0 });
 
   const currency = activeRestaurant?.settings?.currency || '₹';
+  const effectiveBranches = Array.isArray(branches) && branches.length > 0 ? branches : (activeRestaurant?.branches || []);
 
-  // Fetch Live Operational Data
+  // Fetch Live Operational Data across one or all branches
   useEffect(() => {
     let isMounted = true;
     const fetchLiveContext = async () => {
       try {
         const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
-        const branchParam = isBranchFiltered ? { branchId: selectedBranchId } : {};
+        
+        let orderList = [];
+        let staffList = [];
+        let tableList = [];
+        let menuList = [];
 
-        const [orderRes, staffRes, tableRes, catRes, menuRes] = await Promise.all([
-          OrderApi.getOrders({ ...branchParam, limit: 500 }).catch(() => null),
-          UserApi.getUsers({ ...branchParam, limit: 10 }).catch(() => null),
-          TableApi.getTables({ ...branchParam, limit: 10 }).catch(() => null),
-          apiClient.get('/categories').catch(() => null),
-          MenuApi.getMenuItems({ ...branchParam, limit: 1000 }).catch(() => null)
-        ]);
+        if (isBranchFiltered) {
+          const branchParam = { branchId: selectedBranchId, limit: 1000 };
+          const [orderRes, staffRes, tableRes, catRes, menuRes] = await Promise.all([
+            OrderApi.getOrders(branchParam).catch(() => null),
+            UserApi.getUsers(branchParam).catch(() => null),
+            TableApi.getTables(branchParam).catch(() => null),
+            MenuApi.getCategories({ limit: 1000 }).catch(() => null),
+            MenuApi.getMenuItems(branchParam).catch(() => null)
+          ]);
+
+          if (orderRes?.status && orderRes?.response) orderList = extractServerList(orderRes) || [];
+          if (staffRes?.status && staffRes?.response) staffList = extractServerList(staffRes) || [];
+          if (tableRes?.status && tableRes?.response) tableList = extractServerList(tableRes) || [];
+          if (catRes?.status && catRes?.response) {
+            const cd = catRes.response.data || catRes.response.categories || catRes.response;
+            if (Array.isArray(cd)) setLiveCategories(cd);
+          }
+          if (menuRes?.status && menuRes?.response) menuList = extractServerList(menuRes) || [];
+        } else {
+          // All Branches: Fetch global + all branches in parallel
+          const [globalOrders, globalStaff, globalTables, catRes, globalMenu] = await Promise.all([
+            OrderApi.getOrders({ limit: 1000 }).catch(() => null),
+            UserApi.getUsers({ limit: 1000 }).catch(() => null),
+            TableApi.getTables({ limit: 1000 }).catch(() => null),
+            MenuApi.getCategories({ limit: 1000 }).catch(() => null),
+            MenuApi.getMenuItems({ limit: 1000 }).catch(() => null)
+          ]);
+
+          if (catRes?.status && catRes?.response) {
+            const cd = catRes.response.data || catRes.response.categories || catRes.response;
+            if (Array.isArray(cd)) setLiveCategories(cd);
+          }
+
+          orderList = extractServerList(globalOrders) || [];
+          staffList = extractServerList(globalStaff) || [];
+          tableList = extractServerList(globalTables) || [];
+          menuList = extractServerList(globalMenu) || [];
+
+          if (Array.isArray(effectiveBranches) && effectiveBranches.length > 0) {
+            const branchPromises = effectiveBranches.map(async (b) => {
+              const bId = b._id || b.id || b.branchId;
+              if (!bId) return null;
+              const [bOrders, bStaff, bTables, bMenu] = await Promise.all([
+                OrderApi.getOrders({ branchId: bId, limit: 1000 }).catch(() => null),
+                UserApi.getUsers({ branchId: bId, limit: 1000 }).catch(() => null),
+                TableApi.getTables({ branchId: bId, limit: 1000 }).catch(() => null),
+                MenuApi.getMenuItems({ branchId: bId, limit: 1000 }).catch(() => null)
+              ]);
+              return {
+                orders: extractServerList(bOrders) || [],
+                staff: extractServerList(bStaff) || [],
+                tables: extractServerList(bTables) || [],
+                menu: extractServerList(bMenu) || []
+              };
+            });
+
+            const branchResults = await Promise.all(branchPromises);
+            branchResults.forEach(res => {
+              if (res) {
+                if (res.orders.length > 0) orderList.push(...res.orders);
+                if (res.staff.length > 0) staffList.push(...res.staff);
+                if (res.tables.length > 0) tableList.push(...res.tables);
+                if (res.menu.length > 0) menuList.push(...res.menu);
+              }
+            });
+          }
+        }
 
         if (!isMounted) return;
 
-        if (orderRes?.status && orderRes?.response) {
-          const d = orderRes.response.data || orderRes.response;
-          let list = [];
-          if (Array.isArray(d)) list = d;
-          else if (Array.isArray(d?.orders)) list = d.orders;
-          else if (Array.isArray(d?.data?.orders)) list = d.data.orders;
-          else if (Array.isArray(d?.data)) list = d.data;
-          if (list.length > 0) setLiveOrders(list);
-        }
+        // Deduplicate items
+        const uniqueOrders = Array.from(new Map(orderList.map(o => [o._id || o.id || JSON.stringify(o), o])).values());
+        const uniqueStaff = Array.from(new Map(staffList.map(s => [s._id || s.id || s.email || JSON.stringify(s), s])).values());
+        const uniqueTables = Array.from(new Map(tableList.map(t => [t._id || t.id || t.tableNumber || JSON.stringify(t), t])).values());
+        const uniqueMenu = Array.from(new Map(menuList.map(m => [m._id || m.id || m.name || JSON.stringify(m), m])).values());
 
-        if (staffRes?.status && staffRes?.response) {
-          const sd = staffRes.response.data || staffRes.response;
-          let sList = [];
-          if (Array.isArray(sd)) sList = sd;
-          else if (Array.isArray(sd?.users)) sList = sd.users;
-          else if (Array.isArray(sd?.staff)) sList = sd.staff;
-          else if (Array.isArray(sd?.data?.users)) sList = sd.data.users;
-          else if (Array.isArray(sd?.data)) sList = sd.data;
-          if (sList.length > 0) setLiveStaff(sList);
-        }
-
-        if (tableRes?.status && tableRes?.response) {
-          const td = tableRes.response.data || tableRes.response;
-          let tList = [];
-          if (Array.isArray(td)) tList = td;
-          else if (Array.isArray(td?.tables)) tList = td.tables;
-          else if (Array.isArray(td?.data?.tables)) tList = td.data.tables;
-          else if (Array.isArray(td?.data)) tList = td.data;
-          if (tList.length > 0) setLiveTables(tList);
-        }
-
-        if (catRes?.data) {
-          const cd = catRes.data.data || catRes.data.categories || catRes.data;
-          if (Array.isArray(cd)) setLiveCategories(cd);
-        }
-
-        if (menuRes?.status && menuRes?.response) {
-          const md = menuRes.response.data || menuRes.response;
-          let mList = [];
-          if (Array.isArray(md)) mList = md;
-          else if (Array.isArray(md?.items)) mList = md.items;
-          else if (Array.isArray(md?.menu)) mList = md.menu;
-          else if (Array.isArray(md?.data?.items)) mList = md.data.items;
-          else if (Array.isArray(md?.data)) mList = md.data;
-          if (mList.length > 0) setLiveMenu(mList);
-        }
+        if (uniqueOrders.length > 0) setLiveOrders(uniqueOrders);
+        if (uniqueStaff.length > 0) setLiveStaff(uniqueStaff);
+        if (uniqueTables.length > 0) setLiveTables(uniqueTables);
+        if (uniqueMenu.length > 0) setLiveMenu(uniqueMenu);
       } catch (e) {
         console.warn("Live context fetch error in ReportsPanel:", e);
       }
@@ -499,24 +583,237 @@ export default function ReportsPanel({
 
     fetchLiveContext();
     return () => { isMounted = false; };
-  }, [selectedBranchId]);
+  }, [selectedBranchId, effectiveBranches.length]);
 
-  // Derived effective collections
-  const effectiveOrders = (liveOrders.length > 0)
+  // Derived effective collections strictly filtered by active branch
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+
+  const baseOrders = (liveOrders.length > 0)
     ? liveOrders
     : ((orders && orders.length > 0) ? orders : (activeRestaurant?.orders || []));
+  const effectiveOrders = isBranchFiltered
+    ? baseOrders.filter(o => isEntityInBranch(o, selectedBranchId, effectiveBranches))
+    : baseOrders;
 
-  const effectiveStaff = (liveStaff.length > 0)
+  const baseStaff = (liveStaff.length > 0)
     ? liveStaff
     : ((staff && staff.length > 0) ? staff : (activeRestaurant?.staff || []));
+  const effectiveStaff = isBranchFiltered
+    ? baseStaff.filter(s => isEntityInBranch(s, selectedBranchId, effectiveBranches))
+    : baseStaff;
 
-  const effectiveTables = (liveTables.length > 0)
+  const baseTables = (liveTables.length > 0)
     ? liveTables
     : ((tables && tables.length > 0) ? tables : (activeRestaurant?.tables || []));
+  const effectiveTables = isBranchFiltered
+    ? baseTables.filter(t => isEntityInBranch(t, selectedBranchId, effectiveBranches))
+    : baseTables;
 
-  const effectiveMenu = (liveMenu.length > 0)
+  const baseMenu = (liveMenu.length > 0)
     ? liveMenu
     : ((menu && menu.length > 0) ? menu : (activeRestaurant?.menu || []));
+  const effectiveMenu = isBranchFiltered
+    ? baseMenu.filter(m => isEntityInBranch(m, selectedBranchId, effectiveBranches))
+    : baseMenu;
+
+  // Helper: Fetch server list across all branches if All Branches is selected
+  const fetchMultiBranchReport = async (apiCall, filters) => {
+    if (isBranchFiltered) {
+      const res = await apiCall(filters).catch(() => null);
+      let list = extractServerList(res) || [];
+      if (Array.isArray(list)) {
+        list = list.filter(item => isEntityInBranch(item, selectedBranchId, effectiveBranches));
+      }
+      return list;
+    }
+
+    // All Branches: query direct global + all branches in parallel
+    const globalRes = await apiCall({ ...filters, branchId: undefined }).catch(() => null);
+    const globalList = extractServerList(globalRes) || [];
+
+    if (Array.isArray(effectiveBranches) && effectiveBranches.length > 0) {
+      const branchPromises = effectiveBranches.map(b => {
+        const bId = b._id || b.id || b.branchId;
+        if (!bId) return null;
+        return apiCall({ ...filters, branchId: bId }).catch(() => null);
+      });
+
+      const branchResults = await Promise.all(branchPromises);
+      const combined = [...globalList];
+      branchResults.forEach(res => {
+        const bList = extractServerList(res);
+        if (Array.isArray(bList) && bList.length > 0) {
+          combined.push(...bList);
+        }
+      });
+
+      return combined;
+    }
+
+    return globalList;
+  };
+
+  // Helper: Aggregate unique dishes from list
+  const aggregateDishes = (dishList = []) => {
+    const itemMap = new Map();
+
+    dishList.forEach(k => {
+      const foodItem = toDisplayText(k.foodItem || k.itemName || k.name || k.title, '').trim();
+      if (!foodItem || foodItem.toLowerCase() === 'food item') return;
+      const nameLower = foodItem.toLowerCase();
+
+      const matchedMenu = (effectiveMenu || []).find(m => {
+        const mName = toDisplayText(m.name || m.dishName || '').trim().toLowerCase();
+        return mName === nameLower || (m._id && (m._id === k.menuItemId || m._id === k.itemId || m._id === k._id));
+      });
+
+      let cat = toDisplayText(k.category || k.categoryName);
+      if (!cat || cat === 'Uncategorized' || cat === 'null' || cat === 'undefined' || cat === 'N/A') {
+        cat = toDisplayText(matchedMenu?.category || matchedMenu?.categoryName, 'Main Course');
+      }
+
+      let prep = toDisplayText(k.avgPrepTime || k.prepTime);
+      if (!prep || prep === 'N/A' || prep === 'null' || prep === 'undefined') {
+        prep = toDisplayText(matchedMenu?.prepTime || matchedMenu?.preparationTime, '15 mins');
+      }
+
+      const qty = Number(k.quantityPrepared ?? k.qty ?? k.quantity ?? 0);
+      const rate = Number(k.price || matchedMenu?.price || 0);
+      const rev = Number(k.revenueGenerated ?? k.revenue ?? (qty * rate) ?? 0);
+      const status = toDisplayText(k.kitchenStatus || k.status, 'Completed');
+
+      if (!itemMap.has(nameLower)) {
+        itemMap.set(nameLower, {
+          ...k,
+          foodItem,
+          itemName: foodItem,
+          category: cat,
+          kitchenStatus: status,
+          avgPrepTime: prep,
+          quantityPrepared: qty,
+          revenueGenerated: rev
+        });
+      } else {
+        const existing = itemMap.get(nameLower);
+        existing.quantityPrepared += qty;
+        existing.revenueGenerated += rev;
+        if (status === 'In Progress') existing.kitchenStatus = 'In Progress';
+        if (!existing.category || existing.category === 'Main Course') existing.category = cat;
+      }
+    });
+
+    return Array.from(itemMap.values());
+  };
+
+  // Helper: Aggregate unique waiters from list
+  const aggregateWaiters = (waiterList = []) => {
+    const waiterMap = new Map();
+
+    waiterList.forEach((w, idx) => {
+      const name = toDisplayText(w.name || w.userName, 'Waiter').trim();
+      const email = toDisplayText(w.email).trim();
+      const phone = toDisplayText(w.phone || w.mobileNumber).trim();
+      const id = String(w.id || w._id || w.userId || email || `w-${idx}`);
+      const key = email ? email.toLowerCase() : (id ? id.toLowerCase() : name.toLowerCase());
+
+      const dutyStatus = toDisplayText(w.dutyStatus || w.status, 'ON_DUTY');
+      const assignedTables = Array.isArray(w.assignedTablesList) 
+        ? w.assignedTablesList.map(t => toDisplayText(t))
+        : (Array.isArray(w.tables) ? w.tables.map(t => toDisplayText(t)) : []);
+      const ordersServed = Number(w.ordersServed || w.totalOrders || 0);
+      const totalRevenue = Number(w.totalRevenue || w.revenue || 0);
+
+      if (!waiterMap.has(key)) {
+        waiterMap.set(key, {
+          ...w,
+          id,
+          name,
+          email,
+          phone,
+          dutyStatus,
+          assignedTablesList: assignedTables,
+          ordersServed,
+          totalRevenue,
+          averageOrderValue: toDisplayText(w.averageOrderValue || (ordersServed > 0 ? (totalRevenue / ordersServed).toFixed(2) : '0.00'))
+        });
+      } else {
+        const existing = waiterMap.get(key);
+        existing.ordersServed += ordersServed;
+        existing.totalRevenue += totalRevenue;
+        existing.averageOrderValue = existing.ordersServed > 0 ? (existing.totalRevenue / existing.ordersServed).toFixed(2) : '0.00';
+        if (assignedTables.length > 0) {
+          existing.assignedTablesList = Array.from(new Set([...existing.assignedTablesList, ...assignedTables]));
+        }
+      }
+    });
+
+    return Array.from(waiterMap.values());
+  };
+
+  // Sync both tab counts accurately
+  const syncBothTabCounts = async () => {
+    try {
+      const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+      const baseFilters = {
+        startDate: dateStart,
+        endDate: dateEnd,
+        branchId: isBranchFiltered ? selectedBranchId : undefined,
+        limit: 1000
+      };
+
+      const [rawWaiters, rawKitchen] = await Promise.all([
+        fetchMultiBranchReport((f) => ReportsApi.getWaiterReports(f), baseFilters),
+        fetchMultiBranchReport((f) => ReportsApi.getKitchenReports(f), baseFilters)
+      ]);
+
+      // 1. Sync Waiter Count
+      const aggregatedWaiters = aggregateWaiters(rawWaiters);
+      if (aggregatedWaiters.length > 0) {
+        setWaiterTotalCount(aggregatedWaiters.length);
+      } else {
+        const computedW = computeWaiterReports(effectiveOrders, effectiveStaff, effectiveTables, {
+          dateStart,
+          dateEnd,
+          selectedBranchId,
+          searchQuery: '',
+          page: 0,
+          limit: 1000
+        }, effectiveBranches);
+        setWaiterTotalCount(computedW.totalItems || 0);
+      }
+
+      // 2. Sync Kitchen Count
+      const aggregatedKitchen = aggregateDishes(rawKitchen);
+      if (aggregatedKitchen.length > 0) {
+        setKitchenTotalCount(aggregatedKitchen.length);
+      } else {
+        const computedK = computeKitchenReports(effectiveOrders, effectiveMenu, liveCategories, {
+          dateStart,
+          dateEnd,
+          selectedBranchId,
+          filterCategory: 'All',
+          searchQuery: '',
+          page: 0,
+          limit: 1000
+        }, effectiveBranches);
+        setKitchenTotalCount(computedK.totalItems || 0);
+      }
+    } catch (err) {
+      console.warn("syncBothTabCounts error:", err);
+    }
+  };
+
+  useEffect(() => {
+    syncBothTabCounts();
+  }, [
+    effectiveOrders.length,
+    effectiveStaff.length,
+    effectiveTables.length,
+    effectiveMenu.length,
+    dateStart,
+    dateEnd,
+    selectedBranchId
+  ]);
 
   useEffect(() => {
     if (initialTab === 'kitchen' || initialTab === 'waiter') {
@@ -530,24 +827,47 @@ export default function ReportsPanel({
       const filters = {
         startDate: dateStart,
         endDate: dateEnd,
-        branchId: (selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL') ? selectedBranchId : undefined,
+        branchId: isBranchFiltered ? selectedBranchId : undefined,
         search: searchQuery,
-        page,
+        page: page + 1,
         limit: pagination.limit
       };
 
       if (activeReportTab === 'waiter') {
-        const res = await ReportsApi.getWaiterReports(filters);
-        const serverData = extractServerList(res);
+        const rawWaiters = await fetchMultiBranchReport((f) => ReportsApi.getWaiterReports(f), filters);
+        let cleanWaiters = aggregateWaiters(rawWaiters);
 
-        if (Array.isArray(serverData) && serverData.length > 0) {
-          setWaiterData(serverData);
-          setSummary(res.response?.summary || res.response?.data?.summary || null);
-          const totalCount = res.response?.total || res.response?.totalItems || res.response?.data?.total || serverData.length;
+        if (searchQuery && searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          cleanWaiters = cleanWaiters.filter(w =>
+            w.name.toLowerCase().includes(q) ||
+            w.email.toLowerCase().includes(q) ||
+            w.phone.toLowerCase().includes(q) ||
+            w.assignedTablesList.some(t => String(t).toLowerCase().includes(q))
+          );
+        }
+
+        if (cleanWaiters.length > 0) {
+          setWaiterData(cleanWaiters);
+          const totalOrdersServed = cleanWaiters.reduce((acc, w) => acc + (w.ordersServed || 0), 0);
+          const totalWaiterRevenue = cleanWaiters.reduce((acc, w) => acc + (w.totalRevenue || 0), 0);
+          const aov = totalOrdersServed > 0 ? (totalWaiterRevenue / totalOrdersServed).toFixed(2) : '0.00';
+          const activeOnDuty = cleanWaiters.filter(w => toDisplayText(w.dutyStatus) === 'ON_DUTY').length;
+
+          setSummary({
+            totalWaiters: cleanWaiters.length,
+            activeWaitersOnDuty: activeOnDuty,
+            totalOrdersServed,
+            totalWaiterRevenue,
+            averageOrderValue: aov
+          });
+
+          const totalCount = cleanWaiters.length;
+          setWaiterTotalCount(totalCount);
           setPagination(prev => ({
             ...prev,
-            page: typeof res.response?.page === 'number' ? res.response.page : page,
-            totalPages: res.response?.totalPages || Math.ceil(totalCount / pagination.limit) || 1,
+            page: 0,
+            totalPages: Math.max(1, Math.ceil(totalCount / pagination.limit)),
             totalItems: totalCount
           }));
         } else {
@@ -559,9 +879,10 @@ export default function ReportsPanel({
             searchQuery,
             page,
             limit: pagination.limit
-          });
+          }, effectiveBranches);
           setWaiterData(computed.data);
           setSummary(computed.summary);
+          setWaiterTotalCount(computed.totalItems);
           setPagination(prev => ({
             ...prev,
             page,
@@ -571,17 +892,40 @@ export default function ReportsPanel({
         }
       } else {
         filters.categoryId = (filterKitchenCategory && filterKitchenCategory !== 'All') ? filterKitchenCategory : undefined;
-        const res = await ReportsApi.getKitchenReports(filters);
-        const serverData = extractServerList(res);
+        const rawKitchen = await fetchMultiBranchReport((f) => ReportsApi.getKitchenReports(f), filters);
+        let cleanKitchen = aggregateDishes(rawKitchen);
 
-        if (Array.isArray(serverData) && serverData.length > 0) {
-          setKitchenData(serverData);
-          setSummary(res.response?.summary || res.response?.data?.summary || null);
-          const totalCount = res.response?.total || res.response?.totalItems || res.response?.data?.total || serverData.length;
+        // Apply client filters if present
+        if (filterKitchenCategory && filterKitchenCategory !== 'All' && filterKitchenCategory !== 'ALL') {
+          cleanKitchen = cleanKitchen.filter(k => String(k.category).toLowerCase() === String(filterKitchenCategory).toLowerCase());
+        }
+        if (searchQuery && searchQuery.trim()) {
+          const q = searchQuery.trim().toLowerCase();
+          cleanKitchen = cleanKitchen.filter(k => k.foodItem.toLowerCase().includes(q) || k.category.toLowerCase().includes(q));
+        }
+
+        if (cleanKitchen.length > 0) {
+          setKitchenData(cleanKitchen);
+
+          const totalDishesPrepared = cleanKitchen.reduce((acc, d) => acc + d.quantityPrepared, 0);
+          const foodRevenueGenerated = cleanKitchen.reduce((acc, d) => acc + d.revenueGenerated, 0);
+          const activeCategories = Array.from(new Set(cleanKitchen.map(d => d.category).filter(Boolean))).length;
+          const prepMinutes = cleanKitchen.map(d => parseInt(d.avgPrepTime) || 15);
+          const avgMins = prepMinutes.length > 0 ? Math.round(prepMinutes.reduce((a, b) => a + b, 0) / prepMinutes.length) : 15;
+
+          setSummary({
+            totalDishesPrepared,
+            foodRevenueGenerated,
+            activeCategories,
+            avgPrepTime: `${avgMins} mins`
+          });
+
+          const totalCount = cleanKitchen.length;
+          setKitchenTotalCount(totalCount);
           setPagination(prev => ({
             ...prev,
-            page: typeof res.response?.page === 'number' ? res.response.page : page,
-            totalPages: res.response?.totalPages || Math.ceil(totalCount / pagination.limit) || 1,
+            page: 0,
+            totalPages: Math.max(1, Math.ceil(totalCount / pagination.limit)),
             totalItems: totalCount
           }));
         } else {
@@ -594,9 +938,10 @@ export default function ReportsPanel({
             searchQuery,
             page,
             limit: pagination.limit
-          });
+          }, effectiveBranches);
           setKitchenData(computed.data);
           setSummary(computed.summary);
+          setKitchenTotalCount(computed.totalItems);
           setPagination(prev => ({
             ...prev,
             page,
@@ -862,9 +1207,9 @@ export default function ReportsPanel({
           style={{
             padding: '10px 24px',
             borderRadius: '8px',
-            border: activeReportTab === 'waiter' ? '1.5px solid #16a34a' : '1px solid transparent',
-            background: activeReportTab === 'waiter' ? '#dcfce7' : 'transparent',
-            color: activeReportTab === 'waiter' ? '#166534' : '#64748b',
+            border: activeReportTab === 'waiter' ? '1.5px solid #ff5a1f' : '1px solid transparent',
+            background: activeReportTab === 'waiter' ? '#fff7ed' : 'transparent',
+            color: activeReportTab === 'waiter' ? '#ff5a1f' : '#64748b',
             fontSize: '14px',
             fontWeight: activeReportTab === 'waiter' ? 800 : 600,
             cursor: 'pointer',
@@ -874,7 +1219,8 @@ export default function ReportsPanel({
             transition: 'all 0.15s'
           }}
         >
-          🤵 Waiter Reports ({pagination.totalItems || waiterData.length || 0})
+          <UserIcon size={16} color={activeReportTab === 'waiter' ? '#ff5a1f' : '#64748b'} />
+          <span>Waiter Reports ({activeReportTab === 'waiter' ? (pagination.totalItems ?? waiterData.length) : (waiterTotalCount || waiterData.length || 0)})</span>
         </button>
 
         <button
@@ -895,7 +1241,8 @@ export default function ReportsPanel({
             transition: 'all 0.15s'
           }}
         >
-          👨‍🍳 Kitchen Reports ({pagination.totalItems || kitchenData.length || 0})
+          <ChefIcon size={16} color={activeReportTab === 'kitchen' ? '#9a3412' : '#64748b'} />
+          <span>Kitchen Reports ({activeReportTab === 'kitchen' ? (pagination.totalItems ?? kitchenData.length) : (kitchenTotalCount || kitchenData.length || 0)})</span>
         </button>
       </div>
 
@@ -1005,9 +1352,9 @@ export default function ReportsPanel({
                 options={[
                   { value: 'All', label: 'All Food Categories' },
                   ...Array.from(new Set([
-                    ...menu.map(m => m.category),
-                    ...liveCategories.map(c => c.name || c.categoryName || c.title),
-                    ...kitchenData.map(k => k.category),
+                    ...effectiveMenu.map(m => toDisplayText(m.category || m.categoryName)),
+                    ...liveCategories.map(c => toDisplayText(c.name || c.categoryName || c.title || c)),
+                    ...kitchenData.map(k => toDisplayText(k.category)),
                     'Main Course', 'Starters', 'Beverages', 'Desserts', 'Breads'
                   ].filter(Boolean))).map(cat => ({
                     value: cat,
@@ -1090,14 +1437,14 @@ export default function ReportsPanel({
                         fontWeight: 800,
                         flexShrink: 0
                       }}>
-                        {w.name.charAt(0).toUpperCase()}
+                        {toDisplayText(w.name, 'W').charAt(0).toUpperCase()}
                       </div>
                       <div style={{ overflow: 'hidden' }}>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {w.name}
+                          {toDisplayText(w.name, 'Waiter')}
                         </div>
                         <div style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {w.email} · {w.phone}
+                          {toDisplayText(w.email)} {w.phone ? `· ${toDisplayText(w.phone)}` : ''}
                         </div>
                       </div>
                     </div>
@@ -1111,26 +1458,26 @@ export default function ReportsPanel({
                       borderRadius: '12px',
                       fontSize: '10px',
                       fontWeight: 800,
-                      backgroundColor: w.dutyStatus === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
-                      color: w.dutyStatus === 'ON_DUTY' ? '#166534' : '#64748b'
+                      backgroundColor: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
+                      color: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#166534' : '#64748b'
                     }}>
-                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: w.dutyStatus === 'ON_DUTY' ? '#16a34a' : '#94a3b8' }}></span>
-                      {w.dutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#16a34a' : '#94a3b8' }}></span>
+                      {toDisplayText(w.dutyStatus) === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 12px' }}>
                     <span style={{ fontSize: '12px', color: '#334155', fontWeight: 600 }}>
-                      {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.join(', ') : 'Table 1, Table 2'}
+                      {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.map(t => toDisplayText(t)).join(', ') : 'Table 1, Table 2'}
                     </span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'center', fontWeight: 700, color: '#0f172a' }}>
-                    {w.ordersServed} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>orders</span>
+                    {Number(w.ordersServed || 0)} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>orders</span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 800, color: '#16a34a', fontSize: '14px', fontFamily: "'Outfit', sans-serif" }}>
                     {currency}{Number(w.totalRevenue || 0).toLocaleString('en-IN')}
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 700, color: '#475569', fontSize: '13px' }}>
-                    {currency}{w.averageOrderValue}
+                    {currency}{toDisplayText(w.averageOrderValue, '0.00')}
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'center' }}>
                     <button
@@ -1191,18 +1538,18 @@ export default function ReportsPanel({
                     {pagination.page * pagination.limit + index + 1}
                   </td>
                   <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                    {k.foodItem || k.itemName}
+                    {toDisplayText(k.foodItem || k.itemName, 'Food Item')}
                   </td>
                   <td style={{ padding: '12px 12px' }}>
                     <span style={{ fontSize: '11px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontWeight: 600 }}>
-                      {k.category}
+                      {toDisplayText(k.category, 'Uncategorized')}
                     </span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'center', fontWeight: 800, color: '#ea580c', fontSize: '14px', fontFamily: "'Outfit', sans-serif" }}>
-                    {k.quantityPrepared} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>dishes</span>
+                    {Number(k.quantityPrepared || 0)} <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>dishes</span>
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'center', color: '#64748b', fontSize: '12px', fontWeight: 600 }}>
-                    {k.avgPrepTime}
+                    {toDisplayText(k.avgPrepTime, '15 mins')}
                   </td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--primary)', fontSize: '13px', fontFamily: "'Outfit', sans-serif" }}>
                     {currency}{Number(k.revenueGenerated || 0).toLocaleString('en-IN')}
@@ -1214,10 +1561,10 @@ export default function ReportsPanel({
                       borderRadius: '12px',
                       fontSize: '10px',
                       fontWeight: 800,
-                      backgroundColor: (k.kitchenStatus === 'Completed' || k.status === 'Optimal') ? '#dcfce7' : '#ffedd5',
-                      color: (k.kitchenStatus === 'Completed' || k.status === 'Optimal') ? '#166534' : '#c2410c'
+                      backgroundColor: (toDisplayText(k.kitchenStatus || k.status) === 'Completed' || toDisplayText(k.kitchenStatus || k.status) === 'Optimal') ? '#dcfce7' : '#ffedd5',
+                      color: (toDisplayText(k.kitchenStatus || k.status) === 'Completed' || toDisplayText(k.kitchenStatus || k.status) === 'Optimal') ? '#166534' : '#c2410c'
                     }}>
-                      {k.kitchenStatus || k.status || 'Completed'}
+                      {toDisplayText(k.kitchenStatus || k.status, 'Completed')}
                     </span>
                   </td>
                 </tr>
@@ -1339,10 +1686,10 @@ export default function ReportsPanel({
               <tbody>
                 {(selectedWaiterOrdersModal?.orders || []).map(ord => (
                   <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '8px 10px', fontWeight: 700 }}>#{ord.id}</td>
-                    <td style={{ padding: '8px 10px' }}>Table {ord.table}</td>
-                    <td style={{ padding: '8px 10px' }}>{(ord.items || []).map(i => `${i.qty}x ${i.name}`).join(', ')}</td>
-                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>{currency}{ord.total}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700 }}>#{toDisplayText(ord.id)}</td>
+                    <td style={{ padding: '8px 10px' }}>Table {toDisplayText(ord.table)}</td>
+                    <td style={{ padding: '8px 10px' }}>{(ord.items || []).map(i => `${i.qty}x ${toDisplayText(i.name)}`).join(', ')}</td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>{currency}{Number(ord.total || 0).toLocaleString('en-IN')}</td>
                     <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
                         <button
@@ -1385,7 +1732,7 @@ export default function ReportsPanel({
       <Modal
         isOpen={!!selectedOrderForView}
         onClose={() => setSelectedOrderForView(null)}
-        title={`Order Details #${selectedOrderForView?.id || ''}`}
+        title={`Order Details #${toDisplayText(selectedOrderForView?.id || '')}`}
         maxWidth="500px"
       >
         {selectedOrderForView && (
@@ -1393,15 +1740,15 @@ export default function ReportsPanel({
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>TABLE</span>
-                <div style={{ fontWeight: 800, fontSize: '14px' }}>Table {selectedOrderForView.table}</div>
+                <div style={{ fontWeight: 800, fontSize: '14px' }}>Table {toDisplayText(selectedOrderForView.table)}</div>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>WAITER</span>
-                <div style={{ fontWeight: 800, fontSize: '14px' }}>{selectedOrderForView.waiter}</div>
+                <div style={{ fontWeight: 800, fontSize: '14px' }}>{toDisplayText(selectedOrderForView.waiter)}</div>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>STATUS</span>
-                <div style={{ fontWeight: 800, fontSize: '14px', color: 'var(--primary)' }}>{selectedOrderForView.status?.toUpperCase()}</div>
+                <div style={{ fontWeight: 800, fontSize: '14px', color: 'var(--primary)' }}>{toDisplayText(selectedOrderForView.status)?.toUpperCase()}</div>
               </div>
             </div>
 
@@ -1410,14 +1757,14 @@ export default function ReportsPanel({
               <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {(selectedOrderForView.items || []).map((it, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                    <span>{it.qty}x {it.name}</span>
-                    <span style={{ fontWeight: 700 }}>{currency}{(it.price * it.qty).toFixed(2)}</span>
+                    <span>{it.qty}x {toDisplayText(it.name)}</span>
+                    <span style={{ fontWeight: 700 }}>{currency}{(Number(it.price || 0) * (it.qty || 1)).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
               <div style={{ padding: '10px 14px', background: '#fff7ed', borderTop: '1px solid #fed7aa', display: 'flex', justifyContent: 'space-between', fontWeight: 800 }}>
                 <span>Total Amount</span>
-                <span style={{ color: 'var(--primary)', fontSize: '16px' }}>{currency}{selectedOrderForView.total}</span>
+                <span style={{ color: 'var(--primary)', fontSize: '16px' }}>{currency}{toDisplayText(selectedOrderForView.total)}</span>
               </div>
             </div>
 
@@ -1438,7 +1785,7 @@ export default function ReportsPanel({
       <Modal
         isOpen={!!selectedOrderForReceipt}
         onClose={() => setSelectedOrderForReceipt(null)}
-        title={`Receipt #${selectedOrderForReceipt?.id || ''}`}
+        title={`Receipt #${toDisplayText(selectedOrderForReceipt?.id || '')}`}
         maxWidth="400px"
       >
         {selectedOrderForReceipt && (
@@ -1454,30 +1801,30 @@ export default function ReportsPanel({
             fontFamily: 'monospace'
           }}>
             <div style={{ textAlign: 'center', borderBottom: '1px dashed #cbd5e1', paddingBottom: '10px' }}>
-              <h3 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>{activeRestaurant.name || 'Serviq Restaurant'}</h3>
+              <h3 style={{ margin: 0, fontFamily: "'Outfit', sans-serif" }}>{toDisplayText(activeRestaurant?.name || activeRestaurant, 'Serviq Restaurant')}</h3>
               <p style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#64748b' }}>Tax Invoice / Bill</p>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-              <span>Order ID: #{selectedOrderForReceipt.id}</span>
-              <span>Table: {selectedOrderForReceipt.table}</span>
+              <span>Order ID: #{toDisplayText(selectedOrderForReceipt.id)}</span>
+              <span>Table: {toDisplayText(selectedOrderForReceipt.table)}</span>
             </div>
             <div style={{ fontSize: '12px', color: '#64748b' }}>
-              Waiter: {selectedOrderForReceipt.waiter}
+              Waiter: {toDisplayText(selectedOrderForReceipt.waiter)}
             </div>
 
             <div style={{ borderTop: '1px dashed #cbd5e1', borderBottom: '1px dashed #cbd5e1', padding: '8px 0', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {(selectedOrderForReceipt.items || []).map((it, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                  <span>{it.qty}x {it.name}</span>
-                  <span>{currency}{(it.price * it.qty).toFixed(2)}</span>
+                  <span>{it.qty}x {toDisplayText(it.name)}</span>
+                  <span>{currency}{(Number(it.price || 0) * (it.qty || 1)).toFixed(2)}</span>
                 </div>
               ))}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '15px' }}>
               <span>TOTAL</span>
-              <span>{currency}{selectedOrderForReceipt.total}</span>
+              <span>{currency}{toDisplayText(selectedOrderForReceipt.total)}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>

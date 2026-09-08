@@ -1390,7 +1390,7 @@ export default function StaffManagementPanel({
                       background: isWaiter ? '#dcfce7' : (isKitchen ? '#ffedd5' : '#f1f5f9'),
                       color: isWaiter ? '#166534' : (isKitchen ? '#c2410c' : '#334155')
                     }}>
-                      {isWaiter ? '🤵 Waiter' : (isKitchen ? '👨‍🍳 Kitchen' : `💼 ${uRoleName}`)}
+                      {isWaiter ? 'Waiter' : (isKitchen ? 'Kitchen' : uRoleName)}
                     </span>
                   </td>
 

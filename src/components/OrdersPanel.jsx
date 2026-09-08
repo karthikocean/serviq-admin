@@ -85,28 +85,25 @@ export default function OrdersPanel({
   selectedBranchId,
   updateOrderStatus,
   refreshOrders,
-  page = 0,
-  setPage = () => { },
-  limit = 10,
-  setLimit = () => { },
-  totalPages = 1,
-  totalCount = 0,
+  page: propPage,
+  setPage: propSetPage,
+  limit: propLimit = 10,
+  setLimit: propSetLimit,
+  totalPages: propTotalPages,
+  totalCount: propTotalCount,
   currentUser = null
 }) {
-  const getOrderPageNumbers = () => {
-    const pages = [];
-    const maxVisible = 5;
-    const current = page + 1;
-    const total = Math.max(1, totalPages || 1);
-    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
-    let endPage = Math.min(total, startPage + maxVisible - 1);
-    if (endPage - startPage + 1 < maxVisible) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
+  const [internalPage, setInternalPage] = useState(0);
+  const page = propPage !== undefined ? propPage : internalPage;
+  const limit = propLimit || 10;
+
+  const setPage = (updater) => {
+    const targetVal = typeof updater === 'function' ? updater(page) : updater;
+    const clampedVal = Math.max(0, targetVal);
+    if (propSetPage) {
+      propSetPage(clampedVal);
     }
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-    return pages;
+    setInternalPage(clampedVal);
   };
 
   const [internalWaiterDropdownOpen, setInternalWaiterDropdownOpen] = useState(false);
@@ -1071,6 +1068,37 @@ export default function OrdersPanel({
       return resolvedName.toLowerCase() === (currentSelectedWaiterName || '').toLowerCase();
     });
   }
+
+  const isServerPaginated = (propTotalCount || 0) > 0 && sourceOrders.length <= limit && (propTotalCount || 0) > sourceOrders.length && filteredOrders.length === sourceOrders.length;
+
+  const effectiveTotalCount = isServerPaginated ? (propTotalCount || 0) : filteredOrders.length;
+  const effectiveTotalPages = isServerPaginated
+    ? (propTotalPages || Math.max(1, Math.ceil(effectiveTotalCount / limit)))
+    : Math.max(1, Math.ceil(effectiveTotalCount / limit));
+
+  const paginatedOrders = isServerPaginated
+    ? filteredOrders
+    : filteredOrders.slice(page * limit, (page + 1) * limit);
+
+  const getOrderPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = page + 1;
+    const total = Math.max(1, effectiveTotalPages || 1);
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(total, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setPage(0);
+  }, [orderFilter, selectedWaiterFilter]);
 
   const handleOrderStatusUpdate = async (orderId, currentStatus, branchId) => {
     let nextStatus = currentStatus;
@@ -2110,10 +2138,10 @@ export default function OrdersPanel({
                       position: 'absolute',
                       top: 'calc(100% + 6px)',
                       right: 0,
-                      minWidth: '200px',
+                      minWidth: '220px',
                       width: 'max-content',
-                      maxWidth: '260px',
-                      maxHeight: '190px',
+                      maxWidth: '280px',
+                      maxHeight: '240px',
                       overflowY: 'auto',
                       overflowX: 'hidden',
                       backgroundColor: '#ffffff',
@@ -2121,10 +2149,10 @@ export default function OrdersPanel({
                       borderRadius: '10px',
                       boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
                       zIndex: 1050,
-                      padding: '6px 4px 6px 6px',
+                      padding: '6px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '2px',
+                      gap: '3px',
                       scrollbarWidth: 'thin',
                       scrollbarColor: '#ff5a1f #f1f5f9'
                     }}>
@@ -2142,6 +2170,7 @@ export default function OrdersPanel({
                           style={{
                             padding: '8px 12px',
                             fontSize: '13px',
+                            lineHeight: '1.4',
                             fontWeight: isSelected ? 700 : 500,
                             borderRadius: '6px',
                             backgroundColor: isSelected ? '#ff5a1f' : 'transparent',
@@ -2150,7 +2179,12 @@ export default function OrdersPanel({
                             transition: 'all 0.15s ease',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis'
+                            textOverflow: 'ellipsis',
+                            flexShrink: 0,
+                            minHeight: '34px',
+                            boxSizing: 'border-box',
+                            display: 'flex',
+                            alignItems: 'center'
                           }}
                           onMouseEnter={(e) => {
                             if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
@@ -2264,7 +2298,7 @@ export default function OrdersPanel({
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((ord, index) => {
+              {paginatedOrders.map((ord, index) => {
                 let totalItemsCount = 0;
                 let itemsListDetail = '';
 
@@ -2299,7 +2333,8 @@ export default function OrdersPanel({
                 let displayId = ord.orderId || ord.id || String(index);
                 if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
 
-                const dateStr = ord.createdAt ? formatDateDMY(ord.createdAt) : 'N/A';
+                const parsedDate = ord.createdAt ? new Date(ord.createdAt) : null;
+                const formattedDate = parsedDate && !isNaN(parsedDate) ? formatDateDMY(parsedDate) : '-';
                 const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
                 const timeAgoStr = ord.createdAt ? (() => {
                   const diffMin = Math.floor((new Date() - new Date(ord.createdAt)) / 60000);
@@ -2312,7 +2347,7 @@ export default function OrdersPanel({
                   <tr
                     key={ord.id || index}
                     style={{
-                      borderBottom: index < filteredOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
+                      borderBottom: index < paginatedOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
                       transition: 'background 0.15s',
                       backgroundColor: '#ffffff'
                     }}
@@ -2349,7 +2384,7 @@ export default function OrdersPanel({
                     {/* NEW DATE COLUMN */}
                     <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                        {dateStr}
+                        {formattedDate}
                       </div>
                     </td>
 
@@ -2669,7 +2704,7 @@ export default function OrdersPanel({
                 );
               })}
 
-              {filteredOrders.length === 0 && (
+              {paginatedOrders.length === 0 && (
                 <tr>
                   <td colSpan="9" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
                     No orders found matching the filter "{orderFilter}".
@@ -2681,7 +2716,7 @@ export default function OrdersPanel({
         </div>
 
         {/* PAGINATION UI */}
-        {(totalCount > 0 || (orders && orders.length > 0)) && (
+        {(effectiveTotalCount > 0) && (
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -2696,7 +2731,7 @@ export default function OrdersPanel({
             gap: '12px'
           }}>
             <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-              Showing {totalCount === 0 && (!orders || orders.length === 0) ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalCount || orders.length)} of {totalCount || orders.length} entries
+              Showing {effectiveTotalCount === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, effectiveTotalCount)} of {effectiveTotalCount} entries
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <button
@@ -2743,16 +2778,16 @@ export default function OrdersPanel({
               <button
                 type="button"
                 onClick={() => setPage(page + 1)}
-                disabled={page >= totalPages - 1}
+                disabled={page >= effectiveTotalPages - 1}
                 style={{
                   padding: '6px 14px',
                   borderRadius: '8px',
                   border: '1px solid #e2e8f0',
-                  background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
-                  color: page >= totalPages - 1 ? '#cbd5e1' : '#334155',
+                  background: page >= effectiveTotalPages - 1 ? '#f8fafc' : '#ffffff',
+                  color: page >= effectiveTotalPages - 1 ? '#cbd5e1' : '#334155',
                   fontSize: '13px',
                   fontWeight: 600,
-                  cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                  cursor: page >= effectiveTotalPages - 1 ? 'not-allowed' : 'pointer',
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -2809,8 +2844,13 @@ export default function OrdersPanel({
                   <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
                     Assigned Waiter
                   </span>
-                  <strong style={{ fontSize: '13px', color: (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700 }}>
-                    {(waiterName && waiterName !== 'Unassigned') ? `🤵 ${waiterName}` : 'None (Unassigned)'}
+                  <strong style={{ fontSize: '13px', color: (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    {(waiterName && waiterName !== 'Unassigned') ? (
+                      <>
+                        <UserIcon size={14} color="#64748b" />
+                        <span>{waiterName}</span>
+                      </>
+                    ) : 'None (Unassigned)'}
                   </strong>
                 </div>
 
@@ -3157,7 +3197,7 @@ export default function OrdersPanel({
                   onChange={e => setNewOrderWaiter(e.target.value)}
                   options={[
                     { value: 'Unassigned', label: '-- None (Unassigned) --' },
-                    ...modalWaiters.map(w => ({ value: w, label: `🤵 ${w}` }))
+                    ...modalWaiters.map(w => ({ value: w, label: w }))
                   ]}
                   placeholder="Select Waiter..."
                 />
@@ -3526,7 +3566,10 @@ export default function OrdersPanel({
                   onMouseEnter={e => { e.currentTarget.style.background = '#fff7ed'; e.currentTarget.style.borderColor = '#ff5a1f'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                 >
-                  <span>🤵 {w.name}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <UserIcon size={14} color="#64748b" />
+                    <span>{w.name}</span>
+                  </span>
                   <span style={{ fontSize: '12px', color: '#ff5a1f', fontWeight: 800 }}>Assign →</span>
                 </button>
               ))}

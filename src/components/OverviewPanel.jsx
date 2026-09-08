@@ -29,6 +29,13 @@ const UsersIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const UserIcon = ({ size = 12, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 // Robust Branch Matcher
 const branchMatches = (itemBranch, targetBranch) => {
   if (!itemBranch || !targetBranch) return false;
@@ -812,7 +819,7 @@ export default function OverviewPanel({
       )}
 
       {/* CHARTS CONTAINER (Revenue Growth & Order Breakdown) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1.2fr)', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
         
         {/* Revenue Growth Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
@@ -959,7 +966,7 @@ export default function OverviewPanel({
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
             {activeBreakdown.totalItemsSold > 0 && activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
-              activeBreakdown.categories.filter(c => Number(c.count) > 0).map((cat, idx) => {
+              activeBreakdown.categories.filter(c => Number(c.count) > 0).slice(0, 5).map((cat, idx) => {
                 const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
                 const itemColor = cat.color || defaultColors[idx % defaultColors.length];
                 const pct = cat.percentage ?? (activeBreakdown.totalItemsSold > 0 ? Math.round((cat.count / activeBreakdown.totalItemsSold) * 100) : 0);
@@ -1203,7 +1210,7 @@ export default function OverviewPanel({
                         {tableNum}
                       </span>
                       <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                        🪑 {seats}
+                        {seats} Seats
                       </span>
                     </div>
 
@@ -1212,8 +1219,9 @@ export default function OverviewPanel({
                     </div>
 
                     {waiterName && (
-                      <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`Waiter: ${waiterName}`}>
-                        🤵 {waiterName}
+                      <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }} title={`Waiter: ${waiterName}`}>
+                        <UserIcon size={11} color="#64748b" />
+                        <span>{waiterName}</span>
                       </div>
                     )}
                   </div>

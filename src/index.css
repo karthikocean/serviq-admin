@@ -1945,7 +1945,7 @@ input:checked+.slider:before {
   color: var(--text-muted);
 }
 
-/* Table statuses inside billing list */
+/* Table status inside billing list */
 .billing-badge {
   padding: 2px 8px;
   font-size: 10px;

@@ -814,7 +814,7 @@ export default function UserListPanel() {
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
               options={[
-                { value: 'All', label: 'All Statuses' },
+                { value: 'All', label: 'All Status' },
                 { value: 'Active', label: 'Active Users' },
                 { value: 'Inactive', label: 'Inactive Users' }
               ]}

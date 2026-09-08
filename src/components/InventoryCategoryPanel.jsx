@@ -718,7 +718,7 @@ export default function InventoryCategoryPanel() {
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
                 options={[
-                  { value: 'ALL', label: 'All Statuses' },
+                  { value: 'ALL', label: 'All Status' },
                   { value: 'AVAILABLE', label: 'Available (Active)' },
                   { value: 'UNAVAILABLE', label: 'Unavailable (Disabled)' }
                 ]}

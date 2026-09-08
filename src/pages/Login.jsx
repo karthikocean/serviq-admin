@@ -95,8 +95,9 @@ export default function Login() {
 
   useEffect(() => {
     try {
-      const savedEmail = localStorage.getItem('rememberedEmail');
-      const isRemembered = localStorage.getItem('rememberMe') === 'true';
+      localStorage.clear();
+      const savedEmail = sessionStorage.getItem('rememberedEmail');
+      const isRemembered = sessionStorage.getItem('rememberMe') === 'true';
       if (savedEmail && isRemembered) {
         setEmail(savedEmail);
         setRememberMe(true);
@@ -216,12 +217,13 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      try { localStorage.clear(); } catch (e) {}
       if (rememberMe) {
-        localStorage.setItem('rememberedEmail', email.trim());
-        localStorage.setItem('rememberMe', 'true');
+        sessionStorage.setItem('rememberedEmail', email.trim());
+        sessionStorage.setItem('rememberMe', 'true');
       } else {
-        localStorage.removeItem('rememberedEmail');
-        localStorage.removeItem('rememberMe');
+        sessionStorage.removeItem('rememberedEmail');
+        sessionStorage.removeItem('rememberMe');
       }
 
       const res = await login(email.trim(), password, role);
