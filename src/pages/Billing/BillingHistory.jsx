@@ -91,7 +91,8 @@ export default function BillingHistory() {
 
     try {
       const filters = {
-        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        limit: 1000
       };
 
       const result = await BillingApi.getBillingHistory(filters);
@@ -132,7 +133,10 @@ export default function BillingHistory() {
         } else {
           // Attempt OrderApi fetch as backup
           try {
-            const orderRes = await OrderApi.getOrders();
+            const orderRes = await OrderApi.getOrders({
+              branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+              limit: 1000
+            });
             if (orderRes && orderRes.status) {
               const oPayload = orderRes.response || {};
               const fetchedOrders = Array.isArray(oPayload) ? oPayload :

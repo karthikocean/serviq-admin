@@ -391,7 +391,7 @@ export default function StaffManagementPanel({
       dutyStatus: 'ON_DUTY',
       phone: '',
       email: '',
-      password: 'user' + Math.floor(100 + Math.random() * 900),
+      password: '',
       assignedTableIds: []
     });
     setFormErrors({});
@@ -961,6 +961,10 @@ export default function StaffManagementPanel({
                   </label>
                   <input
                     type="email"
+                    name="staff_member_email_field"
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    spellCheck="false"
                     value={userForm.email}
                     onChange={e => {
                       setUserForm({ ...userForm, email: e.target.value });
@@ -989,7 +993,9 @@ export default function StaffManagementPanel({
                       Password <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
-                      type="text"
+                      type="password"
+                      name="staff_member_password_field"
+                      autoComplete="new-password"
                       value={userForm.password}
                       onChange={e => {
                         setUserForm({ ...userForm, password: e.target.value });
@@ -1714,7 +1720,9 @@ export default function StaffManagementPanel({
               New Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
-              type="text"
+              type="password"
+              name="staff_change_password_field"
+              autoComplete="new-password"
               value={newPassword}
               onChange={e => {
                 setNewPassword(e.target.value);
@@ -1856,7 +1864,7 @@ export default function StaffManagementPanel({
               </div>
             </>
           ) : (
-            <form onSubmit={handleKitchenStationSubmit}>
+            <form onSubmit={handleKitchenStationSubmit} autoComplete="off">
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch <span style={{ color: '#ef4444' }}>*</span>
@@ -1891,7 +1899,11 @@ export default function StaffManagementPanel({
                   Kitchen Station Email
                 </label>
                 <input
-                  type="text"
+                  type="email"
+                  name="kitchen_station_email_field"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  spellCheck="false"
                   value={kitchenForm.email}
                   onChange={e => setKitchenForm({ ...kitchenForm, email: e.target.value })}
                   placeholder="kitchen@saravana.com"
@@ -1911,7 +1923,9 @@ export default function StaffManagementPanel({
                   Kitchen Station Password
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  name="kitchen_station_password_field"
+                  autoComplete="new-password"
                   value={kitchenForm.password}
                   onChange={e => setKitchenForm({ ...kitchenForm, password: e.target.value })}
                   placeholder="••••••••••••"

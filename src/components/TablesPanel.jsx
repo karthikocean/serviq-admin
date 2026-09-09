@@ -346,28 +346,28 @@ export default function TablesPanel({
         <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>TOTAL TABLES</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {totalCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Tables</span>
+            {totalCount}
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>AVAILABLE (FREE)</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {freeCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Ready</span>
+            {freeCount}
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>OCCUPIED</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#dc2626', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {occupiedCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Dining</span>
+            {occupiedCount}
           </div>
         </div>
 
         <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>QR CODES ACTIVE</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {qrCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Live ({qrPercentage}%)</span>
+            {qrCount}
           </div>
         </div>
       </div>

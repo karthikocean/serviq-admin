@@ -189,7 +189,7 @@ export default function Login() {
     }
 
     if (!isEmailValid && !isPasswordValid) {
-      setFormErrors({ email: true, password: true, passwordMsg: 'Please enter your password' });
+      setFormErrors({ email: true, password: true, passwordMsg: isPasswordEmpty ? 'Please enter your password' : 'Password must be at least 4 characters' });
       return false;
     }
 
@@ -199,7 +199,7 @@ export default function Login() {
     }
 
     if (!isPasswordValid) {
-      setFormErrors({ email: false, password: true, passwordMsg: 'Password must be at least 4 characters' });
+      setFormErrors({ email: false, password: true, passwordMsg: isPasswordEmpty ? 'Please enter your password' : 'Password must be at least 4 characters' });
       return false;
     }
 

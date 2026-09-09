@@ -4,6 +4,7 @@ import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from '../components/SearchableSelect.jsx';
+import { extractOrderISODate } from '../helper/DateHelper.js';
 
 import OverviewPanel, { isTableOccupied } from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
@@ -538,15 +539,7 @@ export default function Admin() {
   };
 
   const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
+    return extractOrderISODate(ord) || ord.date || '';
   };
 
   const getOrderPriority = (ord) => {
@@ -564,8 +557,9 @@ export default function Admin() {
       const paymentStatus = ord.billingStatus || 'unpaid';
       const orderStatus = ord.status || 'new';
 
-      if (waiterFilterDateStart && date < waiterFilterDateStart) return false;
-      if (waiterFilterDateEnd && date > waiterFilterDateEnd) return false;
+      if (waiterFilterDateStart && date && date < waiterFilterDateStart) return false;
+      if (waiterFilterDateEnd && date && date > waiterFilterDateEnd) return false;
+      if ((waiterFilterDateStart || waiterFilterDateEnd) && !date) return false;
       if (waiterFilterStaff !== 'All' && waiter !== waiterFilterStaff) return false;
       if (waiterFilterTable !== 'All' && table !== waiterFilterTable) return false;
       if (waiterFilterSource !== 'All' && source !== waiterFilterSource) return false;
@@ -586,8 +580,9 @@ export default function Admin() {
       const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
       const priority = getOrderPriority(ord);
 
-      if (kitchenFilterDateStart && date < kitchenFilterDateStart) return false;
-      if (kitchenFilterDateEnd && date > kitchenFilterDateEnd) return false;
+      if (kitchenFilterDateStart && date && date < kitchenFilterDateStart) return false;
+      if (kitchenFilterDateEnd && date && date > kitchenFilterDateEnd) return false;
+      if ((kitchenFilterDateStart || kitchenFilterDateEnd) && !date) return false;
       if (kitchenFilterStaff !== 'All' && kitchenStaffName !== kitchenFilterStaff) return false;
       if (kitchenFilterDish !== 'All') {
         const hasDish = ord.items.some(item => item.name === kitchenFilterDish);
@@ -937,14 +932,45 @@ export default function Admin() {
 
   const renderActivePage = () => {
     const PageHeader = ({ subtitle }) => (
-      <div style={sty.pageInlineHeader}>
-        <button style={sty.pageBackBtn} onClick={() => setActivePage(null)}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'inherit'; }}
-        >→</button>
-        <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>{pageTitle[activePage]}</h2>
-          {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        padding: '24px 32px',
+        marginBottom: '24px',
+        border: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button
+            type="button"
+            onClick={() => setActivePage(null)}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {pageTitle[activePage]}
+            </h2>
+            {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+          </div>
         </div>
       </div>
     );
@@ -1613,7 +1639,7 @@ export default function Admin() {
           <div style={{ width: '100%' }}>
             <PageHeader />
             <div style={sty.pageCard}>
-              <form onSubmit={handleStaffSubmit} style={{ width: '100%' }}>
+              <form onSubmit={handleStaffSubmit} autoComplete="off" style={{ width: '100%' }}>
                 <div style={sty.formGrid2}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Full Name</label>
@@ -1653,11 +1679,29 @@ export default function Admin() {
                 <div style={sty.formGrid2}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Email Address</label>
-                    <input type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} required placeholder="e.g. ramesh@serviq.com" />
+                    <input
+                      type="email"
+                      name="admin_staff_email_field"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      value={staffForm.email}
+                      onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                      required
+                      placeholder="e.g. ramesh@serviq.com"
+                    />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Password</label>
-                    <input type="text" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} required placeholder="e.g. waiter123" />
+                    <input
+                      type="password"
+                      name="admin_staff_password_field"
+                      autoComplete="new-password"
+                      value={staffForm.password}
+                      onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                      required
+                      placeholder="••••••••••••"
+                    />
                   </div>
                 </div>
 

@@ -504,8 +504,8 @@ export default function InventoryCategoryPanel() {
                 onChange={e => setFormStatus(e.target.value)}
                 isDisabled={isSubmitting}
                 options={[
-                  { value: 'AVAILABLE', label: 'AVAILABLE (Active)' },
-                  { value: 'UNAVAILABLE', label: 'UNAVAILABLE (Disabled)' }
+                  { value: 'AVAILABLE', label: 'AVAILABLE ' },
+                  { value: 'UNAVAILABLE', label: 'UNAVAILABLE' }
                 ]}
                 placeholder="Select Status..."
               />
@@ -563,19 +563,7 @@ export default function InventoryCategoryPanel() {
               <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
                 Inventory Categories
               </h2>
-              <span style={{
-                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-                color: '#ffffff',
-                fontSize: '10px',
-                fontWeight: 800,
-                padding: '3px 8px',
-                borderRadius: '6px',
-                letterSpacing: '0.6px'
-              }}>
-                LIVE API
-              </span>
             </div>
-           
           </div>
         </div>
 
@@ -662,74 +650,68 @@ export default function InventoryCategoryPanel() {
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
-          {/* Search Input */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: '#f8fafc',
-            border: '1px solid #cbd5e1',
-            borderRadius: '8px',
-            padding: '0 12px',
-            width: '320px',
-            height: '38px',
-            boxSizing: 'border-box'
-          }}>
-            <SearchIcon size={15} color="#64748b" />
-            <input
-              type="text"
-              placeholder="Search inventory categories..."
-              value={searchTerm}
-              onKeyDown={e => {
-                if (e.key === ' ' && !e.currentTarget.value) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value.replace(/^\s+/, '');
-                setSearchTerm(val);
-              }}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                fontSize: '13px',
-                width: '100%',
-                color: '#0f172a'
-              }}
-            />
-            {searchTerm && (
-              <button
-                type="button"
-                onClick={() => setSearchTerm('')}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Status Filter */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: '180px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
-            <div style={{ flex: 1 }}>
-              <SearchableSelect
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                options={[
-                  { value: 'ALL', label: 'All Status' },
-                  { value: 'AVAILABLE', label: 'Available (Active)' },
-                  { value: 'UNAVAILABLE', label: 'Unavailable (Disabled)' }
-                ]}
-                placeholder="Filter Status..."
-              />
-            </div>
-          </div>
+        {/* Search Input */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: '#f8fafc',
+          border: '1px solid #cbd5e1',
+          borderRadius: '8px',
+          padding: '0 12px',
+          width: '320px',
+          height: '38px',
+          boxSizing: 'border-box'
+        }}>
+          <SearchIcon size={15} color="#64748b" />
+          <input
+            type="text"
+            placeholder="Search inventory categories..."
+            value={searchTerm}
+            onKeyDown={e => {
+              if (e.key === ' ' && !e.currentTarget.value) {
+                e.preventDefault();
+              }
+            }}
+            onChange={e => {
+              const val = e.target.value.replace(/^\s+/, '');
+              setSearchTerm(val);
+            }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              fontSize: '13px',
+              width: '100%',
+              color: '#0f172a'
+            }}
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px', padding: 0 }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
-        <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>
-          Showing {filteredCategories.length} Categories ({categories.length} Total)
+        {/* Status Filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '220px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>Status:</label>
+          <div style={{ minWidth: '180px' }}>
+            <SearchableSelect
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Status' },
+                { value: 'AVAILABLE', label: 'Available ' },
+                { value: 'UNAVAILABLE', label: 'Unavailable ' }
+              ]}
+              placeholder="Filter Status..."
+            />
+          </div>
         </div>
       </div>
 
@@ -801,10 +783,7 @@ export default function InventoryCategoryPanel() {
                         {page * limit + index + 1}
                       </td>
                       <td style={{ padding: '14px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff5a1f' }}></span>
-                          <span>{item.name}</span>
-                        </div>
+                        {item.name}
                       </td>
                       <td style={{ padding: '14px 20px', fontSize: '13px', color: '#475569', maxWidth: '300px' }}>
                         {item.description || '—'}

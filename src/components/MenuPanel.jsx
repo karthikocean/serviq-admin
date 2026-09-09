@@ -217,7 +217,7 @@ export default function MenuPanel({
           <div>
             <h2 className="panel-inner-title" style={{ margin: 0 }}>Menu List</h2>
             <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              • {totalItems} items actively listed
+              {totalItems} items actively listed
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import SearchableSelect from './SearchableSelect.jsx';
+import { extractOrderISODate, formatDateDMY } from '../helper/DateHelper.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -123,15 +124,7 @@ export default function KitchenReportsPanel({
   };
 
   const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
+    return extractOrderISODate(ord) || ord.date || '';
   };
 
   const getOrderPriority = (ord) => {
@@ -152,8 +145,9 @@ export default function KitchenReportsPanel({
     const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
     const priority = getOrderPriority(ord);
 
-    if (dateStart && date < dateStart) return false;
-    if (dateEnd && date > dateEnd) return false;
+    if (dateStart && date && date < dateStart) return false;
+    if (dateEnd && date && date > dateEnd) return false;
+    if ((dateStart || dateEnd) && !date) return false;
     if (filterStaff !== 'All' && kitchenStaffName !== filterStaff) return false;
     if (filterDish !== 'All') {
       const ordItems = Array.isArray(ord.items) ? ord.items : (Array.isArray(ord.orderItems) ? ord.orderItems : []);
@@ -198,7 +192,7 @@ export default function KitchenReportsPanel({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', flex: 1 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', flex: 1 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label className="premium-filter-label">Start Date</label>
               <input

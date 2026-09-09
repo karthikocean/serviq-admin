@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Badge } from './Badge';
+import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import BillingApi from '../api/Billing.js';
+import OrderApi from '../api/Order.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} fill={color} viewBox="0 0 16 16" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-3.5 1a.5.5 0 0 0-.374.374l1 3.5a.5.5 0 0 0 .49.49l3.468-1.026z" />
+    <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-3.5 1a.5.5 0 0 0-.374.374l1 3.5a.5.5 0 0 0 .49.49l3.468-1.026z" />
   </svg>
 );
 
@@ -19,8 +21,16 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
 export default function BillingPanel({
   billingData = [],
+  setBillingData,
   selectedBillingTable = '',
   setSelectedBillingTable,
   activeRestaurant = {},
@@ -29,12 +39,25 @@ export default function BillingPanel({
   fetchBillingData,
   selectedBranchId
 }) {
-  const [isEditing, setIsEditing] = React.useState(false);
-  const [editItems, setEditItems] = React.useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editItems, setEditItems] = useState([]);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const displayBillingData = billingData || [];
 
-  const selectedBillData = displayBillingData.find(b => b.tableId === selectedBillingTable) || {
+  const selectedBillData = displayBillingData.find(b => 
+    (selectedBillingTable && (
+      b.tableId === selectedBillingTable ||
+      b._id === selectedBillingTable ||
+      b.id === selectedBillingTable ||
+      b.table === selectedBillingTable ||
+      String(b.tableNumber) === String(selectedBillingTable) ||
+      String(b.tableNo) === String(selectedBillingTable)
+    ))
+  ) || displayBillingData[0] || {
     tableId: selectedBillingTable,
     table: 'Unknown Table',
     orders: 0,
@@ -46,10 +69,10 @@ export default function BillingPanel({
 
   const isSettled = selectedBillData.status !== 'Unpaid';
   const billingItems = selectedBillData.items || [];
-  const orderIdDisplay = selectedBillData.orderId ? `#${selectedBillData.orderId}` : '';
+  const orderIdDisplay = selectedBillData.orderId ? `${selectedBillData.orderId}` : '';
 
   // Pagination for bill items
-  const [itemsPage, setItemsPage] = React.useState(0);
+  const [itemsPage, setItemsPage] = useState(0);
   const itemsPerPage = 6;
   const totalItemsPages = Math.ceil(billingItems.length / itemsPerPage) || 1;
   const paginatedBillingItems = billingItems.slice(itemsPage * itemsPerPage, (itemsPage + 1) * itemsPerPage);
@@ -58,19 +81,21 @@ export default function BillingPanel({
     setItemsPage(0);
   }, [selectedBillingTable]);
 
-  const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax
+  const taxRate = activeRestaurant.settings?.taxRate || 0.025; // split tax (5% total)
   const serviceRate = activeRestaurant.settings?.serviceChargeRate || 0;
 
-  const subtotal = billingItems.reduce((acc, curr) => acc + curr.amount, 0);
+  const subtotal = billingItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || curr.quantity || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
   const taxAmt = parseFloat((subtotal * taxRate * 2).toFixed(2));
   const serviceAmt = parseFloat((subtotal * serviceRate).toFixed(2));
   const totalAmt = subtotal + taxAmt + serviceAmt;
 
+  // Mark as Paid
   const handleMarkAsPaidSubmit = async () => {
-    if (!selectedBillingTable) return;
+    const currentTableId = selectedBillData.tableId || selectedBillData._id || selectedBillingTable;
+    if (!currentTableId) return;
     const response = await BillingApi.processTablePayment({
       branchId: selectedBranchId,
-      tableId: selectedBillingTable,
+      tableId: currentTableId,
       paymentMethod: billingPaymentMethod.toLowerCase()
     });
 
@@ -81,6 +106,224 @@ export default function BillingPanel({
       }
     }
   };
+
+  // Open Edit Modal
+  const handleOpenEditModal = () => {
+    const rawItems = selectedBillData.items || [];
+    if (rawItems.length === 0) {
+      if (Number(selectedBillData.total) > 0) {
+        setEditItems([{
+          name: `${selectedBillData.table} Order`,
+          qty: 1,
+          rate: Number(selectedBillData.total) || 0,
+          amount: Number(selectedBillData.total) || 0
+        }]);
+        setIsEditing(true);
+        return;
+      }
+      setEditItems([{
+        name: '',
+        qty: 1,
+        rate: 0,
+        amount: 0
+      }]);
+      setIsEditing(true);
+      return;
+    }
+    const cloned = rawItems.map(item => {
+      const q = Number(item.qty ?? item.quantity ?? item.count ?? 1) || 1;
+      const r = Number(item.rate ?? item.price ?? item.itemPrice ?? item.unitPrice ?? 0) || 0;
+      return {
+        ...item,
+        name: item.name || item.menuItem?.name || item.dishName || item.title || 'Item',
+        qty: q,
+        rate: r,
+        amount: Number(item.amount) || (q * r)
+      };
+    });
+    setEditItems(cloned);
+    setIsEditing(true);
+  };
+
+  // Add Item in Edit Modal
+  const handleAddItemToEdit = () => {
+    setEditItems(prev => [
+      ...prev,
+      { name: '', qty: 1, rate: 0, amount: 0 }
+    ]);
+  };
+
+  // Remove Item in Edit Modal
+  const handleRemoveItemFromEdit = (index) => {
+    setEditItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Update Item in Edit Modal
+  const handleEditItemChange = (index, field, value) => {
+    setEditItems(prev => {
+      const updated = [...prev];
+      const cur = { ...updated[index] };
+      if (field === 'qty') {
+        const q = Math.max(1, Number(value) || 1);
+        cur.qty = q;
+        cur.amount = q * (Number(cur.rate) || 0);
+      } else if (field === 'rate') {
+        const r = Math.max(0, Number(value) || 0);
+        cur.rate = r;
+        cur.amount = (Number(cur.qty) || 1) * r;
+      } else {
+        cur[field] = value;
+      }
+      updated[index] = cur;
+      return updated;
+    });
+  };
+
+  // Save Edit Changes
+  const handleSaveEditBill = async () => {
+    const validItems = editItems.filter(it => it.name && it.name.trim() && Number(it.qty) > 0);
+    if (validItems.length === 0) {
+      ShowNotifications.showAlertNotification('Please add at least one item with a valid name and quantity.', false);
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const processedItems = validItems.map(it => {
+        const q = Number(it.qty) || 1;
+        const r = Number(it.rate) || 0;
+        return {
+          ...it,
+          name: it.name.trim(),
+          qty: q,
+          quantity: q,
+          rate: r,
+          price: r,
+          amount: q * r
+        };
+      });
+
+      const newSub = processedItems.reduce((sum, it) => sum + it.amount, 0);
+      const newTax = parseFloat((newSub * taxRate * 2).toFixed(2));
+      const newService = parseFloat((newSub * serviceRate).toFixed(2));
+      const newTot = parseFloat((newSub + newTax + newService).toFixed(2));
+
+      // 1. Update backend order if targetOrderId exists
+      const targetOrderId = selectedBillData.rawOrderId || selectedBillData.orderId || (selectedBillData.orderIds && selectedBillData.orderIds[0]);
+      if (targetOrderId && typeof targetOrderId === 'string' && targetOrderId.length >= 10 && !targetOrderId.startsWith('#')) {
+        try {
+          await OrderApi.updateOrder(targetOrderId, {
+            items: processedItems,
+            total: newTot,
+            subtotal: newSub,
+            totalAmount: newTot
+          });
+        } catch (e) {
+          console.warn("Backend order update notice:", e);
+        }
+      }
+
+      // 2. Update local state
+      const currentTableIdentifier = selectedBillData.tableId || selectedBillData._id || selectedBillData.id || selectedBillingTable;
+      if (typeof setBillingData === 'function') {
+        setBillingData(prev => prev.map(b => {
+          const isTarget = 
+            (b.tableId && b.tableId === currentTableIdentifier) ||
+            (b._id && b._id === currentTableIdentifier) ||
+            (b.id && b.id === currentTableIdentifier) ||
+            (b.table && b.table === selectedBillData.table) ||
+            (selectedBillingTable && (b.tableId === selectedBillingTable || b._id === selectedBillingTable));
+
+          if (isTarget) {
+            return {
+              ...b,
+              items: processedItems,
+              total: newTot,
+              subtotal: newSub
+            };
+          }
+          return b;
+        }));
+      }
+
+      setIsEditing(false);
+      ShowNotifications.showAlertNotification(`Bill items updated for ${selectedBillData.table}!`, true);
+    } catch (err) {
+      console.error("Failed to save edited bill:", err);
+      ShowNotifications.showAlertNotification('Failed to update bill items.', false);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Open Delete Modal
+  const handleOpenDeleteModal = () => {
+    if (!selectedBillData || (!selectedBillingTable && displayBillingData.length === 0)) {
+      ShowNotifications.showAlertNotification('No active bill to delete.', false);
+      return;
+    }
+    setShowDeleteModal(true);
+  };
+
+  // Confirm Delete Bill
+  const handleConfirmDeleteBill = async () => {
+    setIsDeleting(true);
+    try {
+      const targetOrderId = selectedBillData.rawOrderId || selectedBillData.orderId || (selectedBillData.orderIds && selectedBillData.orderIds[0]);
+      
+      // Delete all associated orders from backend if valid ObjectId
+      if (Array.isArray(selectedBillData.orderIds) && selectedBillData.orderIds.length > 0) {
+        for (const oId of selectedBillData.orderIds) {
+          if (oId && typeof oId === 'string' && oId.length >= 10 && !oId.startsWith('#')) {
+            try {
+              await OrderApi.deleteOrder(oId);
+            } catch (err) {
+              console.warn("Could not delete order on backend:", err);
+            }
+          }
+        }
+      } else if (targetOrderId && typeof targetOrderId === 'string' && targetOrderId.length >= 10 && !targetOrderId.startsWith('#')) {
+        try {
+          await OrderApi.deleteOrder(targetOrderId);
+        } catch (err) {
+          console.warn("Could not delete order on backend:", err);
+        }
+      }
+
+      // Remove table bill from local state
+      const currentTableIdentifier = selectedBillData.tableId || selectedBillData._id || selectedBillData.id || selectedBillingTable;
+      if (typeof setBillingData === 'function') {
+        setBillingData(prev => {
+          const updated = prev.filter(b => 
+            (b.tableId || b._id || b.id || b.table) !== currentTableIdentifier &&
+            b.table !== selectedBillData.table &&
+            b.tableId !== selectedBillingTable &&
+            b._id !== selectedBillingTable
+          );
+          if (updated.length > 0) {
+            setSelectedBillingTable(updated[0].tableId || updated[0]._id || updated[0].id || updated[0].table);
+          } else {
+            setSelectedBillingTable('');
+          }
+          return updated;
+        });
+      }
+
+      setShowDeleteModal(false);
+      ShowNotifications.showAlertNotification(`Bill for ${selectedBillData.table} deleted successfully.`, true);
+    } catch (err) {
+      console.error("Failed to delete bill:", err);
+      ShowNotifications.showAlertNotification('Failed to delete bill.', false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Live calculation for edit modal
+  const editSubtotal = editItems.reduce((sum, it) => sum + (Number(it.qty || 1) * Number(it.rate || 0)), 0);
+  const editTax = parseFloat((editSubtotal * taxRate * 2).toFixed(2));
+  const editService = parseFloat((editSubtotal * serviceRate).toFixed(2));
+  const editTotal = editSubtotal + editTax + editService;
 
   return (
     <section className="panel-view active">
@@ -100,14 +343,14 @@ export default function BillingPanel({
         <div style={{ display: 'flex', overflowX: 'auto', gap: '16px', paddingBottom: '16px', scrollbarWidth: 'thin' }}>
           {displayBillingData.map(b => (
             <div
-              key={b.tableId}
-              onClick={() => setSelectedBillingTable(b.tableId)}
+              key={b.tableId || b._id || b.table}
+              onClick={() => setSelectedBillingTable(b.tableId || b._id || b.table)}
               style={{
                 minWidth: '240px',
-                border: selectedBillingTable === b.tableId ? '2px solid var(--primary)' : '1px solid var(--border)',
+                border: (selectedBillingTable === (b.tableId || b._id || b.table) || selectedBillData.table === b.table) ? '2px solid var(--primary)' : '1px solid var(--border)',
                 borderRadius: '12px',
                 padding: '16px',
-                background: selectedBillingTable === b.tableId ? '#fffcf9' : '#ffffff',
+                background: (selectedBillingTable === (b.tableId || b._id || b.table) || selectedBillData.table === b.table) ? '#fffcf9' : '#ffffff',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
                 position: 'relative'
@@ -125,23 +368,20 @@ export default function BillingPanel({
                   }}>
                     {b.status}
                   </span>
-                  <span style={{ color: 'var(--primary)', display: 'inline-flex', alignItems: 'center' }}>
-                    <PencilIcon size={12} />
-                  </span>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
                 <span title={b.orderId}>{b.orderId || 'No Order'}</span>
                 <span>•</span>
-                <span>Wait</span>
+                <span>{b.items?.length || 0} items</span>
               </div>
               <div style={{ textAlign: 'right', fontSize: '20px', fontWeight: '800', color: 'var(--black)' }}>
-                ₹{b.total}
+                ₹{Number(b.total || 0).toLocaleString('en-IN')}
               </div>
             </div>
           ))}
           {displayBillingData.length === 0 && (
-            <div style={{ padding: '20px', color: '#94a3b8' }}>No dining transactions available.</div>
+            <div style={{ padding: '20px', color: '#94a3b8' }}>No active dining transactions available.</div>
           )}
         </div>
       </div>
@@ -167,55 +407,54 @@ export default function BillingPanel({
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                title="Edit Bill"
+                type="button"
+                title="Edit Bill Items"
                 aria-label="Edit Bill"
                 style={{
-                  padding: '8px 12px',
+                  padding: '8px 14px',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
                   borderRadius: '8px',
-                  border: '1px solid var(--border)',
-                  background: '#ffffff',
-                  color: 'var(--text-main)',
+                  border: '1.5px solid #fed7aa',
+                  background: '#fff7ed',
+                  color: '#ea580c',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-main)'; }}
-                onClick={() => {
-                  setEditItems(billingItems.map(item => ({ ...item })));
-                  setIsEditing(true);
-                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#ffedd5'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fff7ed'; }}
+                onClick={handleOpenEditModal}
               >
-                <PencilIcon size={14} />
+                <PencilIcon size={14} color="#ea580c" />
+                <span>Edit</span>
               </button>
               <button
+                type="button"
                 title="Delete Bill"
                 aria-label="Delete Bill"
                 style={{
-                  padding: '8px 12px',
+                  padding: '8px 14px',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
                   borderRadius: '8px',
-                  border: '1px solid #fca5a5',
-                  background: '#fff',
-                  color: '#ef4444',
+                  border: '1.5px solid #fecaca',
+                  background: '#fef2f2',
+                  color: '#dc2626',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; }}
-                onClick={() => {
-                  ShowNotifications.showAlertNotification('Bill deleted', false);
-                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; }}
+                onClick={handleOpenDeleteModal}
               >
-                <TrashIcon size={14} color="#000000ff" />
+                <TrashIcon size={14} color="#dc2626" />
+                <span>Delete</span>
               </button>
             </div>
           </div>
@@ -244,8 +483,8 @@ export default function BillingPanel({
                     )}
                   </td>
                   <td style={{ padding: '16px', textAlign: 'center', fontWeight: '600' }}>{item.qty}</td>
-                  <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>₹{(item.rate).toFixed(2)}</td>
-                  <td style={{ padding: '16px', textAlign: 'right', fontWeight: '700', color: 'var(--black)' }}>₹{(item.amount).toFixed(2)}</td>
+                  <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>₹{Number(item.rate || 0).toFixed(2)}</td>
+                  <td style={{ padding: '16px', textAlign: 'right', fontWeight: '700', color: 'var(--black)' }}>₹{Number(item.amount || (item.qty * item.rate) || 0).toFixed(2)}</td>
                 </tr>
               ))}
               {billingItems.length === 0 && (
@@ -442,98 +681,211 @@ export default function BillingPanel({
         )}
       </div>
 
-      {isEditing && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-          background: 'rgba(0,0,0,0.5)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            width: '100%',
-            maxWidth: '560px',
-            border: '3px solid #ff5a1f',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0, color: '#0f172a' }}>Edit Bill Items</h3>
-              <button
-                onClick={() => setIsEditing(false)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            </div>
+      {/* EDIT BILL MODAL */}
+      <Modal
+        isOpen={isEditing}
+        onClose={() => !isSavingEdit && setIsEditing(false)}
+        title={`Edit Bill - ${selectedBillData.table || 'Table'}`}
+        maxWidth="640px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', color: '#64748b' }}>Modify items, quantities, or prices:</span>
+            <button
+              type="button"
+              onClick={handleAddItemToEdit}
+              style={{
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: '1px solid #fed7aa',
+                background: '#fff7ed',
+                color: '#ea580c',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px'
+              }}
+            >
+              <PlusIcon size={13} color="#ea580c" />
+              <span>Add Item</span>
+            </button>
+          </div>
 
-            {/* Table Header */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr', background: '#111111', color: 'white', borderBottom: '3px solid #ff5a1f' }}>
-              <div style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px', color: '#ffffff', textTransform: 'uppercase' }}>ITEM NAME</div>
-              <div style={{ padding: '16px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', background: '#1a1a1a', textTransform: 'uppercase' }}>QTY</div>
-              <div style={{ padding: '16px 24px', fontSize: '11px', fontWeight: '800', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', textTransform: 'uppercase' }}>RATE</div>
-            </div>
+          {/* Items Header */}
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px 80px 36px', gap: '10px', background: '#000000', color: '#ffffff', padding: '10px 12px', borderRadius: '8px 8px 0 0', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div>Item Name</div>
+            <div style={{ textAlign: 'center' }}>Qty</div>
+            <div style={{ textAlign: 'right' }}>Rate (₹)</div>
+            <div style={{ textAlign: 'right' }}>Total (₹)</div>
+            <div></div>
+          </div>
 
-            {/* Table Body */}
-            <div style={{ padding: '0 24px', maxHeight: '400px', overflowY: 'auto' }}>
-              {editItems.map((item, index) => (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr', gap: '16px', padding: '16px 0', borderBottom: '1px solid #f1f5f9' }}>
-                  <input
-                    value={item.name}
-                    onChange={(e) => {
-                      const newItems = [...editItems];
-                      newItems[index] = { ...newItems[index], name: e.target.value };
-                      setEditItems(newItems);
-                    }}
-                    style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', outline: 'none', color: '#0f172a' }}
-                  />
-                  <input
-                    type="number"
-                    value={item.qty}
-                    onChange={(e) => {
-                      const newItems = [...editItems];
-                      newItems[index] = { ...newItems[index], qty: Number(e.target.value) };
-                      setEditItems(newItems);
-                    }}
-                    style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', textAlign: 'center', outline: 'none', color: '#0f172a' }}
-                  />
-                  <input
-                    type="number"
-                    value={item.rate}
-                    onChange={(e) => {
-                      const newItems = [...editItems];
-                      newItems[index] = { ...newItems[index], rate: Number(e.target.value) };
-                      setEditItems(newItems);
-                    }}
-                    style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '14px', textAlign: 'center', outline: 'none', color: '#0f172a' }}
-                  />
+          {/* Items List */}
+          <div style={{ maxHeight: '280px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', padding: '4px' }}>
+            {editItems.map((item, index) => (
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px 80px 36px', gap: '10px', alignItems: 'center', background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <input
+                  type="text"
+                  placeholder="Item Name"
+                  value={item.name}
+                  onChange={e => handleEditItemChange(index, 'name', e.target.value)}
+                  style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+                <input
+                  type="number"
+                  min="1"
+                  value={item.qty}
+                  onChange={e => handleEditItemChange(index, 'qty', e.target.value)}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', textAlign: 'center', boxSizing: 'border-box' }}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={item.rate}
+                  onChange={e => handleEditItemChange(index, 'rate', e.target.value)}
+                  style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', textAlign: 'right', boxSizing: 'border-box' }}
+                />
+                <div style={{ fontSize: '13px', fontWeight: 800, textAlign: 'right', color: '#0f172a' }}>
+                  ₹{(Number(item.qty || 1) * Number(item.rate || 0)).toFixed(2)}
                 </div>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  title="Remove item"
+                  onClick={() => handleRemoveItemFromEdit(index)}
+                  style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {editItems.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>
+                No items in bill. Click "+ Add Item" to add an item.
+              </div>
+            )}
+          </div>
 
-            {/* Actions */}
-            <div style={{ padding: '24px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={() => setIsEditing(false)}
-                style={{ padding: '10px 24px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: '700', color: '#0f172a', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  // In a real app we'd trigger an API to update
-                  setIsEditing(false);
-                }}
-                style={{ padding: '10px 24px', background: '#ff5a1f', border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '700', color: 'white', cursor: 'pointer' }}
-              >
-                Save changes
-              </button>
+          {/* Live Summary Preview */}
+          <div style={{ background: '#f8fafc', borderRadius: '8px', padding: '12px 16px', border: '1px solid #e2e8f0', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+              <span>Subtotal:</span>
+              <strong style={{ color: '#0f172a' }}>₹{editSubtotal.toFixed(2)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+              <span>GST (5%):</span>
+              <strong style={{ color: '#0f172a' }}>₹{editTax.toFixed(2)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ea580c', borderTop: '1px solid #e2e8f0', paddingTop: '6px', fontSize: '15px' }}>
+              <strong>Grand Total:</strong>
+              <strong>₹{editTotal.toFixed(2)}</strong>
             </div>
           </div>
+
+          {/* Modal Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+            <button
+              type="button"
+              disabled={isSavingEdit}
+              onClick={() => setIsEditing(false)}
+              style={{
+                padding: '9px 18px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isSavingEdit}
+              onClick={handleSaveEditBill}
+              style={{
+                padding: '9px 24px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#ff5a1f',
+                color: '#ffffff',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: isSavingEdit ? 'not-allowed' : 'pointer',
+                opacity: isSavingEdit ? 0.7 : 1
+              }}
+            >
+              {isSavingEdit ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
         </div>
-      )}
+      </Modal>
+
+      {/* DELETE BILL CONFIRMATION MODAL */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => !isDeleting && setShowDeleteModal(false)}
+        title="Delete Bill"
+        maxWidth="460px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#fef2f2', padding: '14px 16px', borderRadius: '10px', border: '1px solid #fecaca' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', flexShrink: 0 }}>
+              ⚠️
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 800, color: '#991b1b' }}>
+                Are you sure you want to delete this bill?
+              </div>
+              <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '2px' }}>
+                This will delete the active order and clear items for <strong>{selectedBillData.table}</strong> (Amount: ₹{Number(selectedBillData.total || 0).toLocaleString('en-IN')}).
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setShowDeleteModal(false)}
+              style={{
+                padding: '9px 18px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDeleteBill}
+              style={{
+                padding: '9px 22px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#dc2626',
+                color: '#ffffff',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.7 : 1
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'Yes, Delete Bill'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

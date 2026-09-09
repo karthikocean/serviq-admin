@@ -3,6 +3,7 @@ import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
+import { extractOrderISODate, formatDateDMY } from '../helper/DateHelper.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -132,15 +133,7 @@ export default function WaiterReportsPanel({
   };
 
   const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
+    return extractOrderISODate(ord) || ord.date || '';
   };
 
   // Filter lists
@@ -157,8 +150,9 @@ export default function WaiterReportsPanel({
     const paymentStatus = ord.billingStatus || 'unpaid';
     const orderStatus = ord.status || 'new';
 
-    if (dateStart && date < dateStart) return false;
-    if (dateEnd && date > dateEnd) return false;
+    if (dateStart && date && date < dateStart) return false;
+    if (dateEnd && date && date > dateEnd) return false;
+    if ((dateStart || dateEnd) && !date) return false;
     if (filterWaiter !== 'All' && waiter !== filterWaiter) return false;
     if (filterTable !== 'All' && table !== filterTable) return false;
     if (filterSource !== 'All' && source !== filterSource) return false;

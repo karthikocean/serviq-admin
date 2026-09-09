@@ -285,20 +285,51 @@ export default function MenuManagement() {
   const sty = {
     pageInlineHeader: { display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid var(--primary-light)' },
     pageBackBtn: { background: '#fff', border: '1.5px solid var(--border)', borderRadius: '10px', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '16px', transition: 'all 0.2s', flexShrink: 0 },
-    pageCard: { background: '#fff', borderRadius: '16px', padding: '32px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' },
+    pageCard: { background: '#ffffff', borderRadius: '16px', padding: '36px 40px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' },
     formGrid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' },
     formGrid3: { display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr', gap: '14px', marginBottom: '16px' },
   };
 
   const PageHeader = ({ title = 'Menu Item', subtitle = '' }) => (
-    <div style={sty.pageInlineHeader}>
-      <button style={sty.pageBackBtn} onClick={() => setActivePage(null)}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'inherit'; }}
-      >←</button>
-      <div>
-        <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>{title}</h2>
-        {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+    <div style={{
+      background: '#ffffff',
+      borderRadius: '16px',
+      padding: '24px 32px',
+      marginBottom: '24px',
+      border: '1px solid #e2e8f0',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <button
+          type="button"
+          onClick={() => setActivePage(null)}
+          style={{
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: '18px',
+            fontWeight: 800,
+            color: '#0f172a',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+          }}
+        >
+          ←
+        </button>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+            {title}
+          </h2>
+          {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+        </div>
       </div>
     </div>
   );

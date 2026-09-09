@@ -74,11 +74,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+    userRoleLower === 'super_admin' ||
+    userRoleLower === 'admin';
 
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
@@ -115,6 +117,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [isExtraBranchModalOpen, setIsExtraBranchModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeBillingCycle, setUpgradeBillingCycle] = useState('monthly'); // 'monthly' | 'annual'
+  const [selectedPlanCycles, setSelectedPlanCycles] = useState({
+    'plan-premium': 'monthly',
+    'plan-standard': 'monthly',
+    'plan-basic': 'monthly'
+  });
   const [upgradePaymentMethod, setUpgradePaymentMethod] = useState('card');
   const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false);
   const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState(null);
@@ -124,6 +131,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'addon'
   const [historySearch, setHistorySearch] = useState('');
   const [localPurchases, setLocalPurchases] = useState([]);
+
+  // Payment Checkout Popup State
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [checkoutData, setCheckoutData] = useState(null);
+  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState('upi'); // 'upi' | 'card' | 'netbanking'
+  const [checkoutUpiMode, setCheckoutUpiMode] = useState('qr'); // 'qr' | 'vpa'
+  const [checkoutUpiId, setCheckoutUpiId] = useState('');
+  const [isUpiVerified, setIsUpiVerified] = useState(false);
+  const [checkoutCard, setCheckoutCard] = useState({
+    number: '4532 8921 4452 9018',
+    name: 'Restaurant Admin',
+    expiry: '12/28',
+    cvv: '821'
+  });
+  const [checkoutSelectedBank, setCheckoutSelectedBank] = useState('HDFC Bank');
+  const [checkoutAutoRenew, setCheckoutAutoRenew] = useState(true);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
   // Popup Managed Plans State (Ordered: Premium -> Standard -> Basic to match screenshot)
   const [plansList, setPlansList] = useState([
@@ -304,30 +328,28 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     };
   };
 
-  // Compile full invoices list from API, context, lastRecharge, and local purchases
-  const apiInvoicesList = 
-    (dashboardData?.history && Array.isArray(dashboardData.history) && dashboardData.history.length > 0 ? dashboardData.history : null) ||
-    (dashboardData?.invoices && Array.isArray(dashboardData.invoices) && dashboardData.invoices.length > 0 ? dashboardData.invoices : null) ||
-    (dashboardData?.rechargeHistory && Array.isArray(dashboardData.rechargeHistory) && dashboardData.rechargeHistory.length > 0 ? dashboardData.rechargeHistory : null) ||
-    (dashboardData?.subscriptionInvoices && Array.isArray(dashboardData.subscriptionInvoices) && dashboardData.subscriptionInvoices.length > 0 ? dashboardData.subscriptionInvoices : null) ||
-    (dashboardData?.addons && Array.isArray(dashboardData.addons) && dashboardData.addons.length > 0 ? dashboardData.addons : null) ||
-    (dashboardData?.transactions && Array.isArray(dashboardData.transactions) && dashboardData.transactions.length > 0 ? dashboardData.transactions : null) ||
-    (activeRestaurant?.subscriptionInvoices && Array.isArray(activeRestaurant.subscriptionInvoices) && activeRestaurant.subscriptionInvoices.length > 0 ? activeRestaurant.subscriptionInvoices : []);
-
-  let combinedInvoices = [
-    ...localPurchases,
-    ...apiInvoicesList
+  // Compile full invoices list from all API endpoints, context, lastRecharge, and local purchases
+  const allApiInvoices = [
+    ...(Array.isArray(dashboardData?.history) ? dashboardData.history : []),
+    ...(Array.isArray(dashboardData?.invoices) ? dashboardData.invoices : []),
+    ...(Array.isArray(dashboardData?.rechargeHistory) ? dashboardData.rechargeHistory : []),
+    ...(Array.isArray(dashboardData?.subscriptionInvoices) ? dashboardData.subscriptionInvoices : []),
+    ...(Array.isArray(dashboardData?.addons) ? dashboardData.addons : []),
+    ...(Array.isArray(dashboardData?.transactions) ? dashboardData.transactions : []),
+    ...(Array.isArray(activeRestaurant?.subscriptionInvoices) ? activeRestaurant.subscriptionInvoices : [])
   ];
+
+  let rawList = [...localPurchases, ...allApiInvoices];
 
   // If lastRechargeData exists and its transaction/date is not in list yet, include it
   if (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date || lastRechargeData.transactionId)) {
-    const isAlreadyPresent = combinedInvoices.some(inv => 
-      (lastRechargeData.transactionId && inv.id === lastRechargeData.transactionId) ||
-      (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount) === Number(lastRechargeData.amount))
+    const isAlreadyPresent = rawList.some(inv => 
+      (lastRechargeData.transactionId && (inv.id === lastRechargeData.transactionId || inv.transactionId === lastRechargeData.transactionId || inv.invoiceNumber === lastRechargeData.transactionId)) ||
+      (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount || inv.totalAmount) === Number(lastRechargeData.amount))
     );
 
     if (!isAlreadyPresent) {
-      combinedInvoices.unshift({
+      rawList.unshift({
         id: lastRechargeData.transactionId || lastRechargeData.invoiceId || `INV-SLOT-${Date.now().toString().slice(-6)}`,
         planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'Standard Add-on' : `${currentPlanName}`),
         type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'addon' : 'subscription',
@@ -341,36 +363,37 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   }
 
-  // If still empty (e.g. initial setup), supply baseline initial subscription records
-  if (combinedInvoices.length === 0) {
-    combinedInvoices = [
-      { id: "INV-PLN-2026-003", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-08-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
-      { id: "INV-PLN-2026-002", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Monthly Subscription Renewal`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-07-15", paymentMethod: "Credit Card (•••• 4242)", status: "Paid" },
-      { id: "INV-PLN-2026-001", planName: `${currentPlanName}`, type: "subscription", description: `${currentPlanName} - Initial Subscription Activation`, branchesIncluded: baseBranchLimit, amount: currentPlanPrice, date: "2026-06-15", paymentMethod: "Razorpay UPI", status: "Paid" }
-    ];
+  // Deduplicate and normalize
+  const seenIds = new Set();
+  const invoices = [];
+  for (let i = 0; i < rawList.length; i++) {
+    const item = normalizeInvoice(rawList[i], i);
+    if (item && !seenIds.has(item.id)) {
+      seenIds.add(item.id);
+      invoices.push(item);
+    }
   }
 
-  const invoices = combinedInvoices.map((inv, idx) => normalizeInvoice(inv, idx)).filter(Boolean);
-
   const addonInvoices = invoices.filter(inv => inv.type === 'addon');
+  const subscriptionInvoices = invoices.filter(inv => inv.type !== 'addon');
 
   const lastRecharge = (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date)) ? {
-    id: lastRechargeData.transactionId || lastRechargeData.invoiceId || invoices[0]?.id || `TXN-RECHARGE-${Date.now().toString().slice(-6)}`,
+    id: lastRechargeData.transactionId || lastRechargeData.invoiceId || invoices[0]?.id || 'PLAN-ACTIVE',
     planName: lastRechargeData.planName || invoices[0]?.planName || currentPlanName,
     description: lastRechargeData.description || invoices[0]?.description || `${currentPlanName} Subscription Renewal`,
     amount: lastRechargeData.amount !== undefined ? lastRechargeData.amount : (invoices[0]?.amount || currentPlanPrice),
-    date: lastRechargeData.date || invoices[0]?.date || new Date().toISOString(),
-    paymentMethod: lastRechargeData.paymentMethod || invoices[0]?.paymentMethod || 'Credit Card (•••• 4242)',
+    date: lastRechargeData.date || invoices[0]?.date || sub.startDate || new Date().toISOString(),
+    paymentMethod: lastRechargeData.paymentMethod || invoices[0]?.paymentMethod || 'Online Payment',
     status: lastRechargeData.status || 'Paid'
-  } : (invoices[0] || {
-    id: "INV-PLN-2026-003",
+  } : (invoices[0] || (activeRestaurant?.subscription ? {
+    id: "PLAN-ACTIVE",
     planName: currentPlanName,
-    description: `${currentPlanName} - Monthly Subscription Renewal`,
+    description: `${currentPlanName} (${currentBillingCycle})`,
     amount: currentPlanPrice,
-    date: "2026-08-15",
-    paymentMethod: "Credit Card (•••• 4242)",
-    status: "Paid"
-  });
+    date: sub.startDate || sub.nextBillingDate || new Date().toISOString(),
+    paymentMethod: "Online Payment",
+    status: "Active"
+  } : null));
 
   const totalSpentOnPlans = invoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
@@ -387,6 +410,9 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
     if (historyFilter === 'addon') {
       return matchesSearch && isAddon;
+    }
+    if (historyFilter === 'subscription') {
+      return matchesSearch && !isAddon;
     }
     return matchesSearch;
   });
@@ -444,11 +470,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   };
 
-  const handleSelectOrSwitchPlan = (targetPlan) => {
+  const handleSelectOrSwitchPlan = (targetPlan, isRenewal = false, cycleOverride = null, customPaymentMethod = null) => {
     if (!targetPlan) return;
     setIsProcessingUpgrade(true);
-    const billing = (currentBillingCycle.toLowerCase().includes('annual') || upgradeBillingCycle === 'annual') ? 'annual' : 'monthly';
-    const methodStr = upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)';
+    const billing = cycleOverride || selectedPlanCycles[targetPlan.id] || upgradeBillingCycle || (currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
+    const methodStr = customPaymentMethod || (upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)');
     const cleanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
     const branchLimit = targetPlan.maxBranches || targetPlan.branchLimit || getPlanBranchLimit(cleanName, 5);
     const planPrice = billing === 'annual' ? (targetPlan.annualPrice || 9999) : (targetPlan.monthlyPrice || 999);
@@ -460,6 +486,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       upgradeRestaurantPlan(activeRestaurant.id, cleanName);
     }
 
+    const nextBillingDateFormatted = new Date();
+    if (billing === 'annual') {
+      nextBillingDateFormatted.setFullYear(nextBillingDateFormatted.getFullYear() + 1);
+    } else {
+      nextBillingDateFormatted.setMonth(nextBillingDateFormatted.getMonth() + 1);
+    }
+
     setDashboardData(prev => ({
       ...prev,
       activePlan: {
@@ -469,6 +502,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         billingCycle: billing === 'annual' ? 'Annual' : 'Monthly',
         price: planPrice,
         baseBranchLimit: branchLimit,
+        nextRenewal: nextBillingDateFormatted.toISOString(),
+        validity: nextBillingDateFormatted.toISOString(),
         status: 'Active'
       },
       branchCapacity: {
@@ -489,20 +524,72 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     const newInvoice = {
       id: `INV-PLN-${Date.now().toString().slice(-6)}`,
       planName: `${cleanName} Plan`,
-      description: `Plan Upgrade to ${cleanName} Plan (${billing})`,
+      description: isRenewal ? `${cleanName} Plan - Subscription Renewal (${billing})` : `Plan Upgrade to ${cleanName} Plan (${billing})`,
       branchesIncluded: branchLimit,
       amount: planPrice,
       date: new Date().toISOString(),
       paymentMethod: methodStr,
       status: 'Paid',
-      type: 'plan'
+      type: 'subscription'
     };
     setLocalPurchases(prev => [newInvoice, ...prev]);
 
     setIsProcessingUpgrade(false);
     setIsUpgradeModalOpen(false);
     setSelectedPlanForUpgrade(null);
-    ShowNotifications.showAlertNotification(`Subscription tier successfully updated to ${cleanName} Plan (Max ${branchLimit} Outlets)!`, true);
+    ShowNotifications.showAlertNotification(
+      isRenewal
+        ? `Subscription for ${cleanName} Plan successfully renewed (${billing})!`
+        : `Subscription tier successfully updated to ${cleanName} Plan (Max ${branchLimit} Outlets)!`,
+      true
+    );
+  };
+
+  const handleInitiatePlanCheckout = (targetPlan, isRenewal = false, cycleOverride = null) => {
+    if (!targetPlan) return;
+    const cycle = cycleOverride || selectedPlanCycles[targetPlan.id] || upgradeBillingCycle || 'monthly';
+    const basePrice = cycle === 'annual' ? (targetPlan.annualPrice || 49999) : (targetPlan.monthlyPrice || 4999);
+    const gst = Math.round(basePrice * 0.18);
+    const total = basePrice + gst;
+    
+    setCheckoutData({
+      plan: targetPlan,
+      isRenewal,
+      cycle,
+      basePrice,
+      gst,
+      total
+    });
+    setCheckoutPaymentMethod('upi');
+    setCheckoutUpiMode('qr');
+    setIsUpiVerified(false);
+    setCheckoutUpiId('');
+    setIsCheckoutModalOpen(true);
+  };
+
+  const handleConfirmCheckoutPayment = async () => {
+    if (!checkoutData || !checkoutData.plan) return;
+    setIsProcessingCheckout(true);
+
+    let methodDisplay = 'Credit Card (•••• 9018)';
+    if (checkoutPaymentMethod === 'upi') {
+      methodDisplay = checkoutUpiMode === 'qr' ? 'UPI / QR (Instant Scan)' : `UPI (${checkoutUpiId.trim() || 'user@upi'})`;
+    } else if (checkoutPaymentMethod === 'netbanking') {
+      methodDisplay = `${checkoutSelectedBank} NetBanking`;
+    }
+
+    // Realistic authorization delay
+    await new Promise(resolve => setTimeout(resolve, 900));
+
+    handleSelectOrSwitchPlan(
+      checkoutData.plan,
+      checkoutData.isRenewal,
+      checkoutData.cycle,
+      methodDisplay
+    );
+
+    setIsProcessingCheckout(false);
+    setIsCheckoutModalOpen(false);
   };
 
   const handleTogglePlanActive = (planId) => {
@@ -650,11 +737,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <HistoryIcon size={15} color="var(--primary)" />
                 <span style={{ fontSize: '11px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Last Recharge
+                  {lastRechargeData || invoices.length > 0 ? 'Last Recharge' : 'Active Plan'}
                 </span>
               </div>
               <span style={{
-                background: lastRechargeData ? '#ecfdf5' : '#f0fdf4',
+                background: (lastRechargeData || invoices.length > 0) ? '#ecfdf5' : '#f0fdf4',
                 color: '#166534',
                 fontWeight: 800,
                 fontSize: '10px',
@@ -662,32 +749,31 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 borderRadius: '6px',
                 border: '1px solid #bbf7d0'
               }}>
-                ● {lastRechargeData ? (lastRechargeData.status || 'Paid') : 'Active Plan'}
+                ● {lastRecharge ? (lastRecharge.status || 'Paid') : 'Active'}
               </span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '8px' }}>
               <span style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                ₹{(lastRechargeData?.amount !== undefined ? lastRechargeData.amount : (lastRecharge?.amount || currentPlanPrice)).toLocaleString()}
+                ₹{(lastRecharge?.amount !== undefined ? lastRecharge.amount : currentPlanPrice).toLocaleString()}
               </span>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-                {lastRechargeData?.date ? `on ${formatDate(lastRechargeData.date)}` : `Active Plan`}
+                {lastRecharge?.date && (lastRechargeData || invoices.length > 0) ? `on ${formatDate(lastRecharge.date)}` : `Active Tier`}
               </span>
             </div>
 
-            <div style={{ fontSize: '11px', color: '#334155', fontWeight: 600, marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {lastRechargeData?.planName || lastRechargeData?.description || currentPlanName}
+            <div style={{ fontSize: '12px', color: '#334155', fontWeight: 600, marginTop: '4px', lineHeight: 1.4 }}>
+              {lastRecharge?.planName || lastRecharge?.description || currentPlanName}
             </div>
-
           </div>
 
           <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '10px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 }}>
-              {lastRechargeData?.id || (lastRechargeData === null ? 'PLAN-ACTIVE' : lastRecharge.id)}
+            <span style={{ fontSize: '11px', color: '#64748b', fontFamily: 'monospace', fontWeight: 700 }}>
+              {lastRecharge?.id || 'PLAN-ACTIVE'}
             </span>
             <button
               type="button"
-              onClick={() => setSelectedInvoiceForView(lastRechargeData || {
+              onClick={() => setSelectedInvoiceForView(lastRecharge || {
                 id: "PLAN-ACTIVE",
                 planName: currentPlanName,
                 description: `${currentPlanName} (${currentBillingCycle})`,
@@ -698,7 +784,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               })}
               style={{ border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', padding: '3px 8px', borderRadius: '5px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
             >
-              <ReceiptIcon size={11} /> {lastRechargeData ? 'Receipt' : 'Details'}
+              <ReceiptIcon size={11} /> {lastRechargeData || invoices.length > 0 ? 'Receipt' : 'Details'}
             </button>
           </div>
         </div>
@@ -801,20 +887,25 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '8px 14px', borderRadius: '10px', textAlign: 'right' }}>
               <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Total Recharges:</span>
-              <strong style={{ fontSize: '14px', color: '#0f172a' }}>{invoices.length} Payments (₹{totalSpentOnPlans.toLocaleString()})</strong>
+              <strong style={{ fontSize: '14px', color: '#0f172a' }}>
+                {isLoading ? '...' : `${invoices.length} Payments (₹${totalSpentOnPlans.toLocaleString()})`}
+              </strong>
             </div>
             <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 14px', borderRadius: '10px', textAlign: 'right' }}>
               <span style={{ fontSize: '11px', color: '#166534', display: 'block' }}>Latest Recharge:</span>
-              <strong style={{ fontSize: '14px', color: '#166534' }}>{lastRecharge.date ? formatDate(lastRecharge.date) : '—'} (₹{lastRecharge.amount.toLocaleString()})</strong>
+              <strong style={{ fontSize: '14px', color: '#166534' }}>
+                {isLoading ? '...' : (lastRecharge?.date && (lastRechargeData || invoices.length > 0) ? `${formatDate(lastRecharge.date)} (₹${(lastRecharge.amount || currentPlanPrice).toLocaleString()})` : 'Active Subscription')}
+              </strong>
             </div>
           </div>
         </div>
 
         {/* Filter Tabs & Search Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
             {[
               { id: 'all', label: `All History (${invoices.length})` },
+              { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
               { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
             ].map(tab => (
               <button
@@ -839,7 +930,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             ))}
           </div>
 
-          <div style={{ position: 'relative', width: '320px' }}>
+          <div style={{ position: 'relative', width: '320px', minWidth: '240px' }}>
             <input
               type="text"
               placeholder="Search invoice, plan, date..."
@@ -871,121 +962,119 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
 
         {/* History Table */}
-        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-          <div style={{ width: '100%', overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: '920px', tableLayout: 'auto', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <colgroup>
-                <col style={{ width: '16%' }} />
-                <col style={{ width: '15%' }} />
-                <col style={{ width: '27%' }} />
-                <col style={{ width: '14%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '16%' }} />
-              </colgroup>
+        <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+          <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px' }}>
+            <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Recharge Date</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Invoice #</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Plan & Recharge Item</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Amount Paid</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Status</th>
-                  <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '150px' }}>Receipt</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '150px' }}>Recharge Date</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Invoice #</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '220px' }}>Plan & Recharge Item</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Amount Paid</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Status</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '140px' }}>Action</th>
                 </tr>
               </thead>
-            <tbody>
-              {filteredInvoices.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                    No recharge records found matching the filter.
-                  </td>
-                </tr>
-              ) : (
-                filteredInvoices.map((inv, idx) => {
-                  const isLatest = idx === 0;
-                  const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot'));
+              <tbody>
+                {isLoading || isRefreshing ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                      <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading recharge history...
+                    </td>
+                  </tr>
+                ) : filteredInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                      No recharge records found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredInvoices.map((inv, idx) => {
+                    const isLatest = idx === 0;
+                    const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
 
-                  return (
-                    <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9', background: isLatest ? '#fafafa' : '#ffffff' }}>
-                      <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>{formatDate(inv.date)}</span>
-                          {isLatest && (
-                            <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '9px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
-                              Latest
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                          via {inv.paymentMethod}
-                        </div>
-                      </td>
+                    return (
+                      <tr key={inv.id} style={{ borderBottom: idx !== filteredInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>
+                        <td style={{ padding: '14px 18px', color: '#0f172a', fontWeight: 600 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{formatDate(inv.date)}</span>
+                            {isLatest && (
+                              <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '9px', fontWeight: 800, padding: '1px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                Latest
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                            via {inv.paymentMethod}
+                          </div>
+                        </td>
 
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>
-                        {inv.id}
-                      </td>
+                        <td style={{ padding: '14px 18px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace', fontSize: '13px' }}>
+                          {inv.id}
+                        </td>
 
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ color: '#0f172a', fontWeight: 700 }}>
-                          {inv.planName || inv.description}
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                          {inv.description} {isAddon ? '• Add-on Slot' : `• (${inv.branchesIncluded || baseBranchLimit} Outlets)`}
-                        </div>
-                      </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ color: '#0f172a', fontWeight: 700, fontSize: '13px' }}>
+                            {inv.planName || inv.description}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px', lineHeight: 1.4 }}>
+                            {inv.description} {isAddon ? '• Add-on Slot' : `• (${inv.branchesIncluded || baseBranchLimit} Outlets)`}
+                          </div>
+                        </td>
 
-                      <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>
-                        <span style={{ fontSize: '14px', color: '#0f172a' }}>₹{inv.amount ? inv.amount.toLocaleString() : '1,999'}</span>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>incl. GST</div>
-                      </td>
+                        <td style={{ padding: '14px 18px', fontWeight: 800, color: '#0f172a' }}>
+                          <div style={{ fontSize: '14px', color: '#0f172a' }}>₹{inv.amount ? inv.amount.toLocaleString() : '1,999'}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>incl. GST</div>
+                        </td>
 
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 800, padding: '3px 8px', borderRadius: '6px' }}>
-                          ● {inv.status || 'Paid'}
-                        </span>
-                      </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                          <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', border: '1px solid #bbf7d0', display: 'inline-block' }}>
+                            ● {inv.status || 'Paid'}
+                          </span>
+                        </td>
 
-                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedInvoiceForView(inv)}
-                          style={{
-                            border: '1.5px solid #cbd5e1',
-                            background: '#ffffff',
-                            color: '#1e293b',
-                            padding: '7px 14px',
-                            borderRadius: '8px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = '#ff5a1f';
-                            e.currentTarget.style.color = '#ff5a1f';
-                            e.currentTarget.style.background = '#fff7ed';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = '#cbd5e1';
-                            e.currentTarget.style.color = '#1e293b';
-                            e.currentTarget.style.background = '#ffffff';
-                          }}
-                        >
-                          <ReceiptIcon size={14} />
-                          <span>View Receipt</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedInvoiceForView(inv)}
+                            style={{
+                              border: '1.5px solid #cbd5e1',
+                              background: '#ffffff',
+                              color: '#1e293b',
+                              padding: '7px 14px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              whiteSpace: 'nowrap',
+                              transition: 'all 0.15s ease',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = '#ff5a1f';
+                              e.currentTarget.style.color = '#ff5a1f';
+                              e.currentTarget.style.background = '#fff7ed';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = '#cbd5e1';
+                              e.currentTarget.style.color = '#1e293b';
+                              e.currentTarget.style.background = '#ffffff';
+                            }}
+                          >
+                            <ReceiptIcon size={14} />
+                            <span>View Receipt</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1217,7 +1306,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </Modal>
       )}
 
-      {/* MODAL: SUBSCRIPTION UPGRADE & PLANS MANAGEMENT MODAL (EXACT MATCH TO SCREENSHOT) */}
+      {/* MODAL: SUBSCRIPTION UPGRADE & PLANS MANAGEMENT MODAL */}
       {isUpgradeModalOpen && (
         <Modal
           isOpen={isUpgradeModalOpen}
@@ -1236,6 +1325,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   plan.id === sub.planId || 
                   (sub.planName && plan.name.toLowerCase().includes(sub.planName.toLowerCase()));
 
+                const planCycle = selectedPlanCycles[plan.id] || 'monthly';
+                const isAnnual = planCycle === 'annual';
+                const activePrice = isAnnual ? (plan.annualPrice || 9999) : (plan.monthlyPrice || 999);
+
                 return (
                   <div
                     key={plan.id}
@@ -1253,7 +1346,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     }}
                   >
                     <div>
-                      {/* Top Row: Title + Edit Pencil Icon */}
+                      {/* Top Row: Title */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
@@ -1265,32 +1358,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             </span>
                           )}
                         </div>
-
-                        {/* Edit Pencil Icon */}
-                        <button
-                          type="button"
-                          onClick={() => setEditingPlan(plan)}
-                          title={`Edit ${plan.name}`}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#94a3b8',
-                            cursor: 'pointer',
-                            padding: '2px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: '4px',
-                            transition: 'color 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
-                        >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                            <path d="m15 5 4 4" />
-                          </svg>
-                        </button>
                       </div>
 
                       {/* Active Status Badge */}
@@ -1310,42 +1377,64 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
 
                       {/* Tagline Description */}
-                      <p style={{ fontSize: '12.5px', color: '#64748b', margin: '14px 0 22px 0', lineHeight: 1.5, minHeight: '38px' }}>
+                      <p style={{ fontSize: '12.5px', color: '#64748b', margin: '14px 0 18px 0', lineHeight: 1.5, minHeight: '38px' }}>
                         {plan.tagline}
                       </p>
 
-                      {/* Rates Section (Left Label - Right Value) */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
-                            MONTHLY RATE
-                          </span>
-                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                            ₹{plan.monthlyPrice ? plan.monthlyPrice.toLocaleString() : '999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/mo</span>
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
-                            ANNUAL RATE
-                          </span>
-                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                            ₹{plan.annualPrice ? plan.annualPrice.toLocaleString() : '9,999'}<span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>/yr</span>
-                          </span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
-                            MAX BRANCHES
-                          </span>
-                          <span style={{ fontSize: '17px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
-                            {plan.maxBranches} Outlets
-                          </span>
+                      {/* Billing Cycle & Rate Selector Dropdown */}
+                      <div style={{ marginBottom: '14px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                          BILLING CYCLE & RATE
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <select
+                            value={planCycle}
+                            onChange={(e) => setSelectedPlanCycles(prev => ({ ...prev, [plan.id]: e.target.value }))}
+                            style={{
+                              width: '100%',
+                              padding: '10px 36px 10px 14px',
+                              borderRadius: '8px',
+                              border: '1.5px solid #cbd5e1',
+                              background: '#f8fafc',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: '#0f172a',
+                              outline: 'none',
+                              cursor: 'pointer',
+                              appearance: 'none',
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'none',
+                              boxSizing: 'border-box',
+                              fontFamily: "'Outfit', sans-serif"
+                            }}
+                          >
+                            <option value="monthly">
+                              Monthly Rate — ₹{plan.monthlyPrice ? plan.monthlyPrice.toLocaleString() : '999'}/mo
+                            </option>
+                            <option value="annual">
+                              Annual Rate — ₹{plan.annualPrice ? plan.annualPrice.toLocaleString() : '9,999'}/yr (Save 15%)
+                            </option>
+                          </select>
+                          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                          </div>
                         </div>
                       </div>
 
+                      {/* Max Branches */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
+                          MAX BRANCHES
+                        </span>
+                        <span style={{ fontSize: '16px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
+                          {plan.maxBranches} Outlets
+                        </span>
+                      </div>
+
                       {/* Includes Features Section */}
-                      <div style={{ marginTop: '20px' }}>
+                      <div style={{ marginTop: '18px' }}>
                         <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '14px' }}>
                           INCLUDES FEATURES:
                         </div>
@@ -1374,38 +1463,43 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
                     </div>
 
-                    {/* Bottom Action Button: Current Active Plan vs Switch to this Plan */}
-                    <div style={{ marginTop: '28px' }}>
+                    {/* Bottom Action Button: Renew Current Plan vs Switch to this Plan */}
+                    <div style={{ marginTop: '26px' }}>
                       {isCurrentPlan ? (
                         <button
                           type="button"
-                          disabled
+                          onClick={() => handleInitiatePlanCheckout(plan, true, planCycle)}
+                          disabled={isProcessingUpgrade || isProcessingCheckout}
                           style={{
                             width: '100%',
                             padding: '11px 16px',
                             borderRadius: '8px',
-                            border: '1.5px solid #10b981',
-                            background: '#e6f9f0',
-                            color: '#059669',
+                            border: 'none',
+                            background: '#10b981',
+                            color: '#ffffff',
                             fontSize: '13px',
                             fontWeight: 800,
-                            cursor: 'default',
+                            cursor: (isProcessingUpgrade || isProcessingCheckout) ? 'wait' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '8px'
+                            gap: '8px',
+                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            transition: 'all 0.15s'
                           }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                         >
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12"></polyline>
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
                           </svg>
-                          ✓ Current Active Plan
+                          {isProcessingUpgrade ? 'Processing...' : `⚡ Renew Plan (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
                       ) : (
                         <button
                           type="button"
-                          onClick={() => handleSelectOrSwitchPlan(plan)}
-                          disabled={isProcessingUpgrade}
+                          onClick={() => handleInitiatePlanCheckout(plan, false, planCycle)}
+                          disabled={isProcessingUpgrade || isProcessingCheckout}
                           style={{
                             width: '100%',
                             padding: '11px 16px',
@@ -1415,7 +1509,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             color: '#ffffff',
                             fontSize: '13px',
                             fontWeight: 700,
-                            cursor: 'pointer',
+                            cursor: (isProcessingUpgrade || isProcessingCheckout) ? 'wait' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -1429,7 +1523,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
                           </svg>
-                          Switch to {plan.name}
+                          {isProcessingUpgrade ? 'Processing...' : `Switch to ${plan.name} (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
                       )}
                     </div>
@@ -1442,82 +1536,497 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </Modal>
       )}
 
-      {/* MODAL: EDIT PLAN MODAL */}
-      {editingPlan && (
+      {/* MODAL: PAYMENT CHECKOUT POPUP MODAL */}
+      {isCheckoutModalOpen && checkoutData && checkoutData.plan && (
         <Modal
-          isOpen={!!editingPlan}
-          onClose={() => setEditingPlan(null)}
-          title={`Edit ${editingPlan.name}`}
-          maxWidth="500px"
+          isOpen={isCheckoutModalOpen}
+          onClose={() => {
+            if (!isProcessingCheckout) {
+              setIsCheckoutModalOpen(false);
+            }
+          }}
+          title="💳 Subscription Checkout & Payment"
+          maxWidth="640px"
         >
-          <form onSubmit={handleSaveEditPlan} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '6px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-                Tagline Description
-              </label>
-              <textarea
-                value={editingPlan.tagline}
-                onChange={e => setEditingPlan({ ...editingPlan, tagline: e.target.value })}
-                rows="2"
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '18px', paddingTop: '6px' }}>
+
+            {/* Plan Overview Summary Box */}
+            <div style={{
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              color: '#ffffff',
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', right: '-15px', top: '-15px', opacity: 0.08, pointerEvents: 'none' }}>
+                <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '19px', fontWeight: 800, color: '#ffffff', fontFamily: "'Outfit', sans-serif" }}>
+                      {checkoutData.plan.name}
+                    </h3>
+                    <span style={{
+                      background: checkoutData.isRenewal ? '#10b981' : 'var(--primary)',
+                      color: '#ffffff',
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {checkoutData.isRenewal ? 'Renewal' : 'Upgrade'}
+                    </span>
+                  </div>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                    Billing: <strong>{checkoutData.cycle === 'annual' ? 'Annual (365 Days)' : 'Monthly (30 Days)'}</strong> • Up to <strong>{checkoutData.plan.maxBranches} Outlets</strong>
+                  </p>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '11px', color: '#cbd5e1', fontWeight: 600 }}>Plan Price</div>
+                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#38bdf8', fontFamily: "'Outfit', sans-serif" }}>
+                    ₹{checkoutData.basePrice.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '11.5px', color: '#e2e8f0' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  All POS & Menu Features
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Instant Activation
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  GST Invoice Receipt
+                </span>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-                  Monthly Rate (₹)
-                </label>
-                <input
-                  type="number"
-                  value={editingPlan.monthlyPrice}
-                  onChange={e => setEditingPlan({ ...editingPlan, monthlyPrice: Number(e.target.value) })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                />
+            {/* Price Calculation & Tax Breakdown */}
+            <div style={{ background: '#f8fafc', padding: '14px 18px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>Base Subscription Fee ({checkoutData.cycle === 'annual' ? '1 Year' : '1 Month'}):</span>
+                <strong style={{ color: '#0f172a' }}>₹{checkoutData.basePrice.toLocaleString()}</strong>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-                  Annual Rate (₹)
-                </label>
-                <input
-                  type="number"
-                  value={editingPlan.annualPrice}
-                  onChange={e => setEditingPlan({ ...editingPlan, annualPrice: Number(e.target.value) })}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
-                />
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b' }}>
+                <span>GST (18% CGST + SGST):</span>
+                <strong style={{ color: '#0f172a' }}>₹{checkoutData.gst.toLocaleString()}</strong>
+              </div>
+              <div style={{ marginTop: '4px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', display: 'block' }}>Total Payable Amount:</span>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>Inclusive of all taxes & charges</span>
+                </div>
+                <span style={{ fontSize: '22px', fontWeight: 900, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif" }}>
+                  ₹{checkoutData.total.toLocaleString()}
+                </span>
               </div>
             </div>
 
+            {/* Payment Method Selector Tabs */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-                Max Branches
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                Choose Payment Method:
               </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                {[
+                  { id: 'upi', label: '📱 UPI / QR Code', sub: 'GPay, PhonePe, Paytm' },
+                  { id: 'card', label: '💳 Credit / Debit Card', sub: 'Visa, MasterCard, RuPay' },
+                  { id: 'netbanking', label: '🏦 Net Banking', sub: 'All Major Banks' }
+                ].map(pm => (
+                  <div
+                    key={pm.id}
+                    onClick={() => setCheckoutPaymentMethod(pm.id)}
+                    style={{
+                      padding: '12px 10px',
+                      borderRadius: '10px',
+                      border: checkoutPaymentMethod === pm.id ? '2px solid var(--primary)' : '1px solid #cbd5e1',
+                      background: checkoutPaymentMethod === pm.id ? '#fff7ed' : '#ffffff',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.15s',
+                      boxShadow: checkoutPaymentMethod === pm.id ? '0 2px 8px rgba(255, 90, 31, 0.15)' : 'none'
+                    }}
+                  >
+                    <div style={{ fontSize: '12.5px', fontWeight: 800, color: checkoutPaymentMethod === pm.id ? 'var(--primary)' : '#0f172a' }}>{pm.label}</div>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'block', marginTop: '2px' }}>{pm.sub}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* METHOD 1: UPI / QR Payment */}
+              {checkoutPaymentMethod === 'upi' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {/* Mode switcher: QR vs VPA */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutUpiMode('qr')}
+                      style={{
+                        flex: 1,
+                        padding: '7px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: checkoutUpiMode === 'qr' ? '#ffffff' : 'transparent',
+                        color: checkoutUpiMode === 'qr' ? '#0f172a' : '#64748b',
+                        boxShadow: checkoutUpiMode === 'qr' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
+                      }}
+                    >
+                      ⚡ Scan QR Code
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutUpiMode('vpa')}
+                      style={{
+                        flex: 1,
+                        padding: '7px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: checkoutUpiMode === 'vpa' ? '#ffffff' : 'transparent',
+                        color: checkoutUpiMode === 'vpa' ? '#0f172a' : '#64748b',
+                        boxShadow: checkoutUpiMode === 'vpa' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
+                      }}
+                    >
+                      🆔 Enter UPI ID
+                    </button>
+                  </div>
+
+                  {checkoutUpiMode === 'qr' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '10px', padding: '6px 0' }}>
+                      {/* Stylized QR Visual */}
+                      <div style={{
+                        width: '150px',
+                        height: '150px',
+                        background: '#ffffff',
+                        border: '2px solid #0f172a',
+                        borderRadius: '12px',
+                        padding: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+                      }}>
+                        <svg width="130" height="130" viewBox="0 0 100 100" fill="#0f172a">
+                          {/* Corner Top-Left */}
+                          <rect x="5" y="5" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="10" y="10" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="15" y="15" width="10" height="10" rx="1" fill="#0f172a" />
+                          {/* Corner Top-Right */}
+                          <rect x="65" y="5" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="70" y="10" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="75" y="15" width="10" height="10" rx="1" fill="#0f172a" />
+                          {/* Corner Bottom-Left */}
+                          <rect x="5" y="65" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="10" y="70" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="15" y="75" width="10" height="10" rx="1" fill="#0f172a" />
+                          {/* Data points */}
+                          <rect x="42" y="10" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="24" width="8" height="8" fill="#0f172a" />
+                          <rect x="10" y="42" width="8" height="8" fill="#0f172a" />
+                          <rect x="24" y="42" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="42" width="16" height="16" rx="2" fill="#ff5a1f" />
+                          <rect x="65" y="42" width="8" height="8" fill="#0f172a" />
+                          <rect x="79" y="42" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="65" width="8" height="8" fill="#0f172a" />
+                          <rect x="42" y="79" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="65" y="65" width="12" height="12" fill="#0f172a" />
+                          <rect x="80" y="80" width="10" height="10" fill="#0f172a" />
+                        </svg>
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                        Scan QR with any UPI App: <strong style={{ color: '#0f172a' }}>Google Pay, PhonePe, Paytm, BHIM, CRED</strong>
+                      </div>
+                      <div style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', border: '1px solid #a7f3d0' }}>
+                        ⏱️ QR Active • Valid for 10:00 mins
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                        Enter Virtual Payment Address (UPI ID):
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          placeholder="e.g. mobile@okhdfcbank or user@upi"
+                          value={checkoutUpiId}
+                          onChange={(e) => {
+                            setCheckoutUpiId(e.target.value);
+                            setIsUpiVerified(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: isUpiVerified ? '1.5px solid #10b981' : '1.5px solid #cbd5e1',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (checkoutUpiId.includes('@')) {
+                              setIsUpiVerified(true);
+                              ShowNotifications.showAlertNotification("UPI ID verified successfully! (Restaurant Admin)", true);
+                            } else {
+                              ShowNotifications.showAlertNotification("Please enter a valid UPI ID (e.g., username@upi)", false);
+                            }
+                          }}
+                          style={{
+                            padding: '10px 16px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: isUpiVerified ? '#10b981' : '#0f172a',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {isUpiVerified ? '✓ Verified' : 'Verify'}
+                        </button>
+                      </div>
+
+                      {/* Quick handles */}
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {['@okhdfcbank', '@okaxis', '@paytm', '@ybl'].map(handle => (
+                          <button
+                            key={handle}
+                            type="button"
+                            onClick={() => {
+                              const prefix = checkoutUpiId.includes('@') ? checkoutUpiId.split('@')[0] : (checkoutUpiId || 'merchant');
+                              setCheckoutUpiId(`${prefix}${handle}`);
+                              setIsUpiVerified(true);
+                            }}
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #e2e8f0',
+                              background: '#f8fafc',
+                              fontSize: '11px',
+                              color: '#64748b',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            +{handle}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* METHOD 2: Credit / Debit Card */}
+              {checkoutPaymentMethod === 'card' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Card Number
+                    </label>
+                    <input
+                      type="text"
+                      value={checkoutCard.number}
+                      onChange={(e) => setCheckoutCard(prev => ({ ...prev, number: e.target.value }))}
+                      placeholder="4532 8921 4452 9018"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Cardholder Name
+                    </label>
+                    <input
+                      type="text"
+                      value={checkoutCard.name}
+                      onChange={(e) => setCheckoutCard(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Name on card"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        Expiry (MM/YY)
+                      </label>
+                      <input
+                        type="text"
+                        value={checkoutCard.expiry}
+                        onChange={(e) => setCheckoutCard(prev => ({ ...prev, expiry: e.target.value }))}
+                        placeholder="MM/YY"
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        CVV / CVC
+                      </label>
+                      <input
+                        type="password"
+                        maxLength="4"
+                        value={checkoutCard.cvv}
+                        onChange={(e) => setCheckoutCard(prev => ({ ...prev, cvv: e.target.value }))}
+                        placeholder="•••"
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* METHOD 3: Net Banking */}
+              {checkoutPaymentMethod === 'netbanking' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                    Select Popular Bank:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {['HDFC Bank', 'ICICI Bank', 'State Bank of India', 'Axis Bank'].map(bank => (
+                      <div
+                        key={bank}
+                        onClick={() => setCheckoutSelectedBank(bank)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: checkoutSelectedBank === bank ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
+                          background: checkoutSelectedBank === bank ? 'var(--primary-light)' : '#ffffff',
+                          cursor: 'pointer',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: checkoutSelectedBank === bank ? 'var(--primary)' : '#0f172a',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: checkoutSelectedBank === bank ? 'var(--primary)' : '#cbd5e1' }}></span>
+                        {bank}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Or Choose Other Bank:
+                    </label>
+                    <select
+                      value={checkoutSelectedBank}
+                      onChange={(e) => setCheckoutSelectedBank(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #cbd5e1',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        background: '#ffffff',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="HDFC Bank">HDFC Bank</option>
+                      <option value="ICICI Bank">ICICI Bank</option>
+                      <option value="State Bank of India">State Bank of India</option>
+                      <option value="Axis Bank">Axis Bank</option>
+                      <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                      <option value="Punjab National Bank">Punjab National Bank</option>
+                      <option value="Bank of Baroda">Bank of Baroda</option>
+                      <option value="IndusInd Bank">IndusInd Bank</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Auto-renew checkbox */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <input
-                type="number"
-                value={editingPlan.maxBranches}
-                onChange={e => setEditingPlan({ ...editingPlan, maxBranches: Number(e.target.value) })}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                type="checkbox"
+                id="checkout-auto-renew"
+                checked={checkoutAutoRenew}
+                onChange={(e) => setCheckoutAutoRenew(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
               />
+              <label htmlFor="checkout-auto-renew" style={{ fontSize: '12px', color: '#334155', fontWeight: 600, cursor: 'pointer' }}>
+                Enable auto-renewal for this plan (Cancel or change anytime from Plans Management)
+              </label>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+            {/* Security Guarantee Note */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '11px', color: '#64748b' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <span>256-Bit SSL Encrypted &bull; RBI-Compliant Gateway &bull; Instant Receipt Generated</span>
+            </div>
+
+            {/* Bottom Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '4px', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={() => setEditingPlan(null)}
-                style={{ padding: '8px 16px', fontSize: '13px' }}
+                onClick={() => setIsCheckoutModalOpen(false)}
+                disabled={isProcessingCheckout}
+                style={{ padding: '10px 18px', borderRadius: '8px', fontWeight: 600, fontSize: '13px' }}
               >
                 Cancel
               </button>
               <button
-                type="submit"
+                type="button"
                 className="btn btn-black"
-                style={{ padding: '8px 18px', fontSize: '13px' }}
+                onClick={handleConfirmCheckoutPayment}
+                disabled={isProcessingCheckout}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  background: checkoutData.isRenewal ? '#10b981' : 'var(--primary)',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '13.5px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: checkoutData.isRenewal ? '0 4px 12px rgba(16, 185, 129, 0.3)' : '0 4px 12px rgba(255, 90, 31, 0.3)',
+                  cursor: isProcessingCheckout ? 'wait' : 'pointer'
+                }}
               >
-                Save Changes
+                {isProcessingCheckout ? (
+                  <>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ animation: 'spin 1s linear infinite' }}>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                    </svg>
+                    Authorizing Payment...
+                  </>
+                ) : (
+                  <>
+                    🔒 Pay ₹{checkoutData.total.toLocaleString()} & Activate
+                  </>
+                )}
               </button>
             </div>
-          </form>
+
+          </div>
         </Modal>
       )}
 
