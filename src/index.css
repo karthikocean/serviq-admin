@@ -960,6 +960,42 @@ color: #000000;
   scrollbar-color: #ff5a1f #f1f5f9;
 }
 
+/* All dropdowns / select menus / autocomplete lists invisible scrollbar */
+select,
+select option,
+.dropdown-menu,
+.dropdown-list,
+.waiter-dropdown-list,
+.custom-dropdown,
+.select-dropdown,
+.sidebar-submenu,
+[class*="menuList"],
+[class*="-MenuList"],
+[class*="dropdown"],
+[class*="react-select__menu"],
+[class*="Select__menu"] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+select::-webkit-scrollbar,
+select option::-webkit-scrollbar,
+.dropdown-menu::-webkit-scrollbar,
+.dropdown-list::-webkit-scrollbar,
+.waiter-dropdown-list::-webkit-scrollbar,
+.custom-dropdown::-webkit-scrollbar,
+.select-dropdown::-webkit-scrollbar,
+.sidebar-submenu::-webkit-scrollbar,
+[class*="menuList"]::-webkit-scrollbar,
+[class*="-MenuList"]::-webkit-scrollbar,
+[class*="dropdown"]::-webkit-scrollbar,
+[class*="react-select__menu"]::-webkit-scrollbar,
+[class*="Select__menu"]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 .table-responsive,
 .menu-table-wrapper,
 .feed-table-wrapper,
@@ -1945,7 +1981,7 @@ input:checked+.slider:before {
   color: var(--text-muted);
 }
 
-/* Table statuses inside billing list */
+/* Table status inside billing list */
 .billing-badge {
   padding: 2px 8px;
   font-size: 10px;

@@ -1,9 +1,11 @@
+import UploadApi from '../api/Upload.js';
 import React, { useState, useEffect } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from '../components/SearchableSelect.jsx';
+import { extractOrderISODate } from '../helper/DateHelper.js';
 
 import OverviewPanel, { isTableOccupied } from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
@@ -25,6 +27,7 @@ import CategoryListPanel from '../components/CategoryListPanel';
 import BranchManagementPanel from '../components/BranchManagementPanel';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import NotificationModal from '../components/NotificationModal';
+import { notificationApi } from '../api/Notification.js';
 
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -339,6 +342,33 @@ export default function Admin() {
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  // Fetch live notifications count for badge
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCounts = async () => {
+      try {
+        const res = await notificationApi.getNotifications({
+          type: 'all',
+          branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        });
+        if (isMounted && res && res.status && res.data) {
+          const counts = res.data.counts || {};
+          const activeCount = counts.totalActive ?? counts.totalCount ?? (Array.isArray(res.data) ? res.data.length : 0);
+          setNotificationCount(activeCount);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch notification counts in Admin:', e);
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedBranchId, isNotificationModalOpen]);
 
   // Roles & Permissions state
   const [selectedRole, setSelectedRole] = useState('Waiter');
@@ -538,15 +568,7 @@ export default function Admin() {
   };
 
   const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
+    return extractOrderISODate(ord) || ord.date || '';
   };
 
   const getOrderPriority = (ord) => {
@@ -564,8 +586,9 @@ export default function Admin() {
       const paymentStatus = ord.billingStatus || 'unpaid';
       const orderStatus = ord.status || 'new';
 
-      if (waiterFilterDateStart && date < waiterFilterDateStart) return false;
-      if (waiterFilterDateEnd && date > waiterFilterDateEnd) return false;
+      if (waiterFilterDateStart && date && date < waiterFilterDateStart) return false;
+      if (waiterFilterDateEnd && date && date > waiterFilterDateEnd) return false;
+      if ((waiterFilterDateStart || waiterFilterDateEnd) && !date) return false;
       if (waiterFilterStaff !== 'All' && waiter !== waiterFilterStaff) return false;
       if (waiterFilterTable !== 'All' && table !== waiterFilterTable) return false;
       if (waiterFilterSource !== 'All' && source !== waiterFilterSource) return false;
@@ -586,8 +609,9 @@ export default function Admin() {
       const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
       const priority = getOrderPriority(ord);
 
-      if (kitchenFilterDateStart && date < kitchenFilterDateStart) return false;
-      if (kitchenFilterDateEnd && date > kitchenFilterDateEnd) return false;
+      if (kitchenFilterDateStart && date && date < kitchenFilterDateStart) return false;
+      if (kitchenFilterDateEnd && date && date > kitchenFilterDateEnd) return false;
+      if ((kitchenFilterDateStart || kitchenFilterDateEnd) && !date) return false;
       if (kitchenFilterStaff !== 'All' && kitchenStaffName !== kitchenFilterStaff) return false;
       if (kitchenFilterDish !== 'All') {
         const hasDish = ord.items.some(item => item.name === kitchenFilterDish);
@@ -937,14 +961,45 @@ export default function Admin() {
 
   const renderActivePage = () => {
     const PageHeader = ({ subtitle }) => (
-      <div style={sty.pageInlineHeader}>
-        <button style={sty.pageBackBtn} onClick={() => setActivePage(null)}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'inherit'; }}
-        >→</button>
-        <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>{pageTitle[activePage]}</h2>
-          {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        padding: '24px 32px',
+        marginBottom: '24px',
+        border: '1px solid #e2e8f0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button
+            type="button"
+            onClick={() => setActivePage(null)}
+            style={{
+              background: '#ffffff',
+              border: '1px solid #cbd5e1',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0f172a',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+          >
+            ←
+          </button>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {pageTitle[activePage]}
+            </h2>
+            {subtitle && <span style={{ fontSize: '12px', color: '#64748b' }}>{subtitle}</span>}
+          </div>
         </div>
       </div>
     );
@@ -1211,16 +1266,25 @@ export default function Admin() {
                         id="menu-item-image-file"
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setMenuForm({ ...menuForm, image: reader.result });
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
+                        onChange={async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMenuForm(prev => ({ ...prev, image: reader.result }));
+      };
+      reader.readAsDataURL(file);
+      try {
+        const res = await UploadApi.uploadImage(file, 'menu', 'image');
+        if (res?.status) {
+          const finalUrl = res.url || res.data?.url || res.response?.data?.url;
+          if (finalUrl) setMenuForm(prev => ({ ...prev, image: finalUrl }));
+        }
+      } catch (err) {
+        console.warn('Upload error:', err);
+      }
+    }
+  }}
                         style={{ display: 'none' }}
                       />
                     </div>
@@ -1613,7 +1677,7 @@ export default function Admin() {
           <div style={{ width: '100%' }}>
             <PageHeader />
             <div style={sty.pageCard}>
-              <form onSubmit={handleStaffSubmit} style={{ width: '100%' }}>
+              <form onSubmit={handleStaffSubmit} autoComplete="off" style={{ width: '100%' }}>
                 <div style={sty.formGrid2}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Full Name</label>
@@ -1653,11 +1717,29 @@ export default function Admin() {
                 <div style={sty.formGrid2}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Email Address</label>
-                    <input type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} required placeholder="e.g. ramesh@serviq.com" />
+                    <input
+                      type="email"
+                      name="admin_staff_email_field"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
+                      value={staffForm.email}
+                      onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                      required
+                      placeholder="e.g. ramesh@serviq.com"
+                    />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Password</label>
-                    <input type="text" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} required placeholder="e.g. waiter123" />
+                    <input
+                      type="password"
+                      name="admin_staff_password_field"
+                      autoComplete="new-password"
+                      value={staffForm.password}
+                      onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                      required
+                      placeholder="••••••••••••"
+                    />
                   </div>
                 </div>
 
@@ -1955,18 +2037,29 @@ export default function Admin() {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
-              {pendingOrdersCount > 0 && (
+              {(notificationCount > 0 || pendingOrdersCount > 0) && (
                 <span style={{
                   position: 'absolute',
-                  top: '-2px',
-                  right: '-2px',
-                  width: '9px',
-                  height: '9px',
-                  borderRadius: '50%',
+                  top: '-4px',
+                  right: '-4px',
+                  minWidth: notificationCount > 0 ? '18px' : '9px',
+                  height: notificationCount > 0 ? '18px' : '9px',
+                  padding: notificationCount > 0 ? '0 4px' : '0',
+                  borderRadius: '9999px',
                   backgroundColor: '#ea580c',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px #fed7aa'
-                }}></span>
+                  boxShadow: '0 2px 4px rgba(234, 88, 12, 0.3)',
+                  boxSizing: 'border-box',
+                  lineHeight: 1
+                }}>
+                  {notificationCount > 0 ? (notificationCount > 99 ? '99+' : notificationCount) : ''}
+                </span>
               )}
             </button>
 

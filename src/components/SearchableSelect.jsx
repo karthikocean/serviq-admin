@@ -1,5 +1,17 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
-import Select from 'react-select';
+import Select, { components } from 'react-select';
+
+const CustomMenu = (props) => {
+  const { onMenuMouseEnter, onMenuMouseLeave } = props.selectProps || {};
+  return (
+    <div
+      onMouseEnter={onMenuMouseEnter}
+      onMouseLeave={onMenuMouseLeave}
+    >
+      <components.Menu {...props} />
+    </div>
+  );
+};
 
 /**
  * Universal Searchable / Autocomplete Select Box for Serviq Admin Panel
@@ -24,8 +36,32 @@ export default function SearchableSelect({
   ...rest
 }) {
   const containerRef = useRef(null);
+  const selectRef = useRef(null);
+  const timeoutRef = useRef(null);
   const [dynamicPlacement, setDynamicPlacement] = useState('bottom');
   const [dynamicMaxHeight, setDynamicMaxHeight] = useState(220);
+
+  const handleMouseEnter = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      if (selectRef.current) {
+        selectRef.current.blur();
+      }
+    }, 250);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
 
   // Calculate available space in viewport to prevent dropdown from jumping off screen
   const updatePlacementAndHeight = useCallback(() => {
@@ -149,12 +185,12 @@ export default function SearchableSelect({
       padding: '2px',
       maxHeight: `${dynamicMaxHeight}px`,
       overflowY: 'auto',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
       '&::-webkit-scrollbar': {
-        width: '6px'
-      },
-      '&::-webkit-scrollbar-thumb': {
-        background: '#cbd5e1',
-        borderRadius: '4px'
+        display: 'none',
+        width: '0px',
+        height: '0px'
       }
     }),
     option: (provided, state) => ({
@@ -247,8 +283,14 @@ export default function SearchableSelect({
   const effectivePlacement = menuPlacement !== 'auto' ? menuPlacement : dynamicPlacement;
 
   return (
-    <div ref={containerRef} style={{ width: '100%' }}>
+    <div
+      ref={containerRef}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{ width: '100%' }}
+    >
       <Select
+        ref={selectRef}
         id={id || name}
         name={name}
         options={normalizedOptions}
@@ -263,6 +305,12 @@ export default function SearchableSelect({
         onFocus={(e) => {
           updatePlacementAndHeight();
           if (rest.onFocus) rest.onFocus(e);
+        }}
+        onMenuMouseEnter={handleMouseEnter}
+        onMenuMouseLeave={handleMouseLeave}
+        components={{
+          Menu: CustomMenu,
+          ...(rest.components || {})
         }}
         placeholder={placeholder}
         isClearable={isClearable}

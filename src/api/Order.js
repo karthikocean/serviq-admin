@@ -4,12 +4,32 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class OrderApi {
   async getOrders(params = {}) {
     try {
-      const cleanParams = {};
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
         }
       });
+      const searchVal = params.search || params.searchQuery || params.searchTerm;
+      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+      if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
+      if (params.billingStatus && !cleanParams.billingStatus && params.billingStatus !== 'All' && params.billingStatus !== 'ALL') cleanParams.billingStatus = params.billingStatus;
+      if (params.waiter && !cleanParams.waiter && params.waiter !== 'All' && params.waiter !== 'ALL') cleanParams.waiter = params.waiter;
+      if (params.table && !cleanParams.table && params.table !== 'All' && params.table !== 'ALL') cleanParams.table = params.table;
+      if (params.category && !cleanParams.category && params.category !== 'All' && params.category !== 'ALL') cleanParams.category = params.category;
+      if (params.dateStart && !cleanParams.startDate) cleanParams.startDate = params.dateStart;
+      if (params.dateEnd && !cleanParams.endDate) cleanParams.endDate = params.dateEnd;
+      if (params.fromDate && !cleanParams.startDate) cleanParams.startDate = params.fromDate;
+      if (params.toDate && !cleanParams.endDate) cleanParams.endDate = params.toDate;
+      if (params.customStartDate && !cleanParams.startDate) cleanParams.startDate = params.customStartDate;
+      if (params.customEndDate && !cleanParams.endDate) cleanParams.endDate = params.customEndDate;
+
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit) || 10;
+      }
       const response = await apiClient.get("/orders", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

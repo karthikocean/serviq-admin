@@ -50,6 +50,7 @@ const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 import MenuApi from '../api/Menu.js';
+import { getImageUrl } from '../helper/ImageHelper.js';
 
 export default function MenuPanel({
   categories = [],
@@ -62,11 +63,6 @@ export default function MenuPanel({
   currency = '₹',
   refreshTrigger
 }) {
-  const getImageUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    return `${server}${path}`;
-  };
   const { activeRestaurant, updateMenuCategories, selectedBranchId } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
@@ -124,7 +120,10 @@ export default function MenuPanel({
   }, [fetchLiveCategories, refreshTrigger]);
 
   React.useEffect(() => {
-    fetchPaginatedMenu();
+    const timer = setTimeout(() => {
+      fetchPaginatedMenu();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId, liveCategories]);
 
   const fetchPaginatedMenu = async () => {
@@ -142,7 +141,9 @@ export default function MenuPanel({
       search: trimmed || undefined,
     };
 
-    if (matchedCategory && trimmed.length > 0) {
+    if (menuCategory && menuCategory !== 'All Items' && menuCategory !== 'ALL') {
+      params.categoryId = menuCategory;
+    } else if (matchedCategory && trimmed.length > 0) {
       params.categoryId = matchedCategory._id || matchedCategory.id;
     }
 
@@ -217,7 +218,7 @@ export default function MenuPanel({
           <div>
             <h2 className="panel-inner-title" style={{ margin: 0 }}>Menu List</h2>
             <p className="panel-inner-desc" style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-              • {totalItems} items actively listed
+              {totalItems} items actively listed
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -559,7 +560,13 @@ export default function MenuPanel({
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
-                  <span style={{ fontSize: '24px' }}>🍽️</span>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V8"></path>
+                    <path d="M12 2v6"></path>
+                    <path d="M10 2v3"></path>
+                    <path d="M14 2v3"></path>
+                    <line x1="4" y1="22" x2="20" y2="22"></line>
+                  </svg>
                 )}
               </div>
             </div>

@@ -5,7 +5,25 @@ export const ticketApi = {
     // Get all tickets for the authenticated restaurant
     getTickets: async (params = {}) => {
         try {
-            const response = await apiClient.get('/tickets', { params });
+            const cleanParams = { limit: 10, page: 0 };
+            Object.keys(params).forEach(key => {
+                if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
+                    cleanParams[key] = params[key];
+                }
+            });
+            const searchVal = params.search || params.searchQuery || params.searchTerm;
+            if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+            if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
+            if (params.priority && !cleanParams.priority && params.priority !== 'All' && params.priority !== 'ALL') cleanParams.priority = params.priority;
+            if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+
+            if (cleanParams.page !== undefined) {
+                cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+            }
+            if (cleanParams.limit !== undefined) {
+                cleanParams.limit = Number(cleanParams.limit) || 10;
+            }
+            const response = await apiClient.get('/tickets', { params: cleanParams });
             if (response.status === 200 || response.status === 201) {
                 return { status: true, ...response.data };
             }

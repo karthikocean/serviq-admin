@@ -20,6 +20,7 @@ export default function BillingHistory() {
   const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
 
+
   // Data States
   const [rawHistory, setRawHistory] = useState([]);
   const [apiSummary, setApiSummary] = useState(null);
@@ -28,7 +29,7 @@ export default function BillingHistory() {
   // Trigger fetch when activeRestaurant, selectedBranchId, or date filters change
   useEffect(() => {
     fetchHistory();
-  }, [activeRestaurant?.id, selectedBranchId]);
+  }, [activeRestaurant?.id, selectedBranchId, dateRange, customStartDate, customEndDate, searchTerm, selectedPayment]);
 
   // Reset page to 0 if filters change
   useEffect(() => {
@@ -89,9 +90,35 @@ export default function BillingHistory() {
     let items = [];
     let summaryObj = null;
 
+    let startDate = customStartDate || undefined;
+    let endDate = customEndDate || undefined;
+
+    if (dateRange === 'Today') {
+      const todayStr = new Date().toISOString().split('T')[0];
+      startDate = todayStr;
+      endDate = todayStr;
+    } else if (dateRange === 'Yesterday') {
+      const yestStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      startDate = yestStr;
+      endDate = yestStr;
+    } else if (dateRange === 'This Week') {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      startDate = sevenDaysAgo;
+      endDate = new Date().toISOString().split('T')[0];
+    } else if (dateRange === 'This Month') {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      endDate = new Date().toISOString().split('T')[0];
+    }
+
     try {
       const filters = {
-        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
+        limit: 1000
       };
 
       const result = await BillingApi.getBillingHistory(filters);
@@ -129,27 +156,6 @@ export default function BillingHistory() {
 
         if (paidOrders.length > 0) {
           items = paidOrders;
-        } else {
-          // Attempt OrderApi fetch as backup
-          try {
-            const orderRes = await OrderApi.getOrders();
-            if (orderRes && orderRes.status) {
-              const oPayload = orderRes.response || {};
-              const fetchedOrders = Array.isArray(oPayload) ? oPayload :
-                Array.isArray(oPayload.data) ? oPayload.data :
-                Array.isArray(oPayload.data?.orders) ? oPayload.data.orders :
-                Array.isArray(oPayload.orders) ? oPayload.orders : [];
-              const paid = fetchedOrders.filter(o => {
-                const bStat = (o.billingStatus || o.paymentStatus || o.status || '').toLowerCase();
-                return bStat === 'paid' || bStat === 'completed' || o.isPaid === true;
-              });
-              if (paid.length > 0) {
-                items = paid;
-              }
-            }
-          } catch (err) {
-            // Ignore backup fetch error
-          }
         }
       }
     }

@@ -11,20 +11,17 @@ export default function Reports() {
   if (!activeRestaurant) return null;
 
   const rawOrders = activeRestaurant.orders || [];
-  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
   const rawStaff = activeRestaurant.staff || [];
-  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
   const rawTables = activeRestaurant.tables || [];
-  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
   const menu = activeRestaurant.menu || [];
   const branches = activeRestaurant.branches || [];
 
   return (
     <ReportsPanel
-      orders={orders}
+      orders={rawOrders}
       allOrders={rawOrders}
-      staff={staff}
-      tables={tables}
+      staff={rawStaff}
+      tables={rawTables}
       menu={menu}
       branches={branches}
       selectedBranchId={selectedBranchId}

@@ -26,6 +26,23 @@ import {
   validatePassword
 } from '../helper/ValidationHelper';
 
+const TableIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M4 6h16" />
+    <path d="M5 6v12" />
+    <path d="M19 6v12" />
+    <path d="M10 6v6" />
+    <path d="M14 6v6" />
+  </svg>
+);
+
+const UserIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
@@ -188,15 +205,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const fetchBranches = async () => {
     setIsLoading(true);
     try {
+      const branchParams = {
+        search: searchTerm ? searchTerm.trim() : undefined,
+        status: statusFilter !== 'All' ? statusFilter : undefined,
+        limit: 1000
+      };
       const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 10 })
+        BranchApi.getBranches(branchParams),
+        UserApi.getUsers({ limit: 1000 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
       const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
         ? usersRes.value.response.data
-        : [];
+        : ((usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.users))
+            ? usersRes.value.response.users
+            : (Array.isArray(usersRes.value?.response) ? usersRes.value.response : []));
       const staffList = usersList;
       setApiUsers(usersList);
 
@@ -254,18 +278,28 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const branchId = targetBranch._id || targetBranch.id;
     setIsLoadingOpData(true);
     try {
-      const [usersRes, ordersRes, tablesRes] = await Promise.allSettled([
-        UserApi.getUsers({ branchId, limit: 10 }),
-        OrderApi.getOrders({ branchId, limit: 10 }),
-        TableApi.getTables({ branchId, limit: 10 })
+      const [usersRes, globalUsersRes, ordersRes, tablesRes] = await Promise.allSettled([
+        UserApi.getUsers({ branchId, limit: 1000 }),
+        UserApi.getUsers({ limit: 1000 }),
+        OrderApi.getOrders({ branchId, limit: 1000 }),
+        TableApi.getTables({ branchId, limit: 1000 })
       ]);
 
-      let finalStaff = [];
+      let branchUsers = [];
       if (usersRes.status === 'fulfilled' && usersRes.value?.status) {
         const raw = usersRes.value.response?.data || usersRes.value.response?.users || usersRes.value.response?.staff || (Array.isArray(usersRes.value.response) ? usersRes.value.response : []);
-        finalStaff = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.users) ? raw.users : []));
+        branchUsers = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.users) ? raw.users : []));
       }
-      setLiveBranchStaff(finalStaff);
+
+      if (globalUsersRes.status === 'fulfilled' && globalUsersRes.value?.status) {
+        const gRaw = globalUsersRes.value.response?.data || globalUsersRes.value.response?.users || globalUsersRes.value.response?.staff || (Array.isArray(globalUsersRes.value.response) ? globalUsersRes.value.response : []);
+        const gUsers = Array.isArray(gRaw) ? gRaw : (Array.isArray(gRaw?.data) ? gRaw.data : (Array.isArray(gRaw?.users) ? gRaw.users : []));
+        if (gUsers.length > 0) {
+          setApiUsers(gUsers);
+        }
+      }
+
+      setLiveBranchStaff(branchUsers);
 
       if (ordersRes.status === 'fulfilled' && ordersRes.value?.status) {
         const resp = ordersRes.value.response;
@@ -352,10 +386,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   useEffect(() => {
     if (isRestaurantOwner) {
-      fetchBranches();
+      const timer = setTimeout(() => {
+        fetchBranches();
+      }, 300);
       fetchLiveSubscription();
+      return () => clearTimeout(timer);
     }
-  }, [isRestaurantOwner, fetchLiveSubscription]);
+  }, [isRestaurantOwner, searchTerm, statusFilter, fetchLiveSubscription]);
 
   const branches = apiBranches;
 
@@ -1045,50 +1082,75 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const curBranchCode = String(curBranch?.branchCode || curBranch?.code || '').toLowerCase();
     const curBranchName = String(curBranch?.branchName || curBranch?.name || '').toLowerCase();
 
-    const matchesBranch = (itemBranch) => {
-      if (!itemBranch || !curBranch) return false;
-      let targetId = '';
-      let targetCode = '';
-      let targetName = '';
-      if (typeof itemBranch === 'object' && itemBranch !== null) {
-        targetId = String(itemBranch._id || itemBranch.id || '').toLowerCase();
-        targetCode = String(itemBranch.branchCode || itemBranch.code || '').toLowerCase();
-        targetName = String(itemBranch.branchName || itemBranch.name || '').toLowerCase();
-      } else {
-        targetId = String(itemBranch).toLowerCase();
-      }
-      return (
-        (curBranchId && targetId && curBranchId === targetId) ||
-        (curBranchCode && targetCode && curBranchCode === targetCode) ||
-        (curBranchCode && targetId && curBranchCode === targetId) ||
-        (curBranchName && targetName && curBranchName === targetName) ||
-        (curBranchName && targetId && curBranchName === targetId)
-      );
+    const matchesBranch = (item) => {
+      if (!item || !curBranch) return false;
+      const curKeys = new Set([curBranchId, curBranchCode, curBranchName].filter(Boolean));
+      
+      const candidates = [
+        item.branchId,
+        item.branch,
+        item.branch_id,
+        item.assignedBranch,
+        item.activeBranchId,
+        item.restaurantBranchId,
+        item.outletId,
+        item.branchCode,
+        item.branchName
+      ];
+
+      if (Array.isArray(item.branches)) item.branches.forEach(b => candidates.push(b));
+      if (Array.isArray(item.branchIds)) item.branchIds.forEach(b => candidates.push(b));
+      if (typeof item === 'string' || typeof item === 'number') candidates.push(item);
+
+      return candidates.some(c => {
+        if (!c) return false;
+        if (typeof c === 'string' || typeof c === 'number') {
+          const s = String(c).trim().toLowerCase();
+          return curKeys.has(s);
+        }
+        if (typeof c === 'object' && c !== null) {
+          const cId = String(c._id || c.id || '').trim().toLowerCase();
+          const cCode = String(c.branchCode || c.code || '').trim().toLowerCase();
+          const cName = String(c.branchName || c.name || '').trim().toLowerCase();
+          return (cId && curKeys.has(cId)) || (cCode && curKeys.has(cCode)) || (cName && curKeys.has(cName));
+        }
+        return false;
+      });
     };
 
-    // 1. Staff list
-    const branchStaffRaw = (liveBranchStaff.length > 0)
-      ? liveBranchStaff
-      : (activeRestaurant?.staff || []).filter(s => matchesBranch(s.branchId || s.branch));
+    // 1. Staff list - combine live branch staff, global apiUsers for this branch, and activeRestaurant staff
+    const allStaffCandidates = [
+      ...liveBranchStaff,
+      ...(apiUsers || []).filter(u => matchesBranch(u)),
+      ...(activeRestaurant?.staff || []).filter(s => matchesBranch(s))
+    ];
 
-    const mappedStaff = branchStaffRaw.map(person => {
-      const pName = person.name || 'Staff Member';
-      const roleName = person.roleId?.roleName || person.role?.roleName || person.role || person.userType || 'Staff';
-      const pEmail = person.email || person.phoneNumber || `${pName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`;
-      const pStatus = (person.status || (person.isActive !== false ? 'Active' : 'Inactive'));
+    const uniqueStaffMap = new Map();
+    allStaffCandidates.forEach((person, pIdx) => {
+      const pName = String(person.name || person.userName || person.fullName || 'Staff Member').trim();
+      const pEmail = String(person.email || person.phoneNumber || person.phone || `${pName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`).trim();
+      const key = (person._id || person.id || pEmail || pName).toLowerCase();
 
-      return {
-        name: pName,
-        role: roleName,
-        email: pEmail,
-        status: pStatus,
-        initial: (pName.trim().charAt(0) || 'S').toUpperCase()
-      };
+      if (!uniqueStaffMap.has(key)) {
+        const roleName = person.roleId?.roleName || person.role?.roleName || person.role || person.userType || person.designation || 'Staff';
+        const pStatus = (person.status || (person.isActive !== false ? 'Active' : 'Inactive'));
+        uniqueStaffMap.set(key, {
+          _id: person._id || person.id || `staff-${pIdx}`,
+          id: person._id || person.id || `staff-${pIdx}`,
+          name: pName,
+          role: roleName,
+          email: pEmail,
+          status: pStatus,
+          initial: (pName.charAt(0) || 'S').toUpperCase()
+        });
+      }
     });
+
+    const mappedStaff = Array.from(uniqueStaffMap.values());
 
     // Auto-include Branch Manager if assigned to this branch and not yet in list
     const managerName = curBranch?.branchManager || curBranch?.managerName;
-    if (managerName && managerName.trim() && !mappedStaff.some(s => s.name.toLowerCase() === managerName.trim().toLowerCase())) {
+    if (managerName && managerName.trim() && !['unassigned', 'null', 'undefined'].includes(managerName.trim().toLowerCase()) && !mappedStaff.some(s => s.name.toLowerCase() === managerName.trim().toLowerCase())) {
       mappedStaff.unshift({
         name: managerName.trim(),
         role: 'Branch Manager',
@@ -1200,18 +1262,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       : (activeRestaurant?.tables || []).filter(t => matchesBranch(t.branchId || t.branch));
 
     const mappedTables = branchTablesRaw.length > 0
-      ? branchTablesRaw.map((t, i) => ({
-          _id: t._id || t.id || `tbl-${i + 1}`,
-          id: t._id || t.id || `tbl-${i + 1}`,
-          name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
-          tableNo: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
-          seats: t.capacity || t.seats || 4,
-          capacity: t.capacity || t.seats || 4,
-          status: t.status || 'Available',
-          floor: t.floor || t.section || 'Main Dining Area',
-          qrUrl: t.qrUrl || t.qrCode || '',
-          assignedQrId: t.assignedQrId || ''
-        }))
+      ? branchTablesRaw.map((t, i) => {
+          const seatingVal = t.seatingCapacity ?? t.seats ?? t.capacity ?? t.tableCapacity ?? 4;
+          return {
+            _id: t._id || t.id || `tbl-${i + 1}`,
+            id: t._id || t.id || `tbl-${i + 1}`,
+            name: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
+            tableNo: t.tableNo || t.tableNumber || (t.name ? t.name : `T-${String(i + 1).padStart(2, '0')}`),
+            seats: Number(seatingVal) || 4,
+            capacity: Number(seatingVal) || 4,
+            seatingCapacity: Number(seatingVal) || 4,
+            status: t.status || 'Available',
+            floor: t.floor || t.section || 'Main Dining Area',
+            qrUrl: t.qrUrl || t.qrCode || '',
+            assignedQrId: t.assignedQrId || ''
+          };
+        })
       : Array.from({ length: currentViewBranch?.totalTables || 10 }).map((_, i) => ({
           _id: `tbl-${i + 1}`,
           id: `tbl-${i + 1}`,
@@ -1219,6 +1285,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           tableNo: `T-${String(i + 1).padStart(2, '0')}`,
           seats: 4,
           capacity: 4,
+          seatingCapacity: 4,
           status: 'Available',
           floor: 'Main Dining Area',
           qrUrl: '',
@@ -1323,7 +1390,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   };
 
   // Operational View: Staff Pagination (8 per page)
-  const staffLimit = 8;
+  const staffLimit = 10;
   const staffTotal = (opData.staff || []).length;
   const staffTotalPages = Math.max(1, Math.ceil(staffTotal / staffLimit));
   const staffCurrentPage = Math.min(staffPage, staffTotalPages);
@@ -1411,99 +1478,81 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           </div>
         </div>
 
-        {/* Simplified 2-Column Info & Metrics Section */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px' }}>
+        {/* Full-Width Branch Information Card */}
+        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '22px 26px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
           
-          {/* Left Column: Branch Info & Compliance Card */}
-          <div style={{ flex: '1', minWidth: '320px', background: '#ffffff', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                Branch Information
-              </h3>
-              <button
-                type="button"
-                onClick={() => handleOpenEditForm(currentViewBranch)}
-                style={{ border: 'none', background: '#f1f5f9', color: '#334155', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <PencilIcon size={12} /> Edit
-              </button>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              Branch Information
+            </h3>
+            <button
+              type="button"
+              onClick={() => handleOpenEditForm(currentViewBranch)}
+              style={{ border: '1px solid #e2e8f0', background: '#f8fafc', color: '#0f172a', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s ease' }}
+              onMouseOver={e => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.color = '#fff'; }}
+              onMouseOut={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
+            >
+              <PencilIcon size={13} /> Edit
+            </button>
+          </div>
+
+          {/* Clean 4-Column Structured Metadata Row - Perfectly Top-Aligned Headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 0.9fr 1.5fr', gap: '20px', alignItems: 'start', background: '#f8fafc', padding: '16px 22px', borderRadius: '12px', border: '1px solid #eef2f6' }}>
+            
+            {/* 1. Branch Manager */}
+            <div>
+              <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px', lineHeight: '14px' }}>
+                Branch Manager
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)', color: '#fff', fontSize: '15px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 6px rgba(255, 90, 31, 0.2)' }}>
+                  {((currentViewBranch?.managerName || currentViewBranch?.branchManager) && (currentViewBranch?.managerName || currentViewBranch?.branchManager).trim() && !['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager).trim().toLowerCase()) ? (currentViewBranch.managerName || currentViewBranch.branchManager).trim().charAt(0) : 'U').toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {(!currentViewBranch?.managerName && !currentViewBranch?.branchManager) || ['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager || '').toLowerCase()) ? 'Unassigned Manager' : (currentViewBranch?.managerName || currentViewBranch?.branchManager)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 700, marginTop: '2px' }}>
+                    {currentViewBranch?.mobileNumber || 'N/A'}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', minWidth: '40px', minHeight: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)', color: '#fff', fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, lineHeight: 1 }}>
-                {((currentViewBranch?.managerName || currentViewBranch?.branchManager) && (currentViewBranch?.managerName || currentViewBranch?.branchManager).trim() && !['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager).trim().toLowerCase()) ? (currentViewBranch.managerName || currentViewBranch.branchManager).trim().charAt(0) : 'U').toUpperCase()}
-              </div>
-              <div>
-                <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Branch Manager</span>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{(!currentViewBranch?.managerName && !currentViewBranch?.branchManager) || ['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager || '').toLowerCase()) ? 'Unassigned Manager' : (currentViewBranch?.managerName || currentViewBranch?.branchManager)}</div>
-                <div style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>{currentViewBranch?.mobileNumber}</div>
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '12px' }}>
-              <div>
-                <span style={{ fontSize: '10px', color: '#64748b', display: 'block', fontWeight: 700 }}>Email Address</span>
-                <strong style={{ color: '#0f172a', wordBreak: 'break-all' }}>{currentViewBranch?.email || 'N/A'}</strong>
-              </div>
-              <div>
-                <span style={{ fontSize: '10px', color: '#64748b', display: 'block', fontWeight: 700 }}>Opening Date</span>
-                <strong style={{ color: '#0f172a' }}>{currentViewBranch?.openingDate || '2026-01-15'}</strong>
+            {/* 2. Email Address */}
+            <div>
+              <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px', lineHeight: '14px' }}>
+                Email Address
+              </span>
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', wordBreak: 'break-all', minHeight: '36px', display: 'flex', alignItems: 'center' }}>
+                {currentViewBranch?.email || 'N/A'}
               </div>
             </div>
 
-            <div style={{ fontSize: '12px', color: '#475569' }}>
-              <strong>Full Street Address:</strong>
-              <div style={{ color: '#0f172a', fontWeight: 600, marginTop: '4px' }}>
+            {/* 3. Opening Date */}
+            <div>
+              <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px', lineHeight: '14px' }}>
+                Opening Date
+              </span>
+              <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', minHeight: '36px', display: 'flex', alignItems: 'center' }}>
+                {currentViewBranch?.openingDate || '2026-01-15'}
+              </div>
+            </div>
+
+            {/* 4. Full Street Address */}
+            <div>
+              <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px', lineHeight: '14px' }}>
+                Full Street Address
+              </span>
+              <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155', lineHeight: 1.4 }}>
                 {typeof currentViewBranch?.address === 'object' && currentViewBranch?.address !== null
                   ? `${currentViewBranch.address.street || ''}${currentViewBranch.address.city ? `, ${currentViewBranch.address.city}` : ''}${currentViewBranch.address.state ? `, ${currentViewBranch.address.state}` : ''}${currentViewBranch.address.pincode ? ` - ${currentViewBranch.address.pincode}` : ''}`
                   : `${currentViewBranch?.address || ''}, ${currentViewBranch?.city || ''}, ${currentViewBranch?.state || ''} - ${currentViewBranch?.pincode || ''} (${currentViewBranch?.country || 'India'})`}
               </div>
             </div>
-          </div>
-
-          {/* Right Column: Clean 2x2 Metrics Grid */}
-          <div style={{ flex: '1.2', minWidth: '320px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            
-            {/* Card 1: Seating Capacity */}
-            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Seating Capacity</span>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--primary)', marginTop: '8px' }}>
-                {opData.tables.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Dining Tables</span>
-              </div>
-              <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>✓ Operational</span>
-            </div>
-
-            {/* Card 2: Live Orders Queue & History */}
-            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Live Orders Queue</span>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b', marginTop: '8px' }}>
-                {inQueueCount} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>In Queue</span>
-              </div>
-              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>
-                Total History: {allOrdersCount} Orders
-              </span>
-            </div>
-
-            {/* Card 3: Assigned Staff */}
-            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Staff</span>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#6366f1', marginTop: '8px' }}>
-                {staffTotal} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Staff Members</span>
-              </div>
-              <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, marginTop: '4px' }}>Waiters & Kitchen team</span>
-            </div>
-
-            {/* Card 4: KDS Stations */}
-            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Kitchen KDS Stations</span>
-              <div style={{ fontSize: '24px', fontWeight: 800, color: '#ea580c', marginTop: '8px' }}>
-                {opData.kitchen.length} <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Active Displays</span>
-              </div>
-              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px' }}>Order routing active</span>
-            </div>
 
           </div>
-
         </div>
 
         {/* Operational Sub-Tabs (Tables, Orders, Staff, Kitchen) */}
@@ -1612,7 +1661,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               {/* Table / Grid Render */}
               {opData.tables.length === 0 ? (
                 <div style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                  <div style={{ fontSize: '28px', marginBottom: '8px' }}>🍽️</div>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto' }}>
+                    <TableIcon size={22} color="#64748b" />
+                  </div>
                   <div style={{ fontWeight: 700, color: '#475569' }}>No tables configured for this branch</div>
                   <div style={{ fontSize: '12px', marginTop: '4px' }}>Add dining tables in Table Management to see them here.</div>
                 </div>
@@ -1649,12 +1700,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                             <tr key={tbl._id || tbl.id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
                               <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 600 }}>{rowNum}</td>
                               <td style={{ padding: '12px 16px', fontWeight: 800, color: '#0f172a' }}>
-                                <span style={{ color: 'var(--primary, #ff7a00)', marginRight: '6px' }}>🪑</span>
+                                <span style={{ color: 'var(--primary, #ff7a00)', marginRight: '6px', display: 'inline-flex', verticalAlign: 'middle' }}>
+                                  <TableIcon size={15} color="var(--primary, #ff7a00)" />
+                                </span>
                                 {tbl.name || tbl.tableNo}
                               </td>
                               <td style={{ padding: '12px 16px', color: '#334155', fontWeight: 600 }}>
-                                <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '12px' }}>
-                                  👤 {tbl.seats || tbl.capacity || 4} Persons
+                                <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                  <UserIcon size={13} color="#64748b" />
+                                  <span>{tbl.seatingCapacity ?? tbl.seats ?? tbl.capacity ?? 4} seats</span>
                                 </span>
                               </td>
                               <td style={{ padding: '12px 16px', color: '#64748b', fontWeight: 500 }}>
@@ -1691,11 +1745,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                     return (
                       <div key={tbl._id || tbl.id || i} style={{ background: '#ffffff', padding: '16px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', textAlign: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.02)', transition: 'transform 0.15s ease' }}>
-                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto', fontSize: '16px' }}>
-                          🪑
+                        <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px auto' }}>
+                          <TableIcon size={18} color="var(--primary, #ff7a00)" />
                         </div>
                         <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{tbl.name || tbl.tableNo}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>{tbl.seats || 4} Seats</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>{tbl.seatingCapacity ?? tbl.seats ?? tbl.capacity ?? 4} seats</div>
                         <div style={{ marginTop: '8px' }}>
                           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '9999px', fontWeight: 700, background: statusBg, color: statusColor }}>
                             {tbl.status || 'Available'}
@@ -1806,31 +1860,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={handleRefreshOrders}
-                    disabled={isRefreshingOrders}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '7px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#0f172a',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: isRefreshingOrders ? 'wait' : 'pointer'
-                    }}
-                  >
-                    <span style={{ display: 'inline-block', transform: isRefreshingOrders ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>
-                      🔄
-                    </span>
-                    {isRefreshingOrders ? 'Refreshing...' : 'Refresh Orders'}
-                  </button>
-                </div>
+
               </div>
 
               {/* Status Filter Chips */}
@@ -1839,9 +1869,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   { key: 'all', label: 'All History', count: allOrdersCount },
                   { key: 'queue', label: 'Live Queue', count: inQueueCount },
                   { key: 'preparing', label: 'Preparing', count: preparingCount },
-                  { key: 'ready', label: 'Ready to Serve', count: readyCount },
-                  { key: 'completed', label: 'Completed / Served', count: completedCount },
-                  { key: 'cancelled', label: 'Cancelled', count: cancelledCount }
+                  { key: 'ready', label: 'Ready to Serve', count: readyCount }
                 ].map(chip => {
                   const isSelected = ordersFilter === chip.key;
                   return (
@@ -2176,41 +2204,51 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   if (activeView === 'form') {
     return (
       <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Header Row with Back Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <button
-            type="button"
-            onClick={() => setActiveView('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: '700',
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              flexShrink: 0
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              {isEditing ? `Edit Branch - ${branchForm.branchName}` : 'Add New Restaurant Branch'}
-            </h2>
-
+        {/* Header Card with Back Button */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '24px 32px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setActiveView('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                {isEditing ? `Edit Branch - ${branchForm.branchName}` : 'Add New Restaurant Branch'}
+              </h2>
+            </div>
           </div>
         </div>
 
         {/* Page Style Form Card (noValidate disabled HTML browser popups) */}
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px 36px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-          <form onSubmit={handleSubmit} noValidate style={{ width: '100%' }}>
+          <form onSubmit={handleSubmit} noValidate autoComplete="off" style={{ width: '100%' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               
               {/* Section 1: Basic Information */}
@@ -2309,7 +2347,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                   {/* Field 4: Status */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>Status</label>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Status
+                    </label>
                     <SearchableSelect
                       value={branchForm.status}
                       onChange={e => setBranchForm({ ...branchForm, status: e.target.value })}
@@ -2321,18 +2361,34 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     />
                   </div>
 
-                  {/* Field 5: Is Main Branch Checkbox */}
-                  <div style={{ display: 'flex', alignItems: 'center', marginTop: '24px' }}>
-                    <input
-                      type="checkbox"
-                      id="isMainBranch"
-                      checked={branchForm.isMainBranch}
-                      onChange={e => setBranchForm({ ...branchForm, isMainBranch: e.target.checked })}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                    />
-                    <label htmlFor="isMainBranch" style={{ marginLeft: '8px', fontSize: '14px', fontWeight: 700, color: '#0f172a', cursor: 'pointer' }}>
-                      Main Branch
+                  {/* Field 5: Total Tables Capacity */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Total Tables Capacity <span style={{ color: '#ef4444' }}>*</span>
                     </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 15"
+                      value={branchForm.totalTables}
+                      onChange={e => {
+                        setBranchForm({ ...branchForm, totalTables: Math.max(1, parseInt(e.target.value) || 0) });
+                        if (formErrors.totalTables) setFormErrors({ ...formErrors, totalTables: '' });
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: formErrors.totalTables ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    {formErrors.totalTables && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.totalTables}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2340,91 +2396,54 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               {/* Section 2: Manager & Contact */}
               <div style={{ background: '#f8fafc', padding: '20px 24px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
                 <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  2. Manager & Contact Details
+                  2. Branch Manager & Contact Information
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
                   
-                  {/* Field 5: Branch Manager (Characters Only) */}
+                  {/* Field 5: Manager Name */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Branch Manager <span style={{ color: '#ef4444' }}>*</span>
+                      Branch Manager Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Saravana Kumaran"
-                      value={branchForm.managerName || branchForm.branchManager || ''}
+                      placeholder="e.g. Suresh Kumar"
+                      value={branchForm.managerName}
                       onChange={e => {
-                        const val = e.target.value.replace(/[^a-zA-Z\s.'-]/g, '');
-                        setBranchForm({ ...branchForm, managerName: val, branchManager: val });
-                        if (formErrors.managerName || formErrors.branchManager) {
-                          setFormErrors({ ...formErrors, managerName: '', branchManager: '' });
-                        }
+                        setBranchForm({ ...branchForm, managerName: e.target.value });
+                        if (formErrors.managerName) setFormErrors({ ...formErrors, managerName: '' });
                       }}
                       style={{
                         width: '100%',
                         padding: '12px 16px',
                         borderRadius: '8px',
-                        border: (formErrors.managerName || formErrors.branchManager) ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                        border: formErrors.managerName ? '1.5px solid #ef4444' : '1px solid var(--border)',
                         fontSize: '14px',
                         boxSizing: 'border-box'
                       }}
                     />
-                    {(formErrors.managerName || formErrors.branchManager) && (
+                    {formErrors.managerName && (
                       <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.managerName || formErrors.branchManager}
+                        {formErrors.managerName}
                       </span>
                     )}
                   </div>
 
-                  {/* Field 6: Mobile Number (10 Digits Only) */}
+                  {/* Field 6: Mobile Number (Strict 10 Digits) */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Mobile Number <span style={{ color: '#ef4444' }}>*</span>
+                      Contact Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
-                      type="tel"
+                      type="text"
                       maxLength={10}
-                      placeholder="10 digit mobile number"
+                      inputMode="numeric"
+                      placeholder="10-digit mobile number"
                       value={branchForm.mobileNumber}
                       onChange={e => {
                         const val = sanitizeMobile(e.target.value);
                         setBranchForm({ ...branchForm, mobileNumber: val });
                         if (formErrors.mobileNumber) setFormErrors({ ...formErrors, mobileNumber: '' });
-                      }}
-                      onBlur={() => {
-                        const val = (branchForm.mobileNumber || '').trim();
-                        if (val.length === 10) {
-                          const cleanPhone = val.replace(/\D/g, '').slice(-10);
-                          const allBranchSources = [
-                            ...(apiBranches || []),
-                            ...(branches || []),
-                            ...(activeRestaurant?.branches || [])
-                          ];
-                          let isDuplicate = allBranchSources.some(b => {
-                            const bId = String(b.id || b._id || '');
-                            const currentId = String(branchForm.id || '');
-                            if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) return false;
-                            const rawPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
-                            const existingPhone = rawPhone.slice(-10);
-                            return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
-                          });
-
-                          if (!isDuplicate && Array.isArray(apiUsers)) {
-                            isDuplicate = apiUsers.some(u => {
-                              const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-                              const currentId = String(branchForm.id || '');
-                              if (isEditing && uBranchId && currentId && uBranchId === currentId) return false;
-                              const rawPhone = String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').replace(/\D/g, '');
-                              const existingPhone = rawPhone.slice(-10);
-                              return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
-                            });
-                          }
-
-                          if (isDuplicate) {
-                            const dupMsg = 'This mobile number is already registered to another branch/user.';
-                            setFormErrors(prev => ({ ...prev, mobileNumber: dupMsg }));
-                          }
-                        }
                       }}
                       style={{
                         width: '100%',
@@ -2449,42 +2468,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     </label>
                     <input
                       type="email"
+                      name="branch_mgr_email_field"
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      spellCheck="false"
                       placeholder="chennai@serviq.com"
                       value={branchForm.email}
                       onChange={e => {
                         setBranchForm({ ...branchForm, email: e.target.value });
                         if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
-                      }}
-                      onBlur={() => {
-                        const val = (branchForm.email || '').trim().toLowerCase();
-                        if (val && !validateEmail(val)) {
-                          const allBranchSources = [
-                            ...(apiBranches || []),
-                            ...(branches || []),
-                            ...(activeRestaurant?.branches || [])
-                          ];
-                          let isDuplicateEmail = allBranchSources.some(b => {
-                            const bId = String(b.id || b._id || '');
-                            const currentId = String(branchForm.id || '');
-                            if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) return false;
-                            const existingEmail = String(b.email || b.managerEmail || '').trim().toLowerCase();
-                            return Boolean(existingEmail && existingEmail === val);
-                          });
-
-                          if (!isDuplicateEmail && Array.isArray(apiUsers)) {
-                            isDuplicateEmail = apiUsers.some(u => {
-                              const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-                              const currentId = String(branchForm.id || '');
-                              if (isEditing && uBranchId && currentId && uBranchId === currentId) return false;
-                              const existingEmail = String(u.email || '').trim().toLowerCase();
-                              return Boolean(existingEmail && existingEmail === val);
-                            });
-                          }
-
-                          if (isDuplicateEmail) {
-                            setFormErrors(prev => ({ ...prev, email: 'This email is already registered to another branch/user.' }));
-                          }
-                        }
                       }}
                       style={{
                         width: '100%',
@@ -2502,7 +2494,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     )}
                   </div>
 
-                  {/* Field 8 & 9: Password & Confirm Password (Available in Create & Edit Mode) */}
+                  {/* Field 8: Password */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                       {isEditing ? 'New Password' : 'Password'} {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
@@ -2526,6 +2518,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </span>
                       <input
                         type={showPassword ? 'text' : 'password'}
+                        name="branch_mgr_password_field"
+                        autoComplete="new-password"
                         placeholder="••••••••••••"
                         value={branchForm.password}
                         onChange={e => {
@@ -2563,82 +2557,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                       </button>
                     </div>
-                    {formErrors.password && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.password}
-                      </span>
-                    )}
-
-                    {/* Password Rules Checklist */}
-                    <div style={{
-                      marginTop: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '3px',
-                      textAlign: 'left'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: /[A-Z]/.test(branchForm.password || '') ? '#15803d' : '#64748b',
-                          transition: 'all 0.15s ease'
-                        }}>
-                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[A-Z]/.test(branchForm.password || '') ? '✓' : '•'}</span>
-                          Must have one capital letter
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: /\d/.test(branchForm.password || '') ? '#15803d' : '#64748b',
-                          transition: 'all 0.15s ease'
-                        }}>
-                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/\d/.test(branchForm.password || '') ? '✓' : '•'}</span>
-                          Must have a number digit
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: (branchForm.password || '').length >= 8 ? '#15803d' : '#64748b',
-                          transition: 'all 0.15s ease'
-                        }}>
-                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{(branchForm.password || '').length >= 8 ? '✓' : '•'}</span>
-                          Must be at least 8 characters long
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          color: /[!@#$%^&*(),.?":{}|<>_\-+=~/\\\[\]]/.test(branchForm.password || '') ? '#15803d' : '#64748b',
-                          transition: 'all 0.15s ease'
-                        }}>
-                          <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[!@#$%^&*(),.?":{}|<>_\-+=~/\\\[\]]/.test(branchForm.password || '') ? '✓' : '•'}</span>
-                          Must have a special character (@, #, $, %)
-                        </span>
-                      </div>
-                    </div>
                   </div>
 
+                  {/* Field 9: Confirm Password */}
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                       Confirm Password {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
@@ -2662,6 +2583,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </span>
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
+                        name="branch_mgr_confirm_password_field"
+                        autoComplete="new-password"
                         placeholder="••••••••••••"
                         value={branchForm.confirmPassword}
                         onChange={e => {
@@ -3004,7 +2927,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               options={[
-                { value: 'All', label: 'All Statuses' },
+                { value: 'All', label: 'All Status' },
                 { value: 'Active', label: 'Active Only' },
                 { value: 'Inactive', label: 'Inactive Only' }
               ]}

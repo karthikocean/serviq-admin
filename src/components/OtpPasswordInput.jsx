@@ -93,7 +93,8 @@ export const OtpPasswordInput = ({
             onPaste={handlePaste}
             disabled={disabled}
             maxLength={1}
-            autoComplete="off"
+            name={`${idPrefix}_digit_${idx}`}
+            autoComplete="one-time-code"
             style={{
               width: '46px',
               height: '48px',

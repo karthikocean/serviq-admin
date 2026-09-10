@@ -29,6 +29,13 @@ const UsersIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const UserIcon = ({ size = 12, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
 // Robust Branch Matcher
 const branchMatches = (itemBranch, targetBranch) => {
   if (!itemBranch || !targetBranch) return false;
@@ -565,13 +572,6 @@ export default function OverviewPanel({
                       : (statsData.todayOrders.count !== undefined ? statsData.todayOrders.count : displayOrders.length))
                   : (isAllBranches ? `${branches.length} Outlets` : displayOrders.length)}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
-                {statsData?.todayOrders
-                  ? (isAllBranches && statsData.todayOrders.activeBranches > 0
-                      ? `${statsData.todayOrders.activeBranches} Active Locations`
-                      : (statsData.todayOrders.subLabel || 'Orders received today'))
-                  : (isAllBranches ? `${activeBranchesCount} Active Locations` : 'Orders received today')}
-              </div>
             </div>
           </div>
         </div>
@@ -586,9 +586,6 @@ export default function OverviewPanel({
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {`${occupiedTablesCount} / ${totalTablesDisplayCount} Total`}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: occupiedTablesCount > 0 ? '#ea580c' : 'var(--text-muted)', fontWeight: 600 }}>
-                {statsData?.activeTables?.subLabel || (occupiedTablesCount > 0 ? `${occupiedTablesCount} currently seated` : (isAllBranches ? 'Across all branches' : 'In this branch'))}
-              </div>
             </div>
           </div>
         </div>
@@ -603,16 +600,6 @@ export default function OverviewPanel({
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.todayRevenue?.formatted || `₹${(statsData?.todayRevenue?.amount ?? todayRevenue).toLocaleString('en-IN')}`}
               </h3>
-              <div
-                className="stat-sub-label"
-                style={{
-                  fontSize: '11px',
-                  color: (statsData?.todayRevenue?.percentageChange !== undefined && statsData.todayRevenue.percentageChange < 0) ? '#ef4444' : 'var(--success)',
-                  fontWeight: 600
-                }}
-              >
-                {statsData?.todayRevenue?.subLabel || (statsData?.todayRevenue?.percentageChange !== undefined ? `${statsData.todayRevenue.percentageChange >= 0 ? '+' : ''}${statsData.todayRevenue.percentageChange}% vs yesterday` : '+14.2% vs yesterday')}
-              </div>
             </div>
           </div>
         </div>
@@ -627,9 +614,6 @@ export default function OverviewPanel({
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.monthRevenue?.formatted || `₹${(statsData?.monthRevenue?.amount ?? monthlySales).toLocaleString('en-IN')}`}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {statsData?.monthRevenue?.subLabel || (statsData?.monthRevenue?.formattedTarget ? `Target: ${statsData.monthRevenue.formattedTarget}` : 'Monthly sales target')}
-              </div>
             </div>
           </div>
         </div>
@@ -648,9 +632,6 @@ export default function OverviewPanel({
                       ? `${statsData.staffOnDuty.onDuty} / ${statsData.staffOnDuty.total ?? staff.length} Total`
                       : `${onDutyStaffCount} / ${staff.length} Total`)}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
-                {statsData?.staffOnDuty?.subLabel || 'Waiters & Kitchen Staff'}
-              </div>
             </div>
           </div>
         </div>
@@ -665,9 +646,6 @@ export default function OverviewPanel({
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.pendingOrders?.count !== undefined ? statsData.pendingOrders.count : pendingOrdersCount}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>
-                {statsData?.pendingOrders?.subLabel || 'Awaiting kitchen prep'}
-              </div>
             </div>
           </div>
         </div>
@@ -682,9 +660,6 @@ export default function OverviewPanel({
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.completedOrders?.count !== undefined ? statsData.completedOrders.count : completedOrdersCount}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--success)', fontWeight: 600 }}>
-                {statsData?.completedOrders?.subLabel || 'Fulfilled & served'}
-              </div>
             </div>
           </div>
         </div>
@@ -692,18 +667,13 @@ export default function OverviewPanel({
         {/* Card 8: Top Items */}
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div className="stat-info">
+            <div className="stat-info" style={{ width: '100%' }}>
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
                 {statsData?.topItem?.label || 'Top Item'}
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '6px 0', color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={statsData?.topItem?.name || topItemFallback}>
+              <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '4px 0', color: 'var(--black)', lineHeight: 1.25, wordBreak: 'break-word' }} title={statsData?.topItem?.name || topItemFallback}>
                 {statsData?.topItem?.name || topItemFallback}
               </h3>
-              <div className="stat-sub-label" style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {statsData?.topItem
-                  ? (statsData.topItem.quantitySold ? `${statsData.topItem.quantitySold} sold • ₹${statsData.topItem.revenue || 0}` : (statsData.topItem.subLabel || 'Highest seller'))
-                  : 'Highest seller'}
-              </div>
             </div>
           </div>
         </div>
@@ -812,7 +782,7 @@ export default function OverviewPanel({
       )}
 
       {/* CHARTS CONTAINER (Revenue Growth & Order Breakdown) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1.2fr)', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
         
         {/* Revenue Growth Card */}
         <div className="settings-card" style={{ background: 'var(--bg-secondary)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border)', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
@@ -821,9 +791,7 @@ export default function OverviewPanel({
               <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>
                 {revenueGrowthData?.title || (isAllBranches ? 'Branch Revenue Comparison (₹)' : 'Revenue Growth')}
               </h3>
-              <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
-                {revenueGrowthData?.subtitle || 'Last 6 Months'}
-              </p>
+              
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '11px', background: 'rgba(255, 122, 0, 0.1)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '12px', fontWeight: 700 }}>
@@ -919,7 +887,7 @@ export default function OverviewPanel({
             <h3 className="feed-title" style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)' }}>Order Breakdown</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
-                {activeBreakdown.totalItemsSold > 0 ? `${activeBreakdown.totalItemsSold} Items Sold` : '0 Items Sold'}
+                {activeBreakdown.totalItemsSold > 0 ? ` ` : ''}
               </span>
               <button
                 type="button"
@@ -959,7 +927,7 @@ export default function OverviewPanel({
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
             {activeBreakdown.totalItemsSold > 0 && activeBreakdown.categories && activeBreakdown.categories.length > 0 ? (
-              activeBreakdown.categories.filter(c => Number(c.count) > 0).map((cat, idx) => {
+              activeBreakdown.categories.filter(c => Number(c.count) > 0).slice(0, 5).map((cat, idx) => {
                 const defaultColors = ['#ff7a00', '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899'];
                 const itemColor = cat.color || defaultColors[idx % defaultColors.length];
                 const pct = cat.percentage ?? (activeBreakdown.totalItemsSold > 0 ? Math.round((cat.count / activeBreakdown.totalItemsSold) * 100) : 0);
@@ -1162,17 +1130,12 @@ export default function OverviewPanel({
             className="tables-status-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
               gap: '12px',
-              maxHeight: '235px',
-              overflowY: 'auto',
-              paddingRight: '6px',
-              paddingBottom: '4px',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#ff5a1f #f1f5f9'
+              paddingBottom: '4px'
             }}
           >
-            {displayTables.map((table, idx) => {
+            {displayTables.slice(0, 5).map((table, idx) => {
               const isOccupied = isTableOccupied(table, displayOrders);
               const isReserved = String(table.status || '').toLowerCase() === 'reserved';
               const tableNum = table.tableNumber || table.tableNo || table.id || `T-${idx + 1}`;
@@ -1203,7 +1166,7 @@ export default function OverviewPanel({
                         {tableNum}
                       </span>
                       <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                        🪑 {seats}
+                        {seats} Seats
                       </span>
                     </div>
 
@@ -1212,8 +1175,9 @@ export default function OverviewPanel({
                     </div>
 
                     {waiterName && (
-                      <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`Waiter: ${waiterName}`}>
-                        🤵 {waiterName}
+                      <div style={{ fontSize: '10.5px', color: '#475569', fontWeight: 600, textAlign: 'left', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: '4px' }} title={`Waiter: ${waiterName}`}>
+                        <UserIcon size={11} color="#64748b" />
+                        <span>{waiterName}</span>
                       </div>
                     )}
                   </div>

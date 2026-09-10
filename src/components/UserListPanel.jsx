@@ -181,7 +181,8 @@ export default function UserListPanel() {
         limit, 
         search: searchQuery, 
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
-        statusFilter: statusFilter === 'All' ? '' : statusFilter
+        statusFilter: statusFilter === 'All' ? '' : statusFilter,
+        branchId: activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined
       }),
       BranchApi.getBranches(),
       RoleApi.getRoles()
@@ -224,7 +225,7 @@ export default function UserListPanel() {
       fetchData();
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [page, searchQuery, roleFilter, statusFilter]);
+  }, [page, searchQuery, roleFilter, statusFilter, activeFilteredBranchId]);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -264,7 +265,7 @@ export default function UserListPanel() {
       status: 'Active',
       phone: '',
       email: '',
-      password: 'user' + Math.floor(100 + Math.random() * 900)
+      password: ''
     });
     setFormErrors({});
     setViewState('form');
@@ -474,7 +475,7 @@ export default function UserListPanel() {
           width: '100%',
           boxSizing: 'border-box'
         }}>
-          <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <form onSubmit={handleUserSubmit} noValidate autoComplete="off" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
@@ -630,7 +631,11 @@ export default function UserListPanel() {
                   Email Address <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="text"
+                  type="email"
+                  name="user_panel_email_field"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  spellCheck="false"
                   value={userForm.email}
                   onChange={e => {
                     setUserForm({ ...userForm, email: e.target.value });
@@ -660,7 +665,9 @@ export default function UserListPanel() {
                   Password <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="text"
+                  type="password"
+                  name="user_panel_password_field"
+                  autoComplete="new-password"
                   value={userForm.password}
                   onChange={e => {
                     setUserForm({ ...userForm, password: e.target.value });
@@ -814,7 +821,7 @@ export default function UserListPanel() {
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value); setPage(0); }}
               options={[
-                { value: 'All', label: 'All Statuses' },
+                { value: 'All', label: 'All Status' },
                 { value: 'Active', label: 'Active Users' },
                 { value: 'Inactive', label: 'Inactive Users' }
               ]}
@@ -1164,7 +1171,9 @@ export default function UserListPanel() {
               New Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
-              type="text"
+              type="password"
+              name="user_change_password_field"
+              autoComplete="new-password"
               value={newPassword}
               onChange={e => {
                 setNewPassword(e.target.value);

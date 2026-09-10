@@ -272,11 +272,23 @@ export default function InventoryPanel() {
     }
   }, [selectedBranchId]);
 
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const limit = 10;
+
   // 4. Fetch Items from Backend API
   const fetchItems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = { limit: 1000 };
+      const params = {
+        page,
+        limit,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        status: statusFilter !== 'All' ? statusFilter : undefined,
+        itemName: itemNameFilter !== 'All' ? itemNameFilter : undefined
+      };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
@@ -285,10 +297,24 @@ export default function InventoryPanel() {
         const rawData = res.response?.data || res.response?.items || res.response || [];
         const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
         setItems(list);
+        if (res.response?.totalPages) {
+          setTotalPages(res.response.totalPages);
+        } else if (res.response?.total) {
+          setTotalPages(Math.max(1, Math.ceil(res.response.total / limit)));
+        } else {
+          setTotalPages(Math.max(1, Math.ceil(list.length / limit)));
+        }
+        if (res.response?.total !== undefined) {
+          setTotalRecords(res.response.total);
+        } else {
+          setTotalRecords(list.length);
+        }
       } else {
         // Fallback to local context data if API is unreachable
         if (activeRestaurant?.inventory) {
           setItems(activeRestaurant.inventory);
+          setTotalRecords(activeRestaurant.inventory.length);
+          setTotalPages(Math.max(1, Math.ceil(activeRestaurant.inventory.length / limit)));
         }
       }
     } catch (err) {
@@ -296,7 +322,7 @@ export default function InventoryPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, page, limit, searchTerm, categoryFilter, statusFilter, itemNameFilter, activeRestaurant]);
 
   const [liveLogs, setLiveLogs] = useState([]);
 
@@ -354,9 +380,15 @@ export default function InventoryPanel() {
     fetchCategories();
     fetchBranches();
     fetchStats();
-    fetchItems();
     fetchLogs();
-  }, [selectedBranchId, fetchCategories, fetchBranches, fetchStats, fetchItems, fetchLogs]);
+  }, [selectedBranchId, fetchCategories, fetchBranches, fetchStats, fetchLogs]);
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchItems();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [fetchItems]);
 
   // Unified available branches list - if filtered by header, show only that branch
   const allBranchesList = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
@@ -419,28 +451,25 @@ export default function InventoryPanel() {
   ].filter(Boolean))).sort();
   const categoriesList = ['All', ...dynamicCatNames];
 
-  const uniqueItemNames = Array.from(new Set(
-    items.map(i => getItemDisplayName(i.name || i.itemName, i._id || i.id)).filter(name => name && !isMongoId(name))
-  )).sort();
+  const uniqueItemNames = Array.from(new Set([
+    ...items.map(i => getItemDisplayName(i.name || i.itemName, i._id || i.id)).filter(name => name && !isMongoId(name))
+  ])).sort();
 
-  // Metrics
-  const totalItemsCount = items.length;
-  const outOfStockCount = items.filter(i => {
-    const cur = Number(i.currentStock) || 0;
-    return cur <= 0;
-  }).length;
-  const lowStockCount = items.filter(i => {
+  // Metrics (sourced from backend apiStats if available)
+  const totalItemsCount = apiStats?.totalItems !== undefined ? Number(apiStats.totalItems) : (totalRecords || items.length);
+  const outOfStockCount = apiStats?.outOfStockCount !== undefined ? Number(apiStats.outOfStockCount) : items.filter(i => (Number(i.currentStock) || 0) <= 0).length;
+  const lowStockCount = apiStats?.lowStockCount !== undefined ? Number(apiStats.lowStockCount) : items.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
     const cur = Number(i.currentStock) || 0;
     return cur > 0 && cur <= min;
   }).length;
-  const inStockCount = items.filter(i => {
+  const inStockCount = apiStats?.inStockCount !== undefined ? Number(apiStats.inStockCount) : items.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
     const cur = Number(i.currentStock) || 0;
     return cur > min;
   }).length;
-  const totalValuation = items.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
-  const categoriesCount = new Set(items.map(i => getCategoryName(i))).size;
+  const totalValuation = apiStats?.totalValuation !== undefined ? Number(apiStats.totalValuation) : items.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
+  const categoriesCount = availableCategories.length || new Set(items.map(i => getCategoryName(i))).size;
 
   // Logs filtered by selected branch with clean resolved item names
   const baseLogs = liveLogs.length > 0
@@ -457,38 +486,8 @@ export default function InventoryPanel() {
     itemName: getItemDisplayName(log.rawItemName || log.itemName, log.itemId)
   }));
 
-  // Filter items
-  const filteredInventory = items.filter(item => {
-    const itemName = getItemDisplayName(item.name || item.itemName, item._id || item.id);
-    const catName = getCategoryName(item);
-    const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
-    const curStock = Number(item.currentStock) || 0;
-
-    const matchesSearch = (itemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      catName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesItemName = itemNameFilter === 'All' || itemName === itemNameFilter;
-    const matchesCategory = categoryFilter === 'All' || catName === categoryFilter;
-
-    let matchesStatus = true;
-    if (statusFilter === 'Low Stock') {
-      matchesStatus = curStock <= minLevel && curStock > 0;
-    } else if (statusFilter === 'Out of Stock') {
-      matchesStatus = curStock <= 0;
-    } else if (statusFilter === 'In Stock') {
-      matchesStatus = curStock > minLevel;
-    }
-
-    return matchesSearch && matchesItemName && matchesCategory && matchesStatus;
-  });
-
-  // Pagination for inventory items
-  const [page, setPage] = useState(0);
-  const limit = 10;
-  const totalPages = Math.ceil(filteredInventory.length / limit) || 1;
-  const paginatedInventory = filteredInventory.slice(page * limit, (page + 1) * limit);
+  // Server-filtered inventory items
+  const displayInventory = items;
 
   const getPageNumbers = () => {
     const pages = [];
@@ -507,7 +506,7 @@ export default function InventoryPanel() {
 
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, itemNameFilter, categoryFilter, statusFilter]);
+  }, [searchTerm, itemNameFilter, categoryFilter, statusFilter, selectedBranchId]);
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
@@ -698,7 +697,7 @@ export default function InventoryPanel() {
           purchaseDate: new Date().toISOString(),
           branchId: cleanBranchId
         };
-        await InventoryApi.recordPurchase(payload);
+        await InventoryApi.recordPurchase(payload, { silent: true });
       } else {
         // Stock Out
         const payload = {
@@ -712,12 +711,12 @@ export default function InventoryPanel() {
           value: qty * (Number(adjustTargetItem.costPerUnit) || 0),
           branchId: cleanBranchId
         };
-        await InventoryApi.reduceStock(payload);
+        await InventoryApi.reduceStock(payload, { silent: true });
       }
 
       await InventoryApi.updateItem(itemId, {
         currentStock: newStock
-      });
+      }, { silent: true });
 
       if (adjustStock && activeRestaurant?.id) {
         adjustStock(
@@ -763,34 +762,45 @@ export default function InventoryPanel() {
   if (viewMode === 'form') {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 24px 24px', width: '100%' }}>
-        {/* Header with Back button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', paddingTop: '8px' }}>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '18px',
-              fontWeight: 800,
-              color: '#0f172a',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}
-          >
-            ←
-          </button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-              {editingItem ? 'Edit Stock Item' : 'Add New Stock Item'}
-            </h2>
-            
+        {/* Header Card with Back button */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          padding: '24px 32px',
+          marginBottom: '24px',
+          border: '1px solid #e2e8f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: '18px',
+                fontWeight: 800,
+                color: '#0f172a',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+              }}
+            >
+              ←
+            </button>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                {editingItem ? 'Edit Stock Item' : 'Add New Stock Item'}
+              </h2>
+            </div>
           </div>
         </div>
 
@@ -1365,23 +1375,9 @@ export default function InventoryPanel() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-                Inventory Management
-              </h2>
-              <span style={{
-                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-                color: '#ffffff',
-                fontSize: '11px',
-                fontWeight: 800,
-                padding: '3px 8px',
-                borderRadius: '6px',
-                letterSpacing: '0.5px'
-              }}>
-                LIVE API
-              </span>
-            </div>
-            
+            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+              Inventory Management
+            </h2>
           </div>
         </div>
 
@@ -1430,28 +1426,7 @@ export default function InventoryPanel() {
             Stock Logs ({logs.length})
           </button>
 
-          <button
-            type="button"
-            onClick={fetchItems}
-            disabled={isLoading}
-            title="Refresh inventory items"
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              color: '#475569',
-              fontWeight: 700,
-              padding: '10px 14px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <RefreshIcon size={14} color={isLoading ? '#94a3b8' : '#475569'} />
-            Refresh
-          </button>
+
 
           <button
             type="button"
@@ -1480,29 +1455,29 @@ export default function InventoryPanel() {
       {/* 2. STATS & METRICS GRID */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px',
-        marginBottom: '24px'
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '12px',
+        marginBottom: '18px'
       }}>
         {/* Card 1: Total Items */}
         <div style={{
           background: '#ffffff',
-          borderRadius: '14px',
-          padding: '20px',
+          borderRadius: '10px',
+          padding: '12px 16px',
           border: '1px solid #e2e8f0',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
           display: 'flex',
           alignItems: 'center',
-          gap: '16px'
+          gap: '12px'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BoxIcon size={24} color="#2563eb" />
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <BoxIcon size={20} color="#2563eb" />
           </div>
           <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
               Total Stock Items
             </span>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 0 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: '2px 0 0 0' }}>
               {totalItemsCount}
             </h3>
           </div>
@@ -1511,22 +1486,22 @@ export default function InventoryPanel() {
         {/* Card 2: Low Stock Alert */}
         <div style={{
           background: '#ffffff',
-          borderRadius: '14px',
-          padding: '20px',
+          borderRadius: '10px',
+          padding: '12px 16px',
           border: '1px solid #e2e8f0',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
           display: 'flex',
           alignItems: 'center',
-          gap: '16px'
+          gap: '12px'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertTriangleIcon size={24} color="#ea580c" />
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangleIcon size={20} color="#ea580c" />
           </div>
           <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
               Low Stock Alerts
             </span>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: lowStockCount > 0 ? '#dc2626' : '#0f172a', margin: '4px 0 0 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: lowStockCount > 0 ? '#dc2626' : '#0f172a', margin: '2px 0 0 0' }}>
               {lowStockCount}
             </h3>
           </div>
@@ -1535,22 +1510,22 @@ export default function InventoryPanel() {
         {/* Card 3: Stock Valuation */}
         <div style={{
           background: '#ffffff',
-          borderRadius: '14px',
-          padding: '20px',
+          borderRadius: '10px',
+          padding: '12px 16px',
           border: '1px solid #e2e8f0',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
           display: 'flex',
           alignItems: 'center',
-          gap: '16px'
+          gap: '12px'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TrendingUpIcon size={24} color="#059669" />
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <TrendingUpIcon size={20} color="#059669" />
           </div>
           <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
               Total Stock Valuation
             </span>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 0 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: '2px 0 0 0' }}>
               ₹{totalValuation.toLocaleString('en-IN')}
             </h3>
           </div>
@@ -1559,22 +1534,22 @@ export default function InventoryPanel() {
         {/* Card 4: Categories */}
         <div style={{
           background: '#ffffff',
-          borderRadius: '14px',
-          padding: '20px',
+          borderRadius: '10px',
+          padding: '12px 16px',
           border: '1px solid #e2e8f0',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
           display: 'flex',
           alignItems: 'center',
-          gap: '16px'
+          gap: '12px'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#faf5ff', color: '#9333ea', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LayersIcon size={24} color="#9333ea" />
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#faf5ff', color: '#9333ea', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <LayersIcon size={20} color="#9333ea" />
           </div>
           <div>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
               Active Categories
             </span>
-            <h3 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '4px 0 0 0' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: '2px 0 0 0' }}>
               {categoriesCount}
             </h3>
           </div>
@@ -1675,7 +1650,7 @@ export default function InventoryPanel() {
               }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {categoryFilter === 'All' ? `All Categories (${dynamicCatNames.length})` : categoryFilter}
+                {categoryFilter === 'All' ? 'All Categories' : categoryFilter}
               </span>
               <ChevronDownIcon size={12} color={categoryFilter !== 'All' ? '#c2410c' : '#64748b'} />
             </button>
@@ -1739,7 +1714,8 @@ export default function InventoryPanel() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '2px',
-                  scrollbarWidth: 'thin'
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none'
                 }}>
                   <button
                     type="button"
@@ -1766,15 +1742,11 @@ export default function InventoryPanel() {
                     onMouseLeave={e => { if (categoryFilter !== 'All') e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span>All Categories</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
-                      {items.length}
-                    </span>
                   </button>
 
                   {dynamicCatNames
                     .filter(cat => !catDropdownSearch || cat.toLowerCase().includes(catDropdownSearch.toLowerCase().trim()))
                     .map(cat => {
-                      const count = items.filter(i => getCategoryName(i) === cat).length;
                       const isSelected = categoryFilter === cat;
                       return (
                         <button
@@ -1802,11 +1774,8 @@ export default function InventoryPanel() {
                           onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
                           onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {cat}
-                          </span>
-                          <span style={{ fontSize: '11px', color: isSelected ? '#ea580c' : '#94a3b8', background: isSelected ? '#fed7aa' : '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
-                            {count}
                           </span>
                         </button>
                       );
@@ -1849,7 +1818,7 @@ export default function InventoryPanel() {
               }}
             >
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {itemNameFilter === 'All' ? `All Item Names (${uniqueItemNames.length})` : itemNameFilter}
+                {itemNameFilter === 'All' ? 'All Item Names' : itemNameFilter}
               </span>
               <ChevronDownIcon size={12} color={itemNameFilter !== 'All' ? '#c2410c' : '#64748b'} />
             </button>
@@ -1913,7 +1882,8 @@ export default function InventoryPanel() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '2px',
-                  scrollbarWidth: 'thin'
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none'
                 }}>
                   <button
                     type="button"
@@ -1940,16 +1910,12 @@ export default function InventoryPanel() {
                     onMouseLeave={e => { if (itemNameFilter !== 'All') e.currentTarget.style.background = 'transparent'; }}
                   >
                     <span>All Item Names</span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '1px 6px', borderRadius: '10px' }}>
-                      {items.length}
-                    </span>
                   </button>
 
                   {uniqueItemNames
                     .filter(name => !itemDropdownSearch || name.toLowerCase().includes(itemDropdownSearch.toLowerCase().trim()))
                     .map(name => {
                       const isSelected = itemNameFilter === name;
-                      const matchItem = items.find(i => i.name === name);
                       return (
                         <button
                           key={name}
@@ -1976,14 +1942,9 @@ export default function InventoryPanel() {
                           onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
                           onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                         >
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '140px' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {name}
                           </span>
-                          {matchItem && (
-                            <span style={{ fontSize: '10px', color: isSelected ? '#ea580c' : '#94a3b8', background: isSelected ? '#fed7aa' : '#f1f5f9', padding: '1px 5px', borderRadius: '8px' }}>
-                              {matchItem.currentStock} {matchItem.unit}
-                            </span>
-                          )}
                         </button>
                       );
                     })
@@ -2084,8 +2045,8 @@ export default function InventoryPanel() {
                     </div>
                   </td>
                 </tr>
-              ) : filteredInventory.length > 0 ? (
-                paginatedInventory.map((item, index) => {
+              ) : displayInventory.length > 0 ? (
+                displayInventory.map((item, index) => {
                   const minLevel = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
                   const curStock = Number(item.currentStock) || 0;
                   const isOut = curStock <= 0;
@@ -2403,7 +2364,7 @@ export default function InventoryPanel() {
       </div>
 
       {/* Pagination Controls */}
-      {filteredInventory.length > 0 && (
+      {displayInventory.length > 0 && (
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -2418,7 +2379,7 @@ export default function InventoryPanel() {
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredInventory.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredInventory.length)} of {filteredInventory.length} items
+            Showing {displayInventory.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalRecords || displayInventory.length)} of {totalRecords || displayInventory.length} items
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
@@ -2565,89 +2526,7 @@ export default function InventoryPanel() {
               </div>
             </div>
 
-            {/* Stock Movement & Out of Stock History for this Item */}
-            {(() => {
-              const itemLogs = logs.filter(l => (
-                (viewingItem._id && (l.itemId === viewingItem._id || l.id === viewingItem._id)) ||
-                (viewingItem.id && (l.itemId === viewingItem.id || l.id === viewingItem.id)) ||
-                (l.itemName && viewingItem.name && l.itemName.toLowerCase() === viewingItem.name.toLowerCase())
-              ));
 
-              return (
-                <div style={{ marginTop: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
-                      Stock Movement History ({itemLogs.length} entries)
-                    </span>
-                    {itemLogs.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const itm = viewingItem;
-                          setViewingItem(null);
-                          handleOpenItemLogs(itm);
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ff5a1f',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          textDecoration: 'underline'
-                        }}
-                      >
-                        View Full Logs →
-                      </button>
-                    )}
-                  </div>
-
-                  {itemLogs.length > 0 ? (
-                    <div style={{ maxHeight: '160px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>DATE</th>
-                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>TYPE</th>
-                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>QTY</th>
-                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>REASON</th>
-                            <th style={{ padding: '8px 10px', color: '#64748b', fontWeight: 700 }}>LOGGED BY</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {itemLogs.slice(0, 10).map((log, lIdx) => (
-                            <tr key={log.id || lIdx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '7px 10px', color: '#64748b' }}>{log.date}</td>
-                              <td style={{ padding: '7px 10px' }}>
-                                <span style={{
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  fontSize: '10px',
-                                  fontWeight: 800,
-                                  background: log.type === 'Stock In' ? '#ecfdf5' : '#fef2f2',
-                                  color: log.type === 'Stock In' ? '#059669' : '#dc2626'
-                                }}>
-                                  {log.type}
-                                </span>
-                              </td>
-                              <td style={{ padding: '7px 10px', fontWeight: 800, color: log.type === 'Stock In' ? '#059669' : '#dc2626' }}>
-                                {log.type === 'Stock In' ? `+${log.quantity}` : `-${log.quantity}`} {log.unit}
-                              </td>
-                              <td style={{ padding: '7px 10px', color: '#334155' }}>{log.reason}</td>
-                              <td style={{ padding: '7px 10px', color: '#64748b' }}>{log.user || 'Admin'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div style={{ padding: '14px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', color: '#94a3b8', fontSize: '12px' }}>
-                      No stock movement history recorded yet for this item.
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button

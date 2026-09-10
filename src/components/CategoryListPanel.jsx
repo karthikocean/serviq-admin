@@ -37,17 +37,19 @@ export default function CategoryListPanel({
 }) {
   const { currentUser, selectedBranchId } = useAppState();
   const [allCategories, setAllCategories] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
   const limit = 10;
 
   const fetchCategoriesData = async () => {
     if (!activeRestaurant) return;
     try {
-      const params = { limit: 1000 };
+      const params = {
+        limit: 1000,
+        search: searchQuery ? searchQuery.trim() : undefined
+      };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
-      } else {
-        params.branchId = 'all';
       }
       const res = await MenuApi.getCategories(params);
       if (res?.status && res.response) {
@@ -66,8 +68,11 @@ export default function CategoryListPanel({
   };
 
   React.useEffect(() => {
-    fetchCategoriesData();
-  }, [activeRestaurant, selectedBranchId]);
+    const delayDebounceFn = setTimeout(() => {
+      fetchCategoriesData();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [activeRestaurant, selectedBranchId, searchQuery]);
 
   React.useEffect(() => {
     if (Array.isArray(categories) && categories.length > 0) {
@@ -75,19 +80,15 @@ export default function CategoryListPanel({
     }
   }, [categories]);
 
-  const displayCategories = allCategories.filter(cat => {
-    if (selectedBranchId && selectedBranchId !== 'ALL') {
-      const catBranchId = typeof cat.branchId === 'object' ? (cat.branchId?._id || cat.branchId?.id) : cat.branchId;
-      if (catBranchId && String(catBranchId) !== String(selectedBranchId)) {
-        return false;
-      }
-    }
-    return true;
-  });
+  const displayCategories = allCategories;
 
   const totalItems = displayCategories.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
   const paginatedCategories = displayCategories.slice(page * limit, (page + 1) * limit);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [searchQuery, selectedBranchId]);
 
   React.useEffect(() => {
     if (page >= totalPages && totalPages > 0) {

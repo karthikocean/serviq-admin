@@ -48,7 +48,7 @@ export default function QRManagementPanel({
 }) {
   const { selectedBranchId } = useAppState();
   const [openDropdown, setOpenDropdown] = useState(null);
-  const [localStatuses, setLocalStatuses] = useState({});
+  const [localStatus, setLocalStatus] = useState({});
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const rawQrCodes = activeRestaurant.qrCodes || [];
@@ -165,7 +165,7 @@ export default function QRManagementPanel({
           const qrUrl = getCustomerScanUrl(qr);
 
           // Status & Color matching screenshot defaults
-          let statusText = localStatuses[qr.id] || (table?.status ? table.status.toUpperCase() : 'OCCUPIED');
+          let statusText = localStatus[qr.id] || (table?.status ? table.status.toUpperCase() : 'OCCUPIED');
           let statusColor = '#ea4335'; // Red for OCCUPIED
 
           if (statusText === 'FREE') statusColor = '#1e6ee2';
@@ -295,7 +295,7 @@ export default function QRManagementPanel({
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenDropdown(null);
-                            setLocalStatuses(prev => ({ ...prev, [qr.id]: opt.label }));
+                            setLocalStatus(prev => ({ ...prev, [qr.id]: opt.label }));
                             if (updateDiningTable && (table || qr.tableId)) {
                               const tableIdToUpdate = table ? table.id : qr.tableId;
                               const newStatus = opt.label === 'FREE' ? 'Free' : (opt.label === 'OCCUPIED' ? 'Occupied' : (opt.label === 'RESERVED' ? 'Reserved' : 'Inactive'));

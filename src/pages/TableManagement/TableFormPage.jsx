@@ -269,11 +269,11 @@ export default function TableFormPage() {
     { value: '', label: '-- None (Unassigned) --' },
     ...unassignedWaiters.map(w => ({
       value: w._id || w.id || w.name,
-      label: `🤵 ${w.name} (Unassigned)`
+      label: `${w.name} (Unassigned)`
     })),
     ...assignedWaiters.map(w => ({
       value: w._id || w.id || w.name,
-      label: `🤵 ${w.name} (Assigned to Table ${w.assignedTableNum})`
+      label: `${w.name} (Assigned to Table ${w.assignedTableNum})`
     }))
   ];
 
@@ -314,7 +314,7 @@ export default function TableFormPage() {
       payload.tableNumber = idStr;
     }
 
-    const token = localStorage.getItem("userToken") || localStorage.getItem("token");
+    const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
     const isMock = token && token.startsWith("mock_");
 
     if (isEdit) {

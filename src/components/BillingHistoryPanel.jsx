@@ -6,6 +6,13 @@ import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
 
+const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 export default function BillingHistoryPanel({
   billingHistory = [],
   branches = [],
@@ -49,13 +56,34 @@ export default function BillingHistoryPanel({
     let itemsToExport = [];
 
     try {
+      let startDate = customStartDate || undefined;
+      let endDate = customEndDate || undefined;
+
+      if (dateRange === 'Today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        startDate = todayStr;
+        endDate = todayStr;
+      } else if (dateRange === 'Yesterday') {
+        const yestStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        startDate = yestStr;
+        endDate = yestStr;
+      } else if (dateRange === 'This Week') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        startDate = sevenDaysAgo;
+        endDate = new Date().toISOString().split('T')[0];
+      } else if (dateRange === 'This Month') {
+        const now = new Date();
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        endDate = new Date().toISOString().split('T')[0];
+      }
+
       const filters = {
         search: searchTerm,
         dateRange,
-        startDate: customStartDate,
-        endDate: customEndDate,
-        branchId: selectedBranchId,
-        paymentMethod: selectedPayment,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
         isExport: 'true',
         limit: '0' // Tell backend to fetch all for export
       };
@@ -140,6 +168,7 @@ export default function BillingHistoryPanel({
   const totalSales = summary?.totalSales || 0;
   const cashTotal = summary?.cashTotal || 0;
   const upiTotal = summary?.upiTotal || 0;
+  const cardTotal = summary?.cardTotal || 0;
 
   return (
     <section>
@@ -225,7 +254,7 @@ export default function BillingHistoryPanel({
         </div>
 
         {/* SUMMARY CARDS */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Bills</span>
             <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--black)', marginTop: '8px' }}>{totalBills}</div>
@@ -241,6 +270,10 @@ export default function BillingHistoryPanel({
           <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UPI</span>
             <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6', marginTop: '8px' }}>₹{upiTotal.toLocaleString()}</div>
+          </div>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Card</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#8b5cf6', marginTop: '8px' }}>₹{cardTotal.toLocaleString()}</div>
           </div>
         </div>
 
@@ -294,10 +327,34 @@ export default function BillingHistoryPanel({
                         </td>
                         <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                           <button
+                            type="button"
                             onClick={() => setSelectedInvoice(invoice)}
-                            style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '700', fontSize: '14px', cursor: 'pointer', textDecoration: 'underline' }}
+                            title="View Invoice Details"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              border: '1px solid #fed7aa',
+                              background: '#fff7ed',
+                              color: 'var(--primary)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = 'var(--primary)';
+                              e.currentTarget.style.color = '#ffffff';
+                              e.currentTarget.style.borderColor = 'var(--primary)';
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = '#fff7ed';
+                              e.currentTarget.style.color = 'var(--primary)';
+                              e.currentTarget.style.borderColor = '#fed7aa';
+                            }}
                           >
-                            View
+                            <EyeIcon size={16} />
                           </button>
                         </td>
                       </tr>

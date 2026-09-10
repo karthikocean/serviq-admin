@@ -41,10 +41,19 @@ export default function TableManagement() {
     }
   }, [activeRestaurant, selectedBranchId]);
 
-  const fetchData = async () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+
+  const fetchData = async (filters = {}) => {
     setIsLoading(true);
     try {
-      const params = selectedBranchId ? { branchId: selectedBranchId } : { branchId: 'ALL' };
+      const activeSearch = filters.search !== undefined ? filters.search : searchTerm;
+      const activeStatus = filters.status !== undefined ? filters.status : statusFilter;
+      const params = {
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+        search: activeSearch ? activeSearch.trim() : undefined,
+        status: activeStatus !== 'All' ? activeStatus : undefined
+      };
       const tablesRes = await TableApi.getTables(params);
       if (tablesRes.status && tablesRes.response?.data) {
         setTables(tablesRes.response.data);

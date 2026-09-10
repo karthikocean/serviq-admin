@@ -322,28 +322,24 @@ export default function HelpSupport() {
           <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'left' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>PRIORITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>REPLIES</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'center' }}>ACTION</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '20%', textAlign: 'left' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '40%', textAlign: 'left' }}>SUBJECT</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>PRIORITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
                 </tr>
               ) : tickets.length === 0 ? (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
                 </tr>
               ) : (
                 tickets.map(ticket => {
-                  const replies = getTicketReplies(ticket);
-                  const hasReplies = replies.length > 0 || Boolean(ticket.resolution);
-
                   return (
                   <tr 
                     key={ticket._id || ticket.id}
@@ -366,46 +362,6 @@ export default function HelpSupport() {
                       <span className={`badge ${getStatusClass(ticket.status)}`}>
                         {ticket.status}
                       </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
-                      {hasReplies ? (
-                        <span 
-                          onClick={() => handleOpenViewTicket(ticket)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 9px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            background: '#eff6ff',
-                            color: '#1d4ed8',
-                            border: '1px solid #bfdbfe',
-                            cursor: 'pointer'
-                          }}
-                          title="Click to view support replies"
-                        >
-                          💬 {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? 'Reply' : 'Replies'}` : 'Replied'}
-                        </span>
-                      ) : (
-                        <span 
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            background: '#f8fafc',
-                            color: '#94a3b8',
-                            border: '1px solid #e2e8f0'
-                          }}
-                        >
-                          ⏳ Awaiting
-                        </span>
-                      )}
                     </td>
                     <td style={{ padding: '14px 20px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
@@ -671,7 +627,10 @@ export default function HelpSupport() {
             <div style={{ marginTop: '4px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                 <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  💬 Support Responses ({replies.length + (viewTicket.resolution ? 1 : 0)})
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  Support Responses ({replies.length + (viewTicket.resolution ? 1 : 0)})
                 </span>
                 {isLoadingTicketDetails && (
                   <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Refreshing replies...</span>
@@ -683,8 +642,11 @@ export default function HelpSupport() {
                 {viewTicket.resolution && (
                   <div style={{ background: '#f0fdf4', padding: '14px 16px', borderRadius: '10px', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '12px', color: '#166534', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                        ✅ Official Support Resolution
+                      <span style={{ fontSize: '12px', color: '#166534', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Official Support Resolution
                       </span>
                       {viewTicket.resolvedAt && (
                         <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
@@ -707,8 +669,23 @@ export default function HelpSupport() {
                       className={`ticket-reply-card ${isAdmin ? 'admin-reply' : 'user-reply'}`}
                     >
                       <div className="ticket-reply-header">
-                        <span className="ticket-reply-author" style={{ color: isAdmin ? '#0369a1' : '#c2410c' }}>
-                          {isAdmin ? '🛡️ ServIQ Support Team' : `👤 ${reply.sender || 'You (Restaurant)'}`}
+                        <span className="ticket-reply-author" style={{ color: isAdmin ? '#0369a1' : '#c2410c', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {isAdmin ? (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                              </svg>
+                              ServIQ Support Team
+                            </>
+                          ) : (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                              </svg>
+                              {reply.sender || 'You (Restaurant)'}
+                            </>
+                          )}
                         </span>
                         <span className="ticket-reply-time">
                           {formatDateTimeDMY(reply.createdAt)}

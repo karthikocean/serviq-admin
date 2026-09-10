@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
+import { extractOrderISODate, formatDateDMY } from '../helper/DateHelper.js';
+import ReportsApi from '../api/Reports.js';
+import { useAppState } from '../config/AppContext.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -42,7 +45,7 @@ const iconBtnViewStyle = {
 
 const IconBtn = ({ icon, tooltip, style, onClick }) => {
   const isDelete = style?.color === '#ef4444';
-  const isGreen = style?.color === '#10b981';
+  const isGreen = style?.color === '#10b981' || style?.color === '#059669';
   return (
     <button 
       title={tooltip} 
@@ -78,6 +81,9 @@ export default function WaiterReportsPanel({
   updateOrder,
   activeRestaurant = {}
 }) {
+  const { selectedBranchId } = useAppState();
+  const [apiReportData, setApiReportData] = useState([]);
+
   // Filters local states
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
@@ -89,6 +95,33 @@ export default function WaiterReportsPanel({
   const [filterOrderStatus, setFilterOrderStatus] = useState('All');
   const [page, setPage] = useState(0);
   const limit = 10;
+
+  // Fetch waiter reports from API when date/filters change
+  useEffect(() => {
+    let isMounted = true;
+    const fetchApiReport = async () => {
+      try {
+        const filters = {
+          startDate: dateStart || undefined,
+          endDate: dateEnd || undefined,
+          branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+          waiterName: filterWaiter !== 'All' ? filterWaiter : undefined,
+          limit: 1000
+        };
+        const res = await ReportsApi.getWaiterReports(filters);
+        if (isMounted && res && res.status) {
+          const d = res.response?.data || res.response || [];
+          if (Array.isArray(d) && d.length > 0) {
+            setApiReportData(d);
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching waiter report API:", err);
+      }
+    };
+    fetchApiReport();
+    return () => { isMounted = false; };
+  }, [dateStart, dateEnd, filterWaiter, selectedBranchId]);
 
   // Modals local states
   const [showTimelineModal, setShowTimelineModal] = useState(false);
@@ -132,15 +165,7 @@ export default function WaiterReportsPanel({
   };
 
   const getOrderDate = (ord) => {
-    if (ord.date) return ord.date;
-    const idNum = parseInt(ord.id) || 0;
-    const offset = (847 - idNum) % 7;
-    if (offset >= 0 && idNum >= 840) {
-      const d = new Date(2026, 5, 10);
-      d.setDate(d.getDate() - offset);
-      return d.toISOString().split('T')[0];
-    }
-    return ord.date || new Date().toISOString().split('T')[0];
+    return extractOrderISODate(ord) || ord.date || '';
   };
 
   // Filter lists
@@ -157,8 +182,9 @@ export default function WaiterReportsPanel({
     const paymentStatus = ord.billingStatus || 'unpaid';
     const orderStatus = ord.status || 'new';
 
-    if (dateStart && date < dateStart) return false;
-    if (dateEnd && date > dateEnd) return false;
+    if (dateStart && date && date < dateStart) return false;
+    if (dateEnd && date && date > dateEnd) return false;
+    if ((dateStart || dateEnd) && !date) return false;
     if (filterWaiter !== 'All' && waiter !== filterWaiter) return false;
     if (filterTable !== 'All' && table !== filterTable) return false;
     if (filterSource !== 'All' && source !== filterSource) return false;
@@ -322,7 +348,7 @@ export default function WaiterReportsPanel({
                 value={filterPaymentStatus}
                 onChange={e => setFilterPaymentStatus(e.target.value)}
                 options={[
-                  { value: 'All', label: 'All Statuses' },
+                  { value: 'All', label: 'All Status' },
                   { value: 'Paid', label: 'Paid' },
                   { value: 'Unpaid', label: 'Unpaid' }
                 ]}
@@ -336,7 +362,7 @@ export default function WaiterReportsPanel({
                 value={filterOrderStatus}
                 onChange={e => setFilterOrderStatus(e.target.value)}
                 options={[
-                  { value: 'All', label: 'All Statuses' },
+                  { value: 'All', label: 'All Status' },
                   { value: 'New', label: 'New' },
                   { value: 'Preparing', label: 'Preparing' },
                   { value: 'Ready', label: 'Ready' },

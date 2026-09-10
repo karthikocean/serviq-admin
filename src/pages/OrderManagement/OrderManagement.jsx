@@ -31,17 +31,16 @@ export default function OrderManagement() {
   const fetchOrdersAndStaff = async () => {
     try {
       const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-      const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}` : '';
-      const paginationParam = `page=${page}&limit=${limit}${isBranchFiltered ? `&branchId=${selectedBranchId}` : ''}`;
+      const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000';
 
       let fetchedOrders = [];
       let paginationInfo = null;
 
-      // 1. Fetch paginated orders, staff/users & tables in parallel
+      // 1. Fetch orders, staff/users & tables in parallel
       const [orderRes, staffRes, tableRes] = await Promise.all([
-        apiClient.get(`/orders?${paginationParam}`).catch(() => null),
-        apiClient.get(`/users${branchParam}`).catch(() => null),
-        apiClient.get(`/tables${branchParam}`).catch(() => null)
+        apiClient.get(`/orders${branchParam}`).catch(() => null),
+        apiClient.get(`/users${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000'}`).catch(() => null),
+        apiClient.get(`/tables${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000'}`).catch(() => null)
       ]);
 
       if (orderRes && (orderRes.status === 200 || orderRes.status === 201 || orderRes.data?.success || orderRes.data?.status)) {
@@ -64,10 +63,10 @@ export default function OrderManagement() {
         if (d?.pagination) paginationInfo = d.pagination;
       }
 
-      // 2. If paginated endpoint returned empty, fallback to unpaginated /orders
+      // 2. If endpoint returned empty, fallback to basic /orders
       if (fetchedOrders.length === 0) {
         try {
-          const fallbackRes = await apiClient.get(`/orders${branchParam}`).catch(() => null);
+          const fallbackRes = await apiClient.get(isBranchFiltered ? `/orders?branchId=${selectedBranchId}` : '/orders').catch(() => null);
           if (fallbackRes && (fallbackRes.status === 200 || fallbackRes.data?.success || fallbackRes.data?.status)) {
             const fd = fallbackRes.data;
             if (Array.isArray(fd)) fetchedOrders = fd;
@@ -89,9 +88,9 @@ export default function OrderManagement() {
 
       setApiOrders(fetchedOrders);
 
-      if (paginationInfo) {
-        setTotalPages(paginationInfo.totalPages || 1);
-        setTotalCount(paginationInfo.totalOrders || fetchedOrders.length);
+      if (paginationInfo && paginationInfo.totalOrders) {
+        setTotalPages(paginationInfo.totalPages || Math.ceil(paginationInfo.totalOrders / limit));
+        setTotalCount(paginationInfo.totalOrders);
       } else {
         setTotalCount(fetchedOrders.length);
         setTotalPages(Math.max(1, Math.ceil(fetchedOrders.length / limit)));
