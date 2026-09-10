@@ -1,3 +1,4 @@
+import UploadApi from '../api/Upload.js';
 import React, { useState, useEffect } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from '../components/Badge';
@@ -26,6 +27,7 @@ import CategoryListPanel from '../components/CategoryListPanel';
 import BranchManagementPanel from '../components/BranchManagementPanel';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import NotificationModal from '../components/NotificationModal';
+import { notificationApi } from '../api/Notification.js';
 
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -340,6 +342,33 @@ export default function Admin() {
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  // Fetch live notifications count for badge
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCounts = async () => {
+      try {
+        const res = await notificationApi.getNotifications({
+          type: 'all',
+          branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        });
+        if (isMounted && res && res.status && res.data) {
+          const counts = res.data.counts || {};
+          const activeCount = counts.totalActive ?? counts.totalCount ?? (Array.isArray(res.data) ? res.data.length : 0);
+          setNotificationCount(activeCount);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch notification counts in Admin:', e);
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedBranchId, isNotificationModalOpen]);
 
   // Roles & Permissions state
   const [selectedRole, setSelectedRole] = useState('Waiter');
@@ -1237,16 +1266,25 @@ export default function Admin() {
                         id="menu-item-image-file"
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              setMenuForm({ ...menuForm, image: reader.result });
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
+                        onChange={async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMenuForm(prev => ({ ...prev, image: reader.result }));
+      };
+      reader.readAsDataURL(file);
+      try {
+        const res = await UploadApi.uploadImage(file, 'menu', 'image');
+        if (res?.status) {
+          const finalUrl = res.url || res.data?.url || res.response?.data?.url;
+          if (finalUrl) setMenuForm(prev => ({ ...prev, image: finalUrl }));
+        }
+      } catch (err) {
+        console.warn('Upload error:', err);
+      }
+    }
+  }}
                         style={{ display: 'none' }}
                       />
                     </div>
@@ -1999,18 +2037,29 @@ export default function Admin() {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
-              {pendingOrdersCount > 0 && (
+              {(notificationCount > 0 || pendingOrdersCount > 0) && (
                 <span style={{
                   position: 'absolute',
-                  top: '-2px',
-                  right: '-2px',
-                  width: '9px',
-                  height: '9px',
-                  borderRadius: '50%',
+                  top: '-4px',
+                  right: '-4px',
+                  minWidth: notificationCount > 0 ? '18px' : '9px',
+                  height: notificationCount > 0 ? '18px' : '9px',
+                  padding: notificationCount > 0 ? '0 4px' : '0',
+                  borderRadius: '9999px',
                   backgroundColor: '#ea580c',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px #fed7aa'
-                }}></span>
+                  boxShadow: '0 2px 4px rgba(234, 88, 12, 0.3)',
+                  boxSizing: 'border-box',
+                  lineHeight: 1
+                }}>
+                  {notificationCount > 0 ? (notificationCount > 99 ? '99+' : notificationCount) : ''}
+                </span>
               )}
             </button>
 

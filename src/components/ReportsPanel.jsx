@@ -693,13 +693,18 @@ export default function ReportsPanel({
         let menuList = [];
 
         if (isBranchFiltered) {
-          const branchParam = { branchId: selectedBranchId, limit: 1000 };
+          const branchParam = {
+            branchId: selectedBranchId,
+            limit: 1000,
+            startDate: dateStart || undefined,
+            endDate: dateEnd || undefined
+          };
           const [orderRes, staffRes, tableRes, catRes, menuRes] = await Promise.all([
             OrderApi.getOrders(branchParam).catch(() => null),
-            UserApi.getUsers(branchParam).catch(() => null),
-            TableApi.getTables(branchParam).catch(() => null),
+            UserApi.getUsers({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
+            TableApi.getTables({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
             MenuApi.getCategories({ limit: 1000 }).catch(() => null),
-            MenuApi.getMenuItems(branchParam).catch(() => null)
+            MenuApi.getMenuItems({ branchId: selectedBranchId, limit: 1000 }).catch(() => null)
           ]);
 
           if (orderRes?.status && orderRes?.response) orderList = extractServerList(orderRes) || [];
@@ -713,7 +718,11 @@ export default function ReportsPanel({
         } else {
           // All Branches: Fetch global + all branches in parallel
           const [globalOrders, globalStaff, globalTables, catRes, globalMenu] = await Promise.all([
-            OrderApi.getOrders({ limit: 1000 }).catch(() => null),
+            OrderApi.getOrders({
+              limit: 1000,
+              startDate: dateStart || undefined,
+              endDate: dateEnd || undefined
+            }).catch(() => null),
             UserApi.getUsers({ limit: 1000 }).catch(() => null),
             TableApi.getTables({ limit: 1000 }).catch(() => null),
             MenuApi.getCategories({ limit: 1000 }).catch(() => null),
@@ -735,7 +744,12 @@ export default function ReportsPanel({
               const bId = b._id || b.id || b.branchId;
               if (!bId) return null;
               const [bOrders, bStaff, bTables, bMenu] = await Promise.all([
-                OrderApi.getOrders({ branchId: bId, limit: 1000 }).catch(() => null),
+                OrderApi.getOrders({
+                  branchId: bId,
+                  limit: 1000,
+                  startDate: dateStart || undefined,
+                  endDate: dateEnd || undefined
+                }).catch(() => null),
                 UserApi.getUsers({ branchId: bId, limit: 1000 }).catch(() => null),
                 TableApi.getTables({ branchId: bId, limit: 1000 }).catch(() => null),
                 MenuApi.getMenuItems({ branchId: bId, limit: 1000 }).catch(() => null)
@@ -779,7 +793,7 @@ export default function ReportsPanel({
 
     fetchLiveContext();
     return () => { isMounted = false; };
-  }, [selectedBranchId, effectiveBranches.length]);
+  }, [selectedBranchId, effectiveBranches.length, dateStart, dateEnd]);
 
   // Derived effective collections strictly filtered by active branch
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
@@ -1000,7 +1014,7 @@ export default function ReportsPanel({
         endDate: dateEnd,
         branchId: isBranchFiltered ? selectedBranchId : undefined,
         search: searchQuery,
-        page: page + 1,
+        page: page,
         limit: pagination.limit
       };
 
@@ -1361,19 +1375,16 @@ export default function ReportsPanel({
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Waiter Revenue</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{(summary?.totalWaiterRevenue || 0).toLocaleString('en-IN')}</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Fulfilled by serving team</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Orders Served</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.totalOrdersServed || 0}</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Completed order tickets</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid var(--primary, #ff7a00)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Waiters On Duty</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeWaitersOnDuty || 0} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {summary?.totalWaiters || waiterData.length || 0}</span></div>
-            <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px', fontWeight: 600 }}>Available for table service</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #f59e0b', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
@@ -1381,7 +1392,6 @@ export default function ReportsPanel({
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#b45309', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>
               {currency}{summary?.averageOrderValue || '0.00'}
             </div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Per customer order</div>
           </div>
         </div>
       ) : (
@@ -1389,27 +1399,21 @@ export default function ReportsPanel({
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #ea580c', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Dishes Prepared</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#ea580c', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.totalDishesPrepared || 0}</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Cooked and dispatched</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid var(--primary, #ff7a00)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Food Revenue Generated</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{(summary?.foodRevenueGenerated || 0).toLocaleString('en-IN')}</div>
-            <div style={{ fontSize: '11px', color: '#16a34a', marginTop: '2px', fontWeight: 600 }}>Total value of dishes cooked</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Food Items</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeFoodItems ?? kitchenData.length}</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>
-              {filterKitchenCategory && filterKitchenCategory !== 'All' ? `In category: ${filterKitchenCategory}` : `Across ${summary?.activeCategories || 0} categories`}
-            </div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #10b981', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Kitchen Preparation Time</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.avgPrepTime || '15 mins'}</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', fontWeight: 600 }}>Average order fulfillment</div>
           </div>
         </div>
       )}

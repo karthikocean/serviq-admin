@@ -225,11 +225,26 @@ export default function StaffManagementPanel({
   const fetchData = async () => {
     setIsLoading(true);
 
+    const userParams = {
+      page: 0,
+      limit: 500,
+    };
+    if (searchQuery && searchQuery.trim()) {
+      userParams.search = searchQuery.trim();
+    }
+    if (roleFilter && roleFilter !== 'All') {
+      const targetRoleObj = apiRoles.find(r => r._id === roleFilter);
+      userParams.role = targetRoleObj ? targetRoleObj.roleName : roleFilter;
+    }
+    if (statusFilter && statusFilter !== 'All') {
+      userParams.status = statusFilter;
+    }
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
+      userParams.branchId = activeFilteredBranchId;
+    }
+
     const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
-      UserApi.getUsers({
-        page: 0,
-        limit: 500
-      }),
+      UserApi.getUsers(userParams),
       UserApi.getStations(),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
@@ -294,8 +309,11 @@ export default function StaffManagementPanel({
   };
 
   useEffect(() => {
-    fetchData();
-  }, [selectedBranchId]);
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [selectedBranchId, roleFilter, statusFilter, searchQuery]);
 
   const filteredUsers = apiUsers.filter(u => {
     // 1. Branch filter
@@ -1166,25 +1184,21 @@ export default function StaffManagementPanel({
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid var(--primary)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Staff Records</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalRecords}</div>
-          <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 600, marginTop: '2px' }}>Includes all branches and roles</div>
         </div>
 
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid #16a34a' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Waiters On Duty</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{waitersOnDuty} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {waitersCount}</span></div>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Ready for table service</div>
         </div>
 
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid #ea580c' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Kitchen Staff On Duty</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#ea580c', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{kitchenOnDuty} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {kitchenStaffCount}</span></div>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Active food preparation</div>
         </div>
 
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid #3b82f6' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Dining Tables</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalAssignedTables} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {apiTables.length}</span></div>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '2px' }}>Covered by on-duty waiters</div>
         </div>
       </div>
 

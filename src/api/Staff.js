@@ -11,11 +11,29 @@ const extractErrorMessage = (error, defaultMsg) => {
 };
 
 class StaffApi {
-  async getStaff(branchId = "") {
+  async getStaff(params = "") {
     try {
       const cleanParams = { limit: 10, page: 0 };
-      if (branchId && branchId !== 'ALL') {
-        cleanParams.branchId = branchId;
+      if (typeof params === 'string') {
+        if (params && params !== 'ALL' && params !== 'All') {
+          cleanParams.branchId = params;
+        }
+      } else if (params && typeof params === 'object') {
+        Object.keys(params).forEach(key => {
+          if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
+            cleanParams[key] = params[key];
+          }
+        });
+        const searchVal = params.search || params.searchQuery || params.searchTerm;
+        if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+        const roleVal = params.role || params.roleFilter;
+        if (roleVal && !cleanParams.role && roleVal !== 'All' && roleVal !== 'ALL') cleanParams.role = roleVal;
+        if (cleanParams.page !== undefined) {
+          cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+        }
+        if (cleanParams.limit !== undefined) {
+          cleanParams.limit = Number(cleanParams.limit) || 10;
+        }
       }
       const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {

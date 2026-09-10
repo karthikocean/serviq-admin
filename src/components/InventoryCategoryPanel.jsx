@@ -130,17 +130,22 @@ export default function InventoryCategoryPanel() {
 
   const branches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
 
-  // Fetch Categories and Live Items from Backend API
+  // Fetch categories, items, and branches from APIs
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = { limit: 1000 };
+      const baseParams = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
-        params.branchId = selectedBranchId;
+        baseParams.branchId = selectedBranchId;
       }
+      const queryParams = {
+        ...baseParams,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined
+      };
       const [catsRes, itemsRes] = await Promise.all([
-        InventoryCategoryApi.getCategories(params),
-        InventoryApi.getItems(params)
+        InventoryCategoryApi.getCategories(queryParams),
+        InventoryApi.getItems(baseParams)
       ]);
 
       if (catsRes?.status) {
@@ -166,10 +171,13 @@ export default function InventoryCategoryPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId, activeRestaurant]);
+  }, [selectedBranchId, searchTerm, statusFilter, activeRestaurant]);
 
   useEffect(() => {
-    fetchAllData();
+    const delayDebounceFn = setTimeout(() => {
+      fetchAllData();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
   }, [fetchAllData]);
 
   const fetchCategories = fetchAllData;
@@ -590,28 +598,7 @@ export default function InventoryCategoryPanel() {
             ← Back to Stock Items
           </button>
 
-          <button
-            type="button"
-            onClick={fetchAllData}
-            disabled={isLoading}
-            title="Refresh list from server"
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '700',
-              color: '#475569',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: isLoading ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <RefreshIcon size={14} color={isLoading ? '#94a3b8' : '#475569'} />
-            <span>Refresh</span>
-          </button>
+
 
           <button
             type="button"

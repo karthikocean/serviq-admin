@@ -4,12 +4,24 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class MemberApi {
   async getTables(params = {}) {
     try {
-      const cleanParams = {};
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
         }
       });
+      const searchVal = params.search || params.searchQuery || params.searchTerm;
+      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+      if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
+      if (params.section && !cleanParams.section && params.section !== 'All' && params.section !== 'ALL') cleanParams.section = params.section;
+      if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit) || 10;
+      }
       const response = await apiClient.get("/tables", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

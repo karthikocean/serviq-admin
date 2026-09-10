@@ -417,12 +417,12 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const fetchQrCodes = async () => {
+  const fetchQrCodes = async (params = {}) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await QrCodeApi.getQrCodes();
+      const res = await QrCodeApi.getQrCodes(params);
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
@@ -441,12 +441,12 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (params = {}) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await OrderApi.getOrders();
+      const res = await OrderApi.getOrders(params);
       if (res && res.status) {
         const payload = res.response || {};
         const rawOrders = Array.isArray(payload) ? payload :
@@ -475,12 +475,13 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const fetchMenu = async () => {
+  const fetchMenu = async (params = {}) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MenuApi.getMenuItems({ limit: 1000 });
+      const queryParams = { limit: 1000, ...params };
+      const res = await MenuApi.getMenuItems(queryParams);
       if (res && res.status && res.response) {
         const menuData = Array.isArray(res.response.data)
           ? res.response.data
@@ -504,12 +505,12 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const fetchBranches = async () => {
+  const fetchBranches = async (params = {}) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
       const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(),
+        BranchApi.getBranches(params),
         UserApi.getUsers({ limit: 10 })
       ]);
 

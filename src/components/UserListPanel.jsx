@@ -181,7 +181,8 @@ export default function UserListPanel() {
         limit, 
         search: searchQuery, 
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
-        statusFilter: statusFilter === 'All' ? '' : statusFilter
+        statusFilter: statusFilter === 'All' ? '' : statusFilter,
+        branchId: activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined
       }),
       BranchApi.getBranches(),
       RoleApi.getRoles()
@@ -224,7 +225,7 @@ export default function UserListPanel() {
       fetchData();
     }, 300);
     return () => clearTimeout(delayDebounceFn);
-  }, [page, searchQuery, roleFilter, statusFilter]);
+  }, [page, searchQuery, roleFilter, statusFilter, activeFilteredBranchId]);
 
   const getPageNumbers = () => {
     const pages = [];

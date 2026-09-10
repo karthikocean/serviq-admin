@@ -185,12 +185,12 @@ export default function SearchableSelect({
       padding: '2px',
       maxHeight: `${dynamicMaxHeight}px`,
       overflowY: 'auto',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
       '&::-webkit-scrollbar': {
-        width: '6px'
-      },
-      '&::-webkit-scrollbar-thumb': {
-        background: '#cbd5e1',
-        borderRadius: '4px'
+        display: 'none',
+        width: '0px',
+        height: '0px'
       }
     }),
     option: (provided, state) => ({

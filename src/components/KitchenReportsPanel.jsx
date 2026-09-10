@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import SearchableSelect from './SearchableSelect.jsx';
 import { extractOrderISODate, formatDateDMY } from '../helper/DateHelper.js';
+import ReportsApi from '../api/Reports.js';
+import { useAppState } from '../config/AppContext.js';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -76,12 +78,42 @@ export default function KitchenReportsPanel({
   staff = [],
   menu = []
 }) {
+  const { selectedBranchId } = useAppState();
+  const [apiKitchenData, setApiKitchenData] = useState([]);
+
   // Filters local states
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
   const [filterStaff, setFilterStaff] = useState('All');
   const [filterDish, setFilterDish] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
+
+  // Fetch kitchen reports from API when date/filters change
+  useEffect(() => {
+    let isMounted = true;
+    const fetchApiReport = async () => {
+      try {
+        const filters = {
+          startDate: dateStart || undefined,
+          endDate: dateEnd || undefined,
+          branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+          staffName: filterStaff !== 'All' ? filterStaff : undefined,
+          limit: 1000
+        };
+        const res = await ReportsApi.getKitchenReports(filters);
+        if (isMounted && res && res.status) {
+          const d = res.response?.data || res.response || [];
+          if (Array.isArray(d) && d.length > 0) {
+            setApiKitchenData(d);
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching kitchen report API:", err);
+      }
+    };
+    fetchApiReport();
+    return () => { isMounted = false; };
+  }, [dateStart, dateEnd, filterStaff, selectedBranchId]);
 
   // Modals local states
   const [showTimelineModal, setShowTimelineModal] = useState(false);

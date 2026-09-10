@@ -5,6 +5,7 @@ import { isModuleAllowedForPlan } from '../config/initialData';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
 import NotificationModal from '../components/NotificationModal';
+import { notificationApi } from '../api/Notification.js';
 
 export default function AdminLayout() {
   const {
@@ -29,7 +30,34 @@ export default function AdminLayout() {
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [dateTimeStr, setDateTimeStr] = useState('');
+
+  // Fetch live notifications count for badge
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCounts = async () => {
+      try {
+        const res = await notificationApi.getNotifications({
+          type: 'all',
+          branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        });
+        if (isMounted && res && res.status && res.data) {
+          const counts = res.data.counts || {};
+          const activeCount = counts.totalActive ?? counts.totalCount ?? (Array.isArray(res.data) ? res.data.length : 0);
+          setNotificationCount(activeCount);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch notification counts in AdminLayout:', e);
+      }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [selectedBranchId, isNotificationModalOpen]);
 
   // Live Clock
   useEffect(() => {
@@ -519,18 +547,29 @@ export default function AdminLayout() {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                 <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
               </svg>
-              {pendingOrdersCount > 0 && (
+              {(notificationCount > 0 || pendingOrdersCount > 0) && (
                 <span style={{
                   position: 'absolute',
-                  top: '-2px',
-                  right: '-2px',
-                  width: '9px',
-                  height: '9px',
-                  borderRadius: '50%',
+                  top: '-4px',
+                  right: '-4px',
+                  minWidth: notificationCount > 0 ? '18px' : '9px',
+                  height: notificationCount > 0 ? '18px' : '9px',
+                  padding: notificationCount > 0 ? '0 4px' : '0',
+                  borderRadius: '9999px',
                   backgroundColor: '#ea580c',
+                  color: '#ffffff',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px #fed7aa'
-                }}></span>
+                  boxShadow: '0 2px 4px rgba(234, 88, 12, 0.3)',
+                  boxSizing: 'border-box',
+                  lineHeight: 1
+                }}>
+                  {notificationCount > 0 ? (notificationCount > 99 ? '99+' : notificationCount) : ''}
+                </span>
               )}
             </button>
 

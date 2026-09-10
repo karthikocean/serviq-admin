@@ -87,20 +87,39 @@ export default function StockReductionPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Active view tab: 'reductions' | 'history' | 'purchases'
+  const [activeTab, setActiveTab] = useState('reductions');
+
+  // Search and filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [reasonFilter, setReasonFilter] = useState('All');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
   // Fetch Categories, Items, Stats, and Logs from API
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = { limit: 1000 };
+      const baseParams = { limit: 1000 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
-        params.branchId = selectedBranchId;
+        baseParams.branchId = selectedBranchId;
       }
+      const queryParams = {
+        ...baseParams,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        reason: reasonFilter !== 'All' ? reasonFilter : undefined
+      };
+
       const [catsRes, itemsRes, statsRes, purchaseLogsRes, reductionLogsRes] = await Promise.all([
-        InventoryCategoryApi.getCategories(params),
-        InventoryApi.getItems(params),
-        InventoryApi.getStats(params),
-        InventoryApi.getLogs({ ...params, type: 'purchase' }),
-        InventoryApi.getLogs({ ...params, type: 'reduction' })
+        InventoryCategoryApi.getCategories(baseParams),
+        InventoryApi.getItems(queryParams),
+        InventoryApi.getStats(baseParams),
+        InventoryApi.getLogs({ ...queryParams, type: 'purchase' }),
+        InventoryApi.getLogs({ ...queryParams, type: 'reduction' })
       ]);
 
       if (catsRes?.status) {
@@ -135,10 +154,13 @@ export default function StockReductionPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, searchTerm, categoryFilter, reasonFilter]);
 
   useEffect(() => {
-    fetchAllData();
+    const delayDebounceFn = setTimeout(() => {
+      fetchAllData();
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
   }, [fetchAllData]);
 
   const rawCategories = liveCategories.length > 0 ? liveCategories : (activeRestaurant?.inventoryCategories || DEFAULT_INVENTORY_CATEGORIES);
@@ -199,17 +221,6 @@ export default function StockReductionPanel() {
     ? liveReductions
     : (selectedBranchId ? rawReductions.filter(r => r.branchId === selectedBranchId || r.branchId === 'ALL') : rawReductions);
 
-  // Active view tab: 'reductions' | 'history' | 'purchases'
-  const [activeTab, setActiveTab] = useState('reductions');
-
-  // Search and filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [reasonFilter, setReasonFilter] = useState('All');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // View and Modals state
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'reduce-form' | 'purchase-form'
@@ -316,12 +327,12 @@ export default function StockReductionPanel() {
     };
 
     try {
-      const res = await InventoryApi.reduceStock(payload);
+      const res = await InventoryApi.reduceStock(payload, { silent: true });
       if (res?.status) {
         if (itemId) {
           await InventoryApi.updateItem(itemId, {
             currentStock: Math.max(0, (Number(currentItem?.currentStock) || 0) - qtyNum)
-          }).catch(() => {});
+          }, { silent: true }).catch(() => {});
         }
         await fetchAllData();
         if (reduceInventoryStock && activeRestaurant?.id) {
@@ -456,7 +467,7 @@ export default function StockReductionPanel() {
           supplierName: purchaseForm.supplierName.trim() || undefined,
           supplierPhone: purchaseForm.supplierPhone.trim() || undefined,
           branchId: cleanBranchId
-        });
+        }, { silent: true });
         if (createRes?.status && createRes?.response?.data) {
           itemId = createRes.response.data._id || createRes.response.data.id;
         }
@@ -481,12 +492,12 @@ export default function StockReductionPanel() {
     };
 
     try {
-      const res = await InventoryApi.recordPurchase(payload);
+      const res = await InventoryApi.recordPurchase(payload, { silent: true });
       if (res?.status) {
         if (itemId) {
           await InventoryApi.updateItem(itemId, {
             currentStock: (Number(currentItem?.currentStock) || 0) + qtyNum
-          }).catch(() => {});
+          }, { silent: true }).catch(() => {});
         }
         await fetchAllData();
         if (addPurchaseRecord && activeRestaurant?.id) {
@@ -1290,49 +1301,14 @@ export default function StockReductionPanel() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-                Stock Reduction & Purchase Logs
-              </h1>
-              <span style={{
-                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-                color: '#ffffff',
-                fontSize: '11px',
-                fontWeight: 800,
-                padding: '3px 8px',
-                borderRadius: '6px',
-                letterSpacing: '0.6px'
-              }}>
-                LIVE API
-              </span>
-            </div>
+            <h1 style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+              Stock Reduction & Purchase Logs
+            </h1>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={fetchAllData}
-            disabled={isLoading}
-            title="Refresh stats and records"
-            style={{
-              background: '#ffffff',
-              color: '#475569',
-              border: '1px solid #cbd5e1',
-              borderRadius: '8px',
-              padding: '9px 14px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <RefreshIcon size={14} color={isLoading ? '#94a3b8' : '#475569'} />
-            <span>Refresh</span>
-          </button>
 
           <button
             type="button"
@@ -1381,47 +1357,32 @@ export default function StockReductionPanel() {
       </div>
 
       {/* 2. STATS KPI METRICS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '18px' }}>
+        <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.4px' }}>TOTAL REDUCTIONS</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {totalReductionInstances} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Entries</span>
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            🍳 {totalKitchenUsageCount} Kitchen Usage Logs
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginTop: '2px', fontFamily: "'Outfit', sans-serif" }}>
+            {totalReductionInstances} <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Entries</span>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>TOTAL REDUCTIONS VALUE</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#dc2626', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#dc2626', marginTop: '2px', fontFamily: "'Outfit', sans-serif" }}>
             ₹{totalWastageValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            Usage, Waste & Spoilage
-          </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>TOTAL PURCHASES</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#16a34a', marginTop: '2px', fontFamily: "'Outfit', sans-serif" }}>
             ₹{totalPurchasesAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            {totalPurchasesCount} Recorded Invoices
-          </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '18px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '12px 16px', boxShadow: '0 1px 4px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#ea580c', textTransform: 'uppercase', letterSpacing: '0.4px' }}>ACTIVE RAW MATERIALS</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {activeItemsCount} <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Items</span>
-          </div>
-          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            {inventory.filter(i => {
-              const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
-              return (Number(i.currentStock) || 0) <= min;
-            }).length} Require Restocking
+          <div style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', marginTop: '2px', fontFamily: "'Outfit', sans-serif" }}>
+            {activeItemsCount} <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b' }}>Items</span>
           </div>
         </div>
       </div>
@@ -1498,12 +1459,12 @@ export default function StockReductionPanel() {
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>View:</label>
               <div style={{ flex: 1 }}>
                 <SearchableSelect
-                  value={activeTab}
+                  value={activeTab} 
                   onChange={e => { setActiveTab(e.target.value); setCurrentPage(0); }}
                   options={[
-                    { value: 'reductions', label: `Stock Reduction Items (${inventory.length})` },
-                    { value: 'history', label: `Reduction History Logs (${reductions.length})` },
-                    { value: 'purchases', label: `Purchase Records (${purchases.length})` }
+                    { value: 'reductions', label: 'Stock Reduction Items' },
+                    { value: 'history', label: 'Reduction History Logs' },
+                    { value: 'purchases', label: 'Purchase Records' }
                   ]}
                   placeholder="Select View..."
                 />

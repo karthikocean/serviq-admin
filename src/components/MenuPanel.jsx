@@ -50,6 +50,7 @@ const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 import MenuApi from '../api/Menu.js';
+import { getImageUrl } from '../helper/ImageHelper.js';
 
 export default function MenuPanel({
   categories = [],
@@ -62,11 +63,6 @@ export default function MenuPanel({
   currency = '₹',
   refreshTrigger
 }) {
-  const getImageUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    return `${server}${path}`;
-  };
   const { activeRestaurant, updateMenuCategories, selectedBranchId } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
@@ -124,7 +120,10 @@ export default function MenuPanel({
   }, [fetchLiveCategories, refreshTrigger]);
 
   React.useEffect(() => {
-    fetchPaginatedMenu();
+    const timer = setTimeout(() => {
+      fetchPaginatedMenu();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId, liveCategories]);
 
   const fetchPaginatedMenu = async () => {
@@ -142,7 +141,9 @@ export default function MenuPanel({
       search: trimmed || undefined,
     };
 
-    if (matchedCategory && trimmed.length > 0) {
+    if (menuCategory && menuCategory !== 'All Items' && menuCategory !== 'ALL') {
+      params.categoryId = menuCategory;
+    } else if (matchedCategory && trimmed.length > 0) {
       params.categoryId = matchedCategory._id || matchedCategory.id;
     }
 

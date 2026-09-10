@@ -8,14 +8,10 @@ import MenuApi from '../../api/Menu.js';
 import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import { cleanRelativeImagePath, getImageUrl } from '../../helper/ImageHelper.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
-  const getImageUrl = (path) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    return `${server}${path}`;
-  };
   const {
     currentUser,
     activeRestaurant,
@@ -263,8 +259,8 @@ export default function MenuManagement() {
       price: parseFloat(menuForm.price) || 0,
       gst: parseFloat(menuForm.gst) !== undefined ? parseFloat(menuForm.gst) : 5,
       category: menuForm.category,
-      image: menuForm.image,
-      coverImage: menuForm.coverImage,
+      image: cleanRelativeImagePath(menuForm.image),
+      coverImage: cleanRelativeImagePath(menuForm.coverImage),
       available: menuForm.available,
       veg: menuForm.veg,
       bestseller: menuForm.bestseller,
@@ -377,10 +373,11 @@ export default function MenuManagement() {
                         const file = e.target.files[0];
                         if (file) {
                           setIsUploadingCover(true);
-                          const res = await UploadApi.uploadImage(file);
+                          const res = await UploadApi.uploadImage(file, "menu", "image");
                           setIsUploadingCover(false);
-                          if (res?.status && res.response?.data?.url) {
-                            setMenuForm({ ...menuForm, coverImage: res.response.data.url });
+                          if (res?.status) {
+                            const finalPath = res.path || res.data?.path || cleanRelativeImagePath(res.url);
+                            if (finalPath) setMenuForm({ ...menuForm, coverImage: finalPath });
                           }
                         }
                       }}
@@ -438,10 +435,11 @@ export default function MenuManagement() {
                           const file = e.target.files[0];
                           if (file) {
                             setIsUploadingImage(true);
-                            const res = await UploadApi.uploadImage(file);
+                            const res = await UploadApi.uploadImage(file, "menu", "image");
                             setIsUploadingImage(false);
-                            if (res?.status && res.response?.data?.url) {
-                              setMenuForm({ ...menuForm, image: res.response.data.url });
+                            if (res?.status) {
+                              const finalPath = res.path || res.data?.path || cleanRelativeImagePath(res.url);
+                              if (finalPath) setMenuForm({ ...menuForm, image: finalPath });
                             }
                           }
                         }}

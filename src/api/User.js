@@ -13,15 +13,26 @@ const extractErrorMessage = (error, defaultMsg) => {
 class UserApi {
   async getUsers(params = {}) {
     try {
-      const cleanParams = {};
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
         }
       });
+      const searchVal = params.search || params.searchQuery || params.searchTerm;
+      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+      const roleVal = params.role || params.roleFilter;
+      if (roleVal && !cleanParams.role && roleVal !== 'All' && roleVal !== 'ALL') cleanParams.role = roleVal;
+      const statusVal = params.status || params.statusFilter;
+      if (statusVal && !cleanParams.status && statusVal !== 'All' && statusVal !== 'ALL') cleanParams.status = statusVal;
+      if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+
       // Backend API pagination starts from zero (page 0 is first page)
       if (cleanParams.page !== undefined) {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit) || 10;
       }
       const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
@@ -38,15 +49,22 @@ class UserApi {
 
   async getStations(params = {}) {
     try {
-      const cleanParams = {};
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
         }
       });
+      const searchVal = params.search || params.searchQuery || params.searchTerm;
+      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+      if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+
       // Backend API pagination starts from zero (page 0 is first page)
       if (cleanParams.page !== undefined) {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit) || 10;
       }
       const response = await apiClient.get("/users/stations", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {

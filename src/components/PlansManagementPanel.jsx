@@ -638,30 +638,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => fetchDashboardData(true)}
-            disabled={isRefreshing}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 16px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              fontWeight: 700,
-              borderColor: '#cbd5e1',
-              color: '#0f172a',
-              background: '#ffffff',
-              cursor: isRefreshing ? 'wait' : 'pointer'
-            }}
-          >
-            <span style={{ display: 'inline-block', transform: isRefreshing ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>
-              🔄
-            </span>
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
+
 
           <button
             type="button"

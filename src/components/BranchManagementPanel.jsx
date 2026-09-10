@@ -205,8 +205,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const fetchBranches = async () => {
     setIsLoading(true);
     try {
+      const branchParams = {
+        search: searchTerm ? searchTerm.trim() : undefined,
+        status: statusFilter !== 'All' ? statusFilter : undefined,
+        limit: 1000
+      };
       const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(),
+        BranchApi.getBranches(branchParams),
         UserApi.getUsers({ limit: 1000 })
       ]);
 
@@ -381,10 +386,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   useEffect(() => {
     if (isRestaurantOwner) {
-      fetchBranches();
+      const timer = setTimeout(() => {
+        fetchBranches();
+      }, 300);
       fetchLiveSubscription();
+      return () => clearTimeout(timer);
     }
-  }, [isRestaurantOwner, fetchLiveSubscription]);
+  }, [isRestaurantOwner, searchTerm, statusFilter, fetchLiveSubscription]);
 
   const branches = apiBranches;
 
@@ -1382,7 +1390,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   };
 
   // Operational View: Staff Pagination (8 per page)
-  const staffLimit = 8;
+  const staffLimit = 10;
   const staffTotal = (opData.staff || []).length;
   const staffTotalPages = Math.max(1, Math.ceil(staffTotal / staffLimit));
   const staffCurrentPage = Math.min(staffPage, staffTotalPages);
@@ -1852,31 +1860,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={handleRefreshOrders}
-                    disabled={isRefreshingOrders}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '7px 14px',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: '#ffffff',
-                      color: '#0f172a',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: isRefreshingOrders ? 'wait' : 'pointer'
-                    }}
-                  >
-                    <span style={{ display: 'inline-block', transform: isRefreshingOrders ? 'rotate(360deg)' : 'none', transition: 'transform 0.6s linear' }}>
-                      🔄
-                    </span>
-                    {isRefreshingOrders ? 'Refreshing...' : 'Refresh Orders'}
-                  </button>
-                </div>
+
               </div>
 
               {/* Status Filter Chips */}

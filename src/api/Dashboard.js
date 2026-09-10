@@ -97,7 +97,7 @@ class DashboardApi {
 
   async getLiveOrders(params = {}) {
     try {
-      const cleanParams = { limit: 5 };
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
         if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL') {
           cleanParams[key] = params[key];

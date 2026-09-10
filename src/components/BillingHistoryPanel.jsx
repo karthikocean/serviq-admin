@@ -56,13 +56,34 @@ export default function BillingHistoryPanel({
     let itemsToExport = [];
 
     try {
+      let startDate = customStartDate || undefined;
+      let endDate = customEndDate || undefined;
+
+      if (dateRange === 'Today') {
+        const todayStr = new Date().toISOString().split('T')[0];
+        startDate = todayStr;
+        endDate = todayStr;
+      } else if (dateRange === 'Yesterday') {
+        const yestStr = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        startDate = yestStr;
+        endDate = yestStr;
+      } else if (dateRange === 'This Week') {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        startDate = sevenDaysAgo;
+        endDate = new Date().toISOString().split('T')[0];
+      } else if (dateRange === 'This Month') {
+        const now = new Date();
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        endDate = new Date().toISOString().split('T')[0];
+      }
+
       const filters = {
         search: searchTerm,
         dateRange,
-        startDate: customStartDate,
-        endDate: customEndDate,
-        branchId: selectedBranchId,
-        paymentMethod: selectedPayment,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
         isExport: 'true',
         limit: '0' // Tell backend to fetch all for export
       };

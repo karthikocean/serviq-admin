@@ -24,9 +24,9 @@ switch (APP_ENV) {
   default:
 
 
-    IMAGE_BASE_URL = "http://192.168.88.9:5000/public";
-    BASE_URL = "http://192.168.88.9:5000/api/admin";
-    server = "http://192.168.88.9:5000";
+    IMAGE_BASE_URL = "http://192.168.88.23:5000/public";
+    BASE_URL = "http://192.168.88.23:5000/api/admin";
+    server = "http://192.168.88.23:5000";
     break;
 }
 

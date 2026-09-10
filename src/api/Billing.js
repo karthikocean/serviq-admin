@@ -4,13 +4,31 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class BillingApi {
   async getBillingHistory(filters = {}) {
     try {
-      const cleanParams = {};
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(filters).forEach(key => {
         const val = filters[key];
-        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
+        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
           cleanParams[key] = val;
         }
       });
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
+      if (filters.paymentMethod && !cleanParams.paymentMethod && filters.paymentMethod !== 'All' && filters.paymentMethod !== 'ALL') cleanParams.paymentMethod = filters.paymentMethod;
+      if (filters.status && !cleanParams.status && filters.status !== 'All' && filters.status !== 'ALL') cleanParams.status = filters.status;
+      if (filters.branchId && !cleanParams.branchId && filters.branchId !== 'All' && filters.branchId !== 'ALL') cleanParams.branchId = filters.branchId;
+      if (filters.dateStart && !cleanParams.startDate) cleanParams.startDate = filters.dateStart;
+      if (filters.dateEnd && !cleanParams.endDate) cleanParams.endDate = filters.dateEnd;
+      if (filters.fromDate && !cleanParams.startDate) cleanParams.startDate = filters.fromDate;
+      if (filters.toDate && !cleanParams.endDate) cleanParams.endDate = filters.toDate;
+      if (filters.customStartDate && !cleanParams.startDate) cleanParams.startDate = filters.customStartDate;
+      if (filters.customEndDate && !cleanParams.endDate) cleanParams.endDate = filters.customEndDate;
+
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit) || 10;
+      }
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/history${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
