@@ -319,27 +319,31 @@ export default function HelpSupport() {
           <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>My Tickets</h3>
         </div>
         <div className="table-responsive" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
-          <table className="data-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table className="data-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '20%', textAlign: 'left' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '40%', textAlign: 'left' }}>SUBJECT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>PRIORITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '14px 20px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center' }}>ACTION</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'left', whiteSpace: 'nowrap' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED AGENT</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '13%', textAlign: 'left', whiteSpace: 'nowrap' }}>DATE</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center', whiteSpace: 'nowrap' }}>PRIORITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '8%', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
                 </tr>
               ) : tickets.length === 0 ? (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
                 </tr>
               ) : (
                 tickets.map(ticket => {
+                  const assigned = ticket.assignedUser || 'Unassigned';
+                  const isAssigned = assigned && assigned !== 'Unassigned';
                   return (
                   <tr 
                     key={ticket._id || ticket.id}
@@ -347,23 +351,56 @@ export default function HelpSupport() {
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '14px 20px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {ticket.ticketNumber}
                     </td>
-                    <td style={{ padding: '14px 20px', fontWeight: 600, color: '#0f172a', verticalAlign: 'middle' }}>
-                      {ticket.subject}
+                    <td style={{ padding: '14px 18px', verticalAlign: 'middle' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px' }}>{ticket.subject}</div>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                          {ticket.category || 'General'}
+                        </span>
+                        {ticket.restaurantName && (
+                          <span style={{ fontSize: '11px', color: '#0284c7', background: '#f0f9ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                            {ticket.restaurantName}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 16px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: isAssigned ? '#0369a1' : '#64748b',
+                        background: isAssigned ? '#f0f9ff' : '#f8fafc',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: isAssigned ? '1px solid #bae6fd' : '1px solid #e2e8f0'
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        {assigned}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#475569', fontSize: '12.5px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                      {formatDateDMY(ticket.createdAt)}
+                    </td>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <span className={`badge ${getPriorityClass(ticket.priority)}`}>
                         {ticket.priority}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <span className={`badge ${getStatusClass(ticket.status)}`}>
                         {ticket.status}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 20px', textAlign: 'center', verticalAlign: 'middle' }}>
+                    <td style={{ padding: '14px 18px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
                         {/* View & Replies Button (Icon Only) */}
                         <button 
@@ -578,88 +615,183 @@ export default function HelpSupport() {
         isOpen={!!viewTicket} 
         onClose={() => setViewTicket(null)}
         title="Ticket Details"
-        maxWidth="640px"
+        maxWidth="720px"
       >
         {viewTicket && (() => {
           const replies = getTicketReplies(viewTicket);
+          const creatorEmail = viewTicket.createdBy?.email || (typeof viewTicket.createdBy === 'string' ? viewTicket.createdBy : '') || activeRestaurant?.email || 'mirchi@gmail.com';
+          const assignedAgent = viewTicket.assignedUser || 'Unassigned';
+          const isAssigned = assignedAgent && assignedAgent !== 'Unassigned';
 
           return (
-          <div className="ticket-details-modal">
+          <div className="ticket-details-modal" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Header Status & Info */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#0f172a' }}>{viewTicket.ticketNumber}</h3>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                  Created on {formatDateDMY(viewTicket.createdAt)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                    {viewTicket.ticketNumber}
+                  </h3>
+                  {viewTicket.restaurantName && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+                      🏪 {viewTicket.restaurantName}
+                    </span>
+                  )}
+                  {viewTicket.isReadBySuperAdmin !== undefined && (
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      background: viewTicket.isReadBySuperAdmin ? '#ecfdf5' : '#fff7ed',
+                      color: viewTicket.isReadBySuperAdmin ? '#059669' : '#c2410c',
+                      border: viewTicket.isReadBySuperAdmin ? '1px solid #a7f3d0' : '1px solid #fed7aa',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: viewTicket.isReadBySuperAdmin ? '#10b981' : '#f97316' }}></span>
+                      {viewTicket.isReadBySuperAdmin ? 'Seen by Support' : 'Unread by Support'}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginTop: '4px' }}>
+                  Created on <strong>{formatDateTimeDMY(viewTicket.createdAt)}</strong>
+                </div>
               </div>
+
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span className={`badge ${getPriorityClass(viewTicket.priority)}`}>{viewTicket.priority}</span>
-                <span className={`badge ${getStatusClass(viewTicket.status)}`}>{viewTicket.status}</span>
-              </div>
-            </div>
-
-            {/* Ticket Metadata Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>SUBJECT</p>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>{viewTicket.subject}</p>
-              </div>
-              <div>
-                <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>CATEGORY</p>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#334155' }}>{viewTicket.category}</p>
-              </div>
-            </div>
-
-            {/* Original Issue Description */}
-            <div style={{ background: '#ffffff', padding: '14px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  📋 Original Issue Description
+                <span className={`badge ${getPriorityClass(viewTicket.priority)}`} style={{ padding: '6px 12px', fontSize: '11.5px', fontWeight: 800 }}>
+                  {viewTicket.priority} Priority
+                </span>
+                <span className={`badge ${getStatusClass(viewTicket.status)}`} style={{ padding: '6px 12px', fontSize: '11.5px', fontWeight: 800 }}>
+                  {viewTicket.status}
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                {viewTicket.description || 'No description recorded.'}
-              </p>
             </div>
+
+            {/* Ticket Comprehensive Metadata Grid */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '12px',
+              background: '#f8fafc',
+              padding: '16px',
+              borderRadius: '12px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <div>
+                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY</p>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
+                  🏷️ {viewTicket.category || 'Billing'}
+                </span>
+              </div>
+
+              <div>
+                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSIGNED SUPPORT AGENT</p>
+                <span style={{
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  color: isAssigned ? '#0369a1' : '#64748b',
+                  background: isAssigned ? '#f0f9ff' : '#ffffff',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: isAssigned ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  {assignedAgent}
+                </span>
+              </div>
+
+              <div>
+                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>CREATED BY</p>
+                <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                  {creatorEmail}
+                </div>
+              </div>
+
+              <div>
+                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>LAST UPDATED</p>
+                <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                  {formatDateTimeDMY(viewTicket.updatedAt || viewTicket.createdAt)}
+                </div>
+              </div>
+
+              {viewTicket.resolvedAt && (
+                <div>
+                  <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>RESOLVED AT</p>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#166534' }}>
+                    {formatDateTimeDMY(viewTicket.resolvedAt)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Subject & Original Issue Description */}
+            <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  📌 Subject
+                </span>
+              </div>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                {viewTicket.subject}
+              </h4>
+
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+                  Description
+                </span>
+                <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {viewTicket.description || 'No description recorded.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Official Support Resolution Card (if resolved / resolution present) */}
+            {(viewTicket.resolution || viewTicket.status === 'Resolved') && (
+              <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px', border: '1.5px solid #86efac', borderLeft: '5px solid #16a34a' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                  <span style={{ fontSize: '13px', color: '#166534', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    Official Support Resolution
+                  </span>
+                  {viewTicket.resolvedAt && (
+                    <span style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 700, background: '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
+                      Resolved on {formatDateTimeDMY(viewTicket.resolvedAt)}
+                    </span>
+                  )}
+                </div>
+                <p style={{ margin: 0, fontSize: '13.5px', color: '#14532d', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                  {viewTicket.resolution || 'Ticket marked as resolved by technical support.'}
+                </p>
+              </div>
+            )}
 
             {/* Support Replies & Conversation Thread */}
-            <div style={{ marginTop: '4px' }}>
+            <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                   </svg>
                   Support Responses ({replies.length + (viewTicket.resolution ? 1 : 0)})
                 </span>
                 {isLoadingTicketDetails && (
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Refreshing replies...</span>
+                  <span style={{ fontSize: '11.5px', color: '#2563eb', fontWeight: 600 }}>Refreshing replies...</span>
                 )}
               </div>
 
               <div className="ticket-reply-thread">
-                {/* Official Resolution Card (if resolved) */}
-                {viewTicket.resolution && (
-                  <div style={{ background: '#f0fdf4', padding: '14px 16px', borderRadius: '10px', border: '1px solid #bbf7d0', borderLeft: '4px solid #16a34a' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '12px', color: '#166534', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                        Official Support Resolution
-                      </span>
-                      {viewTicket.resolvedAt && (
-                        <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
-                          {formatDateTimeDMY(viewTicket.resolvedAt)}
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#14532d', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                      {viewTicket.resolution}
-                    </p>
-                  </div>
-                )}
-
                 {/* List of Replies */}
                 {replies.map((reply, idx) => {
                   const isAdmin = reply.isAdmin;
@@ -675,7 +807,7 @@ export default function HelpSupport() {
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                               </svg>
-                              ServIQ Support Team
+                              {reply.sender || 'ServIQ Support Team'}
                             </>
                           ) : (
                             <>
@@ -701,17 +833,17 @@ export default function HelpSupport() {
                 {/* Empty State when no replies yet */}
                 {replies.length === 0 && !viewTicket.resolution && (
                   <div style={{
-                    padding: '20px',
-                    borderRadius: '10px',
-                    border: '1px dashed #cbd5e1',
+                    padding: '24px',
+                    borderRadius: '12px',
+                    border: '1.5px dashed #cbd5e1',
                     background: '#f8fafc',
                     textAlign: 'center'
                   }}>
-                    <div style={{ fontSize: '24px', marginBottom: '6px' }}>⏳</div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
+                    <div style={{ fontSize: '26px', marginBottom: '6px' }}>⏳</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#334155' }}>
                       Awaiting Support Team Response
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', lineHeight: 1.5, maxWidth: '420px', margin: '4px auto 0' }}>
                       Our technical support team has received your ticket and is reviewing it. Their reply will appear right here.
                     </div>
                   </div>
@@ -720,12 +852,12 @@ export default function HelpSupport() {
             </div>
 
             {/* Modal Actions Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={() => setViewTicket(null)}
-                style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 600 }}
+                style={{ padding: '8px 24px', fontSize: '13px', fontWeight: 700, borderRadius: '8px' }}
               >
                 Close
               </button>

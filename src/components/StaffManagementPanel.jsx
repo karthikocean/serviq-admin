@@ -16,6 +16,13 @@ const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -83,6 +90,7 @@ export default function StaffManagementPanel({
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
+  const [viewingStaff, setViewingStaff] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
   const [changePasswordUserId, setChangePasswordUserId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
@@ -1476,7 +1484,7 @@ export default function StaffManagementPanel({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
-                        padding: '6px 14px',
+                        padding: '6px 12px',
                         borderRadius: '20px',
                         fontSize: '11px',
                         fontWeight: 800,
@@ -1485,7 +1493,11 @@ export default function StaffManagementPanel({
                         background: isOnDuty ? '#dcfce7' : '#f1f5f9',
                         border: isOnDuty ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
                         cursor: 'pointer',
-                        minWidth: '95px',
+                        width: '105px',
+                        minWidth: '105px',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box',
+                        flexShrink: 0,
                         transition: 'all 0.15s ease',
                         boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                       }}
@@ -1495,7 +1507,8 @@ export default function StaffManagementPanel({
                         height: '7px',
                         borderRadius: '50%',
                         backgroundColor: isOnDuty ? '#16a34a' : '#94a3b8',
-                        display: 'inline-block'
+                        display: 'inline-block',
+                        flexShrink: 0
                       }}></span>
                       {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}
                     </button>
@@ -1504,6 +1517,27 @@ export default function StaffManagementPanel({
                   {/* 8. Actions */}
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        title="View Staff Details"
+                        onClick={() => setViewingStaff(user)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#0284c7',
+                          cursor: 'pointer',
+                          padding: '6px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <EyeIcon size={16} />
+                      </button>
+
                       <button
                         type="button"
                         title="Edit Staff Member"
@@ -2143,6 +2177,238 @@ export default function StaffManagementPanel({
           </div>
         </div>
       </Modal>
+
+      {/* VIEW STAFF MEMBER DETAILS MODAL */}
+      {viewingStaff && (
+        <Modal
+          isOpen={!!viewingStaff}
+          onClose={() => setViewingStaff(null)}
+          title="Staff Member Profile"
+          maxWidth="560px"
+        >
+          {(() => {
+            const uRoleId = typeof viewingStaff.roleId === 'object' ? viewingStaff.roleId?._id : viewingStaff.roleId;
+            const uBranchId = typeof viewingStaff.branchId === 'object' ? viewingStaff.branchId?._id : viewingStaff.branchId;
+            const uRoleName = viewingStaff.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Staff Member';
+            const branchObj = viewingStaff.branchId?.branchName ? viewingStaff.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+            const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
+            const isWaiter = uRoleName.toLowerCase().includes('waiter');
+            const isKitchen = uRoleName.toLowerCase().includes('kitchen');
+            const isOnDuty = viewingStaff.dutyStatus === 'ON_DUTY' || !viewingStaff.dutyStatus;
+            const assignedTables = isWaiter ? apiTables
+              .filter(t => {
+                const assigned = resolveTableAssignedWaiter(t, apiUsers);
+                return assigned && (
+                  String(assigned.id) === String(viewingStaff._id || viewingStaff.id) ||
+                  String(assigned.name).trim().toLowerCase() === String(viewingStaff.name).trim().toLowerCase()
+                );
+              })
+              .map(t => {
+                const tName = t.tableNo || t.tableNumber || t.id;
+                return tName.startsWith('Table') ? tName : `Table ${tName}`;
+              }) : [];
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {/* Header Card with Avatar */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                  padding: '16px 20px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '50%',
+                    background: isWaiter ? '#ecfdf5' : (isKitchen ? '#ffedd5' : '#eff6ff'),
+                    border: isWaiter ? '2px solid #86efac' : (isKitchen ? '2px solid #fed7aa' : '2px solid #bfdbfe'),
+                    color: isWaiter ? '#166534' : (isKitchen ? '#ea580c' : '#1d4ed8'),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    fontWeight: 900,
+                    flexShrink: 0
+                  }}>
+                    {viewingStaff.name?.charAt(0).toUpperCase() || 'S'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {viewingStaff.name}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        background: isWaiter ? '#dcfce7' : (isKitchen ? '#ffedd5' : '#f1f5f9'),
+                        color: isWaiter ? '#166534' : (isKitchen ? '#c2410c' : '#334155')
+                      }}>
+                        {isWaiter ? 'Waiter' : (isKitchen ? 'Kitchen' : uRoleName)}
+                      </span>
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: viewingStaff.isActive ? '#ecfdf5' : '#fef2f2',
+                        color: viewingStaff.isActive ? '#15803d' : '#b91c1c',
+                        border: viewingStaff.isActive ? '1px solid #bbf7d0' : '1px solid #fecaca'
+                      }}>
+                        {viewingStaff.isActive ? 'Active Account' : 'Inactive Account'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '12px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '16px'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Branch</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>{uBranchName}</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Duty Status</div>
+                    <div style={{ marginTop: '2px' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '3px 10px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        background: isOnDuty ? '#dcfce7' : '#f1f5f9',
+                        color: isOnDuty ? '#166534' : '#64748b',
+                        border: isOnDuty ? '1px solid #86efac' : '1px solid #cbd5e1'
+                      }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isOnDuty ? '#16a34a' : '#94a3b8' }}></span>
+                        {isOnDuty ? 'ON DUTY' : 'OFF DUTY'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Phone Number</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginTop: '2px', fontFamily: 'monospace' }}>
+                      {viewingStaff.phoneNumber || 'Not provided'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {viewingStaff.email || 'None'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Type</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px' }}>
+                      {viewingStaff.userType === 'STATION' ? 'Station Account' : 'Standard Employee'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Staff ID</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginTop: '2px', fontFamily: 'monospace' }}>
+                      {viewingStaff._id || viewingStaff.id || 'N/A'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Assigned Tables / Station Section */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  padding: '14px 16px'
+                }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+                    {isWaiter ? 'Assigned Tables' : (isKitchen ? 'Station / Terminal' : 'Station')}
+                  </div>
+                  {isWaiter ? (
+                    assignedTables.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {assignedTables.map(tb => (
+                          <span key={tb} style={{
+                            background: '#fff7ed',
+                            border: '1.5px solid #fed7aa',
+                            color: '#c2410c',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            padding: '3px 10px',
+                            borderRadius: '6px'
+                          }}>
+                            {tb}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
+                        No dining tables currently assigned to this waiter.
+                      </span>
+                    )
+                  ) : isKitchen ? (
+                    <span style={{
+                      background: '#fff',
+                      border: '1px solid #cbd5e1',
+                      color: '#334155',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      display: 'inline-block'
+                    }}>
+                      Kitchen Display System (KDS) Screen Access
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '13px', color: '#64748b' }}>General Floor / Service Duty</span>
+                  )}
+                </div>
+
+                {/* Modal Footer Buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setViewingStaff(null)}
+                    style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const target = viewingStaff;
+                      setViewingStaff(null);
+                      openEditUser(target);
+                    }}
+                    style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
+                  >
+                    Edit Staff Profile
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
 
     </section>
   );

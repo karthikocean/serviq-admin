@@ -75,7 +75,7 @@ export default function StockReductionPanel() {
 
   const rawPurchases = activeRestaurant?.inventoryPurchases || [];
   const rawReductions = activeRestaurant?.inventoryReductions || [];
-  
+
   // Live API States
   const [liveCategories, setLiveCategories] = useState([]);
   const [liveItems, setLiveItems] = useState([]);
@@ -332,7 +332,7 @@ export default function StockReductionPanel() {
         if (itemId) {
           await InventoryApi.updateItem(itemId, {
             currentStock: Math.max(0, (Number(currentItem?.currentStock) || 0) - qtyNum)
-          }, { silent: true }).catch(() => {});
+          }, { silent: true }).catch(() => { });
         }
         await fetchAllData();
         if (reduceInventoryStock && activeRestaurant?.id) {
@@ -455,7 +455,7 @@ export default function StockReductionPanel() {
       try {
         const rawBranch = selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined;
         const cleanBranchId = typeof rawBranch === 'object' ? (rawBranch?._id || rawBranch?.id) : rawBranch;
-        
+
         const createRes = await InventoryApi.createItem({
           name: purchaseForm.itemName.trim(),
           category: purchaseForm.category || 'General',
@@ -497,7 +497,7 @@ export default function StockReductionPanel() {
         if (itemId) {
           await InventoryApi.updateItem(itemId, {
             currentStock: (Number(currentItem?.currentStock) || 0) + qtyNum
-          }, { silent: true }).catch(() => {});
+          }, { silent: true }).catch(() => { });
         }
         await fetchAllData();
         if (addPurchaseRecord && activeRestaurant?.id) {
@@ -583,13 +583,13 @@ export default function StockReductionPanel() {
   const totalWastageValue = apiStats?.totalReductionsValue !== undefined
     ? Number(apiStats.totalReductionsValue)
     : reductions.reduce((sum, r) => {
-        if (r.reason === 'Wastage' || r.reason === 'Damage' || r.reason === 'Expired') {
-          const match = rawInventory.find(i => (i.id === r.itemId || i._id === r.itemId));
-          const rate = match ? (match.costPerUnit || 50) : 50;
-          return sum + ((r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity) * rate);
-        }
-        return sum;
-      }, 0);
+      if (r.reason === 'Wastage' || r.reason === 'Damage' || r.reason === 'Expired') {
+        const match = rawInventory.find(i => (i.id === r.itemId || i._id === r.itemId));
+        const rate = match ? (match.costPerUnit || 50) : 50;
+        return sum + ((r.quantityToReduce !== undefined ? r.quantityToReduce : r.quantity) * rate);
+      }
+      return sum;
+    }, 0);
   const totalPurchasesAmount = apiStats?.totalPurchasesValue !== undefined
     ? Number(apiStats.totalPurchasesValue)
     : purchases.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
@@ -606,9 +606,9 @@ export default function StockReductionPanel() {
     const rCat = (typeof r.itemId === 'object' && r.itemId?.categoryId) ? (rawCategories.find(c => (c._id === r.itemId.categoryId || c.id === r.itemId.categoryId))?.name || 'General') : (matchedItem ? getCategoryName(matchedItem) : (r.category || 'General'));
 
     const matchesSearch = rName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          rReason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          rUser.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          rNotes.toLowerCase().includes(searchTerm.toLowerCase());
+      rReason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rUser.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      rNotes.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesReason = reasonFilter === 'All' || rReason === reasonFilter;
     const matchesCategory = categoryFilter === 'All' || rCat === categoryFilter;
     return matchesSearch && matchesReason && matchesCategory;
@@ -624,9 +624,9 @@ export default function StockReductionPanel() {
     const pCat = (typeof p.itemId === 'object' && p.itemId?.categoryId) ? (rawCategories.find(c => (c._id === p.itemId.categoryId || c.id === p.itemId.categoryId))?.name || 'General') : (matchedItem ? getCategoryName(matchedItem) : (p.category || 'General'));
 
     const matchesSearch = pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          pInv.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          pSupplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          pUser.toLowerCase().includes(searchTerm.toLowerCase());
+      pInv.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pSupplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pUser.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || pCat === categoryFilter;
     return matchesSearch && matchesCategory;
   });
@@ -636,16 +636,16 @@ export default function StockReductionPanel() {
     const itemName = getItemDisplayName(i.name || i.itemName, i._id || i.id);
     const catName = getCategoryName(i);
     const matchesSearch = (itemName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || catName === categoryFilter;
     return matchesSearch && matchesCategory;
   });
 
   // Pagination slicing
-  const activeDataList = activeTab === 'reductions' 
-    ? filteredInventory 
-    : activeTab === 'history' 
-      ? filteredReductions 
+  const activeDataList = activeTab === 'reductions'
+    ? filteredInventory
+    : activeTab === 'history'
+      ? filteredReductions
       : filteredPurchases;
 
   const totalPages = Math.ceil(activeDataList.length / rowsPerPage) || 1;
@@ -1284,7 +1284,7 @@ export default function StockReductionPanel() {
 
   return (
     <section className="panel-view active" style={{ padding: '0 0 40px 0', width: '100%' }}>
-      
+
       {/* 1. TOP HEADER & SUB-NAV SWITCHER */}
       <div style={{
         background: '#ffffff',
@@ -1459,7 +1459,7 @@ export default function StockReductionPanel() {
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>View:</label>
               <div style={{ flex: 1 }}>
                 <SearchableSelect
-                  value={activeTab} 
+                  value={activeTab}
                   onChange={e => { setActiveTab(e.target.value); setCurrentPage(0); }}
                   options={[
                     { value: 'reductions', label: 'Stock Reduction Items' },
@@ -1539,7 +1539,7 @@ export default function StockReductionPanel() {
 
         {/* 4. TABLE VIEWS */}
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          
+
           {/* TAB 1: QUICK REDUCTION ITEMS */}
           {activeTab === 'reductions' && (
             <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>

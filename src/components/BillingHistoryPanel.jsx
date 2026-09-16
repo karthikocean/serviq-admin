@@ -150,15 +150,21 @@ export default function BillingHistoryPanel({
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Billing History");
 
-    // Auto-size columns loosely
-    const wscols = [
-      { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
-      { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 25 }
-    ];
+    // Dynamic auto-fit column widths so every header and value is fully displayed without truncation
+    const keys = Object.keys(exportData[0] || {});
+    const wscols = keys.map(key => {
+      let maxLen = String(key).length;
+      exportData.forEach(row => {
+        const valStr = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
+        if (valStr.length > maxLen) {
+          maxLen = valStr.length;
+        }
+      });
+      return { wch: Math.max(maxLen + 6, 18) };
+    });
     worksheet['!cols'] = wscols;
 
-    const fileName = `Billing_History_${new Date().getTime()}.xlsx`;
+    const fileName = `Billing_History_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(workbook, fileName);
     setIsExporting(false);
   };
@@ -280,52 +286,56 @@ export default function BillingHistoryPanel({
         {/* MAIN HISTORY TABLE */}
         <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)' }}>
           <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
-            <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>INVOICE</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ORDER ID</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DATE & TIME</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>AMOUNT</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PAYMENT</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTION</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>INVOICE</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>ORDER ID</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>TABLE</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DATE & TIME</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>AMOUNT</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>PAYMENT</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>STAFF</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>STATUS</th>
+                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'right' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
                     <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
-                      Loading billing history...
+                      <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading billing history...
                     </td>
                   </tr>
                 ) : (
                   <>
                     {billingHistory.map((invoice, idx) => (
-                      <tr key={invoice.id} style={{ borderBottom: idx !== billingHistory.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>{invoice.id}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.orderId}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>Table {invoice.table}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.date}, {invoice.time}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: 'var(--black)' }}>₹{invoice.amount.toLocaleString()}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '600' }}>{invoice.paymentMethod}</td>
-                        <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b' }}>{invoice.staff}</td>
-                        <td style={{ padding: '16px 20px' }}>
+                      <tr key={invoice.id || idx} style={{ borderBottom: idx !== billingHistory.length - 1 ? '1px solid var(--border)' : 'none', height: '58px' }}>
+                        <td style={{ padding: '14px 18px', fontSize: '13.5px', fontWeight: '700', color: 'var(--black)', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{invoice.id}</td>
+                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap' }}>{invoice.orderId}</td>
+                        <td style={{ padding: '14px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>Table {invoice.table}</td>
+                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569', whiteSpace: 'nowrap' }}>{invoice.date}, {invoice.time}</td>
+                        <td style={{ padding: '14px 18px', fontSize: '14px', fontWeight: '800', color: 'var(--black)', whiteSpace: 'nowrap', fontFamily: "'Outfit', sans-serif" }}>₹{Number(invoice.amount || 0).toLocaleString()}</td>
+                        <td style={{ padding: '14px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>
+                          <span style={{ padding: '4px 10px', borderRadius: '6px', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 700 }}>{invoice.paymentMethod}</span>
+                        </td>
+                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#0f172a', fontWeight: '600', whiteSpace: 'nowrap' }}>{invoice.staff}</td>
+                        <td style={{ padding: '14px 18px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <span style={{
                             display: 'inline-block',
-                            padding: '4px 10px',
+                            padding: '4px 12px',
                             borderRadius: '12px',
-                            fontSize: '12px',
-                            fontWeight: '700',
+                            fontSize: '11px',
+                            fontWeight: '800',
+                            letterSpacing: '0.3px',
                             background: invoice.status === 'Paid' ? '#dcfce7' : '#fef08a',
-                            color: invoice.status === 'Paid' ? '#166534' : '#854d0e'
+                            color: invoice.status === 'Paid' ? '#166534' : '#854d0e',
+                            border: invoice.status === 'Paid' ? '1px solid #86efac' : '1px solid #fde047'
                           }}>
                             {invoice.status}
                           </span>
                         </td>
-                        <td style={{ padding: '16px 20px', textAlign: 'right' }}>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <button
                             type="button"
                             onClick={() => setSelectedInvoice(invoice)}

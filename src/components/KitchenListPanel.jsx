@@ -176,7 +176,7 @@ export default function KitchenListPanel({
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: '6px',
-                          padding: '6px 14px',
+                          padding: '6px 12px',
                           borderRadius: '20px',
                           fontSize: '11px',
                           fontWeight: 800,
@@ -185,7 +185,11 @@ export default function KitchenListPanel({
                           background: isActive ? '#dcfce7' : '#f1f5f9',
                           border: isActive ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
                           cursor: 'pointer',
-                          minWidth: '95px',
+                          width: '105px',
+                          minWidth: '105px',
+                          whiteSpace: 'nowrap',
+                          boxSizing: 'border-box',
+                          flexShrink: 0,
                           transition: 'all 0.15s ease',
                           boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
                         }}
@@ -195,7 +199,8 @@ export default function KitchenListPanel({
                           height: '7px',
                           borderRadius: '50%',
                           backgroundColor: isActive ? '#16a34a' : '#94a3b8',
-                          display: 'inline-block'
+                          display: 'inline-block',
+                          flexShrink: 0
                         }}></span>
                         {isActive ? 'ON DUTY' : 'OFF DUTY'}
                       </button>

@@ -5,7 +5,7 @@ import { isModuleAllowedForPlan } from '../config/initialData';
 import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
 import NotificationModal from '../components/NotificationModal';
-import { notificationApi } from '../api/Notification.js';
+import { notificationApi, isDummyNotification } from '../api/Notification.js';
 
 export default function AdminLayout() {
   const {
@@ -43,9 +43,14 @@ export default function AdminLayout() {
           branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
         });
         if (isMounted && res && res.status && res.data) {
-          const counts = res.data.counts || {};
-          const activeCount = counts.totalActive ?? counts.totalCount ?? (Array.isArray(res.data) ? res.data.length : 0);
-          setNotificationCount(activeCount);
+          const rawCustomer = (res.data.customerWebsiteNotifications || res.data.notifications || res.data.allNotifications || [])
+            .filter(item => (item.source !== 'SUPER_ADMIN' && item.requestType !== 'SuperAdmin'))
+            .filter(n => !isDummyNotification(n));
+          const rawSuper = (res.data.superAdminNotifications || res.data.notifications || res.data.allNotifications || [])
+            .filter(item => (item.source === 'SUPER_ADMIN' || item.requestType === 'SuperAdmin'))
+            .filter(n => !isDummyNotification(n));
+          const totalValid = rawCustomer.length + rawSuper.length;
+          setNotificationCount(totalValid > 0 ? totalValid : 0);
         }
       } catch (e) {
         console.warn('Failed to fetch notification counts in AdminLayout:', e);

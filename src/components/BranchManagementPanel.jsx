@@ -11,7 +11,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
-import { resolveBranchManagerName } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import { getPlanBranchLimit } from '../config/initialData';
 import {
   sanitizeName,
@@ -232,6 +232,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         const mappedBranches = rawList.map(b => {
           const bId = b._id || b.id;
           const mgr = resolveBranchManagerName(b, usersList, staffList);
+          const contactNum = resolveBranchContactNumber(b, usersList, staffList);
           const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
 
           const addr = typeof b.address === 'object' && b.address !== null ? b.address : {};
@@ -250,7 +251,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             branchCode: b.branchCode || b.code || '',
             branchManager: resolvedMgr,
             managerName: resolvedMgr,
-            mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+            mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
             email: b.email || b.managerEmail || '',
             password: '',
             confirmPassword: '',
@@ -544,12 +545,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return '';
     };
 
+    const resolvedFallbackMgr = resolveBranchManagerName(branch, apiUsers, []);
     const managerNameFromBranch = (
       extractRawManagerName(branch.managerName) ||
       extractRawManagerName(branch.branchManager) ||
       extractRawManagerName(branch.manager) ||
       extractRawManagerName(branch.branchManagerName) ||
       extractRawManagerName(branch.contactPerson) ||
+      (resolvedFallbackMgr !== 'Unassigned' ? resolvedFallbackMgr : '') ||
       ''
     );
 
@@ -823,15 +826,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
 
-    const managerVal = (branchForm.branchManager || branchForm.managerName || '').trim();
+    const branchNameTrimmed = (branchForm.branchName || branchForm.name || '').trim();
+    const managerVal = (branchForm.managerName || branchForm.branchManager || '').trim();
 
     const payload = {
-      branchName: (branchForm.branchName || '').trim(),
+      name: branchNameTrimmed,
+      branchName: branchNameTrimmed,
       branchCode: (branchForm.branchCode || '').trim(),
       branchOpeningDate: branchForm.openingDate,
+      openingDate: branchForm.openingDate,
       contactNumber: (branchForm.mobileNumber || '').trim(),
       mobileNumber: (branchForm.mobileNumber || '').trim(),
       phone: (branchForm.mobileNumber || '').trim(),
+      phoneNumber: (branchForm.mobileNumber || '').trim(),
       email: (branchForm.email || '').trim(),
       street: (branchForm.address || '').trim(),
       address: (branchForm.address || '').trim(),
@@ -840,12 +847,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       country: (branchForm.country || '').trim(),
       pincode: (branchForm.pincode || '').trim(),
       managerName: managerVal,
-      branchManager: managerVal,
-      manager: managerVal,
-      contactPerson: managerVal,
-      branchManagerName: managerVal,
-      managerMobile: (branchForm.mobileNumber || '').trim(),
-      managerEmail: (branchForm.email || '').trim(),
       status: branchForm.status || 'Active',
       isMainBranch: !!branchForm.isMainBranch
     };
@@ -868,82 +869,98 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       const res = await BranchApi.updateBranch(branchForm.id, payload);
       if (res && res.status) {
-        // If a new password was set, synchronize with associated manager user record
-        if (branchForm.password && String(branchForm.password).trim()) {
-          const pinVal = String(branchForm.password).trim();
-          const targetBranch = apiBranches.find(b => (b.id === branchForm.id || b._id === branchForm.id));
-          
-          // Match manager user across current user pool
-          let matchedUser = (apiUsers || []).find(u => {
-            const uId = String(u._id || u.id || '');
-            if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
-            if (branchForm.managerId && uId === String(branchForm.managerId)) return true;
-            const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
-              ? String(u.branchId._id || u.branchId.id || '')
-              : String(u.branchId || u.branch || '');
-            if (uBranchId && uBranchId === String(branchForm.id)) {
-              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
-              if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
-            }
-            const uEmail = String(u.email || '').toLowerCase().trim();
-            const uPhone = String(u.phone || u.mobileNumber || u.mobile || u.phoneNumber || '').replace(/\D/g, '');
-            const bEmail = String(branchForm.email || '').toLowerCase().trim();
-            const bPhone = String(branchForm.mobileNumber || '').replace(/\D/g, '');
-            if (bEmail && uEmail && bEmail === uEmail) return true;
-            if (bPhone && uPhone && bPhone === uPhone) return true;
-            return false;
-          });
-
-          // If not found in apiUsers, query backend for users assigned to this branch
-          if (!matchedUser) {
-            try {
-              const branchUsersRes = await UserApi.getUsers({ branchId: branchForm.id, limit: 10 });
-              const branchUsers = branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data)
-                ? branchUsersRes.response.data
-                : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []);
-              matchedUser = branchUsers.find(u => {
-                const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
-                return roleStr.includes('manager') || roleStr.includes('admin');
-              }) || branchUsers[0];
-            } catch (e) {
-              console.warn("Could not query branch users for password sync:", e);
-            }
+        // Synchronize manager name, email, phone with associated manager user record
+        const targetBranch = apiBranches.find(b => (b.id === branchForm.id || b._id === branchForm.id));
+        
+        // Match manager user across current user pool
+        let matchedUser = (apiUsers || []).find(u => {
+          const uId = String(u._id || u.id || '');
+          if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
+          if (branchForm.managerId && uId === String(branchForm.managerId)) return true;
+          const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
+            ? String(u.branchId._id || u.branchId.id || '')
+            : String(u.branchId || u.branch || '');
+          if (uBranchId && uBranchId === String(branchForm.id)) {
+            const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+            if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
           }
+          const uEmail = String(u.email || '').toLowerCase().trim();
+          const uPhone = String(u.phone || u.mobileNumber || u.mobile || u.phoneNumber || '').replace(/\D/g, '');
+          const bEmail = String(branchForm.email || '').toLowerCase().trim();
+          const bPhone = String(branchForm.mobileNumber || '').replace(/\D/g, '');
+          if (bEmail && uEmail && bEmail === uEmail) return true;
+          if (bPhone && uPhone && bPhone === uPhone) return true;
+          return false;
+        });
 
-          const targetUserId = matchedUser?._id || matchedUser?.id;
-          if (targetUserId) {
-            try {
-              await Promise.allSettled([
-                UserApi.changePassword(targetUserId, pinVal),
-                UserApi.updateUser(targetUserId, { password: pinVal })
-              ]);
-            } catch (passErr) {
-              console.warn("Could not update manager password via UserApi:", passErr);
-            }
-          } else {
-            // If no user exists for this branch manager yet, create one
-            try {
-              await UserApi.createUser({
-                name: managerVal,
-                email: branchForm.email,
-                phoneNumber: branchForm.mobileNumber,
-                password: pinVal,
-                role: 'Manager',
-                branchId: branchForm.id
-              });
-            } catch (createErr) {
-              console.warn("Could not create manager user on branch edit:", createErr);
-            }
+        // If not found in apiUsers, query backend for users assigned to this branch
+        if (!matchedUser) {
+          try {
+            const branchUsersRes = await UserApi.getUsers({ branchId: branchForm.id, limit: 10 });
+            const branchUsers = branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data)
+              ? branchUsersRes.response.data
+              : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []);
+            matchedUser = branchUsers.find(u => {
+              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+              return roleStr.includes('manager') || roleStr.includes('admin');
+            }) || branchUsers[0];
+          } catch (e) {
+            console.warn("Could not query branch users for sync:", e);
           }
         }
 
-        setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...payload, branchManager: managerVal, managerName: managerVal } : b));
+        const targetUserId = matchedUser?._id || matchedUser?.id;
+        if (targetUserId) {
+          const userUpdatePayload = {
+            name: managerVal,
+            email: branchForm.email,
+            phone: branchForm.mobileNumber,
+            phoneNumber: branchForm.mobileNumber,
+            mobileNumber: branchForm.mobileNumber
+          };
+          if (branchForm.password && String(branchForm.password).trim()) {
+            const pinVal = String(branchForm.password).trim();
+            userUpdatePayload.password = pinVal;
+            try {
+              await UserApi.changePassword(targetUserId, pinVal);
+            } catch (passErr) {
+              console.warn("Could not update manager password via UserApi:", passErr);
+            }
+          }
+          try {
+            await UserApi.updateUser(targetUserId, userUpdatePayload);
+          } catch (passErr) {
+            console.warn("Could not update manager user info via UserApi:", passErr);
+          }
+        } else if (managerVal) {
+          // If no user exists for this branch manager yet, create one
+          try {
+            await UserApi.createUser({
+              name: managerVal,
+              email: branchForm.email,
+              phoneNumber: branchForm.mobileNumber,
+              password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
+              role: 'Manager',
+              branchId: branchForm.id
+            });
+          } catch (createErr) {
+            console.warn("Could not create manager user on branch edit:", createErr);
+          }
+        }
+
+        const updatedBranchObj = {
+          ...payload,
+          id: branchForm.id,
+          _id: branchForm.id,
+          name: branchNameTrimmed,
+          branchName: branchNameTrimmed,
+          managerName: managerVal,
+          branchManager: managerVal
+        };
+
+        setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...updatedBranchObj } : b));
         if (activeRestaurant?.id && updateBranch) {
-          updateBranch(activeRestaurant.id, branchForm.id, {
-            ...payload,
-            branchManager: managerVal,
-            managerName: managerVal
-          });
+          updateBranch(activeRestaurant.id, branchForm.id, updatedBranchObj);
         }
         await fetchBranches();
         ShowNotifications.showAlertNotification("Branch updated successfully!", true);
@@ -1278,48 +1295,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             assignedQrId: t.assignedQrId || ''
           };
         })
-      : Array.from({ length: currentViewBranch?.totalTables || 10 }).map((_, i) => ({
-          _id: `tbl-${i + 1}`,
-          id: `tbl-${i + 1}`,
-          name: `T-${String(i + 1).padStart(2, '0')}`,
-          tableNo: `T-${String(i + 1).padStart(2, '0')}`,
-          seats: 4,
-          capacity: 4,
-          seatingCapacity: 4,
-          status: 'Available',
-          floor: 'Main Dining Area',
-          qrUrl: '',
-          assignedQrId: ''
-        }));
+      : [];
 
     // 4. Kitchen KDS stations
     const activeCount = mappedOrders.filter(o => o.status === 'preparing').length;
-    const mappedKitchen = [
-      {
-        name: 'Main Hot Kitchen KDS',
-        items: 'Biryani, Curries, Rice Platters, Main Course',
-        load: activeCount > 5 ? 'High' : (activeCount > 2 ? 'Medium' : 'Normal'),
-        loadPercent: Math.min(100, Math.max(25, activeCount * 18))
-      },
-      {
-        name: 'Grill, Tandoor & Starters KDS',
-        items: 'Kebabs, Tandoori, Starters, Fried Items',
-        load: activeCount > 4 ? 'Medium' : 'Normal',
-        loadPercent: Math.min(100, Math.max(20, activeCount * 14))
-      },
-      {
-        name: 'Beverages & Mocktail Bar KDS',
-        items: 'Fresh Juices, Shakes, Mocktails, Hot Teas',
-        load: activeCount > 6 ? 'High' : 'Normal',
-        loadPercent: Math.min(100, Math.max(15, activeCount * 12))
-      },
-      {
-        name: 'Desserts & Bakery KDS',
-        items: 'Ice Creams, Pastries, Puddings, Sweets',
-        load: 'Normal',
-        loadPercent: Math.min(100, Math.max(10, activeCount * 8))
-      }
-    ];
+    const rawCategories = activeRestaurant?.categories || [];
+    const mappedKitchen = rawCategories.length > 0
+      ? rawCategories.map(cat => {
+          const catName = typeof cat === 'string' ? cat : (cat.name || cat.categoryName || 'Kitchen Station');
+          return {
+            name: `${catName} KDS`,
+            items: cat.description || `Live orders for ${catName}`,
+            load: activeCount > 5 ? 'High' : (activeCount > 2 ? 'Medium' : 'Normal'),
+            loadPercent: Math.min(100, Math.max(10, activeCount * 15))
+          };
+        })
+      : [];
 
     return {
       staff: mappedStaff,
@@ -1514,7 +1505,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     {(!currentViewBranch?.managerName && !currentViewBranch?.branchManager) || ['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager || '').toLowerCase()) ? 'Unassigned Manager' : (currentViewBranch?.managerName || currentViewBranch?.branchManager)}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 700, marginTop: '2px' }}>
-                    {currentViewBranch?.mobileNumber || 'N/A'}
+                    {resolveBranchContactNumber(currentViewBranch, users, staff) || currentViewBranch?.mobileNumber || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -2158,37 +2149,43 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           {opSubTab === 'kitchen' && (
             <div style={{ padding: '8px 0' }}>
               <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Kitchen Display System (KDS) Channels</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                {opData.kitchen.map(station => {
-                  let progressColor = '#22c55e'; // Green
-                  if (station.load === 'High') progressColor = '#ef4444'; // Red
-                  else if (station.load === 'Medium') progressColor = '#f59e0b'; // Amber
+              {opData.kitchen.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '32px 16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>No kitchen stations or categories configured for this branch.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                  {opData.kitchen.map(station => {
+                    let progressColor = '#22c55e'; // Green
+                    if (station.load === 'High') progressColor = '#ef4444'; // Red
+                    else if (station.load === 'Medium') progressColor = '#f59e0b'; // Amber
 
-                  return (
-                    <div key={station.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.01)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{station.name}</h5>
-                        <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', fontWeight: 700, padding: '3px 8px', borderRadius: '6px' }}>Active</span>
-                      </div>
-                      
-                      <div>
-                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Routed Categories:</span>
-                        <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{station.items}</p>
-                      </div>
+                    return (
+                      <div key={station.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.01)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{station.name}</h5>
+                          <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', fontWeight: 700, padding: '3px 8px', borderRadius: '6px' }}>Active</span>
+                        </div>
+                        
+                        <div>
+                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Routed Categories:</span>
+                          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{station.items}</p>
+                        </div>
 
-                      <div style={{ marginTop: '4px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 700 }}>
-                          <span style={{ color: '#475569' }}>Load Status</span>
-                          <span style={{ color: progressColor }}>{station.load} ({station.loadPercent}%)</span>
-                        </div>
-                        <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div style={{ width: `${station.loadPercent}%`, height: '100%', background: progressColor, borderRadius: '3px', transition: 'width 0.5s ease-in-out' }}></div>
+                        <div style={{ marginTop: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 700 }}>
+                            <span style={{ color: '#475569' }}>Load Status</span>
+                            <span style={{ color: progressColor }}>{station.load} ({station.loadPercent}%)</span>
+                          </div>
+                          <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${station.loadPercent}%`, height: '100%', background: progressColor, borderRadius: '3px', transition: 'width 0.5s ease-in-out' }}></div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -2973,7 +2970,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                       <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <span>{b.branchName}</span>
+                        <span>{b.branchName || b.name}</span>
                         {b.isMainBranch && (
                           <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px', border: '1px solid #fde68a', flexShrink: 0 }} title="Main Branch">
                             ★ Main

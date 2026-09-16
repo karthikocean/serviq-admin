@@ -34,7 +34,7 @@ export const formatDateTimeDMY = (dateInput) => {
 
 export const extractOrderISODate = (o) => {
   if (!o) return '';
-  const candidate = o.createdAt || o.created_at || o.orderDate || o.date || o.timestamp || o.updatedAt;
+  const candidate = o.createdAt || o.created_at || o.orderDate || o.order_date || o.date || o.rawDate || o.timestamp || o.updatedAt || o.time || o.datetime || o.dateTime || o.createdDate || o.bill?.createdAt || o.payment?.createdAt || o.invoiceDate;
   if (!candidate) {
     const idNum = parseInt(o.id || o._id) || 0;
     if (idNum >= 840 && idNum <= 847) {

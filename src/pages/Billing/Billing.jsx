@@ -35,7 +35,21 @@ export default function Billing() {
       if (tablesRes && tablesRes.status && tablesRes.response) {
         const d = tablesRes.response.data || tablesRes.response.tables || tablesRes.response;
         if (Array.isArray(d)) {
-          fetchedTables = d;
+          fetchedTables = d.map(t => {
+            const mongoOrderId = t.order_id || t.order?._id || t.rawOrderId || (Array.isArray(t.orders) ? t.orders[0]?._id : null) || (Array.isArray(t.orderIds) ? t.orderIds[0] : null) || t._id;
+            const allOrderIds = Array.isArray(t.orderIds)
+              ? t.orderIds.map(id => typeof id === 'object' ? (id?._id || id?.id) : id).filter(Boolean)
+              : (Array.isArray(t.orders) ? t.orders.map(o => o?._id || o?.id).filter(Boolean) : [mongoOrderId].filter(Boolean));
+
+            return {
+              ...t,
+              _id: t._id || t.id,
+              tableId: t.tableId || t._id || t.id,
+              order_id: mongoOrderId,
+              rawOrderId: mongoOrderId,
+              orderIds: allOrderIds
+            };
+          });
         }
       }
     } catch (e) {

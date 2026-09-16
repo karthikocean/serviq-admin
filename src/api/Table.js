@@ -31,9 +31,7 @@ class MemberApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Fetch Tables. Please try again.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("TableApi getTables note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -48,7 +46,7 @@ class MemberApi {
         return { status: true, response: response.data };
       }
     } catch (error) {
-      console.error("Failed to fetch next table ID:", error);
+      console.warn("Failed to fetch next table ID:", error);
       return { status: false };
     }
   }
@@ -91,7 +89,7 @@ class MemberApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Get Member Details. Please try again.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
+      console.warn("TableApi getTableDetails note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -144,6 +142,7 @@ class MemberApi {
       };
     }
   }
+
   async statusUpdate(id, reason) {
     try {
       const response = await apiClient.patch(`/tables/${id}/status`, { reason });
@@ -158,7 +157,7 @@ class MemberApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to Delete Table. Please try again.";
+        "Failed to update table status. Please try again.";
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
@@ -189,7 +188,6 @@ class MemberApi {
       };
     }
   }
-
 }
 
 export default new MemberApi();

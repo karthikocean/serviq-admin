@@ -140,10 +140,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [checkoutUpiId, setCheckoutUpiId] = useState('');
   const [isUpiVerified, setIsUpiVerified] = useState(false);
   const [checkoutCard, setCheckoutCard] = useState({
-    number: '4532 8921 4452 9018',
-    name: 'Restaurant Admin',
-    expiry: '12/28',
-    cvv: '821'
+    number: '',
+    name: '',
+    expiry: '',
+    cvv: ''
   });
   const [checkoutSelectedBank, setCheckoutSelectedBank] = useState('HDFC Bank');
   const [checkoutAutoRenew, setCheckoutAutoRenew] = useState(true);
@@ -470,14 +470,46 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   };
 
-  const handleSelectOrSwitchPlan = (targetPlan, isRenewal = false, cycleOverride = null, customPaymentMethod = null) => {
+  const handleSelectOrSwitchPlan = async (targetPlan, isRenewal = false, cycleOverride = null, customPaymentMethod = null) => {
     if (!targetPlan) return;
     setIsProcessingUpgrade(true);
     const billing = cycleOverride || selectedPlanCycles[targetPlan.id] || upgradeBillingCycle || (currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
-    const methodStr = customPaymentMethod || (upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card (•••• 4242)');
+    const billingParam = billing === 'annual' ? 'Annually' : 'Monthly';
+    const methodStr = customPaymentMethod || (upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card');
+    const paymentParam = methodStr.includes('UPI') ? 'UPI' : (methodStr.includes('NetBanking') ? 'NetBanking' : 'Credit Card');
     const cleanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
     const branchLimit = targetPlan.maxBranches || targetPlan.branchLimit || getPlanBranchLimit(cleanName, 5);
-    const planPrice = billing === 'annual' ? (targetPlan.annualPrice || 9999) : (targetPlan.monthlyPrice || 999);
+    const planPrice = billing === 'annual' ? (targetPlan.annualPrice || 49999) : (targetPlan.monthlyPrice || 4999);
+
+    let apiResult = null;
+    try {
+      if (isRenewal) {
+        apiResult = await SubscriptionApi.renewSubscription({
+          planId: targetPlan._id || targetPlan.id || targetPlan.planId,
+          plan: targetPlan._id || targetPlan.id || targetPlan.planId,
+          billingCycle: billingParam,
+          paymentMethod: paymentParam
+        });
+      } else {
+        apiResult = await SubscriptionApi.upgradeSubscription({
+          planId: targetPlan._id || targetPlan.id || targetPlan.planId,
+          plan: targetPlan._id || targetPlan.id || targetPlan.planId,
+          billingCycle: billingParam,
+          paymentMethod: paymentParam
+        });
+      }
+    } catch (err) {
+      console.warn("Backend subscription call warning:", err);
+    }
+
+    const subData = apiResult?.response?.data?.subscription || apiResult?.response?.subscription || apiResult?.response?.data;
+    const subId = subData?.subscriptionId || subData?._id || `SUB-${Date.now().toString().slice(-6)}`;
+    const finalAmount = subData?.amountPaid || subData?.planPrice || planPrice;
+    const finalStartDate = subData?.startDate || new Date().toISOString();
+    const finalEndDate = subData?.endDate || subData?.renewalDate;
+    const finalRenewalDate = subData?.renewalDate || subData?.endDate;
+    const maxBranches = subData?.maxBranches || branchLimit;
+    const extraBranches = subData?.extraBranches !== undefined ? subData.extraBranches : extraBranchSlots;
 
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
       upgradeSubscriptionPlan(activeRestaurant.id, targetPlan.id, billing, methodStr);
@@ -493,26 +525,52 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       nextBillingDateFormatted.setMonth(nextBillingDateFormatted.getMonth() + 1);
     }
 
+    const newInvoice = {
+      id: subId,
+      transactionId: subId,
+      planName: `${cleanName} Plan`,
+      description: isRenewal ? `${cleanName} Plan - Subscription Renewal (${billingParam})` : `Plan Upgrade to ${cleanName} Plan (${billingParam})`,
+      branchesIncluded: maxBranches + extraBranches,
+      amount: finalAmount,
+      date: subData?.createdAt || finalStartDate,
+      paymentMethod: methodStr,
+      status: subData?.status || 'Paid',
+      type: 'subscription'
+    };
+    setLocalPurchases(prev => [newInvoice, ...prev]);
+
     setDashboardData(prev => ({
       ...prev,
+      subscription: subData || prev?.subscription,
       activePlan: {
         ...(prev?.activePlan || {}),
         planId: targetPlan.id,
         planName: `${cleanName} Plan`,
-        billingCycle: billing === 'annual' ? 'Annual' : 'Monthly',
-        price: planPrice,
-        baseBranchLimit: branchLimit,
-        nextRenewal: nextBillingDateFormatted.toISOString(),
-        validity: nextBillingDateFormatted.toISOString(),
-        status: 'Active'
+        billingCycle: subData?.billingCycle || billingParam,
+        price: subData?.planPrice || planPrice,
+        baseBranchLimit: maxBranches,
+        nextRenewal: finalRenewalDate || nextBillingDateFormatted.toISOString(),
+        validity: finalEndDate || nextBillingDateFormatted.toISOString(),
+        status: subData?.status || 'Active'
       },
       branchCapacity: {
         ...(prev?.branchCapacity || {}),
-        base: branchLimit,
-        total: branchLimit + extraBranchSlots,
+        base: maxBranches,
+        addons: extraBranches,
+        total: maxBranches + extraBranches,
         used: activeBranchesCount,
-        available: Math.max(0, branchLimit + extraBranchSlots - activeBranchesCount),
-        percentUsed: Math.min(100, Math.round((activeBranchesCount / (branchLimit + extraBranchSlots || 1)) * 100))
+        available: Math.max(0, maxBranches + extraBranches - activeBranchesCount),
+        percentUsed: Math.min(100, Math.round((activeBranchesCount / (maxBranches + extraBranches || 1)) * 100))
+      },
+      lastRecharge: {
+        transactionId: subId,
+        invoiceId: subId,
+        planName: `${cleanName} Plan`,
+        description: isRenewal ? `${cleanName} Plan - Subscription Renewal` : `Plan Upgrade to ${cleanName} Plan`,
+        amount: finalAmount,
+        date: subData?.createdAt || finalStartDate,
+        paymentMethod: methodStr,
+        status: subData?.status || 'Paid'
       }
     }));
 
@@ -521,28 +579,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       status: p.id === targetPlan.id ? 'Active' : 'Available'
     })));
 
-    const newInvoice = {
-      id: `INV-PLN-${Date.now().toString().slice(-6)}`,
-      planName: `${cleanName} Plan`,
-      description: isRenewal ? `${cleanName} Plan - Subscription Renewal (${billing})` : `Plan Upgrade to ${cleanName} Plan (${billing})`,
-      branchesIncluded: branchLimit,
-      amount: planPrice,
-      date: new Date().toISOString(),
-      paymentMethod: methodStr,
-      status: 'Paid',
-      type: 'subscription'
-    };
-    setLocalPurchases(prev => [newInvoice, ...prev]);
-
     setIsProcessingUpgrade(false);
     setIsUpgradeModalOpen(false);
     setSelectedPlanForUpgrade(null);
-    ShowNotifications.showAlertNotification(
-      isRenewal
-        ? `Subscription for ${cleanName} Plan successfully renewed (${billing})!`
-        : `Subscription tier successfully updated to ${cleanName} Plan (Max ${branchLimit} Outlets)!`,
-      true
-    );
+    await fetchDashboardData(false);
   };
 
   const handleInitiatePlanCheckout = (targetPlan, isRenewal = false, cycleOverride = null) => {

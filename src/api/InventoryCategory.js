@@ -28,9 +28,7 @@ class InventoryCategoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch inventory categories.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("InventoryCategoryApi getCategories note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

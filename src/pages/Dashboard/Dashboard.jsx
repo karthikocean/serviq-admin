@@ -5,7 +5,7 @@ import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
 import UserApi from '../../api/User';
-import { resolveBranchManagerName } from '../../helper/BranchHelper';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../../helper/BranchHelper';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -64,10 +64,12 @@ export default function Dashboard() {
 
   const branches = rawBranches.map(b => {
     const mgrName = resolveBranchManagerName(b, rawUsers, rawStaff);
+    const contactNum = resolveBranchContactNumber(b, rawUsers, rawStaff);
     return {
       ...b,
       branchManager: mgrName,
-      managerName: mgrName
+      managerName: mgrName,
+      mobileNumber: contactNum !== 'N/A' ? contactNum : (b.mobileNumber || b.contactNumber || b.phone || '')
     };
   });
 

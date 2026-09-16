@@ -25,9 +25,7 @@ class RoleApi {
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message || "Failed to fetch roles.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("RoleApi getRoles note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -44,9 +42,7 @@ class RoleApi {
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message || "Failed to fetch role details.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("RoleApi getRoleById note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

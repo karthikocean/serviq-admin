@@ -41,9 +41,7 @@ class StaffApi {
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error, "Failed to Fetch Staff. Please try again.");
-      if (error?.response?.status !== 401 && error?.response?.status !== 403) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("StaffApi getStaff note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

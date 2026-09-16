@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
+import * as XLSX from 'xlsx';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -224,7 +225,6 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     const ordDate = extractOrderISODate(o);
     if (dateStart && ordDate && ordDate < dateStart) return false;
     if (dateEnd && ordDate && ordDate > dateEnd) return false;
-    if ((dateStart || dateEnd) && !ordDate) return false;
     return true;
   });
 
@@ -283,8 +283,6 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     }
   });
 
-  // If no waiters found, do not inject dummy fake waiters
-
   // 4. Build table-to-waiter map from branchTables and waiter objects
   const tableToWaiterMap = new Map();
   branchTables.forEach(t => {
@@ -318,12 +316,12 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
       if (typeof ordWaiterObj === 'string') {
         ordWaiterName = ordWaiterObj.toLowerCase();
       } else if (typeof ordWaiterObj === 'object' && ordWaiterObj !== null) {
-        ordWaiterName = String(ordWaiterObj.name || ordWaiterObj.userName || '').toLowerCase();
+        ordWaiterName = String(ordWaiterObj.name || ordWaiterObj.userName || ordWaiterObj.fullName || '').toLowerCase();
         ordWaiterId = String(ordWaiterObj._id || ordWaiterObj.id || '').toLowerCase();
       }
 
-      const ordDirectName = String(o.waiterName || o.server || o.serverName || o.assignedStaff || o.staff || o.servedBy || o.takenBy || '').toLowerCase();
-      const ordDirectId = String(o.waiterId || o.userId || o.staffId || '').toLowerCase();
+      const ordDirectName = String(o.waiterName || o.server || o.serverName || o.assignedStaff || o.staff || o.servedBy || o.takenBy || o.createdBy || o.steward || o.captain || (typeof o.staff === 'object' ? (o.staff?.name || o.staff?.userName) : '') || '').toLowerCase();
+      const ordDirectId = String(o.waiterId || o.userId || o.staffId || o.serverId || (typeof o.staff === 'object' ? (o.staff?._id || o.staff?.id) : '') || '').toLowerCase();
 
       // Check direct match
       if (ordWaiterId && wId && (ordWaiterId === wId || ordWaiterId.includes(wId) || wId.includes(ordWaiterId))) return true;
@@ -333,7 +331,8 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
       if (wEmailLower && String(o.email || o.waiterEmail || '').toLowerCase() === wEmailLower) return true;
 
       // Check table match
-      const orderTable = String(o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table) || '').replace(/^table\s*/i, '').toLowerCase();
+      const rawTable = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name || o.table?.tableNo) : o.table) || (typeof o.tableId === 'object' ? (o.tableId?.tableNumber || o.tableId?.name) : o.tableId);
+      const orderTable = String(rawTable || '').replace(/^table\s*/i, '').trim().toLowerCase();
       if (orderTable) {
         if (profileTables.includes(orderTable)) return true;
         const mappedWaiter = tableToWaiterMap.get(orderTable);
@@ -355,7 +354,20 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
       return sum + getOrderTotalAmount(o);
     }, 0);
 
-    const aov = ordersServedCount > 0 ? (totalRevenueNum / ordersServedCount).toFixed(2) : '0.00';
+    const calcAov = ordersServedCount > 0 ? (totalRevenueNum / ordersServedCount).toFixed(2) : '0.00';
+
+    // Preserve metrics from API/existing object if filtered orders yielded 0
+    const finalOrdersServed = ordersServedCount > 0
+      ? ordersServedCount
+      : Number(w.ordersServed || w.totalOrders || w.ordersCount || (Array.isArray(w.orders) ? w.orders.length : 0) || 0);
+
+    const finalTotalRevenue = totalRevenueNum > 0
+      ? totalRevenueNum
+      : Number(w.totalRevenue || w.revenue || w.sales || 0);
+
+    const finalAov = (ordersServedCount > 0 && totalRevenueNum > 0)
+      ? calcAov
+      : (w.averageOrderValue || (finalOrdersServed > 0 ? (finalTotalRevenue / finalOrdersServed).toFixed(2) : '0.00'));
 
     // Extract tables served by this waiter
     const assignedTablesSet = new Set();
@@ -373,10 +385,14 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     const assignedTables = Array.from(assignedTablesSet);
 
     // Normalize order list for detailed popup modal
-    const normalizedOrders = assignedOrders.map((o, idx) => {
+    const rawOrdersToNormalize = assignedOrders.length > 0
+      ? assignedOrders
+      : (Array.isArray(w.orders) && w.orders.length > 0 ? w.orders : (Array.isArray(w.orderList) ? w.orderList : []));
+
+    const normalizedOrders = rawOrdersToNormalize.map((o, idx) => {
       const oId = o.orderId || o.id || o.orderNumber || (o._id ? String(o._id).slice(-6).toUpperCase() : `ORD-${idx + 101}`);
       const tNum = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table) || (typeof o.tableId === 'object' ? (o.tableId?.tableNumber || o.tableId?.name) : o.tableId) || `${idx + 1}`;
-      const oTotal = getOrderTotalAmount(o);
+      const oTotal = getOrderTotalAmount(o) || Number(o.total || o.totalAmount || o.amount || 0);
       const rawDate = extractOrderISODate(o) || (o.createdAt ? formatDateDMY(o.createdAt) : '') || o.date || 'Today';
       const rawTime = o.time || o.orderTime || (o.createdAt ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
 
@@ -415,15 +431,21 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
       email: w.email || '',
       dutyStatus: isDutyActive ? 'ON_DUTY' : 'OFF_DUTY',
       assignedTablesList: assignedTables,
-      ordersServed: ordersServedCount,
-      totalRevenue: totalRevenueNum,
-      averageOrderValue: aov,
-      totalOrders: assignedOrders.length,
+      ordersServed: finalOrdersServed,
+      totalRevenue: finalTotalRevenue,
+      averageOrderValue: finalAov,
+      totalOrders: finalOrdersServed,
       orders: normalizedOrders
     };
   });
 
   let data = waiterRows;
+
+  // When a date filter is active, only show waiters who served orders in that date range
+  // When no date filter is active, show all waiters
+  if (dateStart || dateEnd) {
+    data = data.filter(w => (w.ordersServed > 0 || (w.orders && w.orders.length > 0) || w.totalRevenue > 0));
+  }
 
   // 6. Search Filter
   if (searchQuery && searchQuery.trim()) {
@@ -1125,52 +1147,62 @@ export default function ReportsPanel({
     setPagination(prev => ({ ...prev, page: 0 }));
   };
 
-  // Excel / CSV Export
+  // Excel Export with Dynamic Auto-Fit Columns
   const exportToExcel = () => {
-    let headers = [];
-    let rows = [];
-    let filename = '';
+    let exportData = [];
+    let sheetName = '';
+    let fileName = '';
 
     if (activeReportTab === 'waiter') {
-      headers = ['S.No', 'Waiter Name', 'Duty Status', 'Assigned Tables', 'Orders Served', `Revenue Generated (${currency})`, `Avg Order (${currency})`];
-      rows = waiterData.map((r, i) => [
-        i + 1,
-        r.name,
-        r.dutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty',
-        (Array.isArray(r.assignedTablesList) && r.assignedTablesList.length > 0) ? r.assignedTablesList.join('; ') : 'None',
-        r.ordersServed || r.totalOrders || 0,
-        Number(r.totalRevenue || r.revenue || 0),
-        r.averageOrderValue || '0.00'
-      ]);
-      filename = 'waiter_reports.csv';
+      sheetName = 'Waiter Performance Reports';
+      fileName = `Waiter_Reports_${new Date().toISOString().split('T')[0]}.xlsx`;
+      exportData = waiterData.map((r, i) => ({
+        'S.No': i + 1,
+        'Waiter Name': r.name || 'Waiter',
+        'Duty Status': toDisplayText(r.dutyStatus) === 'ON_DUTY' ? 'On Duty' : 'Off Duty',
+        'Assigned Tables': (Array.isArray(r.assignedTablesList) && r.assignedTablesList.length > 0) ? r.assignedTablesList.join(', ') : 'None',
+        'Orders Fulfilled': Number(r.ordersServed || r.totalOrders || 0),
+        'Total Revenue (INR)': Number(r.totalRevenue || r.revenue || 0),
+        'Average Order Value (INR)': Number(r.averageOrderValue || 0)
+      }));
     } else {
-      headers = ['S.No', 'Food Item Name', 'Category', 'Quantity Prepared', 'Avg Prep Time', `Revenue (${currency})`, 'Status'];
-      rows = kitchenData.map((r, i) => [
-        i + 1,
-        r.foodItem || r.itemName,
-        r.category,
-        r.quantityPrepared || 0,
-        r.avgPrepTime || '15 mins',
-        Number(r.revenueGenerated || r.revenue || 0),
-        r.kitchenStatus || r.status || 'Completed'
-      ]);
-      filename = 'kitchen_reports.csv';
+      sheetName = 'Kitchen Preparation Reports';
+      fileName = `Kitchen_Reports_${new Date().toISOString().split('T')[0]}.xlsx`;
+      exportData = kitchenData.map((r, i) => ({
+        'S.No': i + 1,
+        'Food Item Name': r.foodItem || r.itemName || 'Food Item',
+        'Category': r.category || 'Main Course',
+        'Quantity Prepared': Number(r.quantityPrepared || 0),
+        'Average Prep Time': r.avgPrepTime || '15 mins',
+        'Total Revenue (INR)': Number(r.revenueGenerated || r.revenue || 0),
+        'Kitchen Status': r.kitchenStatus || r.status || 'Completed'
+      }));
     }
 
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(e => e.map(val => `"${val}"`).join(','))
-    ].join('\n');
+    if (exportData.length === 0) {
+      ShowNotifications.showAlertNotification("No report records available to export for this period.", false);
+      return;
+    }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+    // Dynamic auto-fit column widths so every header and value is fully displayed without truncation
+    const keys = Object.keys(exportData[0] || {});
+    const wscols = keys.map(key => {
+      let maxLen = String(key).length;
+      exportData.forEach(row => {
+        const valStr = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
+        if (valStr.length > maxLen) {
+          maxLen = valStr.length;
+        }
+      });
+      return { wch: Math.max(maxLen + 6, 18) };
+    });
+    worksheet['!cols'] = wscols;
+
+    XLSX.writeFile(workbook, fileName);
   };
 
   // PDF Export
@@ -1429,12 +1461,44 @@ export default function ReportsPanel({
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: activeReportTab === 'kitchen' 
-            ? 'minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1.3fr) minmax(200px, 1.5fr) auto' 
-            : 'minmax(150px, 1fr) minmax(150px, 1fr) minmax(220px, 1.8fr) auto',
+          gridTemplateColumns: activeReportTab === 'kitchen'
+            ? 'minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1.3fr) auto'
+            : 'minmax(260px, 2.2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto',
           gap: '14px',
           alignItems: 'flex-end'
         }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Search
+            </label>
+            <input
+              type="text"
+              placeholder={activeReportTab === 'waiter' ? 'Search waiter, table, phone...' : 'Search food item, category...'}
+              value={searchQuery}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchQuery(val);
+              }}
+              style={{
+                width: '100%',
+                height: '40px',
+                padding: '0 12px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                fontSize: '13px',
+                backgroundColor: '#f8fafc',
+                color: '#0f172a',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+            />
+          </div>
+
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               Start Date
@@ -1511,38 +1575,6 @@ export default function ReportsPanel({
           )}
 
           <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Search
-            </label>
-            <input
-              type="text"
-              placeholder={activeReportTab === 'waiter' ? 'Search waiter, table, phone...' : 'Search food item, category...'}
-              value={searchQuery}
-              onKeyDown={e => {
-                if (e.key === ' ' && !e.currentTarget.value) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value.replace(/^\s+/, '');
-                setSearchQuery(val);
-              }}
-              style={{
-                width: '100%',
-                height: '40px',
-                padding: '0 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                boxSizing: 'border-box',
-                outline: 'none'
-              }}
-            />
-          </div>
-
-          <div>
             <button
               type="button"
               className="premium-filter-btn-reset"
@@ -1580,7 +1612,7 @@ export default function ReportsPanel({
                 <th style={{ minWidth: '220px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>WAITER NAME</th>
                 <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>DUTY STATUS</th>
                 <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED TABLES</th>
-                <th style={{ minWidth: '140px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDERS SERVED</th>
+                <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDERS FULFILLED</th>
                 <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>TOTAL REVENUE</th>
                 <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG ORDER VALUE</th>
                 <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTIONS</th>
@@ -1637,16 +1669,24 @@ export default function ReportsPanel({
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '5px',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '5px 12px',
+                        borderRadius: '20px',
                         fontSize: '11px',
                         fontWeight: 800,
+                        letterSpacing: '0.3px',
+                        width: '105px',
+                        minWidth: '105px',
+                        whiteSpace: 'nowrap',
+                        boxSizing: 'border-box',
+                        flexShrink: 0,
                         backgroundColor: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
-                        color: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#166534' : '#64748b'
+                        color: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#166534' : '#64748b',
+                        border: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '1.5px solid #86efac' : '1.5px solid #cbd5e1'
                       }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#16a34a' : '#94a3b8' }}></span>
-                        {toDisplayText(w.dutyStatus) === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#16a34a' : '#94a3b8', flexShrink: 0 }}></span>
+                        {toDisplayText(w.dutyStatus) === 'ON_DUTY' ? 'ON DUTY' : 'OFF DUTY'}
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'left' }}>
@@ -1654,8 +1694,23 @@ export default function ReportsPanel({
                         {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.map(t => toDisplayText(t)).join(', ') : 'None'}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 800 }}>{Number(w.ordersServed || 0)}</span> <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>orders</span>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        borderRadius: '16px',
+                        backgroundColor: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        color: '#1d4ed8'
+                      }}>
+                        <span style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>
+                          {Number(w.ordersServed || w.orders?.length || 0)}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>orders</span>
+                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
                       {currency}{Number(w.totalRevenue || 0).toLocaleString('en-IN')}
@@ -1679,12 +1734,13 @@ export default function ReportsPanel({
                           fontWeight: 700,
                           display: 'inline-flex',
                           alignItems: 'center',
+                          justifyContent: 'center',
                           gap: '5px',
                           transition: 'all 0.15s ease'
                         }}
                       >
                         <EyeIcon size={14} color="var(--primary, #ff7a00)" />
-                        Orders ({w.orders?.length || w.ordersServed || 0})
+                        Orders ({Number(w.ordersServed || w.orders?.length || 0)})
                       </button>
                     </td>
                   </tr>
@@ -1882,18 +1938,20 @@ export default function ReportsPanel({
         maxWidth="720px"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', alignItems: 'center', background: '#f8fafc', padding: '14px 18px', borderRadius: '10px', border: '1px solid #e2e8f0', gap: '16px' }}>
             <div>
-              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Serving Staff</span>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{selectedWaiterOrdersModal?.name}</div>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Serving Staff</span>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{toDisplayText(selectedWaiterOrdersModal?.name, 'Waiter')}</div>
             </div>
-            <div>
-              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Orders Fulfilled</span>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#3b82f6', textAlign: 'right' }}>{selectedWaiterOrdersModal?.orders?.length || 0}</div>
+            <div style={{ textAlign: 'center' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Orders Fulfilled</span>
+              <div style={{ fontSize: '16px', fontWeight: 900, color: '#2563eb', fontFamily: "'Outfit', sans-serif" }}>
+                {Number(selectedWaiterOrdersModal?.orders?.length || selectedWaiterOrdersModal?.ordersServed || 0)}
+              </div>
             </div>
-            <div>
-              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Total Revenue</span>
-              <div style={{ fontSize: '15px', fontWeight: 800, color: '#16a34a', textAlign: 'right', fontFamily: "'Outfit', sans-serif" }}>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '4px' }}>Total Revenue</span>
+              <div style={{ fontSize: '16px', fontWeight: 900, color: '#16a34a', fontFamily: "'Outfit', sans-serif" }}>
                 {currency}{Number(selectedWaiterOrdersModal?.totalRevenue || 0).toLocaleString('en-IN')}
               </div>
             </div>

@@ -6,9 +6,25 @@
 export const resolveBranchManagerName = (branch, users = [], staff = []) => {
   if (!branch) return 'Unassigned';
 
-  // 1. Check all direct candidate manager properties on the branch object
+  // 1. Direct managerName property (Highest priority)
+  if (branch.managerName) {
+    if (typeof branch.managerName === 'string') {
+      const trimmed = branch.managerName.trim();
+      if (trimmed && !['unassigned', 'null', 'undefined', 'none', '-'].includes(trimmed.toLowerCase())) {
+        if (!/^[0-9a-fA-F]{24}$/.test(trimmed)) {
+          return trimmed;
+        }
+      }
+    } else if (typeof branch.managerName === 'object' && branch.managerName !== null) {
+      const objName = branch.managerName.name || branch.managerName.managerName || branch.managerName.fullName || branch.managerName.username;
+      if (objName && typeof objName === 'string' && objName.trim() && !['unassigned', 'null', 'undefined', 'none', '-'].includes(objName.trim().toLowerCase())) {
+        return objName.trim();
+      }
+    }
+  }
+
+  // 2. Check other candidate manager properties on the branch object
   const candidateFields = [
-    branch.managerName,
     branch.branchManager,
     branch.manager,
     branch.branchManagerName,
@@ -129,6 +145,177 @@ export const resolveBranchManagerName = (branch, users = [], staff = []) => {
   return 'Unassigned';
 };
 
+export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
+  if (!branch) return 'N/A';
+
+  const cleanPhone = (val) => {
+    if (!val) return null;
+    if (typeof val === 'number') val = String(val);
+    if (typeof val !== 'string') return null;
+    const trimmed = val.trim();
+    if (!trimmed || ['n/a', 'na', 'null', 'undefined', 'none', '-', 'empty'].includes(trimmed.toLowerCase())) return null;
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.length >= 7) {
+      return trimmed;
+    }
+    return null;
+  };
+
+  // 1. Direct candidate phone fields on branch object
+  const directCandidates = [
+    branch.mobileNumber,
+    branch.contactNumber,
+    branch.phoneNumber,
+    branch.phone,
+    branch.mobile,
+    branch.managerMobile,
+    branch.managerPhone,
+    branch.contactPhone,
+    branch.contactPersonPhone,
+    branch.telephone,
+    branch.contact?.phone,
+    branch.contact?.mobileNumber,
+    branch.contact?.mobile,
+    branch.contact?.phoneNumber,
+    branch.contact?.contactNumber,
+    typeof branch.contact === 'string' ? branch.contact : null,
+    branch.managerDetails?.phone,
+    branch.managerDetails?.mobileNumber,
+    branch.managerDetails?.phoneNumber,
+    branch.managerDetails?.mobile,
+    branch.managerInfo?.phone,
+    branch.managerInfo?.mobileNumber,
+    branch.managerInfo?.phoneNumber,
+    branch.managerInfo?.mobile,
+    branch.manager?.phone,
+    branch.manager?.mobileNumber,
+    branch.manager?.phoneNumber,
+    branch.manager?.mobile,
+    branch.branchManager?.phone,
+    branch.branchManager?.mobileNumber,
+    branch.branchManager?.phoneNumber,
+    branch.branchManager?.mobile
+  ];
+
+  for (const cand of directCandidates) {
+    const valid = cleanPhone(cand);
+    if (valid) return valid;
+  }
+
+  const bId = String(branch._id || branch.id || '');
+  const bCode = String(branch.branchCode || branch.code || '').toLowerCase().trim();
+  const bEmail = String(branch.email || branch.managerEmail || '').toLowerCase().trim();
+
+  // 2. Check explicit manager ID fields (managerId, branchManagerId, userId, adminId, assignedManagerId)
+  const explicitId = String(branch.managerId || branch.branchManagerId || branch.userId || branch.adminId || branch.assignedManagerId || '');
+  if (explicitId) {
+    if (Array.isArray(users)) {
+      const u = users.find(x => String(x._id || x.id) === explicitId);
+      if (u) {
+        const uContact = cleanPhone(u.phone || u.phoneNumber || u.mobileNumber || u.mobile || u.contactNumber);
+        if (uContact) return uContact;
+      }
+    }
+    if (Array.isArray(staff)) {
+      const s = staff.find(x => String(x._id || x.id) === explicitId);
+      if (s) {
+        const sContact = cleanPhone(s.phone || s.phoneNumber || s.mobileNumber || s.mobile || s.contactNumber);
+        if (sContact) return sContact;
+      }
+    }
+  }
+
+  // 3. Match by resolved manager name (e.g. "Gayathri Ranganathan")
+  const resolvedMgrName = resolveBranchManagerName(branch, users, staff);
+  if (resolvedMgrName && resolvedMgrName !== 'Unassigned') {
+    const mgrNameLower = resolvedMgrName.toLowerCase().trim();
+    if (Array.isArray(users)) {
+      const matchedUser = users.find(u => {
+        const uName = String(u.name || u.username || u.fullName || '').toLowerCase().trim();
+        return uName === mgrNameLower;
+      });
+      if (matchedUser) {
+        const uContact = cleanPhone(matchedUser.phone || matchedUser.phoneNumber || matchedUser.mobileNumber || matchedUser.mobile || matchedUser.contactNumber);
+        if (uContact) return uContact;
+      }
+    }
+    if (Array.isArray(staff)) {
+      const matchedStaff = staff.find(s => {
+        const sName = String(s.name || s.fullName || '').toLowerCase().trim();
+        return sName === mgrNameLower;
+      });
+      if (matchedStaff) {
+        const sContact = cleanPhone(matchedStaff.phone || matchedStaff.phoneNumber || matchedStaff.mobileNumber || matchedStaff.mobile || matchedStaff.contactNumber);
+        if (sContact) return sContact;
+      }
+    }
+  }
+
+  // 4. Search in users array for branch manager or branch user
+  if (Array.isArray(users) && users.length > 0) {
+    // 4a. User with matching branch and manager role
+    const managerUser = users.find(u => {
+      const uBranchId = typeof u.branchId === 'object' && u.branchId !== null ? String(u.branchId._id || u.branchId.id || '') : String(u.branchId || u.branch || '');
+      const uBranchCode = typeof u.branchId === 'object' && u.branchId !== null ? String(u.branchId.branchCode || u.branchId.code || '').toLowerCase() : '';
+      const isBranchMatch = (bId && uBranchId === bId) || (bCode && (uBranchCode === bCode || String(u.branch || '').toLowerCase() === bCode));
+      
+      const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || u.designation || '')).toLowerCase();
+      const isManager = roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner') || roleStr.includes('head');
+      return isBranchMatch && isManager;
+    });
+
+    if (managerUser) {
+      const uContact = cleanPhone(managerUser.phone || managerUser.phoneNumber || managerUser.mobileNumber || managerUser.mobile || managerUser.contactNumber);
+      if (uContact) return uContact;
+    }
+
+    // 4b. User with matching branch email
+    if (bEmail) {
+      const emailUser = users.find(u => String(u.email || '').toLowerCase().trim() === bEmail);
+      if (emailUser) {
+        const uContact = cleanPhone(emailUser.phone || emailUser.phoneNumber || emailUser.mobileNumber || emailUser.mobile || emailUser.contactNumber);
+        if (uContact) return uContact;
+      }
+    }
+
+    // 4c. Any user assigned to this branch with contact
+    const anyBranchUser = users.find(u => {
+      const uBranchId = typeof u.branchId === 'object' && u.branchId !== null ? String(u.branchId._id || u.branchId.id || '') : String(u.branchId || u.branch || '');
+      return bId && uBranchId === bId;
+    });
+    if (anyBranchUser) {
+      const uContact = cleanPhone(anyBranchUser.phone || anyBranchUser.phoneNumber || anyBranchUser.mobileNumber || anyBranchUser.mobile || anyBranchUser.contactNumber);
+      if (uContact) return uContact;
+    }
+  }
+
+  // 5. Search in staff array for manager or staff in this branch
+  if (Array.isArray(staff) && staff.length > 0) {
+    const managerStaff = staff.find(s => {
+      const sBranchId = typeof s.branchId === 'object' && s.branchId !== null ? String(s.branchId._id || s.branchId.id || '') : String(s.branchId || s.branch || '');
+      const isBranchMatch = bId && sBranchId === bId;
+      const roleStr = String(s.role || s.designation || s.position || '').toLowerCase();
+      return isBranchMatch && (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('captain') || roleStr.includes('incharge'));
+    });
+    if (managerStaff) {
+      const sContact = cleanPhone(managerStaff.phone || managerStaff.phoneNumber || managerStaff.mobileNumber || managerStaff.mobile || managerStaff.contactNumber);
+      if (sContact) return sContact;
+    }
+
+    const anyBranchStaff = staff.find(s => {
+      const sBranchId = typeof s.branchId === 'object' && s.branchId !== null ? String(s.branchId._id || s.branchId.id || '') : String(s.branchId || s.branch || '');
+      return bId && sBranchId === bId;
+    });
+    if (anyBranchStaff) {
+      const sContact = cleanPhone(anyBranchStaff.phone || anyBranchStaff.phoneNumber || anyBranchStaff.mobileNumber || anyBranchStaff.mobile || anyBranchStaff.contactNumber);
+      if (sContact) return sContact;
+    }
+  }
+
+  return 'N/A';
+};
+
 export default {
-  resolveBranchManagerName
+  resolveBranchManagerName,
+  resolveBranchContactNumber
 };

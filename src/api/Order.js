@@ -39,9 +39,7 @@ class OrderApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Fetch Orders. Please try again.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("OrderApi getOrders note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -72,9 +70,30 @@ class OrderApi {
     }
   }
 
-  async updateOrder(id, data) {
+  async updateOrder(idOrObj, data) {
     try {
-      const response = await apiClient.put(`/orders/${id}`, data);
+      let id = typeof idOrObj === 'object' && idOrObj !== null
+        ? (idOrObj._id || idOrObj.order_id || idOrObj.rawOrderId || idOrObj.id)
+        : idOrObj;
+
+      // If id is not a 24-character hex MongoDB ObjectId, attempt to resolve it
+      if (typeof id === 'string' && !/^[0-9a-fA-F]{24}$/.test(id.trim())) {
+        try {
+          const res = await apiClient.get('/orders', { params: { limit: 100 } });
+          const orders = res?.data?.data || res?.data?.orders || [];
+          const matched = orders.find(o => 
+            o.orderId === id || o.id === id || o.orderNumber === id || o.customOrderId === id
+          );
+          if (matched && matched._id && /^[0-9a-fA-F]{24}$/.test(matched._id)) {
+            id = matched._id;
+          }
+        } catch (lookupErr) {
+          console.warn("OrderApi updateOrder ID resolution error:", lookupErr);
+        }
+      }
+
+      const targetId = String(id || '').trim();
+      const response = await apiClient.put(`/orders/${targetId}`, data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Order Updated Successfully!",
@@ -95,9 +114,30 @@ class OrderApi {
     }
   }
 
-  async deleteOrder(id) {
+  async deleteOrder(idOrObj) {
     try {
-      const response = await apiClient.delete(`/orders/${id}`);
+      let id = typeof idOrObj === 'object' && idOrObj !== null
+        ? (idOrObj._id || idOrObj.order_id || idOrObj.rawOrderId || idOrObj.id)
+        : idOrObj;
+
+      // If id is not a 24-character hex MongoDB ObjectId, attempt to resolve it
+      if (typeof id === 'string' && !/^[0-9a-fA-F]{24}$/.test(id.trim())) {
+        try {
+          const res = await apiClient.get('/orders', { params: { limit: 100 } });
+          const orders = res?.data?.data || res?.data?.orders || [];
+          const matched = orders.find(o => 
+            o.orderId === id || o.id === id || o.orderNumber === id || o.customOrderId === id
+          );
+          if (matched && matched._id && /^[0-9a-fA-F]{24}$/.test(matched._id)) {
+            id = matched._id;
+          }
+        } catch (lookupErr) {
+          console.warn("OrderApi deleteOrder ID resolution error:", lookupErr);
+        }
+      }
+
+      const targetId = String(id || '').trim();
+      const response = await apiClient.delete(`/orders/${targetId}`);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Order Deleted Successfully!",
