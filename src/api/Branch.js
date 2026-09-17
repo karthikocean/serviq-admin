@@ -42,9 +42,7 @@ class BranchApi {
         error,
         "Failed to Fetch Branches. Please try again."
       );
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("BranchApi getBranches note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -88,7 +86,7 @@ class BranchApi {
         error,
         "Failed to Get Branch Details. Please try again."
       );
-      ShowNotifications.showAlertNotification(errorMessage, false);
+      console.warn("BranchApi getBranchDetails note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

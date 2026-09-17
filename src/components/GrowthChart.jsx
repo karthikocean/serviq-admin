@@ -5,12 +5,30 @@ export const GrowthChart = ({ invoices = [] }) => {
   // In standard SVG, we can draw a grid and a smooth line or bar chart.
   // Let's draw a nice bar chart for standard and premium growth.
   
-  // We can mock some months data or compute it from invoices.
-  // In the original dashboard: Year 2026.
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  const values = [12000, 19000, 32000, 45000, 68000, 85000]; // total cumulative growth or monthly MRR
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const now = new Date();
+  const monthsData = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const mName = monthNames[d.getMonth()];
+    const yr = d.getFullYear();
+    const mIdx = d.getMonth();
+
+    const monthlyInvoices = (invoices || []).filter(inv => {
+      const invDate = inv.date || inv.createdAt || inv.purchaseDate;
+      if (!invDate) return false;
+      const parsed = new Date(invDate);
+      return parsed.getFullYear() === yr && parsed.getMonth() === mIdx;
+    });
+
+    const sum = monthlyInvoices.reduce((acc, inv) => acc + (Number(inv.amount || inv.totalAmount) || 0), 0);
+    monthsData.push({ month: mName, value: sum });
+  }
+
+  const months = monthsData.map(m => m.month);
+  const values = monthsData.map(m => m.value);
   
-  const maxVal = Math.max(...values);
+  const maxVal = Math.max(...values, 1000);
   const height = 180;
   const width = 450;
   const padding = 30;

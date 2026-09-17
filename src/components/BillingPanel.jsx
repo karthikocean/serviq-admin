@@ -179,6 +179,78 @@ export default function BillingPanel({
     });
   };
 
+  const isMongoObjectId = (val) => {
+    if (!val || typeof val !== 'string') return false;
+    return /^[0-9a-fA-F]{24}$/.test(val.trim());
+  };
+
+  const resolveOrderUnderScoreIds = async (billData) => {
+    if (!billData) return [];
+    const foundIds = new Set();
+
+    // 1. Direct _id and field checks
+    if (isMongoObjectId(billData._id)) foundIds.add(billData._id.trim());
+    if (isMongoObjectId(billData.order_id)) foundIds.add(billData.order_id.trim());
+    if (isMongoObjectId(billData.rawOrderId)) foundIds.add(billData.rawOrderId.trim());
+    if (isMongoObjectId(billData.order?._id)) foundIds.add(billData.order._id.trim());
+
+    // 2. Check array in orderIds
+    if (Array.isArray(billData.orderIds)) {
+      billData.orderIds.forEach(id => {
+        if (typeof id === 'string' && isMongoObjectId(id)) foundIds.add(id.trim());
+        else if (typeof id === 'object' && id && isMongoObjectId(id._id)) foundIds.add(id._id.trim());
+      });
+    }
+
+    // 3. Check array in orders
+    if (Array.isArray(billData.orders)) {
+      billData.orders.forEach(o => {
+        if (typeof o === 'string' && isMongoObjectId(o)) foundIds.add(o.trim());
+        else if (typeof o === 'object' && o) {
+          if (isMongoObjectId(o._id)) foundIds.add(o._id.trim());
+          if (isMongoObjectId(o.order_id)) foundIds.add(o.order_id.trim());
+        }
+      });
+    }
+
+    // 4. If no valid 24-character hex _id found yet, look up in activeRestaurant orders or API
+    if (foundIds.size === 0) {
+      const rawTargetCode = String(billData.orderId || billData.rawOrderId || billData.id || '').trim();
+      const tableIdOrNumber = String(billData.tableId || billData.table || billData.tableNo || '').replace(/^Table\s*/i, '').trim();
+
+      const localOrders = Array.isArray(activeRestaurant?.orders) ? activeRestaurant.orders : [];
+      localOrders.forEach(o => {
+        if (!isMongoObjectId(o._id)) return;
+        const matchesCode = rawTargetCode && (o.orderId === rawTargetCode || o.id === rawTargetCode || o.orderNumber === rawTargetCode);
+        const oTable = String(o.tableNumber || o.tableNo || o.table || (typeof o.tableId === 'object' ? o.tableId?.tableNumber : o.tableId) || '').replace(/^Table\s*/i, '').trim();
+        const matchesTable = tableIdOrNumber && (oTable === tableIdOrNumber || String(o.tableId) === tableIdOrNumber);
+        if (matchesCode || matchesTable) {
+          foundIds.add(o._id.trim());
+        }
+      });
+
+      if (foundIds.size === 0) {
+        try {
+          const liveRes = await OrderApi.getOrders({ limit: 100 });
+          const liveList = liveRes?.status ? (liveRes.response?.data || liveRes.response?.orders || []) : [];
+          liveList.forEach(o => {
+            if (!isMongoObjectId(o._id)) return;
+            const matchesCode = rawTargetCode && (o.orderId === rawTargetCode || o.id === rawTargetCode || o.orderNumber === rawTargetCode);
+            const oTable = String(o.tableNumber || o.tableNo || o.table || (typeof o.tableId === 'object' ? o.tableId?.tableNumber : o.tableId) || '').replace(/^Table\s*/i, '').trim();
+            const matchesTable = tableIdOrNumber && (oTable === tableIdOrNumber || String(o.tableId) === tableIdOrNumber);
+            if (matchesCode || matchesTable) {
+              foundIds.add(o._id.trim());
+            }
+          });
+        } catch (err) {
+          console.warn("Could not query OrderApi for _id lookup:", err);
+        }
+      }
+    }
+
+    return Array.from(foundIds);
+  };
+
   // Save Edit Changes
   const handleSaveEditBill = async () => {
     const validItems = editItems.filter(it => it.name && it.name.trim() && Number(it.qty) > 0);
@@ -208,18 +280,20 @@ export default function BillingPanel({
       const newService = parseFloat((newSub * serviceRate).toFixed(2));
       const newTot = parseFloat((newSub + newTax + newService).toFixed(2));
 
-      // 1. Update backend order if targetOrderId exists
-      const targetOrderId = selectedBillData.rawOrderId || selectedBillData.orderId || (selectedBillData.orderIds && selectedBillData.orderIds[0]);
-      if (targetOrderId && typeof targetOrderId === 'string' && targetOrderId.length >= 10 && !targetOrderId.startsWith('#')) {
-        try {
-          await OrderApi.updateOrder(targetOrderId, {
-            items: processedItems,
-            total: newTot,
-            subtotal: newSub,
-            totalAmount: newTot
-          });
-        } catch (e) {
-          console.warn("Backend order update notice:", e);
+      // 1. Update backend order using genuine MongoDB _id
+      const targetUnderScoreIds = await resolveOrderUnderScoreIds(selectedBillData);
+      if (targetUnderScoreIds.length > 0) {
+        for (const orderUnderScoreId of targetUnderScoreIds) {
+          try {
+            await OrderApi.updateOrder(orderUnderScoreId, {
+              items: processedItems,
+              total: newTot,
+              subtotal: newSub,
+              totalAmount: newTot
+            });
+          } catch (e) {
+            console.warn("Backend order update notice:", e);
+          }
         }
       }
 
@@ -269,28 +343,19 @@ export default function BillingPanel({
   const handleConfirmDeleteBill = async () => {
     setIsDeleting(true);
     try {
-      const targetOrderId = selectedBillData.rawOrderId || selectedBillData.orderId || (selectedBillData.orderIds && selectedBillData.orderIds[0]);
-      
-      // Delete all associated orders from backend if valid ObjectId
-      if (Array.isArray(selectedBillData.orderIds) && selectedBillData.orderIds.length > 0) {
-        for (const oId of selectedBillData.orderIds) {
-          if (oId && typeof oId === 'string' && oId.length >= 10 && !oId.startsWith('#')) {
-            try {
-              await OrderApi.deleteOrder(oId);
-            } catch (err) {
-              console.warn("Could not delete order on backend:", err);
-            }
+      // 1. Delete all associated orders from backend using genuine MongoDB _id
+      const targetUnderScoreIds = await resolveOrderUnderScoreIds(selectedBillData);
+      if (targetUnderScoreIds.length > 0) {
+        for (const orderUnderScoreId of targetUnderScoreIds) {
+          try {
+            await OrderApi.deleteOrder(orderUnderScoreId);
+          } catch (err) {
+            console.warn("Could not delete order on backend:", err);
           }
-        }
-      } else if (targetOrderId && typeof targetOrderId === 'string' && targetOrderId.length >= 10 && !targetOrderId.startsWith('#')) {
-        try {
-          await OrderApi.deleteOrder(targetOrderId);
-        } catch (err) {
-          console.warn("Could not delete order on backend:", err);
         }
       }
 
-      // Remove table bill from local state
+      // 2. Remove table bill from local state
       const currentTableIdentifier = selectedBillData.tableId || selectedBillData._id || selectedBillData.id || selectedBillingTable;
       if (typeof setBillingData === 'function') {
         setBillingData(prev => {

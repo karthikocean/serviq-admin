@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import * as XLSX from 'xlsx';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { extractOrderISODate, formatDateDMY } from '../helper/DateHelper.js';
@@ -246,11 +247,60 @@ export default function WaiterReportsPanel({
     ShowNotifications.showAlertNotification(`Payment of ₹${selectedPaymentOrder.total} settled via ${offlinePaymentType} successfully.`, true);
   };
 
+  const handleExportExcel = () => {
+    if (filteredWaiterReports.length === 0) {
+      ShowNotifications.showAlertNotification("No waiter orders available to export.", false);
+      return;
+    }
+
+    const exportData = filteredWaiterReports.map((ord, idx) => {
+      const date = getOrderDate(ord);
+      const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
+      const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
+      return {
+        'S.No': idx + 1,
+        'Order ID': `#ORD-${ord.id}`,
+        'Order Date': date ? formatDateDMY(date) : '—',
+        'Table Number': `Table ${ord.table || '—'}`,
+        'Waiter Name': ord.waiter || 'Unassigned',
+        'Order Source': source,
+        'Order Status': (ord.status || 'New').toUpperCase(),
+        'Payment Mode': paymentMode,
+        'Payment Status': (ord.billingStatus || 'Unpaid').toUpperCase(),
+        'Total Amount (INR)': Number(ord.total || 0)
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Waiter Orders");
+
+    const keys = Object.keys(exportData[0] || {});
+    const wscols = keys.map(key => {
+      let maxLen = String(key).length;
+      exportData.forEach(row => {
+        const valStr = row[key] !== null && row[key] !== undefined ? String(row[key]) : '';
+        if (valStr.length > maxLen) maxLen = valStr.length;
+      });
+      return { wch: Math.max(maxLen + 6, 18) };
+    });
+    worksheet['!cols'] = wscols;
+
+    const fileName = `Waiter_Orders_Report_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  };
+
   return (
     <section className="panel-view active">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 className="panel-inner-title">Waiter Report</h2>
-        <button style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Export Report</button>
+        <button 
+          onClick={handleExportExcel}
+          style={{ background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontWeight: 700, padding: '8px 16px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Export Report
+        </button>
       </div>
 
       {/* Filters Block */}
@@ -394,17 +444,17 @@ export default function WaiterReportsPanel({
         <div className="menu-table-wrapper" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
           <table className="menu-items-table" style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr>
-                <th style={{ padding: '16px 14px' }}>ORDER ID</th>
-                <th style={{ padding: '16px 14px' }}>ORDER DATE</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>TABLE NUMBER</th>
-                <th style={{ padding: '16px 14px' }}>WAITER NAME</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ORDER SOURCE</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>ORDER STATUS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>PAYMENT MODE</th>
-                <th style={{ padding: '16px 14px', textAlign: 'center' }}>PAYMENT STATUS</th>
-                <th style={{ padding: '16px 14px', textAlign: 'right' }}>TOTAL AMOUNT</th>
-                <th style={{ padding: '16px 14px', textAlign: 'right' }}>ACTIONS</th>
+              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>ORDER ID</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>ORDER DATE</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>TABLE NUMBER</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>WAITER NAME</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDER SOURCE</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDER STATUS</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>PAYMENT MODE</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>PAYMENT STATUS</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>TOTAL AMOUNT</th>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -421,10 +471,10 @@ export default function WaiterReportsPanel({
                   const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a' }}>#ORD-{ord.id}</td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>{date}</td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center' }}>Table {ord.table}</td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{ord.waiter || 'Unassigned'}</td>
+                      <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a', whiteSpace: 'nowrap' }}>#ORD-{ord.id}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, whiteSpace: 'nowrap' }}>{date ? formatDateDMY(date) : '—'}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>Table {ord.table}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' }}>{ord.waiter || 'Unassigned'}</td>
                       <td style={{ padding: '16px 14px', textAlign: 'center' }}>
                         <span style={{ 
                           padding: '4px 12px', 

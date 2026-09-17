@@ -42,9 +42,7 @@ class BillingApi {
         error?.message ||
         "Failed to fetch billing history.";
 
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("BillingApi getBillingHistory note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -72,9 +70,7 @@ class BillingApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch active tables.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("BillingApi getActiveTables note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

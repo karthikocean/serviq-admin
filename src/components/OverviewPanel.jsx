@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
 import TableApi from '../api/Table.js';
-import { resolveBranchManagerName } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -380,7 +380,7 @@ export default function OverviewPanel({
     };
   }, [orderBreakdownData, displayOrders]);
 
-  // Accurately computed fallback counts
+  // Accurately computed counts
   const localOccupiedCount = displayTables.filter(t => isTableOccupied(t, displayOrders)).length;
   const occupiedTablesCount = localOccupiedCount;
   const totalTablesDisplayCount = displayTables.length || statsData?.activeTables?.total || statsData?.occupiedTables?.total || liveTablesData?.total || 0;
@@ -389,7 +389,7 @@ export default function OverviewPanel({
   const onDutyStaffCount = displayStaff.filter(s => {
     const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
     return statusStr === 'on duty' || statusStr === 'on_duty' || statusStr === 'active';
-  }).length || displayStaff.length;
+  }).length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active' || b.isActive !== false).length;
 
   // Calculate dynamic monthly sales
@@ -415,6 +415,40 @@ export default function OverviewPanel({
   };
 
   const topItemFallback = getTopOrderedItem();
+
+  // Dynamic 6-month revenue calculation from real orders
+  const dynamicPast6Months = useMemo(() => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mName = monthNames[d.getMonth()];
+      const yr = d.getFullYear();
+      const mIdx = d.getMonth();
+
+      const ordersInMonth = (displayOrders || []).filter(o => {
+        if (!o.createdAt) return false;
+        const oDate = new Date(o.createdAt);
+        return oDate.getFullYear() === yr && oDate.getMonth() === mIdx;
+      });
+
+      const rev = ordersInMonth.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      months.push({
+        label: mName,
+        month: mName,
+        year: yr,
+        revenue: rev,
+        formattedRevenue: rev >= 1000 ? `₹${(rev / 1000).toFixed(1)}k` : `₹${rev}`,
+        ordersCount: ordersInMonth.length
+      });
+    }
+    const maxRev = Math.max(...months.map(m => m.revenue), 1);
+    return months.map(m => ({
+      ...m,
+      percentage: m.revenue > 0 ? Math.max(15, Math.round((m.revenue / maxRev) * 100)) : 12
+    }));
+  }, [displayOrders]);
 
   // Branch statistics computation for All Branches view
   const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
@@ -470,7 +504,7 @@ export default function OverviewPanel({
     });
 
     const occupied = occupiedTableIds.size;
-    const totalBranchTables = Math.max(branchTables.length || branch.totalTables || 10, occupied);
+    const totalBranchTables = Math.max(branchTables.length || branch.totalTables || 0, occupied);
 
     const activeStaff = branchStaff.filter(s => {
       const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();
@@ -478,6 +512,7 @@ export default function OverviewPanel({
     }).length;
 
     const mgr = resolveBranchManagerName(branch, allUsers || users || [], branchStaff || allStaff || staff || []);
+    const contactNum = resolveBranchContactNumber(branch, allUsers || users || [], branchStaff || allStaff || staff || []);
 
     return {
       ...branch,
@@ -486,12 +521,13 @@ export default function OverviewPanel({
       branchCode: branch.branchCode || 'BR-001',
       branchManager: mgr,
       managerName: mgr,
+      mobileNumber: contactNum !== 'N/A' ? contactNum : (branch.mobileNumber || branch.contactNumber || branch.phone || ''),
       ordersCount: branchOrders.length,
       revenue: branchRevenue,
       tablesCount: totalBranchTables,
       occupiedTables: occupied,
-      staffCount: branchStaff.length || 5,
-      activeStaff: activeStaff || (branchStaff.length > 0 ? branchStaff.length : 3)
+      staffCount: branchStaff.length,
+      activeStaff: activeStaff
     };
   });
 
@@ -538,7 +574,7 @@ export default function OverviewPanel({
                 </span>
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{resolveBranchManagerName(selectedBranch, allUsers || users || [], allStaff || staff || [])}</strong> • Contact: {selectedBranch.mobileNumber || selectedBranch.phoneNumber || (typeof selectedBranch.contact === 'object' ? selectedBranch.contact?.phone : selectedBranch.contact) || 'N/A'}
+                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{resolveBranchManagerName(selectedBranch, allUsers || users || [], allStaff || staff || [])}</strong> • Contact: {resolveBranchContactNumber(selectedBranch, allUsers || users || [], allStaff || staff || [])}
               </p>
             </div>
           </div>
@@ -837,15 +873,8 @@ export default function OverviewPanel({
               (revenueGrowthData?.data && revenueGrowthData.data.length > 0
                 ? revenueGrowthData.data
                 : (isAllBranches
-                    ? branchAnalytics.map(b => ({ label: b.branchCode, formattedRevenue: `₹${(b.revenue / 1000).toFixed(1)}k`, percentage: Math.max(20, Math.round((b.revenue / Math.max(...branchAnalytics.map(x => x.revenue), 1000)) * 100)), revenue: b.revenue }))
-                    : [
-                        { label: 'Mar', month: 'Mar', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
-                        { label: 'Apr', month: 'Apr', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
-                        { label: 'May', month: 'May', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
-                        { label: 'Jun', month: 'Jun', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
-                        { label: 'Jul', month: 'Jul', formattedRevenue: '₹0', percentage: 15, revenue: 0 },
-                        { label: 'Aug', month: 'Aug', formattedRevenue: '₹262.5', percentage: 26, revenue: 262.5 }
-                      ]
+                    ? branchAnalytics.map(b => ({ label: b.branchCode, formattedRevenue: `₹${(b.revenue / 1000).toFixed(1)}k`, percentage: Math.max(15, Math.round((b.revenue / Math.max(...branchAnalytics.map(x => x.revenue), 1000)) * 100)), revenue: b.revenue }))
+                    : dynamicPast6Months
                   )
               ).map((item, idx) => {
                 const pct = Math.max(12, Math.min(100, item.percentage !== undefined ? item.percentage : 15));

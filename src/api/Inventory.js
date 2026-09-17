@@ -37,9 +37,7 @@ class InventoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch inventory items.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("InventoryApi getItems note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -58,7 +56,7 @@ class InventoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch inventory item details.";
-      ShowNotifications.showAlertNotification(errorMessage, false);
+      console.warn("InventoryApi getItemById note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -236,9 +234,7 @@ class InventoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch inventory logs.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("InventoryApi getLogs note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
@@ -270,9 +266,7 @@ class InventoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch inventory stats.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("InventoryApi getStats note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

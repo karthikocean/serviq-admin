@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../config/AppContext';
-import { notificationApi } from '../api/Notification.js';
+import { notificationApi, isDummyNotification } from '../api/Notification.js';
 import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
 // Relative time formatting helper
@@ -170,21 +170,37 @@ export default function NotificationModal({ isOpen, onClose }) {
       if (res.status && res.data) {
         const data = res.data;
 
-        // Store counts from API
-        if (data.counts) {
-          setCounts(data.counts);
-        }
+        // Extract raw arrays and filter out dummy / test notifications
+        const allCustomerRaw = (data.customerWebsiteNotifications || data.notifications || data.allNotifications || [])
+          .filter(item => (item.source !== 'SUPER_ADMIN' && item.requestType !== 'SuperAdmin'))
+          .filter(item => !isDummyNotification(item));
+
+        const allSuperAdminRaw = (data.superAdminNotifications || data.notifications || data.allNotifications || [])
+          .filter(item => (item.source === 'SUPER_ADMIN' || item.requestType === 'SuperAdmin'))
+          .filter(item => !isDummyNotification(item));
+
+        // Store counts calculated from real non-dummy notifications
+        setCounts({
+          totalActive: allCustomerRaw.length + allSuperAdminRaw.length,
+          totalCount: allCustomerRaw.length + allSuperAdminRaw.length,
+          customerWebsite: allCustomerRaw.length,
+          customerWebsiteUnread: allCustomerRaw.filter(n => !n.isRead).length,
+          superAdmin: allSuperAdminRaw.length,
+          superAdminUnread: allSuperAdminRaw.filter(n => !n.isRead).length,
+          quickHelp: {
+            orders: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'ORDERS' || String(n.type).includes('ORDER')).length,
+            water: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'WATER').length,
+            bill: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'BILL').length,
+            message: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'MESSAGE').length,
+          }
+        });
 
         // Determine notification list based on active tab
         let rawList = [];
         if (activeSourceTab === 'CUSTOMER') {
-          rawList = data.customerWebsiteNotifications || data.notifications || data.allNotifications || [];
+          rawList = allCustomerRaw;
         } else {
-          rawList = data.superAdminNotifications || data.notifications || data.allNotifications || [];
-        }
-
-        if (!Array.isArray(rawList) && Array.isArray(data)) {
-          rawList = data;
+          rawList = allSuperAdminRaw;
         }
 
         // Map and format notifications

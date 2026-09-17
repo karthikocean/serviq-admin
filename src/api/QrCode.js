@@ -29,9 +29,7 @@ class QrCodeApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Fetch QR Codes. Please try again.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("QrCodeApi getQrCodes note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

@@ -9,7 +9,7 @@ import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
 import SubscriptionApi from '../api/Subscription.js';
-import { resolveBranchManagerName } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
 export const AppContext = createContext();
@@ -552,6 +552,7 @@ export const AppProvider = ({ children }) => {
 
             const mappedBranches = branchArray.map(b => {
               const mgr = resolveBranchManagerName(b, usersList, staffList);
+              const contactNum = resolveBranchContactNumber(b, usersList, staffList);
               const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
 
               return {
@@ -561,7 +562,7 @@ export const AppProvider = ({ children }) => {
                 branchCode: b.branchCode || b.code,
                 branchManager: resolvedMgr,
                 managerName: resolvedMgr,
-                mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+                mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
                 email: b.email || b.managerEmail || '',
                 address: b.address?.street || b.address || b.street || '',
                 country: b.address?.country || b.country || '',
@@ -1807,10 +1808,13 @@ export const AppProvider = ({ children }) => {
       const currentBranches = rest.branches || [];
       const updatedBranches = currentBranches.map(b => {
         if (b.id === branchId || b._id === branchId || String(b.id) === String(branchId) || String(b._id) === String(branchId)) {
+          const nameVal = updatedData.branchName || updatedData.name || b.branchName || b.name || '';
           const mgr = updatedData.managerName || updatedData.branchManager || b.managerName || b.branchManager || '';
           return {
             ...b,
             ...updatedData,
+            name: nameVal,
+            branchName: nameVal,
             managerName: mgr,
             branchManager: mgr,
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,

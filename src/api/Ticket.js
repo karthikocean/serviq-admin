@@ -29,9 +29,7 @@ export const ticketApi = {
             }
         } catch (error) {
             const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Fetch Tickets';
-            if (error?.response?.status !== 401) {
-                ShowNotifications.showAlertNotification(errorMessage, false);
-            }
+            console.warn("TicketApi getTickets note:", errorMessage);
             return { status: false, error: errorMessage };
         }
     },
@@ -142,3 +140,5 @@ export const ticketApi = {
         return { status: true, data: payload };
     }
 };
+
+export default ticketApi;

@@ -30,9 +30,7 @@ class MenuApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to fetch menu items. Please try again.";
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("MenuApi getMenuItems note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

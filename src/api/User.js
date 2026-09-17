@@ -40,9 +40,7 @@ class UserApi {
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error, "Failed to fetch users.");
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("UserApi getUsers note:", errorMessage);
       return { status: false, response: error?.response?.data || error };
     }
   }
@@ -72,9 +70,7 @@ class UserApi {
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error, "Failed to fetch stations.");
-      if (error?.response?.status !== 401) {
-        ShowNotifications.showAlertNotification(errorMessage, false);
-      }
+      console.warn("UserApi getStations note:", errorMessage);
       return { status: false, response: error?.response?.data || error };
     }
   }

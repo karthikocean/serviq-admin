@@ -15,6 +15,13 @@ const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -62,6 +69,7 @@ export default function UserListPanel() {
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
+  const [viewingUser, setViewingUser] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
   const [changePasswordUserId, setChangePasswordUserId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
@@ -950,6 +958,27 @@ export default function UserListPanel() {
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button
                           type="button"
+                          onClick={() => setViewingUser(user)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#0284c7',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                          title="View User Details"
+                        >
+                          <EyeIcon size={16} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openEditUser(user)}
                           style={{
                             background: 'transparent',
@@ -1222,6 +1251,93 @@ export default function UserListPanel() {
           </div>
         </div>
       </Modal>
+      {/* VIEW USER DETAILS MODAL */}
+      {viewingUser && (
+        <Modal
+          isOpen={!!viewingUser}
+          onClose={() => setViewingUser(null)}
+          title="User Account Details"
+          maxWidth="560px"
+        >
+          {(() => {
+            const uRoleId = typeof viewingUser.roleId === 'object' ? viewingUser.roleId?._id : viewingUser.roleId;
+            const uBranchId = typeof viewingUser.branchId === 'object' ? viewingUser.branchId?._id : viewingUser.branchId;
+            const uRoleName = viewingUser.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'User';
+            const branchObj = viewingUser.branchId?.branchName ? viewingUser.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
+            const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+                  padding: '16px 20px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '50%',
+                    background: '#eff6ff',
+                    border: '2px solid #bfdbfe',
+                    color: '#1d4ed8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    fontWeight: 900
+                  }}>
+                    {viewingUser.name?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>{viewingUser.name}</div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 800, background: '#e0f2fe', color: '#0369a1' }}>
+                        {uRoleName}
+                      </span>
+                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, background: viewingUser.isActive ? '#dcfce7' : '#fee2e2', color: viewingUser.isActive ? '#15803d' : '#b91c1c' }}>
+                        {viewingUser.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Branch</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>{uBranchName}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Phone</div>
+                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginTop: '2px', fontFamily: 'monospace' }}>{viewingUser.phoneNumber}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Email</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px' }}>{viewingUser.email || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>User ID</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginTop: '2px', fontFamily: 'monospace' }}>{viewingUser._id || viewingUser.id}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button type="button" className="btn btn-outline" onClick={() => setViewingUser(null)} style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}>
+                    Close
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => { const target = viewingUser; setViewingUser(null); openEditUser(target); }} style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}>
+                    Edit Profile
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+
     </section>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
-import { resolveBranchManagerName } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -99,6 +99,7 @@ export default function BranchSearchDropdown() {
         if (Array.isArray(branchArray) && branchArray.length > 0) {
           const mapped = branchArray.map(b => {
             const mgr = resolveBranchManagerName(b, usersList, staffList);
+            const contactNum = resolveBranchContactNumber(b, usersList, staffList);
             return {
               id: b._id || b.id,
               _id: b._id || b.id,
@@ -106,7 +107,7 @@ export default function BranchSearchDropdown() {
               branchCode: b.branchCode || b.code,
               branchManager: mgr,
               managerName: mgr,
-              mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+              mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
               email: b.email || b.managerEmail || '',
               address: b.address?.street || b.address || b.street || '',
               city: b.address?.city || b.city || '',
