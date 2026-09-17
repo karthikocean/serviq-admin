@@ -73,7 +73,7 @@ export default function BillingPanel({
 
   // Pagination for bill items
   const [itemsPage, setItemsPage] = useState(0);
-  const itemsPerPage = 6;
+  const itemsPerPage = 10;
   const totalItemsPages = Math.ceil(billingItems.length / itemsPerPage) || 1;
   const paginatedBillingItems = billingItems.slice(itemsPage * itemsPerPage, (itemsPage + 1) * itemsPerPage);
 

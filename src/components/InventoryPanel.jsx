@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext';
 import InventoryApi from '../api/Inventory';
@@ -273,8 +273,6 @@ export default function InventoryPanel() {
   }, [selectedBranchId]);
 
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
   const limit = 10;
 
   // 4. Fetch Items from Backend API
@@ -282,12 +280,7 @@ export default function InventoryPanel() {
     setIsLoading(true);
     try {
       const params = {
-        page,
-        limit,
-        search: searchTerm ? searchTerm.trim() : undefined,
-        category: categoryFilter !== 'All' ? categoryFilter : undefined,
-        status: statusFilter !== 'All' ? statusFilter : undefined,
-        itemName: itemNameFilter !== 'All' ? itemNameFilter : undefined
+        limit: 1000
       };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
@@ -297,24 +290,10 @@ export default function InventoryPanel() {
         const rawData = res.response?.data || res.response?.items || res.response || [];
         const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
         setItems(list);
-        if (res.response?.totalPages) {
-          setTotalPages(res.response.totalPages);
-        } else if (res.response?.total) {
-          setTotalPages(Math.max(1, Math.ceil(res.response.total / limit)));
-        } else {
-          setTotalPages(Math.max(1, Math.ceil(list.length / limit)));
-        }
-        if (res.response?.total !== undefined) {
-          setTotalRecords(res.response.total);
-        } else {
-          setTotalRecords(list.length);
-        }
       } else {
         // Fallback to local context data if API is unreachable
         if (activeRestaurant?.inventory) {
           setItems(activeRestaurant.inventory);
-          setTotalRecords(activeRestaurant.inventory.length);
-          setTotalPages(Math.max(1, Math.ceil(activeRestaurant.inventory.length / limit)));
         }
       }
     } catch (err) {
@@ -322,7 +301,7 @@ export default function InventoryPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId, page, limit, searchTerm, categoryFilter, statusFilter, itemNameFilter, activeRestaurant]);
+  }, [selectedBranchId, activeRestaurant]);
 
   const [liveLogs, setLiveLogs] = useState([]);
 
@@ -444,32 +423,116 @@ export default function InventoryPanel() {
     return match ? (match.branchName || match.name) : branchId;
   };
 
+  // Items filtered by branch
+  const branchItems = useMemo(() => {
+    if (!selectedBranchId || selectedBranchId === 'ALL') {
+      return items;
+    }
+    return items.filter(i => {
+      const itemBranchId = typeof i.branchId === 'object' ? (i.branchId?._id || i.branchId?.id) : i.branchId;
+      return !itemBranchId || itemBranchId === 'ALL' || String(itemBranchId) === String(selectedBranchId);
+    });
+  }, [items, selectedBranchId]);
+
   // Dynamic Unique Categories & Items List for Dropdowns
-  const dynamicCatNames = Array.from(new Set([
-    ...availableCategories.map(c => c.name),
-    ...items.map(i => getCategoryName(i))
-  ].filter(Boolean))).sort();
+  const dynamicCatNames = useMemo(() => {
+    return Array.from(new Set([
+      ...availableCategories.map(c => c.name),
+      ...branchItems.map(i => getCategoryName(i))
+    ].filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  }, [availableCategories, branchItems, liveCategories]);
   const categoriesList = ['All', ...dynamicCatNames];
 
-  const uniqueItemNames = Array.from(new Set([
-    ...items.map(i => getItemDisplayName(i.name || i.itemName, i._id || i.id)).filter(name => name && !isMongoId(name))
-  ])).sort();
+  const uniqueItemNames = useMemo(() => {
+    return Array.from(new Set(
+      branchItems
+        .map(i => getItemDisplayName(i.name || i.itemName, i._id || i.id))
+        .filter(name => name && !isMongoId(name) && name !== '—')
+    )).sort((a, b) => a.localeCompare(b));
+  }, [branchItems, items]);
 
-  // Metrics (sourced from backend apiStats if available)
-  const totalItemsCount = apiStats?.totalItems !== undefined ? Number(apiStats.totalItems) : (totalRecords || items.length);
-  const outOfStockCount = apiStats?.outOfStockCount !== undefined ? Number(apiStats.outOfStockCount) : items.filter(i => (Number(i.currentStock) || 0) <= 0).length;
-  const lowStockCount = apiStats?.lowStockCount !== undefined ? Number(apiStats.lowStockCount) : items.filter(i => {
+  // Metrics (calculated dynamically across branch items for real-time accuracy)
+  const totalItemsCount = branchItems.length;
+  const outOfStockCount = branchItems.filter(i => (Number(i.currentStock) || 0) <= 0).length;
+  const lowStockCount = branchItems.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
     const cur = Number(i.currentStock) || 0;
     return cur > 0 && cur <= min;
   }).length;
-  const inStockCount = apiStats?.inStockCount !== undefined ? Number(apiStats.inStockCount) : items.filter(i => {
+  const inStockCount = branchItems.filter(i => {
     const min = Number(i.minAlertLevel !== undefined ? i.minAlertLevel : i.minStockLevel) || 0;
     const cur = Number(i.currentStock) || 0;
     return cur > min;
   }).length;
-  const totalValuation = apiStats?.totalValuation !== undefined ? Number(apiStats.totalValuation) : items.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
-  const categoriesCount = availableCategories.length || new Set(items.map(i => getCategoryName(i))).size;
+  const totalValuation = branchItems.reduce((sum, item) => sum + ((Number(item.currentStock) || 0) * (Number(item.costPerUnit) || 0)), 0);
+  const categoriesCount = availableCategories.length || new Set(branchItems.map(i => getCategoryName(i))).size;
+
+  // Filtered inventory items based on stock status, item name, category, and search query
+  const filteredInventory = useMemo(() => {
+    return branchItems.filter(item => {
+      const curStock = Number(item.currentStock) || 0;
+      const minAlert = Number(item.minAlertLevel !== undefined ? item.minAlertLevel : item.minStockLevel) || 0;
+
+      // 1. Stock Status filter: 'In Stock' | 'Low Stock' | 'Out of Stock' | 'All'
+      if (statusFilter === 'In Stock') {
+        if (curStock <= minAlert) return false;
+      } else if (statusFilter === 'Low Stock') {
+        if (curStock <= 0 || curStock > minAlert) return false;
+      } else if (statusFilter === 'Out of Stock') {
+        if (curStock > 0) return false;
+      }
+
+      // 2. Item Name filter
+      if (itemNameFilter && itemNameFilter !== 'All') {
+        const displayName = getItemDisplayName(item.name || item.itemName, item._id || item.id);
+        const rawName = item.name || item.itemName || '';
+        const selected = itemNameFilter.trim().toLowerCase();
+        if (displayName.toLowerCase() !== selected && rawName.toLowerCase() !== selected) {
+          return false;
+        }
+      }
+
+      // 3. Category filter
+      if (categoryFilter && categoryFilter !== 'All') {
+        const catName = getCategoryName(item);
+        const itemCatId = typeof item.categoryId === 'object' ? (item.categoryId?._id || item.categoryId?.id) : item.categoryId;
+        if (catName.toLowerCase() !== categoryFilter.toLowerCase() && String(itemCatId) !== String(categoryFilter)) {
+          return false;
+        }
+      }
+
+      // 4. Search query (matches name, SKU, category, supplier, notes)
+      if (searchTerm && searchTerm.trim()) {
+        const query = searchTerm.trim().toLowerCase();
+        const displayName = getItemDisplayName(item.name || item.itemName, item._id || item.id).toLowerCase();
+        const rawName = (item.name || item.itemName || '').toLowerCase();
+        const sku = (item.sku || '').toLowerCase();
+        const catName = getCategoryName(item).toLowerCase();
+        const supplier = (item.supplierName || '').toLowerCase();
+        const matches = displayName.includes(query) || rawName.includes(query) || sku.includes(query) || catName.includes(query) || supplier.includes(query);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [branchItems, statusFilter, itemNameFilter, categoryFilter, searchTerm, liveCategories]);
+
+  // Paginated inventory items for display
+  const totalRecords = filteredInventory.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
+  const displayInventory = filteredInventory.slice(page * limit, (page + 1) * limit);
+
+  // Auto-adjust page if out of bounds
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
+  // Reset to page 0 on any filter modification
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, itemNameFilter, categoryFilter, statusFilter, selectedBranchId]);
 
   // Logs filtered by selected branch with clean resolved item names
   const baseLogs = liveLogs.length > 0
@@ -486,9 +549,6 @@ export default function InventoryPanel() {
     itemName: getItemDisplayName(log.rawItemName || log.itemName, log.itemId)
   }));
 
-  // Server-filtered inventory items
-  const displayInventory = items;
-
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -503,10 +563,6 @@ export default function InventoryPanel() {
     }
     return pages;
   };
-
-  useEffect(() => {
-    setPage(0);
-  }, [searchTerm, itemNameFilter, categoryFilter, statusFilter, selectedBranchId]);
 
   const handleOpenAddModal = () => {
     setEditingItem(null);

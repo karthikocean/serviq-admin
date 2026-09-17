@@ -197,12 +197,38 @@ export default function KitchenReportsPanel({
   const kitchenPreparingCount = filteredKitchenReports.filter(o => o.status === 'preparing').length;
   const kitchenReadyCount = filteredKitchenReports.filter(o => o.status === 'ready').length;
 
+  // 0-based Pagination (limit = 10)
+  const [page, setPage] = useState(0);
+  const limit = 10;
+  const totalPages = Math.ceil(filteredKitchenReports.length / limit) || 1;
+  const paginatedKitchenReports = filteredKitchenReports.slice(page * limit, (page + 1) * limit);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  useEffect(() => {
+    setPage(0);
+  }, [dateStart, dateEnd, filterStaff, filterDish, filterPriority]);
+
   const handleResetFilters = () => {
     setDateStart('');
     setDateEnd('');
     setFilterStaff('All');
     setFilterDish('All');
     setFilterPriority('All');
+    setPage(0);
   };
 
   return (
@@ -328,7 +354,7 @@ export default function KitchenReportsPanel({
                   </td>
                 </tr>
               ) : (
-                filteredKitchenReports.map(ord => {
+                paginatedKitchenReports.map(ord => {
                   const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
                   const priority = getOrderPriority(ord);
                   return (
@@ -393,6 +419,83 @@ export default function KitchenReportsPanel({
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {filteredKitchenReports.length > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '20px',
+            paddingTop: '16px',
+            borderTop: '1px solid var(--border)',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+              Showing {page * limit + 1} to {Math.min((page + 1) * limit, filteredKitchenReports.length)} of {filteredKitchenReports.length} records
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setPage(prev => Math.max(0, prev - 1))}
+                disabled={page === 0}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  background: page === 0 ? '#f8fafc' : '#ffffff',
+                  color: page === 0 ? '#94a3b8' : '#0f172a',
+                  cursor: page === 0 ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                Previous
+              </button>
+
+              {getPageNumbers().map((pNum) => (
+                <button
+                  key={pNum}
+                  type="button"
+                  onClick={() => setPage(pNum - 1)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '6px',
+                    border: pNum - 1 === page ? 'none' : '1px solid #cbd5e1',
+                    background: pNum - 1 === page ? 'var(--primary)' : '#ffffff',
+                    color: pNum - 1 === page ? '#ffffff' : '#0f172a',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {pNum}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
+                disabled={page >= totalPages - 1}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
+                  color: page >= totalPages - 1 ? '#94a3b8' : '#0f172a',
+                  cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 600
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* KITCHEN TIMELINE MODAL */}

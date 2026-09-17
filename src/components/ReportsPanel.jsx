@@ -369,16 +369,59 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
       ? calcAov
       : (w.averageOrderValue || (finalOrdersServed > 0 ? (finalTotalRevenue / finalOrdersServed).toFixed(2) : '0.00'));
 
-    // Extract tables served by this waiter
+    // Extract tables assigned to and served by this waiter
     const assignedTablesSet = new Set();
+
+    // 1. Direct match from dining tables configured in Table Management (branchTables & tablesList)
+    const isTableAssigned = (t) => {
+      if (!t) return false;
+      const aw = t.assignedWaiter;
+      const awId = String(t.assignedWaiterId || (typeof aw === 'object' ? (aw?._id || aw?.id) : aw) || t.waiterId || t.waiter || t.coverWaiterId || t.tempWaiterId || '').toLowerCase().trim();
+      const awName = String((typeof aw === 'object' ? (aw?.name || aw?.userName || aw?.fullName) : aw) || '').toLowerCase().trim();
+
+      if (wId && awId && (awId === wId || awId.includes(wId) || wId.includes(awId))) return true;
+      if (wNameLower && awName && (awName === wNameLower || awName.includes(wNameLower) || wNameLower.includes(awName))) return true;
+      if (wNameLower && awId && (awId === wNameLower || awId.includes(wNameLower) || wNameLower.includes(awId))) return true;
+      return false;
+    };
+
+    const allTablesPool = [
+      ...(Array.isArray(branchTables) ? branchTables : []),
+      ...(Array.isArray(tablesList) ? tablesList : [])
+    ];
+
+    allTablesPool.forEach(t => {
+      if (isTableAssigned(t)) {
+        const rawTNum = String(t.tableNumber || t.tableNo || t.name || t.number || t.id || t._id || '').trim();
+        if (rawTNum) {
+          const cleanTNum = rawTNum.replace(/^table\s*/i, '').trim();
+          assignedTablesSet.add(`Table ${cleanTNum}`);
+        }
+      }
+    });
+
+    // 2. From waiter profile tables
     if (Array.isArray(w.assignedTablesList)) {
-      w.assignedTablesList.forEach(t => assignedTablesSet.add(toDisplayText(t)));
+      w.assignedTablesList.forEach(t => {
+        const s = String(toDisplayText(t)).replace(/^table\s*/i, '').trim();
+        if (s && s.toLowerCase() !== 'none') assignedTablesSet.add(`Table ${s}`);
+      });
     }
+    if (Array.isArray(w.tables)) {
+      w.tables.forEach(t => {
+        const s = String(toDisplayText(t)).replace(/^table\s*/i, '').trim();
+        if (s && s.toLowerCase() !== 'none') assignedTablesSet.add(`Table ${s}`);
+      });
+    }
+
+    // 3. From served/assigned orders
     assignedOrders.forEach(o => {
-      const tNum = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table);
-      if (tNum) {
-        const tStr = String(tNum).startsWith('Table') ? String(tNum) : `Table ${tNum}`;
-        assignedTablesSet.add(tStr);
+      const rawT = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table) || (typeof o.tableId === 'object' ? (o.tableId?.tableNumber || o.tableId?.name) : o.tableId);
+      if (rawT) {
+        const cleanT = String(rawT).replace(/^table\s*/i, '').trim();
+        if (cleanT) {
+          assignedTablesSet.add(`Table ${cleanT}`);
+        }
       }
     });
 
@@ -697,7 +740,10 @@ export default function ReportsPanel({
   const [kitchenTotalCount, setKitchenTotalCount] = useState(0);
   const [summary, setSummary] = useState(null);
 
-  const [pagination, setPagination] = useState({ page: 0, limit: 10, totalPages: 1, totalItems: 0 });
+  const [waiterPagination, setWaiterPagination] = useState({ page: 0, limit: 10, totalPages: 1, totalItems: 0 });
+  const [kitchenPagination, setKitchenPagination] = useState({ page: 0, limit: 10, totalPages: 1, totalItems: 0 });
+
+  const currentPagination = activeReportTab === 'waiter' ? waiterPagination : kitchenPagination;
 
   const currency = activeRestaurant?.settings?.currency || '₹';
   const effectiveBranches = Array.isArray(branches) && branches.length > 0 ? branches : (activeRestaurant?.branches || []);
@@ -804,10 +850,10 @@ export default function ReportsPanel({
         const uniqueTables = Array.from(new Map(tableList.map(t => [t._id || t.id || t.tableNumber || JSON.stringify(t), t])).values());
         const uniqueMenu = Array.from(new Map(menuList.map(m => [m._id || m.id || m.name || JSON.stringify(m), m])).values());
 
-        if (uniqueOrders.length > 0) setLiveOrders(uniqueOrders);
-        if (uniqueStaff.length > 0) setLiveStaff(uniqueStaff);
-        if (uniqueTables.length > 0) setLiveTables(uniqueTables);
-        if (uniqueMenu.length > 0) setLiveMenu(uniqueMenu);
+        setLiveOrders(uniqueOrders);
+        setLiveStaff(uniqueStaff);
+        setLiveTables(uniqueTables);
+        setLiveMenu(uniqueMenu);
       } catch (e) {
         console.warn("Live context fetch error in ReportsPanel:", e);
       }
@@ -817,33 +863,25 @@ export default function ReportsPanel({
     return () => { isMounted = false; };
   }, [selectedBranchId, effectiveBranches.length, dateStart, dateEnd]);
 
-  // Derived effective collections strictly filtered by active branch
+  // Derived effective collections strictly filtered by active branch (NO dummy fallbacks)
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
 
-  const baseOrders = (liveOrders.length > 0)
-    ? liveOrders
-    : ((orders && orders.length > 0) ? orders : (activeRestaurant?.orders || []));
+  const baseOrders = liveOrders;
   const effectiveOrders = isBranchFiltered
     ? baseOrders.filter(o => isEntityInBranch(o, selectedBranchId, effectiveBranches))
     : baseOrders;
 
-  const baseStaff = (liveStaff.length > 0)
-    ? liveStaff
-    : ((staff && staff.length > 0) ? staff : (activeRestaurant?.staff || []));
+  const baseStaff = liveStaff;
   const effectiveStaff = isBranchFiltered
     ? baseStaff.filter(s => isEntityInBranch(s, selectedBranchId, effectiveBranches))
     : baseStaff;
 
-  const baseTables = (liveTables.length > 0)
-    ? liveTables
-    : ((tables && tables.length > 0) ? tables : (activeRestaurant?.tables || []));
+  const baseTables = liveTables;
   const effectiveTables = isBranchFiltered
     ? baseTables.filter(t => isEntityInBranch(t, selectedBranchId, effectiveBranches))
     : baseTables;
 
-  const baseMenu = (liveMenu.length > 0)
-    ? liveMenu
-    : ((menu && menu.length > 0) ? menu : (activeRestaurant?.menu || []));
+  const baseMenu = liveMenu;
   const effectiveMenu = isBranchFiltered
     ? baseMenu.filter(m => isEntityInBranch(m, selectedBranchId, effectiveBranches))
     : baseMenu;
@@ -982,8 +1020,9 @@ export default function ReportsPanel({
 
     return Array.from(waiterMap.values());
   };
+
   // Sync both tab counts accurately
-  const syncBothTabCounts = async () => {
+  const syncBothTabCounts = () => {
     try {
       const computedW = computeWaiterReports(effectiveOrders, effectiveStaff, effectiveTables, {
         dateStart,
@@ -1037,7 +1076,7 @@ export default function ReportsPanel({
         branchId: isBranchFiltered ? selectedBranchId : undefined,
         search: searchQuery,
         page: page,
-        limit: pagination.limit
+        limit: 10
       };
 
       if (activeReportTab === 'waiter') {
@@ -1054,18 +1093,18 @@ export default function ReportsPanel({
           selectedBranchId,
           searchQuery,
           page,
-          limit: pagination.limit
+          limit: 10
         }, effectiveBranches);
 
         setWaiterData(computed.data);
         setSummary(computed.summary);
         setWaiterTotalCount(computed.totalItems);
-        setPagination(prev => ({
-          ...prev,
+        setWaiterPagination({
           page,
+          limit: 10,
           totalPages: computed.totalPages,
           totalItems: computed.totalItems
-        }));
+        });
       } else {
         filters.categoryId = (filterKitchenCategory && filterKitchenCategory !== 'All') ? filterKitchenCategory : undefined;
         const rawKitchen = await fetchMultiBranchReport((f) => ReportsApi.getKitchenReports(f), filters);
@@ -1082,18 +1121,18 @@ export default function ReportsPanel({
           filterCategory: filterKitchenCategory,
           searchQuery,
           page,
-          limit: pagination.limit
+          limit: 10
         }, effectiveBranches);
 
         setKitchenData(computed.data);
         setSummary(computed.summary);
         setKitchenTotalCount(computed.totalItems);
-        setPagination(prev => ({
-          ...prev,
+        setKitchenPagination({
           page,
+          limit: 10,
           totalPages: computed.totalPages,
           totalItems: computed.totalItems
-        }));
+        });
       }
     } catch (err) {
       console.error("fetchReports error:", err);
@@ -1111,14 +1150,13 @@ export default function ReportsPanel({
     filterKitchenCategory,
     searchQuery,
     selectedBranchId,
-    pagination.limit,
     effectiveOrders.length,
     effectiveStaff.length,
     effectiveMenu.length
   ]);
 
   const handlePageChange = (newPage) => {
-    if (newPage >= 0 && newPage < pagination.totalPages) {
+    if (newPage >= 0 && newPage < currentPagination.totalPages) {
       fetchReports(newPage);
     }
   };
@@ -1126,8 +1164,8 @@ export default function ReportsPanel({
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    const current = pagination.page + 1;
-    const total = Math.max(1, pagination.totalPages || 1);
+    const current = currentPagination.page + 1;
+    const total = Math.max(1, currentPagination.totalPages || 1);
     let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
     let endPage = Math.min(total, startPage + maxVisible - 1);
     if (endPage - startPage + 1 < maxVisible) {
@@ -1144,7 +1182,8 @@ export default function ReportsPanel({
     setDateEnd('');
     setFilterKitchenCategory('All');
     setSearchQuery('');
-    setPagination(prev => ({ ...prev, page: 0 }));
+    setWaiterPagination(prev => ({ ...prev, page: 0 }));
+    setKitchenPagination(prev => ({ ...prev, page: 0 }));
   };
 
   // Excel Export with Dynamic Auto-Fit Columns
@@ -1373,9 +1412,8 @@ export default function ReportsPanel({
             gap: '8px',
             transition: 'all 0.15s'
           }}
-        >
-          <UserIcon size={16} color={activeReportTab === 'waiter' ? '#ff5a1f' : '#64748b'} />
-          <span>Waiter Reports ({activeReportTab === 'waiter' ? (pagination.totalItems ?? waiterData.length) : (waiterTotalCount || waiterData.length || 0)})</span>
+        >          <UserIcon size={16} color={activeReportTab === 'waiter' ? '#ff5a1f' : '#64748b'} />
+          <span>Waiter Reports ({waiterTotalCount})</span>
         </button>
 
         <button
@@ -1397,7 +1435,7 @@ export default function ReportsPanel({
           }}
         >
           <ChefIcon size={16} color={activeReportTab === 'kitchen' ? '#9a3412' : '#64748b'} />
-          <span>Kitchen Reports ({activeReportTab === 'kitchen' ? (pagination.totalItems ?? kitchenData.length) : (kitchenTotalCount || kitchenData.length || 0)})</span>
+          <span>Kitchen Reports ({kitchenTotalCount})</span>
         </button>
       </div>
 
@@ -1419,200 +1457,173 @@ export default function ReportsPanel({
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeWaitersOnDuty || 0} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {summary?.totalWaiters || waiterData.length || 0}</span></div>
           </div>
 
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #f59e0b', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Average Order Value</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#b45309', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>
-              {currency}{summary?.averageOrderValue || '0.00'}
-            </div>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #8b5cf6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Order Value</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#8b5cf6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{summary?.averageOrderValue || '0.00'}</div>
           </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #ea580c', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Dishes Prepared</div>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dishes Prepared</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#ea580c', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.totalDishesPrepared || 0}</div>
           </div>
 
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid var(--primary, #ff7a00)', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #16a34a', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Food Revenue Generated</div>
             <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{currency}{(summary?.foodRevenueGenerated || 0).toLocaleString('en-IN')}</div>
           </div>
 
           <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #3b82f6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
             <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Active Food Items</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeFoodItems ?? kitchenData.length}</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.activeFoodItems || kitchenData.length || 0}</div>
           </div>
 
-          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #10b981', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Kitchen Preparation Time</div>
-            <div style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.avgPrepTime || '15 mins'}</div>
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', borderLeft: '4px solid #8b5cf6', boxShadow: '0 2px 10px rgba(0,0,0,0.02)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Prep Time</div>
+            <div style={{ fontSize: '24px', fontWeight: 900, color: '#8b5cf6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{summary?.avgPrepTime || '15 mins'}</div>
           </div>
         </div>
       )}
 
-      {/* Date Filters & Search Row */}
+      {/* SEARCH AND FILTERS TOOLBAR */}
       <div style={{
-        background: '#fff',
+        background: '#ffffff',
         borderRadius: '12px',
-        border: '1px solid #e2e8f0',
         padding: '16px 20px',
+        border: '1px solid #e2e8f0',
         marginBottom: '20px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.02)'
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
       }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: activeReportTab === 'kitchen'
-            ? 'minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1.3fr) auto'
-            : 'minmax(260px, 2.2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto',
-          gap: '14px',
-          alignItems: 'flex-end'
-        }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Search
-            </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+          {/* Search Box */}
+          <div style={{ position: 'relative', minWidth: '240px', flex: '1 1 240px' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🔍</span>
             <input
               type="text"
-              placeholder={activeReportTab === 'waiter' ? 'Search waiter, table, phone...' : 'Search food item, category...'}
+              placeholder={activeReportTab === 'waiter' ? "Search waiter name, phone, table..." : "Search food item or category..."}
               value={searchQuery}
-              onKeyDown={e => {
-                if (e.key === ' ' && !e.currentTarget.value) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value.replace(/^\s+/, '');
-                setSearchQuery(val);
-              }}
+              onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 width: '100%',
-                height: '40px',
-                padding: '0 12px',
+                padding: '9px 12px 9px 36px',
                 borderRadius: '8px',
-                border: '1px solid #e2e8f0',
+                border: '1px solid #cbd5e1',
                 fontSize: '13px',
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                boxSizing: 'border-box',
+                outline: 'none',
+                background: '#f8fafc',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
+          {/* Kitchen category filter */}
+          {activeReportTab === 'kitchen' && (
+            <div style={{ minWidth: '180px' }}>
+              <select
+                value={filterKitchenCategory}
+                onChange={(e) => setFilterKitchenCategory(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  background: '#f8fafc',
+                  outline: 'none',
+                  fontWeight: 600,
+                  color: '#334155'
+                }}
+              >
+                <option value="All">All Categories</option>
+                {liveCategories.map(c => {
+                  const cName = typeof c === 'string' ? c : (c.name || c.categoryName || c.title || '');
+                  const cId = typeof c === 'object' ? (c._id || c.id || cName) : c;
+                  if (!cName) return null;
+                  return <option key={cId} value={cName}>{cName}</option>;
+                })}
+              </select>
+            </div>
+          )}
+
+          {/* Date range pickers */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="date"
+              value={dateStart}
+              onChange={(e) => setDateStart(e.target.value)}
+              title="From Date"
+              style={{
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '12.5px',
+                background: '#f8fafc',
+                color: '#334155',
+                outline: 'none'
+              }}
+            />
+            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>to</span>
+            <input
+              type="date"
+              value={dateEnd}
+              onChange={(e) => setDateEnd(e.target.value)}
+              title="To Date"
+              style={{
+                padding: '8px 10px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '12.5px',
+                background: '#f8fafc',
+                color: '#334155',
                 outline: 'none'
               }}
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Start Date
-            </label>
-            <input 
-              type="date"
-              value={dateStart}
-              onChange={e => setDateStart(e.target.value)}
-              style={{
-                width: '100%',
-                height: '40px',
-                padding: '0 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                fontWeight: 500,
-                boxSizing: 'border-box',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              End Date
-            </label>
-            <input 
-              type="date"
-              value={dateEnd}
-              onChange={e => setDateEnd(e.target.value)}
-              style={{
-                width: '100%',
-                height: '40px',
-                padding: '0 12px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '13px',
-                backgroundColor: '#f8fafc',
-                color: '#0f172a',
-                fontWeight: 500,
-                boxSizing: 'border-box',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            />
-          </div>
-
-          {activeReportTab === 'kitchen' && (
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Filter by Category
-              </label>
-              <SearchableSelect
-                value={filterKitchenCategory}
-                onChange={e => setFilterKitchenCategory(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Food Categories' },
-                  ...Array.from(new Set([
-                    ...liveCategories.map(c => toDisplayText(c.name || c.categoryName || c.title || c)),
-                    ...effectiveMenu.map(m => resolveCategoryName(m.category || m.categoryName, liveCategories)),
-                    ...kitchenData.map(k => toDisplayText(k.category)),
-                    'Starters', 'Main Course', 'Beverages', 'Desserts', 'Breads', 'Biryani'
-                  ].filter(Boolean))).map(cat => ({
-                    value: cat,
-                    label: cat
-                  }))
-                ]}
-                placeholder="Select Category..."
-              />
-            </div>
-          )}
-
-          <div>
+          {(dateStart || dateEnd || searchQuery || (activeReportTab === 'kitchen' && filterKitchenCategory !== 'All')) && (
             <button
               type="button"
-              className="premium-filter-btn-reset"
               onClick={handleResetFilters}
               style={{
-                height: '40px',
-                padding: '0 18px',
-                fontSize: '13px',
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                padding: '8px 12px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
+                background: '#f1f5f9',
                 color: '#475569',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
+                fontSize: '12.5px',
+                fontWeight: 700,
+                cursor: 'pointer'
               }}
             >
               Reset
             </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* REPORT CONTENT TABLES */}
-      <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+      {/* REPORT DATA TABLES */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+      }}>
         {/* 1. WAITER PERFORMANCE REPORT TABLE */}
         {activeReportTab === 'waiter' && (
-          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
+          <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
                 <th style={{ width: '70px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO</th>
                 <th style={{ minWidth: '220px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>WAITER NAME</th>
-                <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>DUTY STATUS</th>
+                <th style={{ minWidth: '140px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>DUTY STATUS</th>
                 <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED TABLES</th>
-                <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDERS FULFILLED</th>
                 <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>TOTAL REVENUE</th>
                 <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG ORDER VALUE</th>
                 <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTIONS</th>
@@ -1621,13 +1632,13 @@ export default function ReportsPanel({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
                     <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading waiter reports...
                   </td>
                 </tr>
               ) : waiterData.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
                     No waiter performance records found for this period.
                   </td>
                 </tr>
@@ -1635,7 +1646,7 @@ export default function ReportsPanel({
                 waiterData.map((w, index) => (
                   <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
                     <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {pagination.page * pagination.limit + index + 1}
+                      {currentPagination.page * currentPagination.limit + index + 1}
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'left' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1692,24 +1703,6 @@ export default function ReportsPanel({
                     <td style={{ padding: '14px 16px', textAlign: 'left' }}>
                       <span style={{ fontSize: '12.5px', color: '#334155', fontWeight: 600, display: 'inline-block' }}>
                         {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.map(t => toDisplayText(t)).join(', ') : 'None'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        padding: '4px 12px',
-                        borderRadius: '16px',
-                        backgroundColor: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        color: '#1d4ed8'
-                      }}>
-                        <span style={{ fontSize: '13.5px', fontWeight: 800, fontFamily: "'Outfit', sans-serif" }}>
-                          {Number(w.ordersServed || w.orders?.length || 0)}
-                        </span>
-                        <span style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600 }}>orders</span>
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
@@ -1803,7 +1796,7 @@ export default function ReportsPanel({
                   return (
                     <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
                       <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        {pagination.page * pagination.limit + index + 1}
+                        {currentPagination.page * currentPagination.limit + index + 1}
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a', fontSize: '13.5px', textAlign: 'left' }}>
                         {toDisplayText(k.foodItem || k.itemName, 'Food Item')}
@@ -1849,7 +1842,7 @@ export default function ReportsPanel({
       </div>
 
       {/* Pagination Footer */}
-      {(pagination.totalPages > 1 || pagination.totalItems > 0) && (
+      {(currentPagination.totalPages > 1 || currentPagination.totalItems > 0) && (
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -1864,22 +1857,22 @@ export default function ReportsPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {pagination.totalItems === 0 ? 0 : pagination.page * pagination.limit + 1} to {Math.min((pagination.page + 1) * pagination.limit, pagination.totalItems)} of {pagination.totalItems} records
+            Showing {currentPagination.totalItems === 0 ? 0 : currentPagination.page * currentPagination.limit + 1} to {Math.min((currentPagination.page + 1) * currentPagination.limit, currentPagination.totalItems)} of {currentPagination.totalItems} records
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
-              onClick={() => handlePageChange(pagination.page - 1)}
-              disabled={pagination.page === 0}
+              onClick={() => handlePageChange(currentPagination.page - 1)}
+              disabled={currentPagination.page === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: pagination.page === 0 ? '#f8fafc' : '#ffffff',
-                color: pagination.page === 0 ? '#cbd5e1' : '#334155',
+                background: currentPagination.page === 0 ? '#f8fafc' : '#ffffff',
+                color: currentPagination.page === 0 ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: pagination.page === 0 ? 'not-allowed' : 'pointer',
+                cursor: currentPagination.page === 0 ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1896,10 +1889,10 @@ export default function ReportsPanel({
                   height: '32px',
                   borderRadius: '8px',
                   fontSize: '13px',
-                  fontWeight: pagination.page + 1 === pageNum ? 700 : 500,
-                  border: pagination.page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
-                  background: pagination.page + 1 === pageNum ? '#000000' : '#ffffff',
-                  color: pagination.page + 1 === pageNum ? '#ffffff' : '#334155',
+                  fontWeight: currentPagination.page + 1 === pageNum ? 700 : 500,
+                  border: currentPagination.page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: currentPagination.page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: currentPagination.page + 1 === pageNum ? '#ffffff' : '#334155',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -1910,17 +1903,17 @@ export default function ReportsPanel({
 
             <button
               type="button"
-              onClick={() => handlePageChange(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0}
+              onClick={() => handlePageChange(currentPagination.page + 1)}
+              disabled={currentPagination.page >= currentPagination.totalPages - 1 || currentPagination.totalPages === 0}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
-                background: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? '#f8fafc' : '#ffffff',
-                color: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? '#cbd5e1' : '#334155',
+                background: (currentPagination.page >= currentPagination.totalPages - 1 || currentPagination.totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (currentPagination.page >= currentPagination.totalPages - 1 || currentPagination.totalPages === 0) ? '#cbd5e1' : '#334155',
                 fontSize: '13px',
                 fontWeight: 600,
-                cursor: (pagination.page >= pagination.totalPages - 1 || pagination.totalPages === 0) ? 'not-allowed' : 'pointer',
+                cursor: (currentPagination.page >= currentPagination.totalPages - 1 || currentPagination.totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
@@ -1999,27 +1992,6 @@ export default function ReportsPanel({
                     </td>
                     <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          title="View Order Details"
-                          onClick={() => setSelectedOrderForView(ord)}
-                          style={{
-                            background: '#eff6ff',
-                            border: '1px solid #bfdbfe',
-                            color: '#2563eb',
-                            cursor: 'pointer',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '11px',
-                            fontWeight: 700
-                          }}
-                        >
-                          <EyeIcon size={14} color="#2563eb" />
-                          View
-                        </button>
                         <button
                           type="button"
                           title="View Receipt"

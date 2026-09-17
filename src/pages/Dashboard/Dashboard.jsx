@@ -5,7 +5,7 @@ import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
 import UserApi from '../../api/User';
-import { resolveBranchManagerName, resolveBranchContactNumber } from '../../helper/BranchHelper';
+import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch } from '../../helper/BranchHelper';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -20,13 +20,16 @@ export default function Dashboard() {
   const [liveBranches, setLiveBranches] = useState([]);
   const [liveUsers, setLiveUsers] = useState([]);
 
+  const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+
   const fetchDashboardData = useCallback(async () => {
     try {
+      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 10, page: 0 } : { limit: 10, page: 0 };
       const [tablesRes, ordersRes, branchesRes, usersRes] = await Promise.allSettled([
-        TableApi.getTables(),
-        OrderApi.getOrders(),
+        TableApi.getTables(branchParam),
+        OrderApi.getOrders(branchParam),
         BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 10 })
+        UserApi.getUsers(branchParam)
       ]);
 
       if (tablesRes.status === 'fulfilled' && tablesRes.value?.status && tablesRes.value.response?.data) {
@@ -44,7 +47,7 @@ export default function Dashboard() {
     } catch (e) {
       console.error("Dashboard fetch error:", e);
     }
-  }, []);
+  }, [isSpecificBranch, selectedBranchId]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -73,21 +76,19 @@ export default function Dashboard() {
     };
   });
 
-  const branchMatches = (itemBranchId, targetBranchId) => {
-    if (!targetBranchId || targetBranchId === 'ALL') return true;
-    if (!itemBranchId) return false;
-    const rawTarget = String(targetBranchId).toLowerCase();
-    const rawItem = typeof itemBranchId === 'object' && itemBranchId !== null
-      ? String(itemBranchId._id || itemBranchId.id || itemBranchId.branchCode || '').toLowerCase()
-      : String(itemBranchId).toLowerCase();
-    return rawItem === rawTarget;
-  };
+  const orders = isSpecificBranch
+    ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, branches))
+    : rawOrders;
 
-  const orders = selectedBranchId && selectedBranchId !== 'ALL' ? rawOrders.filter(o => branchMatches(o.branchId || o.branch, selectedBranchId)) : rawOrders;
-  const tables = selectedBranchId && selectedBranchId !== 'ALL' ? rawTables.filter(t => branchMatches(t.branchId || t.branch, selectedBranchId)) : rawTables;
-  const staff = selectedBranchId && selectedBranchId !== 'ALL' ? rawStaff.filter(s => branchMatches(s.branchId || s.branch, selectedBranchId)) : rawStaff;
+  const tables = isSpecificBranch
+    ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : rawTables;
 
-  // Compute today's revenue (from paid orders)
+  const staff = isSpecificBranch
+    ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, branches))
+    : rawStaff;
+
+  // Compute today's revenue (from paid orders of the active scope)
   const todayRevenue = orders
     .filter(o => String(o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid')
     .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
@@ -110,3 +111,4 @@ export default function Dashboard() {
     />
   );
 }
+
