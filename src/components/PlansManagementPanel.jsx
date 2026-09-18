@@ -206,20 +206,152 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const [editingPlan, setEditingPlan] = useState(null);
 
-  // Fetch live subscription dashboard data
+  const formatPlanItem = useCallback((rawPlan) => {
+    if (!rawPlan) return null;
+    const pName = rawPlan.planName || rawPlan.name || 'Plan';
+    const cleanSlug = pName.toLowerCase().replace(/\s*plan$/i, '').trim();
+    const planId = rawPlan._id || rawPlan.id || `plan-${cleanSlug}`;
+
+    let features = [];
+    if (rawPlan.featuresIncluded && typeof rawPlan.featuresIncluded === 'object' && !Array.isArray(rawPlan.featuresIncluded)) {
+      const labelMap = {
+        'menu': 'Menu Management',
+        'tables': 'Table Management',
+        'orders': 'Order Management',
+        'waiter-list': 'Waiter Management',
+        'kitchen-list': 'Kitchen Management',
+        'inventory': 'Inventory Management',
+        'qr-code-config': 'QR Ordering & Config'
+      };
+      const orderedKeys = ['menu', 'tables', 'orders', 'waiter-list', 'kitchen-list', 'inventory', 'qr-code-config'];
+      orderedKeys.forEach(k => {
+        if (rawPlan.featuresIncluded[k] !== undefined) {
+          features.push({
+            name: labelMap[k] || k,
+            included: Boolean(rawPlan.featuresIncluded[k])
+          });
+        }
+      });
+      Object.keys(rawPlan.featuresIncluded).forEach(k => {
+        if (!orderedKeys.includes(k)) {
+          features.push({
+            name: labelMap[k] || k.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            included: Boolean(rawPlan.featuresIncluded[k])
+          });
+        }
+      });
+    } else if (Array.isArray(rawPlan.features) && rawPlan.features.length > 0) {
+      features = rawPlan.features;
+    } else {
+      features = [
+        { name: 'Menu Management', included: true },
+        { name: 'Table Management', included: true },
+        { name: 'Order Management', included: true },
+        { name: 'Waiter Management', included: cleanSlug !== 'basic' },
+        { name: 'Kitchen Management', included: cleanSlug !== 'basic' },
+        { name: 'Inventory Management', included: cleanSlug === 'premium' }
+      ];
+    }
+
+    return {
+      ...rawPlan,
+      id: planId,
+      _id: rawPlan._id || planId,
+      name: pName.endsWith('Plan') ? pName : `${pName} Plan`,
+      planName: rawPlan.planName || pName,
+      tagline: rawPlan.planDescription || rawPlan.tagline || rawPlan.description || '',
+      planDescription: rawPlan.planDescription || rawPlan.tagline || rawPlan.description || '',
+      monthlyPrice: Number(rawPlan.monthlyPrice ?? rawPlan.price ?? 999),
+      monthlyDiscount: Number(rawPlan.monthlyDiscount ?? 0),
+      annualPrice: Number(rawPlan.annualPrice ?? rawPlan.yearlyPrice ?? 9999),
+      maxBranches: Number(rawPlan.maxBranches ?? rawPlan.branchLimit ?? (cleanSlug === 'premium' ? 8 : cleanSlug === 'basic' ? 3 : 5)),
+      featuresIncluded: rawPlan.featuresIncluded || {},
+      features: features,
+      status: rawPlan.status || (rawPlan.isActive !== false ? 'Active' : 'Inactive'),
+      isActive: rawPlan.isActive !== false
+    };
+  }, []);
+
+  // Fetch live subscription dashboard & plans data from API
   const fetchDashboardData = useCallback(async (showToast = false) => {
     setIsRefreshing(true);
-    const res = await SubscriptionApi.getDashboard();
-    if (res.status && res.response) {
-      const data = res.response.data || res.response;
-      setDashboardData(data);
-      if (showToast) {
-        ShowNotifications.showAlertNotification(res.response.message || "Subscription dashboard data updated successfully.", true);
+    try {
+      const [dashRes, plansRes] = await Promise.allSettled([
+        SubscriptionApi.getDashboard(),
+        SubscriptionApi.getPlans()
+      ]);
+
+      const dashValue = dashRes.status === 'fulfilled' ? dashRes.value : null;
+      const plansValue = plansRes.status === 'fulfilled' ? plansRes.value : null;
+
+      if (dashValue && dashValue.status && dashValue.response) {
+        const data = dashValue.response.data || dashValue.response;
+        setDashboardData(data);
       }
+
+      let fetchedPlans = [];
+      if (plansValue && plansValue.status && plansValue.response) {
+        const rawPlans = Array.isArray(plansValue.response?.data)
+          ? plansValue.response.data
+          : (Array.isArray(plansValue.response) ? plansValue.response : (plansValue.response?.plans || []));
+        if (rawPlans.length > 0) {
+          fetchedPlans = rawPlans.map(formatPlanItem).filter(Boolean);
+        }
+      }
+
+      if (fetchedPlans.length === 0 && dashValue?.response) {
+        const data = dashValue.response.data || dashValue.response;
+        if (Array.isArray(data.plans) && data.plans.length > 0) {
+          fetchedPlans = data.plans.map(formatPlanItem).filter(Boolean);
+        }
+      }
+
+      if (fetchedPlans.length > 0) {
+        // Sort descending by monthly price: Premium -> Standard -> Basic
+        fetchedPlans.sort((a, b) => (b.monthlyPrice || 0) - (a.monthlyPrice || 0));
+        setPlansList(fetchedPlans);
+        
+        // Sync AVAILABLE_PLANS in memory with live backend values from Super Admin
+        fetchedPlans.forEach(p => {
+          const cleanP = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+          const target = AVAILABLE_PLANS.find(ap => 
+            ap.id === p.id || 
+            ap.id === p._id || 
+            ap.name.toLowerCase().includes(cleanP) || 
+            cleanP.includes(ap.name.toLowerCase().replace(/\s*plan$/i, '').trim())
+          );
+          if (target) {
+            if (p.maxBranches !== undefined) {
+              target.maxBranches = Number(p.maxBranches);
+              target.branchLimit = Number(p.maxBranches);
+            }
+            if (p.monthlyPrice !== undefined) target.monthlyPrice = Number(p.monthlyPrice);
+            if (p.annualPrice !== undefined) target.annualPrice = Number(p.annualPrice);
+          }
+        });
+
+        setSelectedPlanCycles(prev => {
+          const next = { ...prev };
+          fetchedPlans.forEach(p => {
+            if (!next[p.id]) next[p.id] = 'monthly';
+          });
+          return next;
+        });
+      }
+
+      if (showToast) {
+        ShowNotifications.showAlertNotification(
+          dashValue?.response?.message || plansValue?.response?.message || "Subscription plans & dashboard data updated.",
+          true
+        );
+      }
+    } catch (err) {
+      console.warn("Error loading subscription dashboard or plans:", err);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
-    setIsLoading(false);
-    setIsRefreshing(false);
-  }, []);
+  }, [formatPlanItem]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -252,13 +384,17 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   // Active Plan fields - Prioritize activeRestaurant and local selections over API fallbacks
   const cleanPlanSlug = String(activeRestaurant?.subscription?.planName || activeRestaurant?.plan || activePlanData?.planName || sub.planName || 'Standard')
-    .replace(/^plan-/i, '')
+    .replace(/^plan-/i)
     .replace(/\s*plan$/i, '')
     .trim() || 'Standard';
   const currentPlanName = `${cleanPlanSlug.charAt(0).toUpperCase() + cleanPlanSlug.slice(1)} Plan`;
   const currentBillingCycle = activePlanData?.billingCycle || (sub.billingCycle === 'annual' ? 'Annual' : 'Monthly');
 
-  const matchedActivePlan = AVAILABLE_PLANS.find(p =>
+  const matchedActivePlan = plansList.find(p =>
+    p.id === sub.planId ||
+    p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase()) ||
+    cleanPlanSlug.toLowerCase().includes(p.name.toLowerCase().replace(/\s*plan$/i, '').trim())
+  ) || AVAILABLE_PLANS.find(p =>
     p.id === sub.planId ||
     p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase()) ||
     cleanPlanSlug.toLowerCase().includes(p.name.toLowerCase().replace(/\s*plan$/i, '').trim())
@@ -271,13 +407,45 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const nextRenewalFormatted = formatDate(activePlanData?.nextRenewal || sub.nextBillingDate || '2026-09-23');
   const validityFormatted = formatDate(activePlanData?.validity || sub.expiryDate || '2026-09-23');
 
-  // Branch Capacity fields - calculated strictly from selected active plan
+  let savedPlanInfo = null;
+  try {
+    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
+  } catch (e) {}
+
+  // Branch Capacity fields - dynamically prioritize active restaurant / saved plan / superadmin / backend settings
   const branches = activeRestaurant?.branches || [];
   const activeBranchesCount = branches.length;
-  const baseBranchLimit = getPlanBranchLimit(cleanPlanSlug, 5);
-  const extraBranchSlots = branchCapacityData?.addons !== undefined 
-    ? branchCapacityData.addons 
-    : (sub.extraBranchSlots || 0);
+  const baseBranchLimit = Number(
+    activeRestaurant?.subscription?.baseBranchLimit ??
+    activeRestaurant?.subscription?.maxBranches ??
+    activeRestaurant?.subscription?.branchLimit ??
+    savedPlanInfo?.baseBranchLimit ??
+    savedPlanInfo?.maxBranches ??
+    matchedActivePlan?.maxBranches ??
+    matchedActivePlan?.branchLimit ??
+    matchedActivePlan?.baseBranchLimit ??
+    activePlanData?.baseBranchLimit ??
+    activePlanData?.maxBranches ??
+    activePlanData?.branchLimit ??
+    activePlanData?.branchCapacity ??
+    branchCapacityData?.baseLimit ??
+    branchCapacityData?.base ??
+    branchCapacityData?.maxBranches ??
+    branchCapacityData?.branchLimit ??
+    sub.baseBranchLimit ??
+    sub.maxBranches ??
+    getPlanBranchLimit(cleanPlanSlug, 5)
+  );
+  const extraBranchSlots = Number(
+    activeRestaurant?.subscription?.extraBranchSlots !== undefined
+      ? activeRestaurant.subscription.extraBranchSlots
+      : (branchCapacityData?.extraSlots !== undefined 
+          ? branchCapacityData.extraSlots 
+          : (branchCapacityData?.addons !== undefined
+              ? branchCapacityData.addons
+              : (sub.extraBranchSlots || 0)))
+  );
   const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
   const usedBranchesCount = activeBranchesCount;
   const remainingSlots = Math.max(0, totalAllowedBranches - usedBranchesCount);

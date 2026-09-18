@@ -1055,18 +1055,6 @@ export default function InventoryCategoryPanel() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={() => {
-                  const cat = viewingCategory;
-                  setViewingCategory(null);
-                  handleOpenEdit(cat);
-                }}
-                style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
-              >
-                Edit Category
-              </button>
             </div>
           </div>
         </Modal>

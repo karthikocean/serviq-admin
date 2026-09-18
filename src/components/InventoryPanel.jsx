@@ -2593,18 +2593,6 @@ export default function InventoryPanel() {
               >
                 Close
               </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={() => {
-                  const itm = viewingItem;
-                  setViewingItem(null);
-                  handleOpenEditModal(itm);
-                }}
-                style={{ padding: '8px 18px', background: '#ff5a1f', borderColor: '#ff5a1f' }}
-              >
-                Edit Item
-              </button>
             </div>
           </div>
         </Modal>

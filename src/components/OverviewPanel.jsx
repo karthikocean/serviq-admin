@@ -217,7 +217,7 @@ export default function OverviewPanel({
 
   const fetchLiveOrders = async () => {
     setIsLoadingLiveOrders(true);
-    const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 10 } : { limit: 10 };
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 5 } : { limit: 5 };
     const res = await DashboardApi.getLiveOrders(branchParam);
     if (res && res.status && res.response?.data) {
       setLiveOrdersData(Array.isArray(res.response.data) ? res.response.data : (res.response.data?.orders || []));
@@ -1049,7 +1049,7 @@ export default function OverviewPanel({
                     );
                   }
 
-                  return list.slice(0, 10).map((ord, idx) => {
+                  return list.slice(0, 5).map((ord, idx) => {
                     const itemSummary = ord.itemsSummary || (ord.items || []).map(i => `${i.name || i.title} x ${i.quantity || i.qty || 1}`).join(', ') || 'Items';
                     const branchInfo = branches.find(b => isBranchMatch(b, ord.branchId || ord.branch || ord.restaurantBranchId, branches));
                     const branchCode = ord.branch?.code || ord.branchCode || (branchInfo ? branchInfo.branchCode : (ord.branchId ? String(ord.branchId).slice(-6).toUpperCase() : 'BR-001'));

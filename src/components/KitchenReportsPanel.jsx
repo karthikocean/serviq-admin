@@ -174,7 +174,7 @@ export default function KitchenReportsPanel({
   // Get filtered orders
   const filteredKitchenReports = orders.filter(ord => {
     const date = getOrderDate(ord);
-    const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
+    const kitchenStaffName = ord.kitchenStaff || ord.chef || ord.preparedBy || 'Kitchen';
     const priority = getOrderPriority(ord);
 
     if (dateStart && date && date < dateStart) return false;
@@ -355,7 +355,7 @@ export default function KitchenReportsPanel({
                 </tr>
               ) : (
                 paginatedKitchenReports.map(ord => {
-                  const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
+                  const kitchenStaffName = ord.kitchenStaff || ord.chef || ord.preparedBy || 'Kitchen';
                   const priority = getOrderPriority(ord);
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -514,7 +514,7 @@ export default function KitchenReportsPanel({
               <div>
                 <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>CHEF / STAFF</span>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--black)' }}>
-                  {selectedTimelineOrder.kitchenStaff || (parseInt(selectedTimelineOrder.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel')}
+                  {selectedTimelineOrder.kitchenStaff || selectedTimelineOrder.chef || selectedTimelineOrder.preparedBy || 'Kitchen'}
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>

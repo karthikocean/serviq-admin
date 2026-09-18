@@ -11,6 +11,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
+import PasswordRequirements from './common/PasswordRequirements';
 import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import { getPlanBranchLimit } from '../config/initialData';
 import {
@@ -381,15 +382,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   }, []);
 
   const [subDashboard, setSubDashboard] = useState(null);
+  const [livePlansList, setLivePlansList] = useState([]);
 
   const fetchLiveSubscription = useCallback(async () => {
     try {
-      const res = await SubscriptionApi.getDashboard();
-      if (res && res.status && res.response) {
-        setSubDashboard(res.response.data || res.response);
+      const [dashRes, plansRes] = await Promise.allSettled([
+        SubscriptionApi.getDashboard(),
+        SubscriptionApi.getPlans()
+      ]);
+
+      if (dashRes.status === 'fulfilled' && dashRes.value?.status && dashRes.value?.response) {
+        setSubDashboard(dashRes.value.response.data || dashRes.value.response);
+      }
+
+      if (plansRes.status === 'fulfilled' && plansRes.value?.status && plansRes.value?.response) {
+        const rawPlans = Array.isArray(plansRes.value.response?.data) 
+          ? plansRes.value.response.data 
+          : (Array.isArray(plansRes.value.response) ? plansRes.value.response : (plansRes.value.response?.plans || []));
+        if (rawPlans.length > 0) {
+          setLivePlansList(rawPlans);
+        }
       }
     } catch (err) {
-      console.warn("BranchManagementPanel: Failed to fetch subscription dashboard", err);
+      console.warn("BranchManagementPanel: Failed to fetch subscription dashboard or plans", err);
     }
   }, []);
 
@@ -403,7 +418,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
   }, [isRestaurantOwner, searchTerm, statusFilter, fetchLiveSubscription]);
 
-  const branches = apiBranches;
+  // Listen to plan updates across modules
+  useEffect(() => {
+    const handlePlanUpdate = () => {
+      fetchLiveSubscription();
+    };
+    window.addEventListener('plan_updated', handlePlanUpdate);
+    window.addEventListener('storage', handlePlanUpdate);
+    return () => {
+      window.removeEventListener('plan_updated', handlePlanUpdate);
+      window.removeEventListener('storage', handlePlanUpdate);
+    };
+  }, [fetchLiveSubscription]);
+
+  const branches = (apiBranches && apiBranches.length > 0)
+    ? apiBranches
+    : (activeRestaurant?.branches || []);
 
   // Subscription Plan details & calculations (Basic: max 3, Standard: max 5, Premium: max 8)
   const activePlanData = subDashboard?.activePlan;
@@ -417,16 +447,52 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     extraBranchPrice: 699
   };
 
+  let savedPlanInfo = null;
+  try {
+    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
+  } catch (e) {}
+
   // Prioritize activeRestaurant subscription and plan over API dashboard fallbacks
-  const rawPlanName = activeRestaurant?.subscription?.planName || activeRestaurant?.plan || activePlanData?.planName || 'Standard';
+  const rawPlanName = activeRestaurant?.subscription?.planName || activeRestaurant?.plan || savedPlanInfo?.planName || savedPlanInfo?.cleanName || activePlanData?.planName || 'Standard';
   const cleanPlanName = String(rawPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Standard';
   const planName = cleanPlanName;
 
-  // Base limit strictly derived from active plan (Basic: 3, Standard: 5, Premium: 8)
-  const baseBranchLimit = getPlanBranchLimit(planName, 5);
-  const extraBranchSlots = (activeRestaurant?.subscription?.extraBranchSlots !== undefined)
-    ? activeRestaurant.subscription.extraBranchSlots
-    : (branchCap?.extraSlots || 0);
+  // Matched live plan from Super Admin
+  const matchedLivePlan = livePlansList.find(p => {
+    const pName = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+    return pName === planName.toLowerCase() || p._id === sub.planId || p.id === sub.planId;
+  });
+
+  // Base limit dynamically derived from Super Admin backend plan, active restaurant, or saved plan
+  const baseBranchLimit = Number(
+    matchedLivePlan?.maxBranches ??
+    matchedLivePlan?.branchLimit ??
+    activeRestaurant?.subscription?.baseBranchLimit ??
+    activeRestaurant?.subscription?.maxBranches ??
+    activeRestaurant?.subscription?.branchLimit ??
+    savedPlanInfo?.baseBranchLimit ??
+    savedPlanInfo?.maxBranches ??
+    activePlanData?.baseBranchLimit ??
+    activePlanData?.maxBranches ??
+    activePlanData?.branchLimit ??
+    activePlanData?.branchCapacity ??
+    branchCap?.baseLimit ??
+    branchCap?.base ??
+    branchCap?.maxBranches ??
+    branchCap?.branchLimit ??
+    sub.baseBranchLimit ??
+    sub.maxBranches ??
+    getPlanBranchLimit(planName, 5)
+  );
+
+  const extraBranchSlots = Number(
+    activeRestaurant?.subscription?.extraBranchSlots !== undefined
+      ? activeRestaurant.subscription.extraBranchSlots
+      : (branchCap?.extraSlots !== undefined 
+          ? branchCap.extraSlots 
+          : (branchCap?.addons !== undefined ? branchCap.addons : (sub.extraBranchSlots || 0)))
+  );
 
   const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
   const remainingBranchSlots = Math.max(0, totalAllowedBranches - branches.length);
@@ -480,12 +546,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const totalManagersCount = new Set(branches.map(b => (b.managerName || b.branchManager || '').trim()).filter(x => x && !['unassigned', 'null', 'undefined'].includes(x.toLowerCase()))).size;
 
   const openAddBranchFormDirectly = () => {
-    const autoCode = `BR-${Math.floor(100 + Math.random() * 900)}`;
+    const existingCodes = new Set((branches || []).map(b => (b.branchCode || b.code || '').toUpperCase()));
+    let autoCode = `BR-${Math.floor(100 + Math.random() * 900)}`;
+    let attempts = 0;
+    while (existingCodes.has(autoCode) && attempts < 50) {
+      autoCode = `BR-${Math.floor(100 + Math.random() * 900)}`;
+      attempts++;
+    }
+
     setBranchForm({
       ...initialBranchState,
       branchCode: autoCode,
+      country: 'India',
+      state: 'Tamil Nadu',
+      city: '',
       username: `branch_${autoCode.toLowerCase().replace('-', '_')}`,
-     password: '',
+      password: '',
       confirmPassword: ''
     });
     setFormErrors({});
@@ -634,7 +710,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       // Check for code uniqueness locally among branches (exclude current editing branch)
       const isDuplicateCode = branches.some(b => {
         if (isEditing && (b.id === branchForm.id || b._id === branchForm.id)) return false;
-        return (b.branchCode || '').trim().toLowerCase() === branchCodeTrimmed.toLowerCase();
+        return (b.branchCode || b.code || '').trim().toLowerCase() === branchCodeTrimmed.toLowerCase();
       });
       if (isDuplicateCode) {
         errors.branchCode = 'A branch with this code already exists.';
@@ -655,34 +731,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     } else if (managerTrimmed.length < 2) {
       errors.managerName = 'Branch Manager name must be at least 2 characters.';
       errors.branchManager = 'Branch Manager name must be at least 2 characters.';
-    } else if (!/^[a-zA-Z\s.'-]+$/.test(managerTrimmed)) {
-      errors.managerName = 'Branch Manager name must contain letters and spaces only.';
-      errors.branchManager = 'Branch Manager name must contain letters and spaces only.';
+    } else if (!/^[a-zA-Z0-9\s.'()-]+$/.test(managerTrimmed)) {
+      errors.managerName = 'Branch Manager name contains invalid special characters.';
+      errors.branchManager = 'Branch Manager name contains invalid special characters.';
     }
 
-    // 5. Mobile Number (Exactly 10 digits, starts with 6-9)
+    // 5. Mobile Number (Exactly 10 digits)
     const mobileTrimmed = (branchForm.mobileNumber || '').trim();
     const mobileErr = validateMobile(mobileTrimmed);
     if (mobileErr) {
       errors.mobileNumber = mobileErr;
-    } else if (!/^[6-9][0-9]{9}$/.test(mobileTrimmed)) {
-      errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
-    } else {
-      const cleanPhone = mobileTrimmed.replace(/\D/g, '').slice(-10);
-      const isDuplicate = (branches || []).some(b => {
-        const bId = String(b.id || b._id || '');
-        const currentId = String(branchForm.id || '');
-        if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
-          return false;
-        }
-        const rawPhone = String(b.mobileNumber || b.contactNumber || b.phone || b.managerMobile || '').replace(/\D/g, '');
-        const existingPhone = rawPhone.slice(-10);
-        return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
-      });
-
-      if (isDuplicate) {
-        errors.mobileNumber = 'This mobile number is already registered to another branch.';
-      }
+    } else if (!/^[0-9]{10}$/.test(mobileTrimmed)) {
+      errors.mobileNumber = 'Please enter a valid 10-digit mobile number.';
     }
 
     // 6. Email Address validation
@@ -690,23 +750,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const emailErr = validateEmail(emailTrimmed);
     if (emailErr) {
       errors.email = emailErr;
-    } else {
-      const isDuplicateEmail = (branches || []).some(b => {
-        const bId = String(b.id || b._id || '');
-        const currentId = String(branchForm.id || '');
-        if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
-          return false;
-        }
-        const existingEmail = String(b.email || b.managerEmail || '').trim().toLowerCase();
-        return Boolean(existingEmail && existingEmail === emailTrimmed);
-      });
-
-      if (isDuplicateEmail) {
-        errors.email = 'This email is already registered to another branch.';
-      }
     }
 
-    // 7. Password & Confirm Password validation (Nivetha@123 format)
+    // 7. Password & Confirm Password validation (min 6 characters)
     const hasPassword = Boolean(branchForm.password && String(branchForm.password).trim());
     const hasConfirm = Boolean(branchForm.confirmPassword && String(branchForm.confirmPassword).trim());
 
@@ -756,8 +802,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.city = 'City is required.';
     } else if (cityTrimmed.length < 2) {
       errors.city = 'City must be at least 2 characters.';
-    } else if (!/^[a-zA-Z\s]+$/.test(cityTrimmed)) {
-      errors.city = 'City must contain letters and spaces only.';
+    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(cityTrimmed)) {
+      errors.city = 'City contains invalid characters.';
     }
 
     // 10. State validation
@@ -766,8 +812,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.state = 'State is required.';
     } else if (stateTrimmed.length < 2) {
       errors.state = 'State must be at least 2 characters.';
-    } else if (!/^[a-zA-Z\s]+$/.test(stateTrimmed)) {
-      errors.state = 'State must contain letters and spaces only.';
+    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(stateTrimmed)) {
+      errors.state = 'State contains invalid characters.';
     }
 
     // 11. Country validation
@@ -776,8 +822,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.country = 'Country is required.';
     } else if (countryTrimmed.length < 2) {
       errors.country = 'Country must be at least 2 characters.';
-    } else if (!/^[a-zA-Z\s]+$/.test(countryTrimmed)) {
-      errors.country = 'Country must contain letters and spaces only.';
+    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(countryTrimmed)) {
+      errors.country = 'Country contains invalid characters.';
     }
 
     // 12. Pincode (Postal Code) - Exactly 6 digits
@@ -796,6 +842,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const errors = validateForm();
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      const firstError = Object.values(errors)[0];
+      ShowNotifications.showAlertNotification(firstError || "Please check the required fields in the form.", false);
       return;
     }
 
@@ -820,7 +868,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       pincode: pincodeStr
     };
 
-    const restId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId;
+    const restId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || currentUser?.restaurant?._id || currentUser?.restaurant;
 
     const payload = {
       name: branchNameTrimmed,
@@ -838,7 +886,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       managerPhone: phoneStr,
       managerMobile: phoneStr,
       street: addressStr,
-      address: addressObj,
+      address: addressStr,
+      addressObj: addressObj,
       addressLine1: addressStr,
       city: cityStr,
       state: stateStr,
@@ -848,9 +897,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       zipCode: pincodeStr,
       managerName: managerVal,
       branchManager: managerVal,
+      manager: managerVal,
       status: branchForm.status || 'Active',
       totalTables: totalTablesVal,
       tablesCount: totalTablesVal,
+      capacity: totalTablesVal,
+      seatingCapacity: totalTablesVal,
+      branchCapacity: totalTablesVal,
       isMainBranch: !!branchForm.isMainBranch,
       ...(restId ? { restaurantId: restId, restaurant: restId } : {})
     };
@@ -963,11 +1016,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         };
 
         setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...updatedBranchObj } : b));
-        if (activeRestaurant?.id && updateBranch) {
-          updateBranch(activeRestaurant.id, branchForm.id, updatedBranchObj);
+        const restIdForState = activeRestaurant?._id || activeRestaurant?.id || 'mirchi';
+        if (updateBranch) {
+          updateBranch(restIdForState, branchForm.id, updatedBranchObj);
         }
         await fetchBranches();
-        ShowNotifications.showAlertNotification("Branch updated successfully!", true);
         setActiveView('list');
       } else {
         const rawErr = String(
@@ -1014,9 +1067,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
       }
-      const res = await BranchApi.createBranch(payload);
-      if (res && res.status) {
-        const createdData = res.response?.data || res.response || {};
+      const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
+      const isMock = token && token.startsWith("mock_");
+
+      let res;
+      try {
+        res = await BranchApi.createBranch(payload);
+      } catch (createErr) {
+        console.warn("BranchApi create error:", createErr);
+      }
+
+      if (res?.status || isMock) {
+        const createdData = res?.response?.data || res?.response || {};
         const createdId = createdData._id || createdData.id || `BR-${Date.now()}`;
 
         // Create manager user if manager details were provided
@@ -1045,9 +1107,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           managerName: managerVal
         };
 
-        setApiBranches(prev => [...prev, newBranchObj]);
-        if (activeRestaurant?.id && addBranch) {
-          addBranch(activeRestaurant.id, newBranchObj);
+        setApiBranches(prev => [...(prev || []), newBranchObj]);
+        const restIdForState = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || 'mirchi';
+        if (addBranch) {
+          addBranch(restIdForState, newBranchObj);
         }
         await fetchBranches();
         setActiveView('list');
@@ -1059,8 +1122,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           res?.response?.data?.error ||
           res?.response?.error ||
           (typeof res?.response === 'string' ? res.response : '') ||
-          ''
+          'Failed to create branch.'
         );
+
         const hasEmailErr = /email/i.test(rawErr);
         const hasMobileErr = /mobile|phone|contact/i.test(rawErr);
         const hasDuplicateErr = /duplicate|already exists/i.test(rawErr);
@@ -1502,15 +1566,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
               Branch Information
             </h3>
-            <button
-              type="button"
-              onClick={() => handleOpenEditForm(currentViewBranch)}
-              style={{ border: '1px solid #e2e8f0', background: '#f8fafc', color: '#0f172a', padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s ease' }}
-              onMouseOver={e => { e.currentTarget.style.background = '#0f172a'; e.currentTarget.style.color = '#fff'; }}
-              onMouseOut={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#0f172a'; }}
-            >
-              <PencilIcon size={13} /> Edit
-            </button>
           </div>
 
           {/* Clean 4-Column Structured Metadata Row - Perfectly Top-Aligned Headers */}
@@ -2670,6 +2725,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     )}
                   </div>
 
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <PasswordRequirements
+                      password={branchForm.password}
+                      confirmPassword={branchForm.confirmPassword}
+                      showConfirmMatch={true}
+                    />
+                  </div>
+
                 </div>
               </div>
 
@@ -2717,8 +2780,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         placeholder="Chennai"
                         value={branchForm.city}
                         onChange={e => {
-                          const val = sanitizeName(e.target.value);
-                          setBranchForm({ ...branchForm, city: val });
+                          setBranchForm({ ...branchForm, city: e.target.value });
                           if (formErrors.city) setFormErrors({ ...formErrors, city: '' });
                         }}
                         style={{
@@ -2743,8 +2805,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         placeholder="e.g. Tamil Nadu"
                         value={branchForm.state}
                         onChange={e => {
-                          const val = sanitizeName(e.target.value);
-                          setBranchForm({ ...branchForm, state: val });
+                          setBranchForm({ ...branchForm, state: e.target.value });
                           if (formErrors.state) setFormErrors({ ...formErrors, state: '' });
                         }}
                         style={{
@@ -2769,8 +2830,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         placeholder="e.g. India"
                         value={branchForm.country}
                         onChange={e => {
-                          const val = sanitizeName(e.target.value);
-                          setBranchForm({ ...branchForm, country: val });
+                          setBranchForm({ ...branchForm, country: e.target.value });
                           if (formErrors.country) setFormErrors({ ...formErrors, country: '' });
                         }}
                         style={{
@@ -2917,13 +2977,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => setIsPlanLimitModalOpen(true)}
-            style={{ border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-          >
-            + Buy Branch Slot (₹{extraBranchUnitPrice}/mo)
-          </button>
+          {(branches.length >= totalAllowedBranches || remainingBranchSlots <= 0) && (
+            <button
+              type="button"
+              onClick={() => setIsPlanLimitModalOpen(true)}
+              style={{ border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+            >
+              + Buy Branch Slot (₹{extraBranchUnitPrice}/mo)
+            </button>
+          )}
           <button
             type="button"
             onClick={() => navigate('/plans-management')}
