@@ -128,11 +128,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' || 
+    userType === 'ADMINISTRATOR' || 
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+    userRoleLower === 'super_admin' ||
+    userRoleLower === 'admin' ||
+    userRoleLower === 'administrator' ||
+    String(currentUser?.name || '').toLowerCase().includes('admin') ||
+    String(currentUser?.email || '').toLowerCase().includes('admin') ||
+    !currentUser?.branchId ||
+    currentUser?.branchId === 'ALL';
 
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
@@ -661,12 +669,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     } else {
       const cleanPhone = mobileTrimmed.replace(/\D/g, '').slice(-10);
-      const allBranchSources = [
-        ...(apiBranches || []),
-        ...(branches || []),
-        ...(activeRestaurant?.branches || [])
-      ];
-      let isDuplicate = allBranchSources.some(b => {
+      const isDuplicate = (branches || []).some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
         if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
@@ -677,21 +680,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
       });
 
-      if (!isDuplicate && Array.isArray(apiUsers)) {
-        isDuplicate = apiUsers.some(u => {
-          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-          const currentId = String(branchForm.id || '');
-          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
-            return false;
-          }
-          const rawPhone = String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').replace(/\D/g, '');
-          const existingPhone = rawPhone.slice(-10);
-          return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
-        });
-      }
-
       if (isDuplicate) {
-        errors.mobileNumber = 'This mobile number is already registered to another branch/user.';
+        errors.mobileNumber = 'This mobile number is already registered to another branch.';
       }
     }
 
@@ -701,12 +691,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     if (emailErr) {
       errors.email = emailErr;
     } else {
-      const allBranchSources = [
-        ...(apiBranches || []),
-        ...(branches || []),
-        ...(activeRestaurant?.branches || [])
-      ];
-      let isDuplicateEmail = allBranchSources.some(b => {
+      const isDuplicateEmail = (branches || []).some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
         if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
@@ -716,20 +701,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         return Boolean(existingEmail && existingEmail === emailTrimmed);
       });
 
-      if (!isDuplicateEmail && Array.isArray(apiUsers)) {
-        isDuplicateEmail = apiUsers.some(u => {
-          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-          const currentId = String(branchForm.id || '');
-          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
-            return false;
-          }
-          const existingEmail = String(u.email || '').trim().toLowerCase();
-          return Boolean(existingEmail && existingEmail === emailTrimmed);
-        });
-      }
-
       if (isDuplicateEmail) {
-        errors.email = 'This email is already registered to another branch/user.';
+        errors.email = 'This email is already registered to another branch.';
       }
     }
 
@@ -828,27 +801,58 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     const branchNameTrimmed = (branchForm.branchName || branchForm.name || '').trim();
     const managerVal = (branchForm.managerName || branchForm.branchManager || '').trim();
+    const addressStr = (branchForm.address || '').trim();
+    const cityStr = (branchForm.city || '').trim();
+    const stateStr = (branchForm.state || '').trim();
+    const countryStr = (branchForm.country || '').trim();
+    const pincodeStr = (branchForm.pincode || '').trim();
+    const phoneStr = (branchForm.mobileNumber || '').trim();
+    const emailStr = (branchForm.email || '').trim();
+    const branchCodeStr = (branchForm.branchCode || '').trim();
+    const openingDateStr = branchForm.openingDate || new Date().toISOString().split('T')[0];
+    const totalTablesVal = Number(branchForm.totalTables) || 10;
+
+    const addressObj = {
+      street: addressStr,
+      city: cityStr,
+      state: stateStr,
+      country: countryStr,
+      pincode: pincodeStr
+    };
+
+    const restId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId;
 
     const payload = {
       name: branchNameTrimmed,
       branchName: branchNameTrimmed,
-      branchCode: (branchForm.branchCode || '').trim(),
-      branchOpeningDate: branchForm.openingDate,
-      openingDate: branchForm.openingDate,
-      contactNumber: (branchForm.mobileNumber || '').trim(),
-      mobileNumber: (branchForm.mobileNumber || '').trim(),
-      phone: (branchForm.mobileNumber || '').trim(),
-      phoneNumber: (branchForm.mobileNumber || '').trim(),
-      email: (branchForm.email || '').trim(),
-      street: (branchForm.address || '').trim(),
-      address: (branchForm.address || '').trim(),
-      city: (branchForm.city || '').trim(),
-      state: (branchForm.state || '').trim(),
-      country: (branchForm.country || '').trim(),
-      pincode: (branchForm.pincode || '').trim(),
+      branchCode: branchCodeStr,
+      code: branchCodeStr,
+      branchOpeningDate: openingDateStr,
+      openingDate: openingDateStr,
+      contactNumber: phoneStr,
+      mobileNumber: phoneStr,
+      phone: phoneStr,
+      phoneNumber: phoneStr,
+      email: emailStr,
+      managerEmail: emailStr,
+      managerPhone: phoneStr,
+      managerMobile: phoneStr,
+      street: addressStr,
+      address: addressObj,
+      addressLine1: addressStr,
+      city: cityStr,
+      state: stateStr,
+      country: countryStr,
+      pincode: pincodeStr,
+      postalCode: pincodeStr,
+      zipCode: pincodeStr,
       managerName: managerVal,
+      branchManager: managerVal,
       status: branchForm.status || 'Active',
-      isMainBranch: !!branchForm.isMainBranch
+      totalTables: totalTablesVal,
+      tablesCount: totalTablesVal,
+      isMainBranch: !!branchForm.isMainBranch,
+      ...(restId ? { restaurantId: restId, restaurant: restId } : {})
     };
 
     if (branchForm.password && String(branchForm.password).trim()) {
@@ -1012,19 +1016,40 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       }
       const res = await BranchApi.createBranch(payload);
       if (res && res.status) {
-        const createdId = res.response?.data?._id || res.response?.data?.id || `BR-${Date.now()}`;
+        const createdData = res.response?.data || res.response || {};
+        const createdId = createdData._id || createdData.id || `BR-${Date.now()}`;
 
-        setApiBranches(prev => [...prev, { ...payload, id: createdId, _id: createdId, branchManager: managerVal, managerName: managerVal }]);
+        // Create manager user if manager details were provided
+        if (managerVal && emailStr) {
+          try {
+            await UserApi.createUser({
+              name: managerVal,
+              email: emailStr,
+              phoneNumber: phoneStr,
+              mobileNumber: phoneStr,
+              password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
+              role: 'Manager',
+              branchId: createdId,
+              status: 'Active'
+            });
+          } catch (mgrErr) {
+            console.warn("Manager user sync note:", mgrErr);
+          }
+        }
+
+        const newBranchObj = {
+          ...payload,
+          id: createdId,
+          _id: createdId,
+          branchManager: managerVal,
+          managerName: managerVal
+        };
+
+        setApiBranches(prev => [...prev, newBranchObj]);
         if (activeRestaurant?.id && addBranch) {
-          addBranch(activeRestaurant.id, {
-            ...payload,
-            id: createdId,
-            branchManager: managerVal,
-            managerName: managerVal
-          });
+          addBranch(activeRestaurant.id, newBranchObj);
         }
         await fetchBranches();
-        ShowNotifications.showAlertNotification("Branch created successfully!", true);
         setActiveView('list');
       } else {
         const rawErr = String(

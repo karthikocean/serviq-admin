@@ -58,8 +58,8 @@ export const DEFAULT_ROLES = {
   Admin: {
     permissions: {
       overview: { view: true, add: true, edit: true, delete: true },
-      'branch-management': { view: false, add: false, edit: false, delete: false },
-      'plans-management': { view: false, add: false, edit: false, delete: false },
+      'branch-management': { view: true, add: true, edit: true, delete: true },
+      'plans-management': { view: true, add: true, edit: true, delete: true },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
