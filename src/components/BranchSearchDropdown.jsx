@@ -75,47 +75,30 @@ export default function BranchSearchDropdown() {
   const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  // Fetch branches from API
+  // Fetch branches from API lazily when needed
   const loadBranches = async () => {
     try {
-      if (contextFetchBranches) {
-        await contextFetchBranches();
-      }
-      const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(),
-        UserApi.getUsers({ limit: 10 })
-      ]);
-
-      const branchResponse = res.status === 'fulfilled' ? res.value : null;
-      const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
-        ? usersRes.value.response.data
-        : [];
-      const staffList = usersList;
-
-      if (branchResponse && branchResponse.status && branchResponse.response) {
-        const branchArray = Array.isArray(branchResponse.response) 
-          ? branchResponse.response 
-          : (Array.isArray(branchResponse.response.data) ? branchResponse.response.data : (branchResponse.response.branches || []));
+      const res = await BranchApi.getBranches();
+      if (res && res.status && res.response) {
+        const branchArray = Array.isArray(res.response) 
+          ? res.response 
+          : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
         if (Array.isArray(branchArray) && branchArray.length > 0) {
-          const mapped = branchArray.map(b => {
-            const mgr = resolveBranchManagerName(b, usersList, staffList);
-            const contactNum = resolveBranchContactNumber(b, usersList, staffList);
-            return {
-              id: b._id || b.id,
-              _id: b._id || b.id,
-              branchName: b.branchName || b.name,
-              branchCode: b.branchCode || b.code,
-              branchManager: mgr,
-              managerName: mgr,
-              mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
-              email: b.email || b.managerEmail || '',
-              address: b.address?.street || b.address || b.street || '',
-              city: b.address?.city || b.city || '',
-              state: b.address?.state || b.state || '',
-              status: b.status || 'Active',
-              totalTables: b.totalTables || 10
-            };
-          });
+          const mapped = branchArray.map(b => ({
+            id: b._id || b.id,
+            _id: b._id || b.id,
+            branchName: b.branchName || b.name,
+            branchCode: b.branchCode || b.code,
+            branchManager: b.managerName || b.branchManager || 'Unassigned',
+            managerName: b.managerName || b.branchManager || 'Unassigned',
+            mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
+            email: b.email || b.managerEmail || '',
+            address: b.address?.street || b.address || b.street || '',
+            city: b.address?.city || b.city || '',
+            state: b.address?.state || b.state || '',
+            status: b.status || 'Active',
+            totalTables: b.totalTables || 10
+          }));
           setLocalBranches(mapped);
         }
       }
@@ -124,9 +107,12 @@ export default function BranchSearchDropdown() {
     }
   };
 
+  // Only load branches when the dropdown is opened and branches are not yet loaded
   useEffect(() => {
-    loadBranches();
-  }, []);
+    if (isOpen && (!activeRestaurant?.branches || activeRestaurant.branches.length === 0) && localBranches.length === 0) {
+      loadBranches();
+    }
+  }, [isOpen, activeRestaurant?.branches, localBranches.length]);
 
   const rawBranches = (activeRestaurant?.branches && activeRestaurant.branches.length > 0)
     ? activeRestaurant.branches

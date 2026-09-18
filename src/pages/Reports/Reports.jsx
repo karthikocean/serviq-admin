@@ -10,19 +10,10 @@ export default function Reports() {
 
   if (!activeRestaurant) return null;
 
-  const rawOrders = activeRestaurant.orders || [];
-  const rawStaff = activeRestaurant.staff || [];
-  const rawTables = activeRestaurant.tables || [];
-  const menu = activeRestaurant.menu || [];
   const branches = activeRestaurant.branches || [];
 
   return (
     <ReportsPanel
-      orders={rawOrders}
-      allOrders={rawOrders}
-      staff={rawStaff}
-      tables={rawTables}
-      menu={menu}
       branches={branches}
       selectedBranchId={selectedBranchId}
       activeRestaurant={activeRestaurant}

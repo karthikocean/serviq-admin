@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
 import TableApi from '../api/Table.js';
-import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch } from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,34 +36,8 @@ const UserIcon = ({ size = 12, color = 'currentColor' }) => (
   </svg>
 );
 
-// Robust Branch Matcher
-const branchMatches = (itemBranch, targetBranch) => {
-  if (!itemBranch || !targetBranch) return false;
-
-  const targetId = String(targetBranch._id || targetBranch.id || '').toLowerCase().trim();
-  const targetCode = String(targetBranch.branchCode || targetBranch.code || '').toLowerCase().trim();
-  const targetName = String(targetBranch.branchName || targetBranch.name || '').toLowerCase().trim();
-
-  let itemId = '';
-  let itemCode = '';
-  let itemName = '';
-
-  if (typeof itemBranch === 'object' && itemBranch !== null) {
-    itemId = String(itemBranch._id || itemBranch.id || '').toLowerCase().trim();
-    itemCode = String(itemBranch.branchCode || itemBranch.code || '').toLowerCase().trim();
-    itemName = String(itemBranch.branchName || itemBranch.name || '').toLowerCase().trim();
-  } else {
-    itemId = String(itemBranch).toLowerCase().trim();
-    itemCode = itemId;
-  }
-
-  if (targetId && itemId && (targetId === itemId || itemId === targetId)) return true;
-  if (targetCode && (itemCode === targetCode || itemId === targetCode)) return true;
-  if (targetName && (itemName === targetName || itemId === targetName)) return true;
-  return false;
-};
-
 // Robust Table Occupancy Evaluator
+
 export const isTableOccupied = (table, orderList = []) => {
   if (!table) return false;
 
@@ -179,8 +153,16 @@ export default function OverviewPanel({
     userRole === 'super_admin';
   const isAdmin = isRestaurantOwner || userRole === 'admin' || userType === 'ADMIN';
 
-  const selectedBranch = branches.find(b => b.id === selectedBranchId || b._id === selectedBranchId || b.branchCode === selectedBranchId);
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const isSpecificBranch = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All');
+  const isAllBranches = !isSpecificBranch;
+
+  const selectedBranch = isSpecificBranch
+    ? branches.find(b => 
+        String(b.id || b._id || '').toLowerCase() === String(selectedBranchId).toLowerCase() || 
+        String(b.branchCode || b.code || '').toLowerCase() === String(selectedBranchId).toLowerCase() ||
+        String(b.branchName || b.name || '').toLowerCase() === String(selectedBranchId).toLowerCase()
+      )
+    : null;
 
   // Live Dashboard API Stats State
   const [statsData, setStatsData] = useState(null);
@@ -205,7 +187,7 @@ export default function OverviewPanel({
 
   const fetchDashboardStats = async () => {
     setIsLoadingStats(true);
-    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getDashboardStats(branchParam);
     if (res && res.status && res.response?.data) {
       setStatsData(res.response.data);
@@ -215,7 +197,7 @@ export default function OverviewPanel({
 
   const fetchRevenueGrowth = async () => {
     setIsLoadingGrowth(true);
-    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getRevenueGrowth(branchParam);
     if (res && res.status && res.response?.data) {
       setRevenueGrowthData(res.response.data);
@@ -225,7 +207,7 @@ export default function OverviewPanel({
 
   const fetchOrderBreakdown = async () => {
     setIsLoadingBreakdown(true);
-    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getOrderBreakdown(branchParam);
     if (res && res.status && res.response?.data) {
       setOrderBreakdownData(res.response.data);
@@ -235,7 +217,7 @@ export default function OverviewPanel({
 
   const fetchLiveOrders = async () => {
     setIsLoadingLiveOrders(true);
-    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId, limit: 5 } : { limit: 5 };
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 10 } : { limit: 10 };
     const res = await DashboardApi.getLiveOrders(branchParam);
     if (res && res.status && res.response?.data) {
       setLiveOrdersData(Array.isArray(res.response.data) ? res.response.data : (res.response.data?.orders || []));
@@ -245,7 +227,7 @@ export default function OverviewPanel({
 
   const fetchLiveTables = async () => {
     setIsLoadingLiveTables(true);
-    const branchParam = selectedBranchId && selectedBranchId !== 'ALL' ? { branchId: selectedBranchId } : {};
+    const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getLiveTables(branchParam);
     if (res && res.status && res.response?.data) {
       setLiveTablesData(res.response.data);
@@ -283,22 +265,19 @@ export default function OverviewPanel({
     }, 15000);
 
     return () => clearInterval(interval);
-  }, [selectedBranchId]);
+  }, [selectedBranchId, isSpecificBranch]);
 
   // Current view tables and orders
-  const currentTables = (selectedBranchId && selectedBranchId !== 'ALL')
-    ? allTables.filter(t => branchMatches(t.branchId || t.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
-    : allTables;
-  const currentOrders = (selectedBranchId && selectedBranchId !== 'ALL')
-    ? allOrders.filter(o => branchMatches(o.branchId || o.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
-    : allOrders;
-  const currentStaff = (selectedBranchId && selectedBranchId !== 'ALL')
-    ? allStaff.filter(s => branchMatches(s.branchId || s.branch, selectedBranch || { id: selectedBranchId, _id: selectedBranchId }))
-    : allStaff;
+  const displayTables = isSpecificBranch
+    ? (tables && tables.length > 0 ? tables : allTables).filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : (allTables && allTables.length > 0 ? allTables : tables);
+  const displayOrders = isSpecificBranch
+    ? (orders && orders.length > 0 ? orders : allOrders).filter(o => isBranchMatch(o, selectedBranchId, branches))
+    : (allOrders && allOrders.length > 0 ? allOrders : orders);
+  const displayStaff = isSpecificBranch
+    ? (staff && staff.length > 0 ? staff : allStaff).filter(s => isBranchMatch(s, selectedBranchId, branches))
+    : (allStaff && allStaff.length > 0 ? allStaff : staff);
 
-  const displayTables = (currentTables && currentTables.length > 0) ? currentTables : tables;
-  const displayOrders = (currentOrders && currentOrders.length > 0) ? currentOrders : orders;
-  const displayStaff = (currentStaff && currentStaff.length > 0) ? currentStaff : staff;
 
   // Dynamic order breakdown calculation with safe empty state
   const activeBreakdown = useMemo(() => {
@@ -454,10 +433,12 @@ export default function OverviewPanel({
   const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
 
   const branchAnalytics = branches.map(branch => {
-    const branchOrders = (allOrders || orders || []).filter(o => branchMatches(o.branchId || o.branch, branch));
-    const branchTables = (combinedTables || []).filter(t => branchMatches(t.branchId || t.branch, branch));
-    const branchStaff = (allStaff || staff || []).filter(s => branchMatches(s.branchId || s.branch, branch));
+    const branchTarget = branch._id || branch.id || branch.branchCode;
+    const branchOrders = (allOrders && allOrders.length > 0 ? allOrders : orders).filter(o => isBranchMatch(o, branchTarget, branches));
+    const branchTables = (combinedTables && combinedTables.length > 0 ? combinedTables : tables).filter(t => isBranchMatch(t, branchTarget, branches));
+    const branchStaff = (allStaff && allStaff.length > 0 ? allStaff : staff).filter(s => isBranchMatch(s, branchTarget, branches));
     const branchRevenue = branchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
 
     // Collect all occupied table identifiers accurately
     const occupiedTableIds = new Set();
@@ -594,19 +575,17 @@ export default function OverviewPanel({
       {/* 8 STATS CARDS GRID (2 Rows of 4 Cards) */}
       <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '20px', marginBottom: '24px', width: '100%', boxSizing: 'border-box' }}>
         
-        {/* Card 1: Today's Orders / Total Branches */}
+        {/* Card 1: Today's Orders */}
         <div className="stat-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.todayOrders?.label || (isAllBranches ? 'Total Branches' : "Today's Orders")}
+                {isAllBranches ? "TODAY'S ORDERS (ALL)" : "TODAY'S ORDERS"}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
-                {statsData?.todayOrders
-                  ? (isAllBranches && statsData.todayOrders.totalBranches > 0
-                      ? `${statsData.todayOrders.totalBranches} Outlets`
-                      : (statsData.todayOrders.count !== undefined ? statsData.todayOrders.count : displayOrders.length))
-                  : (isAllBranches ? `${branches.length} Outlets` : displayOrders.length)}
+                {statsData?.todayOrders?.count !== undefined 
+                  ? statsData.todayOrders.count 
+                  : displayOrders.length}
               </h3>
             </div>
           </div>
@@ -617,7 +596,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.activeTables?.label || (isAllBranches ? 'Occupied Tables' : 'Active Tables')}
+                {isAllBranches ? 'OCCUPIED TABLES (LIVE)' : 'ACTIVE TABLES (LIVE)'}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {`${occupiedTablesCount} / ${totalTablesDisplayCount} Total`}
@@ -631,7 +610,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.todayRevenue?.label || (isAllBranches ? 'Org Revenue Today' : 'Branch Revenue Today')}
+                {isAllBranches ? 'ORG REVENUE (TODAY)' : 'BRANCH REVENUE (TODAY)'}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.todayRevenue?.formatted || `₹${(statsData?.todayRevenue?.amount ?? todayRevenue).toLocaleString('en-IN')}`}
@@ -645,7 +624,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.monthRevenue?.label || 'Revenue This Month'}
+                {isAllBranches ? 'ORG REVENUE (THIS MONTH)' : 'BRANCH REVENUE (THIS MONTH)'}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.monthRevenue?.formatted || `₹${(statsData?.monthRevenue?.amount ?? monthlySales).toLocaleString('en-IN')}`}
@@ -659,7 +638,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.staffOnDuty?.label || 'Staff On Duty'}
+                STAFF ON DUTY (TODAY)
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.staffOnDuty?.display
@@ -677,7 +656,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.pendingOrders?.label || 'Pending Orders'}
+                PENDING ORDERS (TODAY)
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.pendingOrders?.count !== undefined ? statsData.pendingOrders.count : pendingOrdersCount}
@@ -691,7 +670,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info">
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.completedOrders?.label || 'Completed Orders'}
+                COMPLETED ORDERS (TODAY)
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 700, margin: '4px 0', color: 'var(--black)' }}>
                 {statsData?.completedOrders?.count !== undefined ? statsData.completedOrders.count : completedOrdersCount}
@@ -705,7 +684,7 @@ export default function OverviewPanel({
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info" style={{ width: '100%' }}>
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>
-                {statsData?.topItem?.label || 'Top Item'}
+                TOP ITEM (THIS MONTH)
               </div>
               <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '4px 0', color: 'var(--black)', lineHeight: 1.25, wordBreak: 'break-word' }} title={statsData?.topItem?.name || topItemFallback}>
                 {statsData?.topItem?.name || topItemFallback}
@@ -1054,52 +1033,62 @@ export default function OverviewPanel({
                 </tr>
               </thead>
               <tbody>
-                {(liveOrdersData && liveOrdersData.length > 0 ? liveOrdersData : orders.slice(-5).reverse()).map((ord, idx) => {
-                  const itemSummary = ord.itemsSummary || (ord.items || []).map(i => `${i.name} x ${i.qty || 1}`).join(', ') || 'Items';
-                  const branchInfo = branches.find(b => b.id === ord.branchId || b._id === ord.branchId);
-                  const branchCode = ord.branch?.code || (branchInfo ? branchInfo.branchCode : (ord.branchId ? ord.branchId.slice(-6).toUpperCase() : 'BR-001'));
-                  const tableDisplay = ord.tableNumber || (ord.table ? `Table ${ord.table}` : 'Takeaway');
-                  const orderIdDisplay = ord.orderId || (ord.id ? `#${ord.id}` : `#ORD-${idx + 1}`);
+                {(() => {
+                  const rawList = (liveOrdersData && liveOrdersData.length > 0 ? liveOrdersData : displayOrders);
+                  const list = isSpecificBranch
+                    ? rawList.filter(o => isBranchMatch(o, selectedBranchId, branches))
+                    : rawList;
 
-                  return (
-                    <tr key={ord.id || ord.orderId || idx} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>
-                        <div>{orderIdDisplay}</div>
-                        {ord.time && <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>{ord.time}</div>}
-                      </td>
-                      <td style={{ padding: '14px 12px', textAlign: 'center' }}>
-                        <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', whiteSpace: 'nowrap' }}>
-                          {branchCode}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 14px', fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>
-                        <div>{tableDisplay}</div>
-                        {ord.section && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{ord.section}</span>}
-                      </td>
-                      <td className="items-cell" style={{ padding: '14px 14px', color: 'var(--text-muted)', fontSize: '13px' }} title={itemSummary}>
-                        {itemSummary}
-                      </td>
-                      <td style={{ padding: '14px 14px', fontWeight: 700, color: 'var(--primary)', textAlign: 'right', fontSize: '13.5px' }}>
-                        <div>₹{ord.total}</div>
-                        {ord.billingStatus && (
-                          <span style={{ fontSize: '10.5px', textTransform: 'uppercase', color: ord.billingStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
-                            {ord.billingStatus}
+                  if (list.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
+                          No live orders found for this branch selection.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return list.slice(0, 10).map((ord, idx) => {
+                    const itemSummary = ord.itemsSummary || (ord.items || []).map(i => `${i.name || i.title} x ${i.quantity || i.qty || 1}`).join(', ') || 'Items';
+                    const branchInfo = branches.find(b => isBranchMatch(b, ord.branchId || ord.branch || ord.restaurantBranchId, branches));
+                    const branchCode = ord.branch?.code || ord.branchCode || (branchInfo ? branchInfo.branchCode : (ord.branchId ? String(ord.branchId).slice(-6).toUpperCase() : 'BR-001'));
+                    const tableDisplay = ord.tableNumber || ord.tableName || (ord.table ? `Table ${ord.table}` : 'Takeaway');
+                    const orderIdDisplay = ord.orderId || (ord.id ? `#${ord.id}` : `#ORD-${idx + 1}`);
+
+                    return (
+                      <tr key={ord.id || ord._id || ord.orderId || idx} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>
+                          <div>{orderIdDisplay}</div>
+                          {ord.time && <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 400, marginTop: '2px' }}>{ord.time}</div>}
+                        </td>
+                        <td style={{ padding: '14px 12px', textAlign: 'center' }}>
+                          <span style={{ fontSize: '11px', background: '#f1f5f9', color: '#475569', padding: '3px 8px', borderRadius: '4px', fontWeight: 700, display: 'inline-block', whiteSpace: 'nowrap' }}>
+                            {branchCode}
                           </span>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <Badge status={ord.status || 'new'} style={{ fontSize: '10.5px', padding: '4px 10px', textTransform: 'uppercase' }} />
-                      </td>
-                    </tr>
-                  );
-                })}
-                {(!liveOrdersData || liveOrdersData.length === 0) && orders.length === 0 && (
-                  <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
-                      No live orders found for this branch selection.
-                    </td>
-                  </tr>
-                )}
+                        </td>
+                        <td style={{ padding: '14px 14px', fontWeight: 600, color: 'var(--text-main)', fontSize: '13px' }}>
+                          <div>{tableDisplay}</div>
+                          {ord.section && <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 400 }}>{ord.section}</span>}
+                        </td>
+                        <td className="items-cell" style={{ padding: '14px 14px', color: 'var(--text-muted)', fontSize: '13px' }} title={itemSummary}>
+                          {itemSummary}
+                        </td>
+                        <td style={{ padding: '14px 14px', fontWeight: 700, color: 'var(--primary)', textAlign: 'right', fontSize: '13.5px' }}>
+                          <div>₹{ord.total}</div>
+                          {ord.billingStatus && (
+                            <span style={{ fontSize: '10.5px', textTransform: 'uppercase', color: ord.billingStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
+                              {ord.billingStatus}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                          <Badge status={ord.status || 'new'} style={{ fontSize: '10.5px', padding: '4px 10px', textTransform: 'uppercase' }} />
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

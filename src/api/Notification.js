@@ -45,7 +45,7 @@ class NotificationApi {
 
   async markAsRead(id) {
     try {
-      const response = await apiClient.patch(`/notifications/${id}/read`);
+      const response = await apiClient.put(`/notifications/${id}/read`);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -60,7 +60,7 @@ class NotificationApi {
 
   async markAllAsRead(params = {}) {
     try {
-      const response = await apiClient.patch("/notifications/mark-all-read", {
+      const response = await apiClient.put("/notifications/mark-all-read", {}, {
         params,
       });
       if (response.status === 200 || response.status === 201) {
