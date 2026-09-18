@@ -319,19 +319,19 @@ export default function TableFormPage() {
 
     if (isEdit) {
       const res = await TableApi.updateTable(tableId, payload);
-      if (res?.status || isMock) {
+      if (res?.status) {
         if (updateDiningTable && activeRestaurant?.id) {
           updateDiningTable(activeRestaurant.id, tableId, {
             seats: payload.seatingCapacity,
             status: payload.status,
             section: payload.section
-          });
+          }, true);
         }
         navigate('/tables');
       }
     } else {
       const res = await TableApi.createTable(payload);
-      if (res?.status || isMock) {
+      if (res?.status) {
         if (addDiningTable && activeRestaurant?.id) {
           addDiningTable(activeRestaurant.id, {
             id: res?.response?.data?.tableNumber || idStr || `T-${Date.now().toString().slice(-3)}`,
@@ -339,7 +339,7 @@ export default function TableFormPage() {
             status: payload.status,
             section: payload.section,
             branchId: payload.branchId
-          });
+          }, true);
         }
         navigate('/tables');
       }

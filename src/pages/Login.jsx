@@ -4,6 +4,7 @@ import { useAppState } from '../config/AppContext';
 import AuthApi from '../api/Auth';
 import ShowNotifications from '../helper/ShowNotifications';
 import { Modal } from '../components/Modal';
+import PasswordRequirements from '../components/common/PasswordRequirements';
 import { validatePassword, isStrongPassword } from '../helper/ValidationHelper';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -1382,86 +1383,12 @@ export default function Login() {
                     </span>
                   )}
 
-                  {/* Real-time Password Rules Checklist (matching user reference) */}
-                  <div style={{
-                    marginTop: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    textAlign: 'left'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: /[A-Z]/.test(newPassword) ? '#dcfce7' : 'transparent',
-                        color: /[A-Z]/.test(newPassword) ? '#15803d' : '#64748b',
-                        transition: 'all 0.15s ease'
-                      }}>
-                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[A-Z]/.test(newPassword) ? '✓' : '•'}</span>
-                        Must have one capital letter
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: /\d/.test(newPassword) ? '#dcfce7' : 'transparent',
-                        color: /\d/.test(newPassword) ? '#15803d' : '#64748b',
-                        transition: 'all 0.15s ease'
-                      }}>
-                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/\d/.test(newPassword) ? '✓' : '•'}</span>
-                        Must have a number digit
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: newPassword.length >= 8 ? '#dcfce7' : 'transparent',
-                        color: newPassword.length >= 8 ? '#15803d' : '#64748b',
-                        transition: 'all 0.15s ease'
-                      }}>
-                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{newPassword.length >= 8 ? '✓' : '•'}</span>
-                        Must be at least 8 characters long
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: /[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '#dcfce7' : 'transparent',
-                        color: /[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '#15803d' : '#64748b',
-                        transition: 'all 0.15s ease'
-                      }}>
-                        <span style={{ fontWeight: 800, fontSize: '13px' }}>{/[!@#$%^&*(),.?":{}|<>\-_+=\/\\~]/.test(newPassword) ? '✓' : '•'}</span>
-                        Must have a special character (@, #, $, %)
-                      </span>
-                    </div>
-                  </div>
+                  {/* Real-time Password Requirements Checklist */}
+                  <PasswordRequirements
+                    password={newPassword}
+                    confirmPassword={confirmPassword}
+                    showConfirmMatch={true}
+                  />
                 </div>
 
                 {/* Confirm Password */}
