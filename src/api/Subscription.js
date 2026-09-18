@@ -2,6 +2,33 @@ import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
 class SubscriptionApi {
+  async getPlans(params = {}) {
+    try {
+      let response;
+      try {
+        response = await apiClient.get("/subscription/plans", { params });
+      } catch (firstErr) {
+        // Fallback to /plans if /subscription/plans is not found
+        response = await apiClient.get("/plans", { params });
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
+        return { status: true, response: response.data };
+      }
+      return { status: false, response: response?.data };
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to Fetch Subscription Plans. Please try again.";
+      console.warn("SubscriptionApi getPlans note:", errorMessage);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+        message: errorMessage
+      };
+    }
+  }
+
   async getDashboard() {
     try {
       const response = await apiClient.get("/subscription/dashboard");

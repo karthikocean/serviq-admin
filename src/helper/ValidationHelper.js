@@ -81,12 +81,21 @@ export const validateBranchCode = (code = '') => {
   return '';
 };
 
-// Validate password format (min 6 chars)
+// Validate password rules (Uppercase, Lowercase, Number, Min 8 chars)
 export const validatePassword = (password = '', fieldName = 'Password') => {
-  const val = String(password || '').trim();
-  if (!val) return `${fieldName} is required`;
-  if (val.length < 6) {
-    return `${fieldName} must be at least 6 characters long`;
+  const val = String(password || '');
+  if (!val.trim()) return `${fieldName} is required`;
+  if (!/[a-z]/.test(val)) {
+    return `${fieldName} must contain at least one lowercase letter`;
+  }
+  if (!/[A-Z]/.test(val)) {
+    return `${fieldName} must contain at least one uppercase letter`;
+  }
+  if (!/\d/.test(val)) {
+    return `${fieldName} must contain at least one number`;
+  }
+  if (val.length < 8) {
+    return `${fieldName} must be at least 8 characters long`;
   }
   return '';
 };

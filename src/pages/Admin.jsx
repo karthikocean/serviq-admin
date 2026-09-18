@@ -1,3 +1,4 @@
+import PasswordRequirements from '../components/common/PasswordRequirements';
 import UploadApi from '../api/Upload.js';
 import React, { useState, useEffect } from 'react';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
@@ -581,7 +582,7 @@ export default function Admin() {
       const date = getOrderDate(ord);
       const waiter = ord.waiter || 'Unassigned';
       const table = ord.table || '';
-      const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
+      const source = ord.source || ord.orderType || 'Dine-In';
       const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
       const paymentStatus = ord.billingStatus || 'unpaid';
       const orderStatus = ord.status || 'new';
@@ -606,7 +607,7 @@ export default function Admin() {
   const getFilteredKitchenReports = () => {
     return orders.filter(ord => {
       const date = getOrderDate(ord);
-      const kitchenStaffName = ord.kitchenStaff || (parseInt(ord.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel');
+      const kitchenStaffName = ord.kitchenStaff || ord.chef || ord.preparedBy || 'Kitchen';
       const priority = getOrderPriority(ord);
 
       if (kitchenFilterDateStart && date && date < kitchenFilterDateStart) return false;
@@ -1741,6 +1742,7 @@ export default function Admin() {
                       placeholder="••••••••••••"
                     />
                   </div>
+                  <PasswordRequirements password={staffForm.password} />
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '20px', marginTop: '16px' }}>
@@ -2716,7 +2718,7 @@ export default function Admin() {
                 <div>
                   <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>CHEF / STAFF</span>
                   <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--black)' }}>
-                    {selectedKitchenTimeline.kitchenStaff || (parseInt(selectedKitchenTimeline.id) % 2 === 0 ? 'Suresh Pillai' : 'Priya Patel')}
+                    {selectedKitchenTimeline.kitchenStaff || selectedKitchenTimeline.chef || selectedKitchenTimeline.preparedBy || 'Kitchen'}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>

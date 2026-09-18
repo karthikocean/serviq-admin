@@ -671,18 +671,6 @@ export default function MenuPanel({
               >
                 Close
               </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={() => {
-                  const itm = viewingMenuItem;
-                  setViewingMenuItem(null);
-                  openEditMenuModal(itm);
-                }}
-                style={{ padding: '8px 18px' }}
-              >
-                Edit Item
-              </button>
             </div>
           </div>
         </Modal>

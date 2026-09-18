@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import ShowNotifications from '../../helper/ShowNotifications';
 import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/ValidationHelper';
+import PasswordRequirements from '../../components/common/PasswordRequirements';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function StaffFormPage() {
@@ -395,10 +396,11 @@ export default function StaffFormPage() {
                 </button>
               </div>
               {formErrors.password && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.password}
-                </span>
-              )}
+                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {formErrors.password}
+                        </span>
+                      )}
+                      <PasswordRequirements password={form.password} />
             </div>
           </div>
 

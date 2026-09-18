@@ -5,6 +5,7 @@ import { isModuleAllowedForPlan } from '../../config/initialData';
 import StaffManagementPanel from '../../components/StaffManagementPanel';
 import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import PasswordRequirements from '../../components/common/PasswordRequirements';
 import { validatePassword } from '../../helper/ValidationHelper';
 
 export default function StaffManagement() {
@@ -382,6 +383,7 @@ export default function StaffManagement() {
                 {kitchenError}
               </span>
             )}
+            <PasswordRequirements password={kitchenPasswordInput} />
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>

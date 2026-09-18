@@ -2965,48 +2965,18 @@ export default function OrdersPanel({
                   Close
                 </button>
                 {orderStatus !== 'completed' && orderStatus !== 'cancelled' && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => {
-                        const ord = viewingOrder;
-                        setViewingOrder(null);
-                        handleOpenAppendModal(ord);
-                      }}
-                      style={{ padding: '8px 18px', borderRadius: '8px', background: '#ea580c', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <PlusIcon size={14} color="#ffffff" /> Add Items
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={isPaid}
-                      onClick={() => {
-                        if (isPaid) return;
-                        const ord = viewingOrder;
-                        setViewingOrder(null);
-                        handleOpenEditOrder(ord);
-                      }}
-                      style={{
-                        padding: '8px 18px',
-                        borderRadius: '8px',
-                        background: isPaid ? '#94a3b8' : '#0284c7',
-                        color: '#fff',
-                        fontSize: '13px',
-                        fontWeight: 700,
-                        border: 'none',
-                        cursor: isPaid ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        opacity: isPaid ? 0.6 : 1
-                      }}
-                      title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
-                    >
-                      <PencilIcon size={14} /> Edit Order
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const ord = viewingOrder;
+                      setViewingOrder(null);
+                      handleOpenAppendModal(ord);
+                    }}
+                    style={{ padding: '8px 18px', borderRadius: '8px', background: '#ea580c', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <PlusIcon size={14} color="#ffffff" /> Add Items
+                  </button>
                 )}
                 <button
                   type="button"

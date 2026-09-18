@@ -6,6 +6,7 @@ import RoleApi from '../api/Role';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
+import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -383,8 +384,9 @@ export default function UserListPanel() {
   };
 
   const handleChangePasswordSubmit = async () => {
-    if (!newPassword || newPassword.length < 4) {
-      setPasswordError('Password must be at least 4 characters.');
+    const pErr = validatePassword(newPassword, 'New Password');
+    if (pErr) {
+      setPasswordError(pErr);
       return;
     }
     const res = await UserApi.changePassword(changePasswordUserId._id, newPassword);
@@ -696,6 +698,7 @@ export default function UserListPanel() {
                     {formErrors.password}
                   </span>
                 )}
+              <PasswordRequirements password={userForm.password} />
               </div>
             )}
 
@@ -1223,6 +1226,7 @@ export default function UserListPanel() {
                 {passwordError}
               </span>
             )}
+            <PasswordRequirements password={newPassword} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
             <button
@@ -1327,9 +1331,6 @@ export default function UserListPanel() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                   <button type="button" className="btn btn-outline" onClick={() => setViewingUser(null)} style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}>
                     Close
-                  </button>
-                  <button type="button" className="btn btn-primary" onClick={() => { const target = viewingUser; setViewingUser(null); openEditUser(target); }} style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}>
-                    Edit Profile
                   </button>
                 </div>
               </div>

@@ -239,49 +239,78 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     : (tablesList || []);
 
   // 3. Identify Waiters
-  let waiters = branchStaff.filter(s => {
-    const roleStr = String(s.role || s.roleName || s.designation || '').toLowerCase();
-    return roleStr.includes('waiter') || roleStr.includes('server') || roleStr.includes('steward');
+  // Waiters are users with waiter/server/steward/captain roles, or staff assigned to tables, or staff referenced in orders
+  const waiterRoleStaff = branchStaff.filter(s => {
+    const roleStr = String(s.role || s.roleName || s.designation || (typeof s.role === 'object' ? (s.role?.roleName || s.role?.name) : '') || '').toLowerCase();
+    return roleStr.includes('waiter') || roleStr.includes('server') || roleStr.includes('steward') || roleStr.includes('captain');
   });
 
-  // If no explicit waiters, include all non-admin staff of this branch
-  if (waiters.length === 0 && branchStaff.length > 0) {
-    const nonAdmin = branchStaff.filter(s => {
-      const roleStr = String(s.role || s.roleName || '').toLowerCase();
-      return !roleStr.includes('kitchen') && !roleStr.includes('superadmin') && !roleStr.includes('chef') && !roleStr.includes('cook');
-    });
-    if (nonAdmin.length > 0) waiters = nonAdmin;
-  }
+  const waiterMap = new Map();
+  waiterRoleStaff.forEach(s => {
+    const sId = String(s._id || s.id || s.userId || s.email || s.name || '').toLowerCase();
+    if (sId) waiterMap.set(sId, s);
+  });
+
+  // Include staff assigned to tables
+  branchTables.forEach(t => {
+    const aw = t.assignedWaiter || t.waiter || t.waiterId || t.assignedWaiterId;
+    if (aw) {
+      const awId = String(typeof aw === 'object' ? (aw._id || aw.id) : aw).toLowerCase();
+      const awName = String(typeof aw === 'object' ? (aw.name || aw.userName || aw.fullName) : aw).toLowerCase();
+      const matched = branchStaff.find(s => {
+        const sid = String(s._id || s.id || '').toLowerCase();
+        const sname = String(s.name || s.userName || s.fullName || '').toLowerCase();
+        return (awId && (sid === awId || sid.includes(awId) || awId.includes(sid))) ||
+               (awName && (sname === awName || sname.includes(awName) || awName.includes(sname)));
+      });
+      if (matched) {
+        const mId = String(matched._id || matched.id || matched.email || matched.name || '').toLowerCase();
+        if (mId && !waiterMap.has(mId)) waiterMap.set(mId, matched);
+      }
+    }
+  });
 
   // Also collect any waiters mentioned directly in orders
-  const existingWaiterKeys = new Set(waiters.map(w => {
-    const wId = String(w.id || w._id || '').toLowerCase();
-    const wName = String(w.name || w.userName || '').toLowerCase();
-    return wId || wName;
-  }));
-
   filteredOrders.forEach((o, i) => {
     let orderWaiterName = '';
+    let orderWaiterId = '';
     if (typeof o.waiter === 'string' && o.waiter.trim()) orderWaiterName = o.waiter.trim();
-    else if (typeof o.waiter === 'object' && o.waiter?.name) orderWaiterName = o.waiter.name.trim();
+    else if (typeof o.waiter === 'object' && o.waiter?.name) {
+      orderWaiterName = o.waiter.name.trim();
+      orderWaiterId = String(o.waiter._id || o.waiter.id || '');
+    }
     else if (o.waiterName) orderWaiterName = String(o.waiterName).trim();
     else if (o.server) orderWaiterName = typeof o.server === 'object' ? (o.server.name || '') : String(o.server).trim();
     else if (o.staff) orderWaiterName = typeof o.staff === 'object' ? (o.staff.name || '') : String(o.staff).trim();
 
-    if (orderWaiterName && !existingWaiterKeys.has(orderWaiterName.toLowerCase())) {
-      existingWaiterKeys.add(orderWaiterName.toLowerCase());
-      waiters.push({
-        id: `waiter-order-${i + 1}`,
-        _id: `waiter-order-${i + 1}`,
-        name: orderWaiterName,
-        email: `${orderWaiterName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`,
-        phone: '',
-        status: 'Active',
-        dutyStatus: 'ON_DUTY',
-        branchId: selectedBranchId
+    if (orderWaiterName || orderWaiterId) {
+      const matched = branchStaff.find(s => {
+        const sid = String(s._id || s.id || '').toLowerCase();
+        const sname = String(s.name || s.userName || s.fullName || '').toLowerCase();
+        return (orderWaiterId && sid === orderWaiterId.toLowerCase()) || (orderWaiterName && sname === orderWaiterName.toLowerCase());
       });
+      if (matched) {
+        const mId = String(matched._id || matched.id || matched.email || matched.name || '').toLowerCase();
+        if (mId && !waiterMap.has(mId)) waiterMap.set(mId, matched);
+      } else if (orderWaiterName) {
+        const key = orderWaiterName.toLowerCase();
+        if (!waiterMap.has(key)) {
+          waiterMap.set(key, {
+            id: `waiter-order-${i + 1}`,
+            _id: `waiter-order-${i + 1}`,
+            name: orderWaiterName,
+            email: `${orderWaiterName.toLowerCase().replace(/\s+/g, '.')}@serviq.in`,
+            phone: '',
+            status: 'Active',
+            dutyStatus: 'ON_DUTY',
+            branchId: selectedBranchId
+          });
+        }
+      }
     }
   });
+
+  let waiters = Array.from(waiterMap.values());
 
   // 4. Build table-to-waiter map from branchTables and waiter objects
   const tableToWaiterMap = new Map();
@@ -356,18 +385,10 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
 
     const calcAov = ordersServedCount > 0 ? (totalRevenueNum / ordersServedCount).toFixed(2) : '0.00';
 
-    // Preserve metrics from API/existing object if filtered orders yielded 0
-    const finalOrdersServed = ordersServedCount > 0
-      ? ordersServedCount
-      : Number(w.ordersServed || w.totalOrders || w.ordersCount || (Array.isArray(w.orders) ? w.orders.length : 0) || 0);
-
-    const finalTotalRevenue = totalRevenueNum > 0
-      ? totalRevenueNum
-      : Number(w.totalRevenue || w.revenue || w.sales || 0);
-
-    const finalAov = (ordersServedCount > 0 && totalRevenueNum > 0)
-      ? calcAov
-      : (w.averageOrderValue || (finalOrdersServed > 0 ? (finalTotalRevenue / finalOrdersServed).toFixed(2) : '0.00'));
+    // Strictly calculate metrics from assigned real orders (no dummy/static fallbacks)
+    const finalOrdersServed = ordersServedCount;
+    const finalTotalRevenue = totalRevenueNum;
+    const finalAov = calcAov;
 
     // Extract tables assigned to and served by this waiter
     const assignedTablesSet = new Set();
@@ -612,44 +633,6 @@ const computeKitchenReports = (ordersList = [], menuList = [], categoriesList = 
       if (entry.quantityPrepared >= 8) entry.status = 'High Demand';
     });
   });
-
-  // Only include general menu items if no date filter is applied and there are menu items
-  if (!dateStart && !dateEnd && Array.isArray(menuList) && menuList.length > 0) {
-    menuList.forEach(m => {
-      const name = toDisplayText(m.name || m.dishName || m.foodItem || m.itemName || '').trim();
-      if (!name) return;
-      const nameLower = name.toLowerCase();
-      let cat = resolveCategoryName(m.category || m.categoryName, categoriesList);
-      if (!cat || cat === 'Main Course' || cat === 'Uncategorized') {
-        const lowerName = name.toLowerCase();
-        if (/biryani|rice|pulao|curry|gravy|dal|paneer butter|roti|naan|kulcha|thali|combo meal|fried rice|noodles/i.test(lowerName)) {
-          cat = 'Main Course';
-        } else if (/tikka|kebab|fry|chilli|crispy|roll|soup|manchurian|65|wings|starter|finger|nugget|tandoori|spring roll/i.test(lowerName)) {
-          cat = 'Starters';
-        } else if (/juice|shake|tea|coffee|mojito|coke|soda|lassi|drink|water|beverage|mocktail|smoothie/i.test(lowerName)) {
-          cat = 'Beverages';
-        } else if (/ice cream|cake|sweet|gulab|halwa|kheer|dessert|pudding|brownie|falooda/i.test(lowerName)) {
-          cat = 'Desserts';
-        } else if (/naan|roti|paratha|bread|kulcha|chapati|phulka/i.test(lowerName)) {
-          cat = 'Breads';
-        }
-      }
-
-      if (!itemMap.has(nameLower)) {
-        const prep = toDisplayText(m.prepTime || m.preparationTime, '15 mins');
-        itemMap.set(nameLower, {
-          foodItem: name,
-          itemName: name,
-          category: cat || 'Main Course',
-          quantityPrepared: 0,
-          avgPrepTime: prep,
-          revenueGenerated: 0,
-          kitchenStatus: 'Completed',
-          status: 'Optimal'
-        });
-      }
-    });
-  }
 
   let dishes = Array.from(itemMap.values());
 

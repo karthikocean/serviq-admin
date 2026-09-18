@@ -178,7 +178,7 @@ export default function WaiterReportsPanel({
     const date = getOrderDate(ord);
     const waiter = ord.waiter || 'Unassigned';
     const table = ord.table || '';
-    const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
+    const source = ord.source || ord.orderType || 'Dine-In';
     const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
     const paymentStatus = ord.billingStatus || 'unpaid';
     const orderStatus = ord.status || 'new';
@@ -255,7 +255,7 @@ export default function WaiterReportsPanel({
 
     const exportData = filteredWaiterReports.map((ord, idx) => {
       const date = getOrderDate(ord);
-      const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
+      const source = ord.source || ord.orderType || 'Dine-In';
       const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
       return {
         'S.No': idx + 1,
@@ -467,7 +467,7 @@ export default function WaiterReportsPanel({
               ) : (
                 paginatedWaiterReports.map(ord => {
                   const date = getOrderDate(ord);
-                  const source = ord.source || (parseInt(ord.id) % 2 === 0 ? 'Dine-In' : 'Mobile');
+                  const source = ord.source || ord.orderType || 'Dine-In';
                   const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>

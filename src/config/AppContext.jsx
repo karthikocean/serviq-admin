@@ -165,6 +165,7 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
 ];
 
 const loadSavedUser = () => {
+  
   try {
     // Clear any legacy localStorage items
     localStorage.clear();
@@ -594,51 +595,66 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await SubscriptionApi.getDashboard();
+      const [dashRes, plansRes] = await Promise.allSettled([
+        SubscriptionApi.getDashboard(),
+        SubscriptionApi.getPlans()
+      ]);
+
+      const res = dashRes.status === 'fulfilled' ? dashRes.value : null;
+      const plansResVal = plansRes.status === 'fulfilled' ? plansRes.value : null;
+
+      let livePlans = [];
+      if (plansResVal && plansResVal.status && plansResVal.response) {
+        const raw = Array.isArray(plansResVal.response?.data) 
+          ? plansResVal.response.data 
+          : (Array.isArray(plansResVal.response) ? plansResVal.response : (plansResVal.response?.plans || []));
+        if (raw.length > 0) {
+          livePlans = raw;
+          raw.forEach(p => {
+            const cleanP = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+            const target = AVAILABLE_PLANS.find(ap => 
+              ap.id === p.id || 
+              ap.id === p._id || 
+              ap.name.toLowerCase().includes(cleanP) || 
+              cleanP.includes(ap.name.toLowerCase().replace(/\s*plan$/i, '').trim())
+            );
+            if (target && p.maxBranches !== undefined) {
+              target.maxBranches = Number(p.maxBranches);
+              target.branchLimit = Number(p.maxBranches);
+            }
+          });
+        }
+      }
+
       if (res && res.status && res.response) {
         const data = res.response.data || res.response;
         const activePlan = data.activePlan;
 
-        let savedPlan = null;
-        try {
-          const raw = sessionStorage.getItem('activePlanSelection');
-          if (raw) savedPlan = JSON.parse(raw);
-        } catch (e) {}
+        const rawName = activePlan?.planName || activePlan?.name || savedPlan?.planName || 'Standard';
+        const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Standard';
+        const matchedLive = livePlans.find(lp => {
+          const lName = String(lp.planName || lp.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+          return lName === cleanName.toLowerCase();
+        });
 
-        if (savedPlan && savedPlan.cleanName) {
-          setRestaurantsData(prev => {
-            const targetId = currentRestaurantId || 'rest-1';
-            const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
-            const resolvedLimit = savedPlan.baseBranchLimit || getPlanBranchLimit(savedPlan.cleanName, 5);
-            return {
-              ...prev,
-              [targetId]: {
-                ...baseRest,
-                plan: savedPlan.cleanName,
-                subscription: {
-                  ...(baseRest.subscription || {}),
-                  planId: savedPlan.planId,
-                  planName: savedPlan.planName,
-                  status: 'Active',
-                  billingCycle: savedPlan.billingCycle || baseRest.subscription?.billingCycle || 'monthly',
-                  baseBranchLimit: resolvedLimit,
-                  extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
-                    ? data.branchCapacity.extraSlots 
-                    : (baseRest.subscription?.extraBranchSlots || 0),
-                  extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 499
-                }
-              }
-            };
-          });
-          return;
-        }
+        const resolvedLimit = Number(
+          matchedLive?.maxBranches ??
+          matchedLive?.branchLimit ??
+          activePlan?.baseBranchLimit ??
+          activePlan?.maxBranches ??
+          activePlan?.branchLimit ??
+          activePlan?.branchCapacity ??
+          data.branchCapacity?.baseLimit ??
+          data.branchCapacity?.base ??
+          data.branchCapacity?.maxBranches ??
+          data.branchCapacity?.branchLimit ??
+          savedPlan?.baseBranchLimit ??
+          getPlanBranchLimit(activePlan?.planName || savedPlan?.cleanName || 'Standard', 5)
+        );
 
-        if (activePlan) {
-          const rawName = activePlan.planName || activePlan.name || 'Premium';
-          const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Premium';
-          const resolvedLimit = activePlan.baseBranchLimit || 
-            (data.branchCapacity?.baseLimit) || 
-            getPlanBranchLimit(cleanName, 8);
+        if (activePlan || (savedPlan && savedPlan.cleanName)) {
+          const rawName = activePlan?.planName || activePlan?.name || savedPlan?.planName || 'Standard';
+          const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Standard';
 
           setRestaurantsData(prev => {
             const targetId = currentRestaurantId || 'rest-1';
@@ -650,15 +666,18 @@ export const AppProvider = ({ children }) => {
                 plan: cleanName,
                 subscription: {
                   ...(baseRest.subscription || {}),
-                  planId: activePlan.planId || `plan-${cleanName.toLowerCase()}`,
+                  planId: activePlan?.planId || savedPlan?.planId || `plan-${cleanName.toLowerCase()}`,
                   planName: cleanName,
-                  status: activePlan.status || 'Active',
-                  billingCycle: activePlan.billingCycle || 'monthly',
-                  price: activePlan.price,
+                  status: activePlan?.status || 'Active',
+                  billingCycle: activePlan?.billingCycle || savedPlan?.billingCycle || 'monthly',
+                  price: activePlan?.price || savedPlan?.price || baseRest.subscription?.price,
                   baseBranchLimit: resolvedLimit,
+                  maxBranches: resolvedLimit,
                   extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
                     ? data.branchCapacity.extraSlots 
-                    : (baseRest.subscription?.extraBranchSlots || 0),
+                    : (data.branchCapacity?.addons !== undefined
+                        ? data.branchCapacity.addons
+                        : (baseRest.subscription?.extraBranchSlots || 0)),
                   extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 499
                 }
               }
@@ -931,7 +950,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const addDiningTable = async (id, table) => {
+  const addDiningTable = async (id, table, skipApi = false) => {
     const tableWithBranch = {
       ...table,
       branchId: table.branchId || selectedBranchId || 'BR-001'
@@ -951,6 +970,11 @@ export const AppProvider = ({ children }) => {
       };
     });
 
+    if (skipApi || table?.skipApi) {
+      await fetchTables();
+      return true;
+    }
+
     try {
       const payload = {
         tableNumber: table.id,
@@ -961,13 +985,14 @@ export const AppProvider = ({ children }) => {
         await fetchTables();
         return true;
       }
+      return false;
     } catch (e) {
       console.error(e);
+      return false;
     }
-    return true;
   };
 
-  const updateDiningTable = async (id, tableId, updatedFields) => {
+  const updateDiningTable = async (id, tableId, updatedFields, skipApi = false) => {
     const rest = restaurantsData[id];
     if (!rest) return;
     const targetTable = rest.tables?.find(t => t.id === tableId);
@@ -990,6 +1015,11 @@ export const AppProvider = ({ children }) => {
         }
       };
     });
+
+    if (skipApi || updatedFields?.skipApi) {
+      await fetchTables();
+      return;
+    }
 
     try {
       await MemberApi.updateTable(targetTable._id, payload);
@@ -1736,7 +1766,25 @@ export const AppProvider = ({ children }) => {
 
     const userRole = (roleStr || '').toLowerCase();
     const userType = (userTypeStr || '').toUpperCase();
-    return userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+    return (
+      userRole === 'admin' || 
+      userRole === 'super admin' || 
+      userRole === 'super_admin' || 
+      userRole === 'owner' || 
+      userRole === 'restaurant_owner' || 
+      userRole === 'restaurant owner' ||
+      userRole === 'administrator' ||
+      userType === 'ADMIN' || 
+      userType === 'SUPER ADMIN' || 
+      userType === 'SUPER_ADMIN' || 
+      userType === 'RESTAURANT_OWNER' || 
+      userType === 'OWNER' ||
+      userType === 'ADMINISTRATOR' ||
+      String(currentUser?.name || '').toLowerCase().includes('admin') ||
+      String(currentUser?.email || '').toLowerCase().includes('admin') ||
+      !currentUser?.branchId ||
+      currentUser?.branchId === 'ALL'
+    );
   };
 
   const addBranch = (restaurantId, branchData) => {
@@ -1745,17 +1793,20 @@ export const AppProvider = ({ children }) => {
       return;
     }
     setRestaurantsData(prev => {
-      const rest = prev[restaurantId];
+      const rest = prev[restaurantId] || (currentRestaurantId ? prev[currentRestaurantId] : null) || Object.values(prev)[0];
       if (!rest) return prev;
+      const targetRestKey = restaurantId && prev[restaurantId] ? restaurantId : (currentRestaurantId && prev[currentRestaurantId] ? currentRestaurantId : Object.keys(prev)[0]);
       const currentBranches = rest.branches || [];
       const mgrName = branchData.managerName || branchData.branchManager || '';
       const newBranch = {
         id: branchData.id || `BR-${Date.now()}`,
+        _id: branchData._id || branchData.id || `BR-${Date.now()}`,
         branchCode: branchData.branchCode || `BR-${Math.floor(100 + Math.random() * 900)}`,
-        branchName: branchData.branchName || 'New Branch',
+        branchName: branchData.branchName || branchData.name || 'New Branch',
+        name: branchData.branchName || branchData.name || 'New Branch',
         managerName: mgrName,
         branchManager: mgrName,
-        mobileNumber: branchData.mobileNumber || '',
+        mobileNumber: branchData.mobileNumber || branchData.contactNumber || branchData.phone || '',
         email: branchData.email || '',
         address: branchData.address || '',
         country: branchData.country || 'India',
@@ -1779,7 +1830,7 @@ export const AppProvider = ({ children }) => {
       };
       return {
         ...prev,
-        [restaurantId]: {
+        [targetRestKey]: {
           ...rest,
           branches: [...currentBranches, newBranch]
         }
@@ -1793,7 +1844,8 @@ export const AppProvider = ({ children }) => {
       return;
     }
     setRestaurantsData(prev => {
-      const rest = prev[restaurantId];
+      const targetRestKey = restaurantId && prev[restaurantId] ? restaurantId : (currentRestaurantId && prev[currentRestaurantId] ? currentRestaurantId : Object.keys(prev)[0]);
+      const rest = prev[targetRestKey];
       if (!rest) return prev;
       const currentBranches = rest.branches || [];
       const updatedBranches = currentBranches.map(b => {
@@ -1818,7 +1870,7 @@ export const AppProvider = ({ children }) => {
       });
       return {
         ...prev,
-        [restaurantId]: {
+        [targetRestKey]: {
           ...rest,
           branches: updatedBranches
         }
@@ -1832,14 +1884,15 @@ export const AppProvider = ({ children }) => {
       return;
     }
     setRestaurantsData(prev => {
-      const rest = prev[restaurantId];
+      const targetRestKey = restaurantId && prev[restaurantId] ? restaurantId : (currentRestaurantId && prev[currentRestaurantId] ? currentRestaurantId : Object.keys(prev)[0]);
+      const rest = prev[targetRestKey];
       if (!rest) return prev;
       const currentBranches = rest.branches || [];
       return {
         ...prev,
-        [restaurantId]: {
+        [targetRestKey]: {
           ...rest,
-          branches: currentBranches.filter(b => b.id !== branchId)
+          branches: currentBranches.filter(b => b.id !== branchId && b._id !== branchId)
         }
       };
     });
