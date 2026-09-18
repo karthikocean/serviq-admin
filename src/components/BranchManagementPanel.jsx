@@ -128,11 +128,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' || 
+    userType === 'ADMINISTRATOR' || 
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+    userRoleLower === 'super_admin' ||
+    userRoleLower === 'admin' ||
+    userRoleLower === 'administrator' ||
+    String(currentUser?.name || '').toLowerCase().includes('admin') ||
+    String(currentUser?.email || '').toLowerCase().includes('admin') ||
+    !currentUser?.branchId ||
+    currentUser?.branchId === 'ALL';
 
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
@@ -193,12 +201,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [isLoadingOpData, setIsLoadingOpData] = useState(false);
 
   // View page operational tables & orders & staff pagination & filters
-  const [tablesPage, setTablesPage] = useState(1);
+  const [tablesPage, setTablesPage] = useState(0);
   const [tablesViewMode, setTablesViewMode] = useState('table'); // 'table' | 'grid'
   const [liveTablesPagination, setLiveTablesPagination] = useState(null);
-  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPage, setOrdersPage] = useState(0);
   const [ordersFilter, setOrdersFilter] = useState('all'); // 'all' | 'queue' | 'preparing' | 'ready' | 'completed' | 'cancelled'
-  const [staffPage, setStaffPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(0);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
 
@@ -661,12 +669,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.';
     } else {
       const cleanPhone = mobileTrimmed.replace(/\D/g, '').slice(-10);
-      const allBranchSources = [
-        ...(apiBranches || []),
-        ...(branches || []),
-        ...(activeRestaurant?.branches || [])
-      ];
-      let isDuplicate = allBranchSources.some(b => {
+      const isDuplicate = (branches || []).some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
         if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
@@ -677,21 +680,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
       });
 
-      if (!isDuplicate && Array.isArray(apiUsers)) {
-        isDuplicate = apiUsers.some(u => {
-          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-          const currentId = String(branchForm.id || '');
-          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
-            return false;
-          }
-          const rawPhone = String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').replace(/\D/g, '');
-          const existingPhone = rawPhone.slice(-10);
-          return Boolean(existingPhone && cleanPhone && existingPhone === cleanPhone);
-        });
-      }
-
       if (isDuplicate) {
-        errors.mobileNumber = 'This mobile number is already registered to another branch/user.';
+        errors.mobileNumber = 'This mobile number is already registered to another branch.';
       }
     }
 
@@ -701,12 +691,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     if (emailErr) {
       errors.email = emailErr;
     } else {
-      const allBranchSources = [
-        ...(apiBranches || []),
-        ...(branches || []),
-        ...(activeRestaurant?.branches || [])
-      ];
-      let isDuplicateEmail = allBranchSources.some(b => {
+      const isDuplicateEmail = (branches || []).some(b => {
         const bId = String(b.id || b._id || '');
         const currentId = String(branchForm.id || '');
         if (isEditing && bId && currentId && (bId === currentId || String(bId) === String(currentId))) {
@@ -716,20 +701,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         return Boolean(existingEmail && existingEmail === emailTrimmed);
       });
 
-      if (!isDuplicateEmail && Array.isArray(apiUsers)) {
-        isDuplicateEmail = apiUsers.some(u => {
-          const uBranchId = typeof u.branchId === 'object' ? String(u.branchId?._id || u.branchId?.id || '') : String(u.branchId || '');
-          const currentId = String(branchForm.id || '');
-          if (isEditing && uBranchId && currentId && uBranchId === currentId) {
-            return false;
-          }
-          const existingEmail = String(u.email || '').trim().toLowerCase();
-          return Boolean(existingEmail && existingEmail === emailTrimmed);
-        });
-      }
-
       if (isDuplicateEmail) {
-        errors.email = 'This email is already registered to another branch/user.';
+        errors.email = 'This email is already registered to another branch.';
       }
     }
 
@@ -828,27 +801,58 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     const branchNameTrimmed = (branchForm.branchName || branchForm.name || '').trim();
     const managerVal = (branchForm.managerName || branchForm.branchManager || '').trim();
+    const addressStr = (branchForm.address || '').trim();
+    const cityStr = (branchForm.city || '').trim();
+    const stateStr = (branchForm.state || '').trim();
+    const countryStr = (branchForm.country || '').trim();
+    const pincodeStr = (branchForm.pincode || '').trim();
+    const phoneStr = (branchForm.mobileNumber || '').trim();
+    const emailStr = (branchForm.email || '').trim();
+    const branchCodeStr = (branchForm.branchCode || '').trim();
+    const openingDateStr = branchForm.openingDate || new Date().toISOString().split('T')[0];
+    const totalTablesVal = Number(branchForm.totalTables) || 10;
+
+    const addressObj = {
+      street: addressStr,
+      city: cityStr,
+      state: stateStr,
+      country: countryStr,
+      pincode: pincodeStr
+    };
+
+    const restId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId;
 
     const payload = {
       name: branchNameTrimmed,
       branchName: branchNameTrimmed,
-      branchCode: (branchForm.branchCode || '').trim(),
-      branchOpeningDate: branchForm.openingDate,
-      openingDate: branchForm.openingDate,
-      contactNumber: (branchForm.mobileNumber || '').trim(),
-      mobileNumber: (branchForm.mobileNumber || '').trim(),
-      phone: (branchForm.mobileNumber || '').trim(),
-      phoneNumber: (branchForm.mobileNumber || '').trim(),
-      email: (branchForm.email || '').trim(),
-      street: (branchForm.address || '').trim(),
-      address: (branchForm.address || '').trim(),
-      city: (branchForm.city || '').trim(),
-      state: (branchForm.state || '').trim(),
-      country: (branchForm.country || '').trim(),
-      pincode: (branchForm.pincode || '').trim(),
+      branchCode: branchCodeStr,
+      code: branchCodeStr,
+      branchOpeningDate: openingDateStr,
+      openingDate: openingDateStr,
+      contactNumber: phoneStr,
+      mobileNumber: phoneStr,
+      phone: phoneStr,
+      phoneNumber: phoneStr,
+      email: emailStr,
+      managerEmail: emailStr,
+      managerPhone: phoneStr,
+      managerMobile: phoneStr,
+      street: addressStr,
+      address: addressObj,
+      addressLine1: addressStr,
+      city: cityStr,
+      state: stateStr,
+      country: countryStr,
+      pincode: pincodeStr,
+      postalCode: pincodeStr,
+      zipCode: pincodeStr,
       managerName: managerVal,
+      branchManager: managerVal,
       status: branchForm.status || 'Active',
-      isMainBranch: !!branchForm.isMainBranch
+      totalTables: totalTablesVal,
+      tablesCount: totalTablesVal,
+      isMainBranch: !!branchForm.isMainBranch,
+      ...(restId ? { restaurantId: restId, restaurant: restId } : {})
     };
 
     if (branchForm.password && String(branchForm.password).trim()) {
@@ -1012,19 +1016,40 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       }
       const res = await BranchApi.createBranch(payload);
       if (res && res.status) {
-        const createdId = res.response?.data?._id || res.response?.data?.id || `BR-${Date.now()}`;
+        const createdData = res.response?.data || res.response || {};
+        const createdId = createdData._id || createdData.id || `BR-${Date.now()}`;
 
-        setApiBranches(prev => [...prev, { ...payload, id: createdId, _id: createdId, branchManager: managerVal, managerName: managerVal }]);
+        // Create manager user if manager details were provided
+        if (managerVal && emailStr) {
+          try {
+            await UserApi.createUser({
+              name: managerVal,
+              email: emailStr,
+              phoneNumber: phoneStr,
+              mobileNumber: phoneStr,
+              password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
+              role: 'Manager',
+              branchId: createdId,
+              status: 'Active'
+            });
+          } catch (mgrErr) {
+            console.warn("Manager user sync note:", mgrErr);
+          }
+        }
+
+        const newBranchObj = {
+          ...payload,
+          id: createdId,
+          _id: createdId,
+          branchManager: managerVal,
+          managerName: managerVal
+        };
+
+        setApiBranches(prev => [...prev, newBranchObj]);
         if (activeRestaurant?.id && addBranch) {
-          addBranch(activeRestaurant.id, {
-            ...payload,
-            id: createdId,
-            branchManager: managerVal,
-            managerName: managerVal
-          });
+          addBranch(activeRestaurant.id, newBranchObj);
         }
         await fetchBranches();
-        ShowNotifications.showAlertNotification("Branch created successfully!", true);
         setActiveView('list');
       } else {
         const rawErr = String(
@@ -1320,22 +1345,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     };
   })();
 
-  // Operational View Pagination: Tables (10 per page, matching "total": 16, "from": 1, "to": 10, "totalPages": 2, "currentPage": 1)
+  // Operational View Pagination: Tables (10 per page, starting at 0)
   const tablesLimit = 10;
   const tablesTotal = liveTablesPagination?.total || opData.tables.length;
   const tablesTotalPages = liveTablesPagination?.totalPages || Math.max(1, Math.ceil(tablesTotal / tablesLimit));
-  const tablesCurrentPage = Math.min(tablesPage, tablesTotalPages);
-  const tablesFrom = liveTablesPagination?.from || (tablesTotal === 0 ? 0 : (tablesCurrentPage - 1) * tablesLimit + 1);
-  const tablesTo = liveTablesPagination?.to || Math.min(tablesCurrentPage * tablesLimit, tablesTotal);
+  const tablesCurrentPage = Math.max(0, Math.min(tablesPage, Math.max(0, tablesTotalPages - 1)));
+  const tablesFrom = tablesTotal === 0 ? 0 : tablesCurrentPage * tablesLimit + 1;
+  const tablesTo = Math.min((tablesCurrentPage + 1) * tablesLimit, tablesTotal);
 
   const paginatedTables = (liveTablesPagination && opData.tables.length <= tablesLimit)
     ? opData.tables
     : opData.tables.slice(
-        (tablesCurrentPage - 1) * tablesLimit,
-        tablesCurrentPage * tablesLimit
+        tablesCurrentPage * tablesLimit,
+        (tablesCurrentPage + 1) * tablesLimit
       );
 
-  // Operational View: Orders calculation, filtering & pagination
+  // Operational View: Orders calculation, filtering & pagination (limit 10, starting at 0)
   const filteredOrders = (opData.orders || []).filter(ord => {
     if (ordersFilter === 'all') return true;
     if (ordersFilter === 'queue') return ord.isInQueue;
@@ -1356,13 +1381,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const ordersLimit = 10;
   const ordersTotal = filteredOrders.length;
   const ordersTotalPages = Math.max(1, Math.ceil(ordersTotal / ordersLimit));
-  const ordersCurrentPage = Math.min(ordersPage, ordersTotalPages);
-  const ordersFrom = ordersTotal === 0 ? 0 : (ordersCurrentPage - 1) * ordersLimit + 1;
-  const ordersTo = Math.min(ordersCurrentPage * ordersLimit, ordersTotal);
+  const ordersCurrentPage = Math.max(0, Math.min(ordersPage, Math.max(0, ordersTotalPages - 1)));
+  const ordersFrom = ordersTotal === 0 ? 0 : ordersCurrentPage * ordersLimit + 1;
+  const ordersTo = Math.min((ordersCurrentPage + 1) * ordersLimit, ordersTotal);
 
   const paginatedOrders = filteredOrders.slice(
-    (ordersCurrentPage - 1) * ordersLimit,
-    ordersCurrentPage * ordersLimit
+    ordersCurrentPage * ordersLimit,
+    (ordersCurrentPage + 1) * ordersLimit
   );
 
   const handleOrdersPageChange = (newPage) => {
@@ -1380,17 +1405,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     ShowNotifications.showAlertNotification("Live orders queue refreshed successfully.", true);
   };
 
-  // Operational View: Staff Pagination (8 per page)
+  // Operational View: Staff Pagination (10 per page, starting at 0)
   const staffLimit = 10;
   const staffTotal = (opData.staff || []).length;
   const staffTotalPages = Math.max(1, Math.ceil(staffTotal / staffLimit));
-  const staffCurrentPage = Math.min(staffPage, staffTotalPages);
-  const staffFrom = staffTotal === 0 ? 0 : (staffCurrentPage - 1) * staffLimit + 1;
-  const staffTo = Math.min(staffCurrentPage * staffLimit, staffTotal);
+  const staffCurrentPage = Math.max(0, Math.min(staffPage, Math.max(0, staffTotalPages - 1)));
+  const staffFrom = staffTotal === 0 ? 0 : staffCurrentPage * staffLimit + 1;
+  const staffTo = Math.min((staffCurrentPage + 1) * staffLimit, staffTotal);
 
   const paginatedStaff = (opData.staff || []).slice(
-    (staffCurrentPage - 1) * staffLimit,
-    staffCurrentPage * staffLimit
+    staffCurrentPage * staffLimit,
+    (staffCurrentPage + 1) * staffLimit
   );
 
   const handleStaffPageChange = (newPage) => {
@@ -1505,7 +1530,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     {(!currentViewBranch?.managerName && !currentViewBranch?.branchManager) || ['unassigned', 'null', 'undefined'].includes((currentViewBranch?.managerName || currentViewBranch?.branchManager || '').toLowerCase()) ? 'Unassigned Manager' : (currentViewBranch?.managerName || currentViewBranch?.branchManager)}
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: 700, marginTop: '2px' }}>
-                    {resolveBranchContactNumber(currentViewBranch, users, staff) || currentViewBranch?.mobileNumber || 'N/A'}
+                    {resolveBranchContactNumber(currentViewBranch, apiUsers, liveBranchStaff) || currentViewBranch?.mobileNumber || 'N/A'}
                   </div>
                 </div>
               </div>
@@ -1768,30 +1793,30 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   gap: '12px'
                 }}>
                   <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-                    Showing <strong style={{ color: '#0f172a' }}>{tablesFrom}</strong> to <strong style={{ color: '#0f172a' }}>{tablesTo}</strong> of <strong style={{ color: '#0f172a' }}>{tablesTotal}</strong> tables (Page {tablesCurrentPage} of {tablesTotalPages})
+                    Showing <strong style={{ color: '#0f172a' }}>{tablesFrom}</strong> to <strong style={{ color: '#0f172a' }}>{tablesTo}</strong> of <strong style={{ color: '#0f172a' }}>{tablesTotal}</strong> tables (Page {tablesCurrentPage + 1} of {tablesTotalPages})
                   </div>
 
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <button
                       type="button"
-                      onClick={() => handleTablesPageChange(Math.max(1, tablesCurrentPage - 1))}
-                      disabled={tablesCurrentPage <= 1}
+                      onClick={() => handleTablesPageChange(Math.max(0, tablesCurrentPage - 1))}
+                      disabled={tablesCurrentPage === 0}
                       style={{
                         padding: '6px 14px',
                         borderRadius: '8px',
                         border: '1px solid #e2e8f0',
-                        background: tablesCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
-                        color: tablesCurrentPage <= 1 ? '#cbd5e1' : '#334155',
+                        background: tablesCurrentPage === 0 ? '#f8fafc' : '#ffffff',
+                        color: tablesCurrentPage === 0 ? '#cbd5e1' : '#334155',
                         fontSize: '13px',
                         fontWeight: 600,
-                        cursor: tablesCurrentPage <= 1 ? 'not-allowed' : 'pointer',
+                        cursor: tablesCurrentPage === 0 ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s ease'
                       }}
                     >
                       Prev
                     </button>
 
-                    {Array.from({ length: tablesTotalPages }, (_, i) => i + 1).map(pageNum => (
+                    {Array.from({ length: tablesTotalPages }, (_, i) => i).map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -1809,23 +1834,23 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           transition: 'all 0.15s ease'
                         }}
                       >
-                        {pageNum}
+                        {pageNum + 1}
                       </button>
                     ))}
 
                     <button
                       type="button"
-                      onClick={() => handleTablesPageChange(Math.min(tablesTotalPages, tablesCurrentPage + 1))}
-                      disabled={tablesCurrentPage >= tablesTotalPages}
+                      onClick={() => handleTablesPageChange(Math.min(tablesTotalPages - 1, tablesCurrentPage + 1))}
+                      disabled={tablesCurrentPage >= tablesTotalPages - 1 || tablesTotalPages === 0}
                       style={{
                         padding: '6px 14px',
                         borderRadius: '8px',
                         border: '1px solid #e2e8f0',
-                        background: tablesCurrentPage >= tablesTotalPages ? '#f8fafc' : '#ffffff',
-                        color: tablesCurrentPage >= tablesTotalPages ? '#cbd5e1' : '#334155',
+                        background: (tablesCurrentPage >= tablesTotalPages - 1 || tablesTotalPages === 0) ? '#f8fafc' : '#ffffff',
+                        color: (tablesCurrentPage >= tablesTotalPages - 1 || tablesTotalPages === 0) ? '#cbd5e1' : '#334155',
                         fontSize: '13px',
                         fontWeight: 600,
-                        cursor: tablesCurrentPage >= tablesTotalPages ? 'not-allowed' : 'pointer',
+                        cursor: (tablesCurrentPage >= tablesTotalPages - 1 || tablesTotalPages === 0) ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s ease'
                       }}
                     >
@@ -1839,7 +1864,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
           {opSubTab === 'orders' && (
             <div style={{ padding: '8px 0' }}>
-              {/* Header with Title, Live Indicator & Manual Refresh Button */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
@@ -1851,7 +1875,27 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   </div>
                 </div>
 
-
+                <button
+                  type="button"
+                  onClick={handleRefreshOrders}
+                  disabled={isRefreshingOrders}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#334155',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span style={{ animation: isRefreshingOrders ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
+                  <span>Refresh Queue</span>
+                </button>
               </div>
 
               {/* Status Filter Chips */}
@@ -1869,7 +1913,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       type="button"
                       onClick={() => {
                         setOrdersFilter(chip.key);
-                        setOrdersPage(1);
+                        setOrdersPage(0);
                       }}
                       style={{
                         padding: '6px 14px',
@@ -1976,23 +2020,23 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   gap: '10px'
                 }}>
                   <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    Showing <strong>{ordersFrom}</strong> to <strong>{ordersTo}</strong> of <strong>{ordersTotal}</strong> orders (Page {ordersCurrentPage} of {ordersTotalPages})
+                    Showing <strong>{ordersFrom}</strong> to <strong>{ordersTo}</strong> of <strong>{ordersTotal}</strong> orders (Page {ordersCurrentPage + 1} of {ordersTotalPages})
                   </div>
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                     <button
                       type="button"
-                      onClick={() => handleOrdersPageChange(Math.max(1, ordersCurrentPage - 1))}
-                      disabled={ordersCurrentPage <= 1}
+                      onClick={() => handleOrdersPageChange(Math.max(0, ordersCurrentPage - 1))}
+                      disabled={ordersCurrentPage === 0}
                       style={{
                         padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
-                        background: ordersCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
-                        color: ordersCurrentPage <= 1 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
-                        cursor: ordersCurrentPage <= 1 ? 'not-allowed' : 'pointer'
+                        background: ordersCurrentPage === 0 ? '#f8fafc' : '#ffffff',
+                        color: ordersCurrentPage === 0 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: ordersCurrentPage === 0 ? 'not-allowed' : 'pointer'
                       }}
                     >
                       Prev
                     </button>
-                    {Array.from({ length: ordersTotalPages }, (_, i) => i + 1).map(pageNum => (
+                    {Array.from({ length: ordersTotalPages }, (_, i) => i).map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -2005,18 +2049,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           color: ordersCurrentPage === pageNum ? '#ffffff' : '#334155', cursor: 'pointer'
                         }}
                       >
-                        {pageNum}
+                        {pageNum + 1}
                       </button>
                     ))}
                     <button
                       type="button"
-                      onClick={() => handleOrdersPageChange(Math.min(ordersTotalPages, ordersCurrentPage + 1))}
-                      disabled={ordersCurrentPage >= ordersTotalPages}
+                      onClick={() => handleOrdersPageChange(Math.min(ordersTotalPages - 1, ordersCurrentPage + 1))}
+                      disabled={ordersCurrentPage >= ordersTotalPages - 1 || ordersTotalPages === 0}
                       style={{
                         padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
-                        background: ordersCurrentPage >= ordersTotalPages ? '#f8fafc' : '#ffffff',
-                        color: ordersCurrentPage >= ordersTotalPages ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
-                        cursor: ordersCurrentPage >= ordersTotalPages ? 'not-allowed' : 'pointer'
+                        background: (ordersCurrentPage >= ordersTotalPages - 1 || ordersTotalPages === 0) ? '#f8fafc' : '#ffffff',
+                        color: (ordersCurrentPage >= ordersTotalPages - 1 || ordersTotalPages === 0) ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: (ordersCurrentPage >= ordersTotalPages - 1 || ordersTotalPages === 0) ? 'not-allowed' : 'pointer'
                       }}
                     >
                       Next
@@ -2044,9 +2088,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     <div style={{ 
                       width: '40px', 
                       height: '40px', 
-                      borderRadius: '50%', 
-                      background: person.role === 'Branch Manager' ? 'linear-gradient(135deg, var(--primary) 0%, #ea580c 100%)' : 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', 
-                      color: '#ffffff', 
+                      borderRadius: '8px', 
+                      background: 'var(--primary-light, #fff7ed)', 
+                      color: 'var(--primary, #ea580c)', 
                       fontWeight: 800, 
                       fontSize: '15px', 
                       display: 'flex', 
@@ -2095,23 +2139,23 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   gap: '10px'
                 }}>
                   <div style={{ fontSize: '12px', color: '#64748b' }}>
-                    Showing <strong>{staffFrom}</strong> to <strong>{staffTo}</strong> of <strong>{staffTotal}</strong> staff (Page {staffCurrentPage} of {staffTotalPages})
+                    Showing <strong>{staffFrom}</strong> to <strong>{staffTo}</strong> of <strong>{staffTotal}</strong> staff (Page {staffCurrentPage + 1} of {staffTotalPages})
                   </div>
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                     <button
                       type="button"
-                      onClick={() => handleStaffPageChange(Math.max(1, staffCurrentPage - 1))}
-                      disabled={staffCurrentPage <= 1}
+                      onClick={() => handleStaffPageChange(Math.max(0, staffCurrentPage - 1))}
+                      disabled={staffCurrentPage === 0}
                       style={{
                         padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
-                        background: staffCurrentPage <= 1 ? '#f8fafc' : '#ffffff',
-                        color: staffCurrentPage <= 1 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
-                        cursor: staffCurrentPage <= 1 ? 'not-allowed' : 'pointer'
+                        background: staffCurrentPage === 0 ? '#f8fafc' : '#ffffff',
+                        color: staffCurrentPage === 0 ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: staffCurrentPage === 0 ? 'not-allowed' : 'pointer'
                       }}
                     >
                       Prev
                     </button>
-                    {Array.from({ length: staffTotalPages }, (_, i) => i + 1).map(pageNum => (
+                    {Array.from({ length: staffTotalPages }, (_, i) => i).map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -2124,18 +2168,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           color: staffCurrentPage === pageNum ? '#ffffff' : '#334155', cursor: 'pointer'
                         }}
                       >
-                        {pageNum}
+                        {pageNum + 1}
                       </button>
                     ))}
                     <button
                       type="button"
-                      onClick={() => handleStaffPageChange(Math.min(staffTotalPages, staffCurrentPage + 1))}
-                      disabled={staffCurrentPage >= staffTotalPages}
+                      onClick={() => handleStaffPageChange(Math.min(staffTotalPages - 1, staffCurrentPage + 1))}
+                      disabled={staffCurrentPage >= staffTotalPages - 1 || staffTotalPages === 0}
                       style={{
                         padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0',
-                        background: staffCurrentPage >= staffTotalPages ? '#f8fafc' : '#ffffff',
-                        color: staffCurrentPage >= staffTotalPages ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
-                        cursor: staffCurrentPage >= staffTotalPages ? 'not-allowed' : 'pointer'
+                        background: (staffCurrentPage >= staffTotalPages - 1 || staffTotalPages === 0) ? '#f8fafc' : '#ffffff',
+                        color: (staffCurrentPage >= staffTotalPages - 1 || staffTotalPages === 0) ? '#cbd5e1' : '#334155', fontSize: '12px', fontWeight: 600,
+                        cursor: (staffCurrentPage >= staffTotalPages - 1 || staffTotalPages === 0) ? 'not-allowed' : 'pointer'
                       }}
                     >
                       Next

@@ -315,7 +315,69 @@ export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
   return 'N/A';
 };
 
+export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => {
+  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All') return true;
+  if (!itemBranch) return false;
+
+  const targetStr = String(typeof targetBranchId === 'object' && targetBranchId !== null ? (targetBranchId._id || targetBranchId.id || targetBranchId.branchCode || '') : targetBranchId).toLowerCase().trim();
+  const targetBranchObj = Array.isArray(branchesList)
+    ? branchesList.find(b => 
+        String(b._id || b.id || '').toLowerCase().trim() === targetStr ||
+        String(b.branchCode || b.code || '').toLowerCase().trim() === targetStr ||
+        String(b.branchName || b.name || '').toLowerCase().trim() === targetStr
+      )
+    : (typeof targetBranchId === 'object' && targetBranchId !== null ? targetBranchId : null);
+
+  const targetId = targetBranchObj ? String(targetBranchObj._id || targetBranchObj.id || '').toLowerCase().trim() : targetStr;
+  const targetCode = targetBranchObj ? String(targetBranchObj.branchCode || targetBranchObj.code || '').toLowerCase().trim() : targetStr;
+  const targetName = targetBranchObj ? String(targetBranchObj.branchName || targetBranchObj.name || '').toLowerCase().trim() : '';
+
+  // Extract all identifiers from itemBranch
+  let itemIds = [];
+
+  const extractFromObject = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    if (obj._id) itemIds.push(String(obj._id).toLowerCase().trim());
+    if (obj.id) itemIds.push(String(obj.id).toLowerCase().trim());
+    if (obj.branchCode) itemIds.push(String(obj.branchCode).toLowerCase().trim());
+    if (obj.code) itemIds.push(String(obj.code).toLowerCase().trim());
+    if (obj.branchName) itemIds.push(String(obj.branchName).toLowerCase().trim());
+    if (obj.name) itemIds.push(String(obj.name).toLowerCase().trim());
+  };
+
+  if (typeof itemBranch === 'object' && itemBranch !== null) {
+    extractFromObject(itemBranch);
+    if (itemBranch.branchId) {
+      if (typeof itemBranch.branchId === 'object') extractFromObject(itemBranch.branchId);
+      else itemIds.push(String(itemBranch.branchId).toLowerCase().trim());
+    }
+    if (itemBranch.branch) {
+      if (typeof itemBranch.branch === 'object') extractFromObject(itemBranch.branch);
+      else itemIds.push(String(itemBranch.branch).toLowerCase().trim());
+    }
+    if (itemBranch.restaurantBranchId) {
+      if (typeof itemBranch.restaurantBranchId === 'object') extractFromObject(itemBranch.restaurantBranchId);
+      else itemIds.push(String(itemBranch.restaurantBranchId).toLowerCase().trim());
+    }
+    if (itemBranch.activeBranchId) {
+      if (typeof itemBranch.activeBranchId === 'object') extractFromObject(itemBranch.activeBranchId);
+      else itemIds.push(String(itemBranch.activeBranchId).toLowerCase().trim());
+    }
+  } else if (typeof itemBranch === 'string') {
+    itemIds.push(itemBranch.toLowerCase().trim());
+  }
+
+  return itemIds.some(id => 
+    id === targetStr || 
+    (targetId && id === targetId) || 
+    (targetCode && id === targetCode) || 
+    (targetName && id === targetName)
+  );
+};
+
 export default {
   resolveBranchManagerName,
-  resolveBranchContactNumber
+  resolveBranchContactNumber,
+  isBranchMatch
 };
+

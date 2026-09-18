@@ -115,6 +115,58 @@ const renderNotificationIcon = (notif) => {
   );
 };
 
+export const matchesNotificationFilter = (notif, filter) => {
+  if (!filter || filter === 'ALL') return true;
+  if (!notif) return false;
+
+  const f = String(filter).toUpperCase().trim();
+  const reqType = String(notif.requestType || '').toUpperCase().trim();
+  const rawType = String(notif.type || '').toUpperCase().trim();
+  const title = String(notif.title || '').toUpperCase().trim();
+  const message = String(notif.message || '').toUpperCase().trim();
+
+  if (f === 'ORDERS' || f === 'ORDER') {
+    return (
+      reqType === 'ORDERS' ||
+      reqType === 'ORDER' ||
+      rawType.includes('ORDER') ||
+      title.includes('ORDER') ||
+      Boolean(notif.orderId)
+    );
+  }
+
+  if (f === 'WATER') {
+    return (
+      reqType === 'WATER' ||
+      rawType.includes('WATER') ||
+      title.includes('WATER') ||
+      message.includes('WATER')
+    );
+  }
+
+  if (f === 'BILL' || f === 'BILLING') {
+    return (
+      reqType === 'BILL' ||
+      reqType === 'BILLING' ||
+      rawType.includes('BILL') ||
+      title.includes('BILL') ||
+      message.includes('BILL')
+    );
+  }
+
+  if (f === 'MESSAGE' || f === 'MESSAGES') {
+    return (
+      reqType === 'MESSAGE' ||
+      reqType === 'MESSAGES' ||
+      rawType.includes('MESSAGE') ||
+      title.includes('MESSAGE') ||
+      message.includes('MESSAGE')
+    );
+  }
+
+  return reqType === f || rawType.includes(f) || title.includes(f) || message.includes(f);
+};
+
 export default function NotificationModal({ isOpen, onClose }) {
   const { selectedBranchId } = useContext(AppContext);
   const navigate = useNavigate();
@@ -138,6 +190,7 @@ export default function NotificationModal({ isOpen, onClose }) {
     }
   });
 
+
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastForm, setBroadcastForm] = useState({
     title: '',
@@ -156,10 +209,6 @@ export default function NotificationModal({ isOpen, onClose }) {
     const params = {
       type: typeParam,
     };
-
-    if (activeSourceTab === 'CUSTOMER' && activeFilter !== 'ALL') {
-      params.requestType = activeFilter.toLowerCase();
-    }
 
     if (selectedBranchId && selectedBranchId !== 'ALL') {
       params.branchId = selectedBranchId;
@@ -188,10 +237,10 @@ export default function NotificationModal({ isOpen, onClose }) {
           superAdmin: allSuperAdminRaw.length,
           superAdminUnread: allSuperAdminRaw.filter(n => !n.isRead).length,
           quickHelp: {
-            orders: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'ORDERS' || String(n.type).includes('ORDER')).length,
-            water: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'WATER').length,
-            bill: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'BILL').length,
-            message: allCustomerRaw.filter(n => String(n.requestType).toUpperCase() === 'MESSAGE').length,
+            orders: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'ORDERS')).length,
+            water: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'WATER')).length,
+            bill: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'BILL')).length,
+            message: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'MESSAGE')).length,
           }
         });
 
@@ -202,6 +251,7 @@ export default function NotificationModal({ isOpen, onClose }) {
         } else {
           rawList = allSuperAdminRaw;
         }
+
 
         // Map and format notifications
         const formatted = (rawList || []).map((item) => {
@@ -372,8 +422,16 @@ export default function NotificationModal({ isOpen, onClose }) {
     setActiveSourceTab('SUPERADMIN');
   };
 
-  // Local filter for search query
+  // Local filter for active sub-filter and search query
   const filteredNotifications = notifications.filter(item => {
+    // 1. Filter by active sub-filter when on CUSTOMER tab
+    if (activeSourceTab === 'CUSTOMER' && activeFilter !== 'ALL') {
+      if (!matchesNotificationFilter(item, activeFilter)) {
+        return false;
+      }
+    }
+
+    // 2. Filter by search query
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -388,10 +446,11 @@ export default function NotificationModal({ isOpen, onClose }) {
   const superAdminTabCount = counts.superAdmin || (activeSourceTab === 'SUPERADMIN' ? notifications.length : 0);
   const totalActiveCount = counts.totalActive || (customerTabCount + superAdminTabCount);
 
-  const ordersCount = counts.quickHelp?.orders ?? notifications.filter(n => String(n.requestType).toUpperCase() === 'ORDERS' || String(n.type).includes('ORDER')).length;
-  const waterCount = counts.quickHelp?.water ?? notifications.filter(n => String(n.requestType).toUpperCase() === 'WATER').length;
-  const billCount = counts.quickHelp?.bill ?? notifications.filter(n => String(n.requestType).toUpperCase() === 'BILL').length;
-  const messageCount = counts.quickHelp?.message ?? notifications.filter(n => String(n.requestType).toUpperCase() === 'MESSAGE').length;
+  const ordersCount = counts.quickHelp?.orders ?? notifications.filter(n => matchesNotificationFilter(n, 'ORDERS')).length;
+  const waterCount = counts.quickHelp?.water ?? notifications.filter(n => matchesNotificationFilter(n, 'WATER')).length;
+  const billCount = counts.quickHelp?.bill ?? notifications.filter(n => matchesNotificationFilter(n, 'BILL')).length;
+  const messageCount = counts.quickHelp?.message ?? notifications.filter(n => matchesNotificationFilter(n, 'MESSAGE')).length;
+
 
   return (
     <div style={{
@@ -452,32 +511,6 @@ export default function NotificationModal({ isOpen, onClose }) {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {activeSourceTab === 'SUPERADMIN' && (
-                <button
-                  type="button"
-                  onClick={() => setIsBroadcastModalOpen(true)}
-                  style={{
-                    border: 'none',
-                    background: '#ede9fe',
-                    color: '#7c3aed',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                  Broadcast
-                </button>
-              )}
-
               {notifications.length > 0 && (
                 <button
                   type="button"

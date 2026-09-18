@@ -21,11 +21,19 @@ export default function BranchManagement() {
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' || 
+    userType === 'ADMINISTRATOR' || 
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+    userRoleLower === 'super_admin' ||
+    userRoleLower === 'admin' ||
+    userRoleLower === 'administrator' ||
+    String(currentUser?.name || '').toLowerCase().includes('admin') ||
+    String(currentUser?.email || '').toLowerCase().includes('admin') ||
+    !currentUser?.branchId ||
+    currentUser?.branchId === 'ALL';
 
   // Strict check: Only Restaurant Owner can access branch management
   if (!isRestaurantOwner) {

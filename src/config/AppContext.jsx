@@ -58,8 +58,8 @@ export const DEFAULT_ROLES = {
   Admin: {
     permissions: {
       overview: { view: true, add: true, edit: true, delete: true },
-      'branch-management': { view: false, add: false, edit: false, delete: false },
-      'plans-management': { view: false, add: false, edit: false, delete: false },
+      'branch-management': { view: true, add: true, edit: true, delete: true },
+      'plans-management': { view: true, add: true, edit: true, delete: true },
       orders: { view: true, add: true, edit: true, delete: true },
       menu: { view: true, add: true, edit: true, delete: true },
       tables: { view: true, add: true, edit: true, delete: true },
@@ -671,17 +671,7 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
-    if (!token) return;
-
-    const initData = async () => {
-      await fetchSubscriptionDashboard();
-      await fetchBranches();
-      await fetchOrders();
-    };
-    initData();
-  }, [currentUser, currentRestaurantId]);
+  // Global automatic eager initData removed so that navigating to specific pages only calls the APIs needed for that page.
 
   // Sync theme changes with body class and css variables
   useEffect(() => {
@@ -2349,6 +2339,10 @@ export const AppProvider = ({ children }) => {
         selectedBranchId,
         setSelectedBranchId,
         fetchBranches,
+        fetchSubscriptionDashboard,
+        fetchOrders,
+        fetchTables,
+        fetchMenu,
 
         login,
         logout,

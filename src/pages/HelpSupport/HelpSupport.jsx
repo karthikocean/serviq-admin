@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import { ticketApi } from '../../api/Ticket';
+import BranchApi from '../../api/Branch';
+import { isBranchMatch } from '../../helper/BranchHelper';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -9,16 +11,15 @@ import { formatDateDMY, formatDateTimeDMY } from '../../helper/DateHelper.js';
 import './HelpSupport.css';
 
 export default function HelpSupport() {
-  const { activeRestaurant } = useAppState();
+  const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const [tickets, setTickets] = useState([]);
+  const [liveBranches, setLiveBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalEntries, setTotalEntries] = useState(0);
   const limit = 10;
 
   // Modals State
@@ -31,6 +32,7 @@ export default function HelpSupport() {
     subject: '',
     category: 'Billing',
     priority: 'Medium',
+    branchId: '',
     description: ''
   });
   const [errors, setErrors] = useState({});
@@ -43,25 +45,134 @@ export default function HelpSupport() {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [isLoadingTicketDetails, setIsLoadingTicketDetails] = useState(false);
 
-  const fetchTickets = async (page = currentPage) => {
+  // Fetch branches from API
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches();
+      if (res?.status) {
+        const rawData = res.response?.data || res.response?.branches || res.response || [];
+        const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
+        setLiveBranches(list);
+      }
+    } catch (err) {
+      console.error("Failed to load branches:", err);
+    }
+  }, []);
+
+  const allBranches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+
+  // Helper to dynamically resolve human-readable branch name from ticket
+  const resolveTicketBranchName = useCallback((ticket, branchesList = []) => {
+    if (!ticket) return 'All Branches';
+
+    // 1. Direct branchName / branch properties
+    if (ticket.branchName && typeof ticket.branchName === 'string') {
+      const trimmed = ticket.branchName.trim();
+      if (trimmed && !['null', 'undefined', '-', '—'].includes(trimmed.toLowerCase())) {
+        return trimmed;
+      }
+    }
+
+    if (ticket.branch && typeof ticket.branch === 'object') {
+      const name = ticket.branch.branchName || ticket.branch.name || ticket.branch.branchCode;
+      if (name && typeof name === 'string' && name.trim()) {
+        return name.trim();
+      }
+    }
+
+    if (ticket.branchId && typeof ticket.branchId === 'object') {
+      const name = ticket.branchId.branchName || ticket.branchId.name || ticket.branchId.branchCode;
+      if (name && typeof name === 'string' && name.trim()) {
+        return name.trim();
+      }
+    }
+
+    // 2. Lookup by branchId or branch string ID in branches list
+    const bId = String(
+      (typeof ticket.branchId === 'string' ? ticket.branchId : '') ||
+      (typeof ticket.branch === 'string' ? ticket.branch : '') ||
+      (typeof ticket.restaurantBranchId === 'string' ? ticket.restaurantBranchId : '') ||
+      (typeof ticket.activeBranchId === 'string' ? ticket.activeBranchId : '') ||
+      ''
+    ).trim();
+
+    if (bId && bId !== 'ALL' && bId !== 'All' && Array.isArray(branchesList)) {
+      const matched = branchesList.find(b => (
+        String(b._id || b.id || '').toLowerCase() === bId.toLowerCase() ||
+        String(b.branchCode || b.code || '').toLowerCase() === bId.toLowerCase() ||
+        String(b.branchName || b.name || '').toLowerCase() === bId.toLowerCase()
+      ));
+      if (matched) {
+        return matched.branchName || matched.name || matched.branchCode || 'All Branches';
+      }
+    }
+
+    // 3. Check if ticket has branch string directly
+    if (typeof ticket.branch === 'string' && ticket.branch.trim() && !/^[0-9a-fA-F]{24}$/.test(ticket.branch.trim()) && ticket.branch !== 'ALL' && ticket.branch !== 'All') {
+      return ticket.branch.trim();
+    }
+
+    if (bId === 'ALL' || bId === 'All') {
+      return 'All Branches';
+    }
+
+    // 4. Default: If no specific branch was found on this ticket, return 'All Branches'
+    return 'All Branches';
+  }, []);
+
+  const fetchTickets = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await ticketApi.getTickets({ page, limit });
+      const params = {
+        limit: 1000
+      };
+      if (selectedBranchId && selectedBranchId !== 'ALL') {
+        params.branchId = selectedBranchId;
+      }
+      const data = await ticketApi.getTickets(params);
       if (data && data.status && data.data) {
         setTickets(Array.isArray(data.data) ? data.data : []);
-        setTotalPages(data.totalPages || 1);
-        setTotalEntries(data.total || 0);
+      } else if (Array.isArray(data)) {
+        setTickets(data);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch tickets:", e);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
   useEffect(() => {
-    fetchTickets(currentPage);
-  }, [currentPage]);
+    fetchBranches();
+  }, [fetchBranches]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+    fetchTickets();
+  }, [fetchTickets, selectedBranchId]);
+
+  // Filter tickets by selected branch
+  const filteredTickets = useMemo(() => {
+    if (!selectedBranchId || selectedBranchId === 'ALL') {
+      return tickets;
+    }
+    return tickets.filter(t => {
+      const branchTarget = t.branchId || t.branch || t.restaurantBranchId || t.activeBranchId || t;
+      return isBranchMatch(branchTarget, selectedBranchId, allBranches);
+    });
+  }, [tickets, selectedBranchId, allBranches]);
+
+  // Paginated tickets for table display
+  const totalEntries = filteredTickets.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / limit));
+  const paginatedTickets = filteredTickets.slice(currentPage * limit, (currentPage + 1) * limit);
+
+  // Auto-bounds check for page
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
 
   const validateForm = () => {
     const newErrs = {};
@@ -79,15 +190,43 @@ export default function HelpSupport() {
     return Object.keys(newErrs).length === 0;
   };
 
+  const handleOpenRaiseTicket = () => {
+    const defaultBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
+      ? selectedBranchId
+      : (allBranches[0]?._id || allBranches[0]?.id || 'ALL');
+    setNewTicket({
+      subject: '',
+      category: 'Billing',
+      priority: 'Medium',
+      branchId: defaultBranchId,
+      description: ''
+    });
+    setErrors({});
+    setShowRaiseTicketModal(true);
+  };
+
   const handleRaiseTicket = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     try {
-      await ticketApi.createTicket(newTicket);
+      const branchIdToSend = newTicket.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : 'ALL');
+      const branchObj = allBranches.find(b => String(b._id || b.id) === String(branchIdToSend));
+      const branchNameToSend = branchObj 
+        ? (branchObj.branchName || branchObj.name || branchObj.branchCode) 
+        : (branchIdToSend === 'ALL' || !branchIdToSend ? 'All Branches' : 'Main Branch');
+
+      const payload = {
+        ...newTicket,
+        branchId: branchIdToSend,
+        branchName: branchNameToSend,
+        restaurantName: activeRestaurant?.name || 'Restaurant'
+      };
+
+      await ticketApi.createTicket(payload);
       setShowRaiseTicketModal(false);
-      setNewTicket({ subject: '', category: 'Billing', priority: 'Medium', description: '' });
+      setNewTicket({ subject: '', category: 'Billing', priority: 'Medium', branchId: '', description: '' });
       ShowNotifications.showAlertNotification('Support ticket raised successfully!', true);
       fetchTickets();
     } catch (error) {
@@ -98,6 +237,10 @@ export default function HelpSupport() {
   };
 
   const handleOpenEdit = (ticket) => {
+    const ticketBranchId = ticket.branchId 
+      ? (typeof ticket.branchId === 'object' ? (ticket.branchId._id || ticket.branchId.id) : ticket.branchId) 
+      : (ticket.branch ? (typeof ticket.branch === 'object' ? (ticket.branch._id || ticket.branch.id) : ticket.branch) : '');
+    
     setEditTicket({
       _id: ticket._id || ticket.id,
       ticketNumber: ticket.ticketNumber,
@@ -105,6 +248,7 @@ export default function HelpSupport() {
       category: ticket.category || 'Billing',
       priority: ticket.priority || 'Medium',
       status: ticket.status || 'Open',
+      branchId: ticketBranchId || 'ALL',
       description: ticket.description || ''
     });
     setEditErrors({});
@@ -117,18 +261,25 @@ export default function HelpSupport() {
     setIsSubmitting(true);
     const targetId = editTicket._id;
     try {
+      const branchObj = allBranches.find(b => String(b._id || b.id) === String(editTicket.branchId));
+      const branchName = branchObj 
+        ? (branchObj.branchName || branchObj.name) 
+        : (editTicket.branchId === 'ALL' || !editTicket.branchId ? 'All Branches' : undefined);
+      
       const updateData = {
         subject: editTicket.subject,
         category: editTicket.category,
         priority: editTicket.priority,
         status: editTicket.status,
+        branchId: editTicket.branchId,
+        ...(branchName ? { branchName } : {}),
         description: editTicket.description
       };
       await ticketApi.updateTicket(targetId, updateData);
       setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...updateData } : t));
       ShowNotifications.showAlertNotification('Ticket updated successfully!', true);
       setEditTicket(null);
-      fetchTickets(currentPage);
+      fetchTickets();
     } catch (error) {
       // Fallback local update if API is mock or partial
       setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...editTicket } : t));
@@ -146,14 +297,12 @@ export default function HelpSupport() {
     try {
       await ticketApi.deleteTicket(targetId);
       setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
-      setTotalEntries(prev => Math.max(0, prev - 1));
       ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
       setDeleteTicketConfirm(null);
-      fetchTickets(currentPage);
+      fetchTickets();
     } catch (error) {
       // Local fallback removal
       setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
-      setTotalEntries(prev => Math.max(0, prev - 1));
       ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
       setDeleteTicketConfirm(null);
     } finally {
@@ -229,7 +378,7 @@ export default function HelpSupport() {
         });
 
         setReplyInput('');
-        fetchTickets(currentPage);
+        fetchTickets();
       } else {
         ShowNotifications.showAlertNotification(res?.error || 'Failed to send reply.', false);
       }
@@ -309,23 +458,29 @@ export default function HelpSupport() {
     <div className="help-support-container">
       <div className="page-header">
         <h2>Help & Support</h2>
-        <button className="btn btn-primary" onClick={() => setShowRaiseTicketModal(true)}>
+        <button className="btn btn-primary" onClick={handleOpenRaiseTicket}>
           + Raise Ticket
         </button>
       </div>
 
       <div className="card list-card">
-        <div className="card-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#ffffff' }}>
+        <div className="card-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>My Tickets</h3>
+          {selectedBranchId && selectedBranchId !== 'ALL' && (
+            <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+              📍 Filtered by: {allBranches.find(b => String(b._id || b.id) === String(selectedBranchId))?.branchName || 'Current Branch'}
+            </span>
+          )}
         </div>
         <div className="table-responsive" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
           <table className="data-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '15%', textAlign: 'left', whiteSpace: 'nowrap' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO.</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'left', whiteSpace: 'nowrap' }}>TICKET NO.</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '28%', textAlign: 'left' }}>SUBJECT & BRANCH</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '16%', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED AGENT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '13%', textAlign: 'left', whiteSpace: 'nowrap' }}>DATE</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '12%', textAlign: 'left', whiteSpace: 'nowrap' }}>DATE</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center', whiteSpace: 'nowrap' }}>PRIORITY</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '8%', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
@@ -334,34 +489,57 @@ export default function HelpSupport() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
                 </tr>
-              ) : tickets.length === 0 ? (
+              ) : paginatedTickets.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found.</td>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found for the selected branch filter.</td>
                 </tr>
               ) : (
-                tickets.map(ticket => {
+                paginatedTickets.map((ticket, index) => {
                   const assigned = ticket.assignedUser || 'Unassigned';
                   const isAssigned = assigned && assigned !== 'Unassigned';
+                  const branchLabel = resolveTicketBranchName(ticket, allBranches) || 'All Branches';
+                  const isAllBranches = branchLabel.toLowerCase().includes('all branch');
                   return (
                   <tr 
-                    key={ticket._id || ticket.id}
+                    key={ticket._id || ticket.id || index}
                     style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
+                    <td style={{ padding: '14px 14px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {currentPage * limit + index + 1}
+                    </td>
                     <td style={{ padding: '14px 18px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {ticket.ticketNumber}
                     </td>
                     <td style={{ padding: '14px 18px', verticalAlign: 'middle' }}>
                       <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px' }}>{ticket.subject}</div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
                           {ticket.category || 'General'}
                         </span>
+                        <span style={{
+                          fontSize: '11px',
+                          color: isAllBranches ? '#475569' : '#0369a1',
+                          background: isAllBranches ? '#f1f5f9' : '#e0f2fe',
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          border: isAllBranches ? '1px solid #e2e8f0' : '1px solid #bae6fd'
+                        }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                            <circle cx="12" cy="10" r="3" />
+                          </svg>
+                          {branchLabel}
+                        </span>
                         {ticket.restaurantName && (
-                          <span style={{ fontSize: '11px', color: '#0284c7', background: '#f0f9ff', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                          <span style={{ fontSize: '11px', color: '#475569', background: '#f8fafc', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
                             {ticket.restaurantName}
                           </span>
                         )}
@@ -513,7 +691,7 @@ export default function HelpSupport() {
           </table>
         </div>
 
-        {/* Pagination UI matching previous screens */}
+        {/* Pagination UI matching standard table layout */}
         {totalPages > 0 && (
           <div style={{
             display: 'flex',
@@ -622,6 +800,7 @@ export default function HelpSupport() {
           const creatorEmail = viewTicket.createdBy?.email || (typeof viewTicket.createdBy === 'string' ? viewTicket.createdBy : '') || activeRestaurant?.email || 'mirchi@gmail.com';
           const assignedAgent = viewTicket.assignedUser || 'Unassigned';
           const isAssigned = assignedAgent && assignedAgent !== 'Unassigned';
+          const ticketBranchName = resolveTicketBranchName(viewTicket, allBranches) || 'All Branches';
 
           return (
           <div className="ticket-details-modal" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -632,8 +811,11 @@ export default function HelpSupport() {
                   <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
                     {viewTicket.ticketNumber}
                   </h3>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    📍 {ticketBranchName}
+                  </span>
                   {viewTicket.restaurantName && (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px' }}>
                       🏪 {viewTicket.restaurantName}
                     </span>
                   )}
@@ -680,6 +862,13 @@ export default function HelpSupport() {
               borderRadius: '12px',
               border: '1px solid #e2e8f0'
             }}>
+              <div>
+                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</p>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                  📍 {ticketBranchName}
+                </span>
+              </div>
+
               <div>
                 <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY</p>
                 <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
@@ -887,6 +1076,41 @@ export default function HelpSupport() {
           </div>
 
           <div className="form-group">
+            <label>Branch *</label>
+            {selectedBranchId && selectedBranchId !== 'ALL' ? (
+              <div style={{
+                padding: '10px 12px',
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#0f172a',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span>📍</span>
+                <span>{allBranches.find(b => String(b._id || b.id) === String(selectedBranchId))?.branchName || 'Selected Branch'}</span>
+                <span style={{ fontSize: '11px', color: '#64748b', marginLeft: 'auto' }}>(Header Filter Active)</span>
+              </div>
+            ) : (
+              <SearchableSelect 
+                value={newTicket.branchId}
+                onChange={e => setNewTicket({...newTicket, branchId: e.target.value})}
+                options={[
+                  { value: 'ALL', label: 'All Branches (General)' },
+                  ...allBranches.map(b => ({
+                    value: b._id || b.id,
+                    label: b.branchName || b.name || b.branchCode || 'Main Branch'
+                  }))
+                ]}
+                placeholder="Select Branch"
+              />
+            )}
+          </div>
+
+          <div className="form-group">
             <label>Category *</label>
             <SearchableSelect 
               value={newTicket.category}
@@ -955,6 +1179,22 @@ export default function HelpSupport() {
                 placeholder="E.g., Printer connection issue"
               />
               {editErrors.subject && <span className="error-text">{editErrors.subject}</span>}
+            </div>
+
+            <div className="form-group">
+              <label>Branch</label>
+              <SearchableSelect 
+                value={editTicket.branchId}
+                onChange={e => setEditTicket({...editTicket, branchId: e.target.value})}
+                options={[
+                  { value: 'ALL', label: 'All Branches (General)' },
+                  ...allBranches.map(b => ({
+                    value: b._id || b.id,
+                    label: b.branchName || b.name || b.branchCode || 'Main Branch'
+                  }))
+                ]}
+                placeholder="Select Branch"
+              />
             </div>
 
             <div className="form-group">
