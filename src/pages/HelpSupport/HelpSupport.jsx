@@ -520,24 +520,26 @@ export default function HelpSupport() {
                         <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
                           {ticket.category || 'General'}
                         </span>
-                        <span style={{
-                          fontSize: '11px',
-                          color: isAllBranches ? '#475569' : '#0369a1',
-                          background: isAllBranches ? '#f1f5f9' : '#e0f2fe',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          border: isAllBranches ? '1px solid #e2e8f0' : '1px solid #bae6fd'
-                        }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
-                          {branchLabel}
-                        </span>
+                        {!isAllBranches && branchLabel && branchLabel !== 'All Branches' && (
+                          <span style={{
+                            fontSize: '11px',
+                            color: '#0369a1',
+                            background: '#e0f2fe',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid #bae6fd'
+                          }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                              <circle cx="12" cy="10" r="3" />
+                            </svg>
+                            {branchLabel}
+                          </span>
+                        )}
                         {ticket.restaurantName && (
                           <span style={{ fontSize: '11px', color: '#475569', background: '#f8fafc', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
                             {ticket.restaurantName}
@@ -811,9 +813,11 @@ export default function HelpSupport() {
                   <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
                     {viewTicket.ticketNumber}
                   </h3>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    📍 {ticketBranchName}
-                  </span>
+                  {ticketBranchName && !ticketBranchName.toLowerCase().includes('all branch') && (
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      📍 {ticketBranchName}
+                    </span>
+                  )}
                   {viewTicket.restaurantName && (
                     <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px' }}>
                       🏪 {viewTicket.restaurantName}

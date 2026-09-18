@@ -7,6 +7,7 @@ import TableApi from '../api/Table';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
+import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -1042,6 +1043,7 @@ export default function StaffManagementPanel({
                         {formErrors.password}
                       </span>
                     )}
+                    <PasswordRequirements password={userForm.password} />
                   </div>
                 )}
               </div>
@@ -2390,18 +2392,6 @@ export default function StaffManagementPanel({
                     style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
                   >
                     Close
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      const target = viewingStaff;
-                      setViewingStaff(null);
-                      openEditUser(target);
-                    }}
-                    style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
-                  >
-                    Edit Staff Profile
                   </button>
                 </div>
               </div>
