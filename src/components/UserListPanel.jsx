@@ -23,6 +23,15 @@ const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeOffIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -74,7 +83,11 @@ export default function UserListPanel() {
   const [userToDelete, setUserToDelete] = useState(null);
   const [changePasswordUserId, setChangePasswordUserId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -384,16 +397,40 @@ export default function UserListPanel() {
   };
 
   const handleChangePasswordSubmit = async () => {
+    let hasError = false;
     const pErr = validatePassword(newPassword, 'New Password');
     if (pErr) {
       setPasswordError(pErr);
-      return;
+      hasError = true;
+    } else {
+      setPasswordError('');
     }
-    const res = await UserApi.changePassword(changePasswordUserId._id, newPassword);
+
+    if (!confirmPassword) {
+      setConfirmPasswordError('Please confirm the new password.');
+      hasError = true;
+    } else if (newPassword !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match.');
+      hasError = true;
+    } else {
+      setConfirmPasswordError('');
+    }
+
+    if (hasError) return;
+
+    const targetId = changePasswordUserId?._id || changePasswordUserId?.id;
+    const res = await UserApi.changePassword(targetId, newPassword);
     if (res.status) {
+      ShowNotifications.showAlertNotification(res.response?.message || 'Password changed successfully!', true);
       setChangePasswordUserId(null);
       setNewPassword('');
+      setConfirmPassword('');
       setPasswordError('');
+      setConfirmPasswordError('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+    } else {
+      ShowNotifications.showAlertNotification(res.response?.message || 'Failed to change password.', false);
     }
   };
 
@@ -1006,7 +1043,11 @@ export default function UserListPanel() {
                         onClick={() => {
                           setChangePasswordUserId(user);
                           setNewPassword('');
+                          setConfirmPassword('');
                           setPasswordError('');
+                          setConfirmPasswordError('');
+                          setShowNewPassword(false);
+                          setShowConfirmPassword(false);
                         }}
                         style={{
                           background: 'none',
@@ -1190,49 +1231,151 @@ export default function UserListPanel() {
 
       <Modal
         isOpen={!!changePasswordUserId}
-        onClose={() => setChangePasswordUserId(null)}
+        onClose={() => {
+          setChangePasswordUserId(null);
+          setNewPassword('');
+          setConfirmPassword('');
+          setPasswordError('');
+          setConfirmPasswordError('');
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        }}
         title="Change Password"
-        maxWidth="440px"
+        maxWidth="480px"
       >
         <div style={{ padding: '10px 0' }}>
           <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569' }}>
             Set a new password for <strong>{changePasswordUserId?.name}</strong>.
           </p>
-          <div style={{ marginBottom: '24px' }}>
+
+          {/* New Password */}
+          <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
               New Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <input
-              type="password"
-              name="user_change_password_field"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={e => {
-                setNewPassword(e.target.value);
-                if (passwordError) setPasswordError('');
-              }}
-              placeholder="Enter new password"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: passwordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                name="user_change_password_field"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={e => {
+                  setNewPassword(e.target.value);
+                  if (passwordError) setPasswordError('');
+                }}
+                placeholder="Enter new password"
+                style={{
+                  width: '100%',
+                  padding: '10px 40px 10px 14px',
+                  borderRadius: '8px',
+                  border: passwordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}
+                title={showNewPassword ? "Hide Password" : "Show Password"}
+              >
+                {showNewPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
             {passwordError && (
               <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                 {passwordError}
               </span>
             )}
-            <PasswordRequirements password={newPassword} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+
+          {/* Confirm Password */}
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+              Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                name="user_confirm_password_field"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={e => {
+                  setConfirmPassword(e.target.value);
+                  if (confirmPasswordError) setConfirmPasswordError('');
+                }}
+                placeholder="Re-enter new password"
+                style={{
+                  width: '100%',
+                  padding: '10px 40px 10px 14px',
+                  borderRadius: '8px',
+                  border: confirmPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}
+                title={showConfirmPassword ? "Hide Password" : "Show Password"}
+              >
+                {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
+            {confirmPasswordError && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {confirmPasswordError}
+              </span>
+            )}
+          </div>
+
+          {/* Real-time Password Requirements Checklist */}
+          <PasswordRequirements
+            password={newPassword}
+            confirmPassword={confirmPassword}
+            showConfirmMatch={true}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
             <button
               type="button"
               className="btn btn-outline"
-              onClick={() => setChangePasswordUserId(null)}
+              onClick={() => {
+                setChangePasswordUserId(null);
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError('');
+                setConfirmPasswordError('');
+                setShowNewPassword(false);
+                setShowConfirmPassword(false);
+              }}
             >
               Cancel
             </button>

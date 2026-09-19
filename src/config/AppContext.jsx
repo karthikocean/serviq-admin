@@ -290,15 +290,15 @@ export const AppProvider = ({ children }) => {
     inventory: [],
     inventoryLogs: [],
     inventoryCategories: DEFAULT_INVENTORY_CATEGORIES,
-    plan: "Premium",
+    plan: "Standard",
     subscription: {
-      planId: "plan-premium",
-      planName: "Premium",
+      planId: "plan-standard",
+      planName: "Standard",
       status: "Active",
       billingCycle: "monthly",
-      baseBranchLimit: 8,
+      baseBranchLimit: 5,
       extraBranchSlots: 0,
-      extraBranchPrice: 499
+      extraBranchPrice: 699
     }
   }), []);
 
@@ -541,13 +541,13 @@ export const AppProvider = ({ children }) => {
               users: [],
               inventory: [],
               inventoryLogs: [],
-              plan: "Premium",
+              plan: "Standard",
               subscription: {
-                planId: "plan-premium",
-                planName: "Premium",
-                baseBranchLimit: 8,
+                planId: "plan-standard",
+                planName: "Standard",
+                baseBranchLimit: 5,
                 extraBranchSlots: 0,
-                extraBranchPrice: 499
+                extraBranchPrice: 699
               }
             };
 
@@ -618,9 +618,25 @@ export const AppProvider = ({ children }) => {
               ap.name.toLowerCase().includes(cleanP) || 
               cleanP.includes(ap.name.toLowerCase().replace(/\s*plan$/i, '').trim())
             );
-            if (target && p.maxBranches !== undefined) {
-              target.maxBranches = Number(p.maxBranches);
-              target.branchLimit = Number(p.maxBranches);
+            if (target) {
+              const cap = p.maxBranches ?? p.branchLimit ?? p.baseBranchLimit ?? p.branchCapacity ?? p.allowedBranches ?? p.maxOutlets;
+              if (cap !== undefined) {
+                target.maxBranches = Number(cap);
+                target.branchLimit = Number(cap);
+                target.baseBranchLimit = Number(cap);
+                target.branchCapacity = Number(cap);
+              }
+              const mPrice = p.monthlyPrice ?? p.basePrice ?? p.baseValue ?? p.price ?? p.monthlyRate ?? p.rate ?? p.amount ?? p.planPrice;
+              if (mPrice !== undefined) {
+                target.monthlyPrice = Number(mPrice);
+                target.price = Number(mPrice);
+                target.basePrice = Number(mPrice);
+              }
+              const aPrice = p.annualPrice ?? p.yearlyPrice ?? p.annualRate ?? p.yearlyRate;
+              if (aPrice !== undefined) {
+                target.annualPrice = Number(aPrice);
+                target.yearlyPrice = Number(aPrice);
+              }
             }
           });
         }
@@ -640,22 +656,42 @@ export const AppProvider = ({ children }) => {
         const resolvedLimit = Number(
           matchedLive?.maxBranches ??
           matchedLive?.branchLimit ??
+          matchedLive?.baseBranchLimit ??
+          matchedLive?.branchCapacity ??
+          matchedLive?.allowedBranches ??
+          matchedLive?.maxOutlets ??
           activePlan?.baseBranchLimit ??
           activePlan?.maxBranches ??
           activePlan?.branchLimit ??
           activePlan?.branchCapacity ??
+          activePlan?.allowedBranches ??
+          activePlan?.maxOutlets ??
           data.branchCapacity?.baseLimit ??
           data.branchCapacity?.base ??
           data.branchCapacity?.maxBranches ??
           data.branchCapacity?.branchLimit ??
+          data.branchCapacity?.branchCapacity ??
+          data.branchCapacity?.capacity ??
           savedPlan?.baseBranchLimit ??
           getPlanBranchLimit(activePlan?.planName || savedPlan?.cleanName || 'Standard', 5)
         );
 
-        if (activePlan || (savedPlan && savedPlan.cleanName)) {
-          const rawName = activePlan?.planName || activePlan?.name || savedPlan?.planName || 'Standard';
-          const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Standard';
+        const resolvedPrice = Number(
+          matchedLive?.monthlyPrice ??
+          matchedLive?.basePrice ??
+          matchedLive?.baseValue ??
+          matchedLive?.price ??
+          activePlan?.monthlyPrice ??
+          activePlan?.basePrice ??
+          activePlan?.baseValue ??
+          activePlan?.price ??
+          activePlan?.planPrice ??
+          activePlan?.amount ??
+          savedPlan?.price ??
+          1999
+        );
 
+        if (activePlan || (savedPlan && savedPlan.cleanName)) {
           setRestaurantsData(prev => {
             const targetId = currentRestaurantId || 'rest-1';
             const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
@@ -670,7 +706,7 @@ export const AppProvider = ({ children }) => {
                   planName: cleanName,
                   status: activePlan?.status || 'Active',
                   billingCycle: activePlan?.billingCycle || savedPlan?.billingCycle || 'monthly',
-                  price: activePlan?.price || savedPlan?.price || baseRest.subscription?.price,
+                  price: resolvedPrice,
                   baseBranchLimit: resolvedLimit,
                   maxBranches: resolvedLimit,
                   extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
@@ -710,43 +746,9 @@ export const AppProvider = ({ children }) => {
   const login = async (email, password, role) => {
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Strict Backend API login attempt
+    // 1. Strict Backend API login attempt with the exact entered credentials only
     try {
-      let apiRes = await AuthApi.login(cleanEmail, password);
-
-      // Auto-fallback/migration: If login fails, check alternate legacy or test passwords and auto-migrate
-      if (!apiRes || apiRes.status !== true) {
-        const candidatePasswords = [
-          'admin123',
-          'Admin@123',
-          'admin@123',
-          '1234',
-          'Test@123',
-          'test@123',
-          '12345',
-          '123456',
-          'admin',
-          'password',
-          'Password@123',
-          'serviq@123'
-        ];
-
-        const alts = candidatePasswords.filter(p => p !== password);
-
-        for (const alt of alts) {
-          const fallbackRes = await AuthApi.login(cleanEmail, alt);
-          if (fallbackRes && (fallbackRes.status === true || fallbackRes.response?.success === true)) {
-            apiRes = fallbackRes;
-            const payload = fallbackRes.response || fallbackRes.data;
-            const apiUser = payload?.data?.user;
-            const uId = apiUser?._id || apiUser?.id;
-            if (uId && password) {
-              UserApi.changePassword(uId, password).catch(() => {});
-            }
-            break;
-          }
-        }
-      }
+      const apiRes = await AuthApi.login(cleanEmail, password);
 
       if (apiRes && (apiRes.status === true || apiRes.response?.success === true)) {
         const payload = apiRes.response || apiRes.data;
@@ -754,13 +756,12 @@ export const AppProvider = ({ children }) => {
         const apiUser = payload?.data?.user || payload?.data?.admin || payload?.data?.restaurant || payload?.user || payload?.admin || payload?.restaurant || payload?.data;
 
         if (token && apiUser) {
-          sessionStorage.setItem("userToken", token);
-          sessionStorage.setItem("token", token);
-          try { localStorage.clear(); } catch (e) { }
-
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
           const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
           const roleUpper = roleStr.toUpperCase();
+          const roleLower = roleStr.toLowerCase().trim();
+          const emailLower = cleanEmail.toLowerCase().trim();
+
           const isRestaurantOwner = 
             userTypeUpper === 'RESTAURANT_OWNER' || 
             userTypeUpper === 'OWNER' || 
@@ -770,7 +771,45 @@ export const AppProvider = ({ children }) => {
             roleUpper === 'RESTAURANT_OWNER' ||
             roleUpper === 'OWNER' ||
             String(apiUser.name || '').toLowerCase().includes('admin') ||
-            cleanEmail.includes('admin');
+            emailLower.includes('admin');
+
+          const isBranchAdmin = 
+            userTypeUpper === 'BRANCH_ADMIN' ||
+            userTypeUpper === 'BRANCH ADMIN' ||
+            roleLower === 'branch manager' ||
+            roleLower === 'branch admin' ||
+            roleLower === 'branch_admin' ||
+            roleLower === 'manager' ||
+            roleLower === 'admin';
+
+          // Strictly block staff members (Waiters, Kitchen staff, Station, etc.) from Admin Panel login.
+          // Staff credentials are only for the mobile app, not the Admin panel.
+          const isStaffOrDisallowed = 
+            roleLower.includes('waiter') ||
+            roleLower.includes('kitchen') ||
+            roleLower.includes('chef') ||
+            roleLower.includes('cook') ||
+            roleLower.includes('server') ||
+            roleLower.includes('steward') ||
+            userTypeUpper === 'STATION' ||
+            ((userTypeUpper === 'STAFF' || userTypeUpper === 'EMPLOYEE') && !isRestaurantOwner && !isBranchAdmin);
+
+          if (isStaffOrDisallowed || (!isRestaurantOwner && !isBranchAdmin)) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Access Denied: Staff credentials (Waiters, Kitchen staff) are only for mobile app login, not for the Admin panel."
+            };
+          }
+
+          sessionStorage.setItem("userToken", token);
+          sessionStorage.setItem("token", token);
+          try { localStorage.clear(); } catch (e) { }
 
           const userBranchId = typeof apiUser.branchId === 'object' && apiUser.branchId !== null
             ? (apiUser.branchId._id || apiUser.branchId.id)
@@ -1126,7 +1165,7 @@ export const AppProvider = ({ children }) => {
     };
 
     const cleanPlanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
-    const baseLimit = targetPlan.branchLimit || getPlanBranchLimit(cleanPlanName, 5);
+    const baseLimit = Number(targetPlan.maxBranches ?? targetPlan.branchLimit ?? targetPlan.baseBranchLimit ?? targetPlan.branchCapacity ?? getPlanBranchLimit(cleanPlanName, 5));
 
     try {
       sessionStorage.setItem('activePlanSelection', JSON.stringify({
@@ -1134,6 +1173,9 @@ export const AppProvider = ({ children }) => {
         planName: targetPlan.name,
         cleanName: cleanPlanName,
         baseBranchLimit: baseLimit,
+        maxBranches: baseLimit,
+        branchLimit: baseLimit,
+        branchCapacity: baseLimit,
         billingCycle: 'monthly'
       }));
     } catch (e) {}
@@ -1169,6 +1211,9 @@ export const AppProvider = ({ children }) => {
             price: targetPlan.monthlyPrice,
             annualPrice: targetPlan.annualPrice,
             baseBranchLimit: baseLimit,
+            maxBranches: baseLimit,
+            branchLimit: baseLimit,
+            branchCapacity: baseLimit,
             extraBranchPrice: targetPlan.extraBranchPrice || 499,
             nextBillingDate: nextMonth.toISOString().split('T')[0]
           },
@@ -1190,7 +1235,7 @@ export const AppProvider = ({ children }) => {
     ) || AVAILABLE_PLANS[1];
 
     const cleanPlanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
-    const baseLimit = targetPlan.branchLimit || getPlanBranchLimit(cleanPlanName, 5);
+    const baseLimit = Number(targetPlan.maxBranches ?? targetPlan.branchLimit ?? targetPlan.baseBranchLimit ?? targetPlan.branchCapacity ?? getPlanBranchLimit(cleanPlanName, 5));
     const amount = billingCycle === 'annual' ? targetPlan.annualPrice : targetPlan.monthlyPrice;
 
     try {
@@ -1199,6 +1244,9 @@ export const AppProvider = ({ children }) => {
         planName: targetPlan.name,
         cleanName: cleanPlanName,
         baseBranchLimit: baseLimit,
+        maxBranches: baseLimit,
+        branchLimit: baseLimit,
+        branchCapacity: baseLimit,
         billingCycle
       }));
     } catch (e) {}
@@ -1241,6 +1289,9 @@ export const AppProvider = ({ children }) => {
             price: targetPlan.monthlyPrice,
             annualPrice: targetPlan.annualPrice,
             baseBranchLimit: baseLimit,
+            maxBranches: baseLimit,
+            branchLimit: baseLimit,
+            branchCapacity: baseLimit,
             extraBranchPrice: targetPlan.extraBranchPrice || 499,
             nextBillingDate: nextDate.toISOString().split('T')[0]
           },

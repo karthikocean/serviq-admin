@@ -233,22 +233,26 @@ export default function Login() {
       } else {
         const rawErr = String(res?.error || '').toLowerCase();
         
-        if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered')) {
+        if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted') || rawErr.includes('waiter') || rawErr.includes('kitchen')) {
+          setFormErrors({ email: false, password: true, passwordMsg: res?.error || 'Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to log into the Admin Panel.' });
+        } else if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered')) {
           setFormErrors({ email: true, password: false, passwordMsg: '' });
         } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('mismatch') || rawErr.includes('invalid credential') || rawErr.includes('invalid password')) {
           setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
         } else {
-          setFormErrors({ email: true, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
+          setFormErrors({ email: true, password: true, passwordMsg: res?.error || 'Incorrect password. Please check and try again.' });
         }
       }
     } catch (err) {
       const rawErr = String(err.message || '').toLowerCase();
-      if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist')) {
+      if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted')) {
+        setFormErrors({ email: false, password: true, passwordMsg: err.message || 'Access Denied: Staff members are not permitted to log into the Admin Panel.' });
+      } else if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist')) {
         setFormErrors({ email: true, password: false, passwordMsg: '' });
       } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('invalid')) {
         setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
       } else {
-        setFormErrors({ email: true, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
+        setFormErrors({ email: true, password: true, passwordMsg: err.message || 'Incorrect password. Please check and try again.' });
       }
     } finally {
       setIsLoading(false);

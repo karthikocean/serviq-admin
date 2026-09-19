@@ -24,6 +24,15 @@ const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeOffIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -95,11 +104,16 @@ export default function StaffManagementPanel({
   const [userToDelete, setUserToDelete] = useState(null);
   const [changePasswordUserId, setChangePasswordUserId] = useState(null);
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [dutyFilter, setDutyFilter] = useState('All');
 
   const [apiUsers, setApiUsers] = useState([]);
 
@@ -322,7 +336,7 @@ export default function StaffManagementPanel({
       fetchData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [selectedBranchId, roleFilter, statusFilter, searchQuery]);
+  }, [selectedBranchId, roleFilter, statusFilter, dutyFilter, searchQuery]);
 
   const filteredUsers = apiUsers.filter(u => {
     // 1. Branch filter
@@ -352,7 +366,14 @@ export default function StaffManagementPanel({
       if (statusFilter === 'Inactive' && isActive) return false;
     }
 
-    // 4. Search query
+    // 4. Duty Status filter
+    if (dutyFilter && dutyFilter !== 'All') {
+      const isOnDuty = u.dutyStatus === 'ON_DUTY' || (!u.dutyStatus && u.isActive !== false);
+      if (dutyFilter === 'ON_DUTY' && !isOnDuty) return false;
+      if (dutyFilter === 'OFF_DUTY' && isOnDuty) return false;
+    }
+
+    // 5. Search query
     if (searchQuery && searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const name = (u.name || '').toLowerCase();
@@ -455,8 +476,10 @@ export default function StaffManagementPanel({
     const nameTrimmed = (userForm.name || '').trim();
     if (!nameTrimmed) {
       errors.name = 'Full Name is required.';
+    } else if (/\d/.test(nameTrimmed)) {
+      errors.name = 'Numbers are not allowed in staff name.';
     } else if (!/^[a-zA-Z\s.]+$/.test(nameTrimmed)) {
-      errors.name = 'Full Name should contain letters only.';
+      errors.name = 'Full Name should contain letters and spaces only.';
     }
 
     if (!userForm.branchId) {
@@ -486,7 +509,7 @@ export default function StaffManagementPanel({
     if (emailTrimmed) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(emailTrimmed)) {
-        errors.email = 'Please enter a valid email address (e.g. name@example.com).';
+        errors.email = 'Please enter a valid email address.';
       }
     }
 
@@ -555,7 +578,7 @@ export default function StaffManagementPanel({
     if (!kitchenForm.email.trim()) {
       errors.email = 'Email is required.';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(kitchenForm.email.trim())) {
-      errors.email = 'Please enter a valid email address (e.g. name@example.com).';
+      errors.email = 'Please enter a valid email address';
     }
     const kPasswordErr = validatePassword(kitchenForm.password, 'Kitchen Station Password');
     if (kPasswordErr) errors.password = kPasswordErr;
@@ -642,11 +665,15 @@ export default function StaffManagementPanel({
 
   const handleToggleDuty = async (user) => {
     const nextDutyStatus = (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? 'OFF_DUTY' : 'ON_DUTY';
+    // Optimistic local update
+    setApiUsers(prev => prev.map(u => String(u._id || u.id) === String(user._id || user.id) ? { ...u, dutyStatus: nextDutyStatus } : u));
     const payload = { dutyStatus: nextDutyStatus };
-    const res = await UserApi.updateUser(user._id, payload);
-    if (res.status) {
+    const res = await UserApi.updateUser(user._id || user.id, payload);
+    if (res?.status) {
       fetchData();
-      ShowNotifications.showAlertNotification("Duty status updated.", true);
+      ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
+    } else {
+      fetchData();
     }
   };
 
@@ -704,7 +731,16 @@ export default function StaffManagementPanel({
 
   const handleDeleteConfirm = async () => {
     if (!userToDelete) return;
-    const res = await UserApi.deleteUser(userToDelete._id);
+    // Security check: Sub-branch users cannot delete stations or staff from other branches
+    if (!isAdmin && currentBranchId) {
+      const targetBranch = typeof userToDelete.branchId === 'object' ? (userToDelete.branchId?._id || userToDelete.branchId?.id) : (userToDelete.branchId || userToDelete.branch);
+      if (targetBranch && String(targetBranch) !== String(currentBranchId) && targetBranch !== 'ALL') {
+        ShowNotifications.showAlertNotification("Permission Denied: You cannot delete staff or kitchen stations from other branches.", false);
+        setUserToDelete(null);
+        return;
+      }
+    }
+    const res = await UserApi.deleteUser(userToDelete._id || userToDelete.id);
     if (res.status) {
       setUserToDelete(null);
       fetchData();
@@ -712,15 +748,50 @@ export default function StaffManagementPanel({
   };
 
   const handleChangePasswordSubmit = async () => {
-    if (!newPassword || newPassword.length < 4) {
-      setPasswordError('Password must be at least 4 characters.');
-      return;
+    let hasError = false;
+    const pwdErr = validatePassword(newPassword, 'New Password');
+    if (pwdErr) {
+      setPasswordError(pwdErr);
+      hasError = true;
+    } else {
+      setPasswordError('');
     }
-    const res = await UserApi.changePassword(changePasswordUserId._id, newPassword);
+
+    if (!confirmPassword) {
+      setConfirmPasswordError('Please confirm the new password.');
+      hasError = true;
+    } else if (newPassword !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match.');
+      hasError = true;
+    } else {
+      setConfirmPasswordError('');
+    }
+
+    if (hasError) return;
+
+    // Security check: Sub-branch users cannot change password of stations or staff from other branches
+    if (!isAdmin && currentBranchId) {
+      const targetBranch = typeof changePasswordUserId.branchId === 'object' ? (changePasswordUserId.branchId?._id || changePasswordUserId.branchId?.id) : (changePasswordUserId.branchId || changePasswordUserId.branch);
+      if (targetBranch && String(targetBranch) !== String(currentBranchId) && targetBranch !== 'ALL') {
+        ShowNotifications.showAlertNotification("Permission Denied: You cannot modify credentials of staff or kitchen stations from other branches.", false);
+        setChangePasswordUserId(null);
+        return;
+      }
+    }
+
+    const targetId = changePasswordUserId?._id || changePasswordUserId?.id;
+    const res = await UserApi.changePassword(targetId, newPassword);
     if (res.status) {
+      ShowNotifications.showAlertNotification(res.response?.message || 'Password changed successfully!', true);
       setChangePasswordUserId(null);
       setNewPassword('');
+      setConfirmPassword('');
       setPasswordError('');
+      setConfirmPasswordError('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+    } else {
+      ShowNotifications.showAlertNotification(res.response?.message || 'Failed to change password.', false);
     }
   };
 
@@ -823,7 +894,8 @@ export default function StaffManagementPanel({
                   type="text"
                   value={userForm.name}
                   onChange={e => {
-                    setUserForm({ ...userForm, name: e.target.value });
+                    const cleaned = e.target.value.replace(/[0-9]/g, '');
+                    setUserForm({ ...userForm, name: cleaned });
                     if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
                   }}
                   placeholder="e.g. Rajesh Kumar"
@@ -932,7 +1004,7 @@ export default function StaffManagementPanel({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: !(apiRoles.find(r => r._id === userForm.roleId)?.roleName?.toLowerCase().includes('kitchen')) ? '1fr 1fr' : '1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Phone Number <span style={{ color: '#ef4444' }}>*</span>
@@ -964,24 +1036,7 @@ export default function StaffManagementPanel({
                 )}
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Duty Status
-                </label>
-                <SearchableSelect
-                  value={userForm.dutyStatus}
-                  onChange={e => setUserForm({ ...userForm, dutyStatus: e.target.value })}
-                  options={[
-                    { value: 'ON_DUTY', label: 'On Duty' },
-                    { value: 'OFF_DUTY', label: 'Off Duty' }
-                  ]}
-                  placeholder="Select Duty Status..."
-                />
-              </div>
-            </div>
-
-            {!(apiRoles.find(r => r._id === userForm.roleId)?.roleName?.toLowerCase().includes('kitchen')) && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {!(apiRoles.find(r => r._id === userForm.roleId)?.roleName?.toLowerCase().includes('kitchen')) && (
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                     Email Address
@@ -1013,39 +1068,39 @@ export default function StaffManagementPanel({
                     </span>
                   )}
                 </div>
+              )}
+            </div>
 
-                {!editingUserId && (
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Password <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="password"
-                      name="staff_member_password_field"
-                      autoComplete="new-password"
-                      value={userForm.password}
-                      onChange={e => {
-                        setUserForm({ ...userForm, password: e.target.value });
-                        if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                      }}
-                      placeholder="••••••••••••"
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '8px',
-                        border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                        fontSize: '14px',
-                        boxSizing: 'border-box'
-                      }}
-                    />
-                    {formErrors.password && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.password}
-                      </span>
-                    )}
-                    <PasswordRequirements password={userForm.password} />
-                  </div>
+            {!(apiRoles.find(r => r._id === userForm.roleId)?.roleName?.toLowerCase().includes('kitchen')) && !editingUserId && (
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                  Password <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="password"
+                  name="staff_member_password_field"
+                  autoComplete="new-password"
+                  value={userForm.password}
+                  onChange={e => {
+                    setUserForm({ ...userForm, password: e.target.value });
+                    if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                  }}
+                  placeholder="••••••••••••"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.password && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.password}
+                  </span>
                 )}
+                <PasswordRequirements password={userForm.password} />
               </div>
             )}
 
@@ -1071,28 +1126,60 @@ export default function StaffManagementPanel({
     );
   }
 
-  // Calculate KPIs based on apiUsers
-  const waitersCount = apiUsers.filter(s => {
-    const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
-    return rName?.toLowerCase().includes('waiter');
-  }).length;
+  // Branch-scoped staff pool for KPI Cards
+  const branchScopedStaff = apiUsers.filter(u => {
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
+      const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+      const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
+      const effectiveStaffBranch = uBranchId || uBranch;
+      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(activeFilteredBranchId) && effectiveStaffBranch !== 'ALL') {
+        return false;
+      }
+    }
+    return true;
+  });
 
-  const waitersOnDuty = apiUsers.filter(s => {
-    const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
-    return rName?.toLowerCase().includes('waiter') && (!s.dutyStatus || s.dutyStatus === 'ON_DUTY');
-  }).length;
+  const getStaffRoleName = (s) => {
+    if (!s) return '';
+    if (typeof s.roleId === 'object' && s.roleId !== null) return s.roleId.roleName || s.roleId.name || '';
+    if (typeof s.role === 'object' && s.role !== null) return s.role.roleName || s.role.name || '';
+    if (s.roleName) return s.roleName;
+    if (typeof s.role === 'string' && s.role) return s.role;
+    if (s.designation) return s.designation;
+    if (s.roleId) {
+      const targetRoleId = typeof s.roleId === 'object' ? (s.roleId._id || s.roleId.id) : s.roleId;
+      const found = apiRoles.find(r => String(r._id) === String(targetRoleId) || String(r.id) === String(targetRoleId));
+      if (found) return found.roleName || found.name || '';
+    }
+    return '';
+  };
 
-  const kitchenStaffCount = apiUsers.filter(s => {
-    const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
-    return rName?.toLowerCase().includes('kitchen');
-  }).length;
+  const isStaffWaiter = (s) => {
+    const rName = getStaffRoleName(s).toLowerCase();
+    return rName.includes('waiter') || rName.includes('server') || rName.includes('steward') || rName.includes('captain');
+  };
 
-  const kitchenOnDuty = apiUsers.filter(s => {
-    const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
-    return rName?.toLowerCase().includes('kitchen') && (!s.dutyStatus || s.dutyStatus === 'ON_DUTY');
-  }).length;
+  const isStaffKitchen = (s) => {
+    const rName = getStaffRoleName(s).toLowerCase();
+    return rName.includes('kitchen') || rName.includes('chef') || rName.includes('cook');
+  };
 
-  const totalAssignedTables = apiTables.filter(t => resolveTableAssignedWaiter(t, apiUsers)).length;
+  // Calculate KPIs based on branchScopedStaff
+  const waitersCount = branchScopedStaff.filter(s => isStaffWaiter(s)).length;
+  const waitersOnDuty = branchScopedStaff.filter(s => isStaffWaiter(s) && (s.dutyStatus === 'ON_DUTY' || !s.dutyStatus)).length;
+
+  const kitchenStaffCount = branchScopedStaff.filter(s => isStaffKitchen(s)).length;
+  const kitchenOnDuty = branchScopedStaff.filter(s => isStaffKitchen(s) && (s.dutyStatus === 'ON_DUTY' || !s.dutyStatus)).length;
+
+  const branchScopedTables = apiTables.filter(t => {
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
+      const tBranchId = typeof t.branchId === 'object' ? (t.branchId?._id || t.branchId?.id) : (t.branchId || t.branch);
+      if (tBranchId && String(tBranchId) !== String(activeFilteredBranchId) && tBranchId !== 'ALL') return false;
+    }
+    return true;
+  });
+
+  const totalAssignedTables = branchScopedTables.filter(t => resolveTableAssignedWaiter(t, apiUsers)).length;
 
   return (
     <section className="panel-view active" style={{ width: '100%', paddingBottom: '24px' }}>
@@ -1303,10 +1390,23 @@ export default function StaffManagementPanel({
             />
           </div>
 
-          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All') && (
+          <div>
+            <SearchableSelect
+              value={dutyFilter}
+              onChange={(e) => { setDutyFilter(e.target.value); setPage(0); }}
+              options={[
+                { value: 'All', label: 'All Duty Status' },
+                { value: 'ON_DUTY', label: 'On Duty' },
+                { value: 'OFF_DUTY', label: 'Off Duty' }
+              ]}
+              placeholder="Filter Duty..."
+            />
+          </div>
+
+          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All' || dutyFilter !== 'All') && (
             <button
               type="button"
-              onClick={() => { setSearchQuery(''); setRoleFilter('All'); setStatusFilter('All'); }}
+              onClick={() => { setSearchQuery(''); setRoleFilter('All'); setStatusFilter('All'); setDutyFilter('All'); }}
               style={{
                 padding: '8px 14px',
                 borderRadius: '8px',
@@ -1327,12 +1427,11 @@ export default function StaffManagementPanel({
 
       {/* Staff Unified Table */}
       <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
-        <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
               <th style={{ width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
               <th style={{ minWidth: '180px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
-              <th style={{ minWidth: '90px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TYPE</th>
               <th style={{ minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
               <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
               <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
@@ -1402,12 +1501,7 @@ export default function StaffManagementPanel({
                     </div>
                   </td>
 
-                  {/* 3. Type */}
-                  <td style={{ padding: '12px 12px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                    {user.userType === 'STATION' ? 'Station Account' : 'Employee'}
-                  </td>
-
-                  {/* 4. Role */}
+                  {/* 3. Role */}
                   <td style={{ padding: '12px 12px' }}>
                     <span style={{
                       display: 'inline-flex',
@@ -1565,7 +1659,11 @@ export default function StaffManagementPanel({
                         onClick={() => {
                           setChangePasswordUserId(user);
                           setNewPassword('');
+                          setConfirmPassword('');
                           setPasswordError('');
+                          setConfirmPasswordError('');
+                          setShowNewPassword(false);
+                          setShowConfirmPassword(false);
                         }}
                         style={{
                           background: 'none',
@@ -1757,48 +1855,151 @@ export default function StaffManagementPanel({
       {/* Change Password Modal */}
       <Modal
         isOpen={!!changePasswordUserId}
-        onClose={() => setChangePasswordUserId(null)}
+        onClose={() => {
+          setChangePasswordUserId(null);
+          setNewPassword('');
+          setConfirmPassword('');
+          setPasswordError('');
+          setConfirmPasswordError('');
+          setShowNewPassword(false);
+          setShowConfirmPassword(false);
+        }}
         title="Change Password"
-        maxWidth="440px"
+        maxWidth="480px"
       >
         <div style={{ padding: '10px 0' }}>
           <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569' }}>
             Set a new password for <strong>{changePasswordUserId?.name}</strong>.
           </p>
-          <div style={{ marginBottom: '24px' }}>
+          
+          {/* New Password */}
+          <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
               New Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <input
-              type="password"
-              name="staff_change_password_field"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={e => {
-                setNewPassword(e.target.value);
-                if (passwordError) setPasswordError('');
-              }}
-              placeholder="Enter new password"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: passwordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                fontSize: '14px',
-                boxSizing: 'border-box'
-              }}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                name="staff_change_password_field"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={e => {
+                  setNewPassword(e.target.value);
+                  if (passwordError) setPasswordError('');
+                }}
+                placeholder="Enter new password"
+                style={{
+                  width: '100%',
+                  padding: '10px 40px 10px 14px',
+                  borderRadius: '8px',
+                  border: passwordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}
+                title={showNewPassword ? "Hide Password" : "Show Password"}
+              >
+                {showNewPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
             {passwordError && (
               <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                 {passwordError}
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+
+          {/* Confirm Password */}
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+              Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                name="staff_confirm_password_field"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={e => {
+                  setConfirmPassword(e.target.value);
+                  if (confirmPasswordError) setConfirmPasswordError('');
+                }}
+                placeholder="Re-enter new password"
+                style={{
+                  width: '100%',
+                  padding: '10px 40px 10px 14px',
+                  borderRadius: '8px',
+                  border: confirmPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}
+                title={showConfirmPassword ? "Hide Password" : "Show Password"}
+              >
+                {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
+            {confirmPasswordError && (
+              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                {confirmPasswordError}
+              </span>
+            )}
+          </div>
+
+          {/* Real-time Password Requirements Checklist */}
+          <PasswordRequirements
+            password={newPassword}
+            confirmPassword={confirmPassword}
+            showConfirmMatch={true}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
             <button
               type="button"
               className="btn btn-outline"
-              onClick={() => setChangePasswordUserId(null)}
+              onClick={() => {
+                setChangePasswordUserId(null);
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError('');
+                setConfirmPasswordError('');
+                setShowNewPassword(false);
+                setShowConfirmPassword(false);
+              }}
             >
               Cancel
             </button>
@@ -1836,54 +2037,76 @@ export default function StaffManagementPanel({
           {kitchenViewState === 'list' ? (
             <>
               <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '20px', maxHeight: '300px', overflowY: 'auto' }}>
-                {apiStations.length === 0 ? (
-                  <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                    No kitchen station accounts found.
-                  </div>
-                ) : (
-                  <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                    {apiStations.map((station, idx, arr) => (
-                      <li key={station._id} style={{
-                        padding: '12px 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: idx !== arr.length - 1 ? '1px solid #e2e8f0' : 'none'
-                      }}>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{station.name}</div>
-                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            {station.email || 'No email'} • {station.branchId?.branchName || 'Branch'}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setChangePasswordUserId(station);
-                              setShowKitchenModal(false);
-                            }}
-                            title="Reset Password"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
-                          >
-                            🔑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setUserToDelete(station);
-                              setShowKitchenModal(false);
-                            }}
-                            title="Delete Station"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {(() => {
+                  const isBranchUser = !isAdmin && currentBranchId;
+                  const userAllowedBranchId = isBranchUser ? currentBranchId : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : null);
+
+                  const visibleStations = apiStations.filter(station => {
+                    if (!userAllowedBranchId) return true; // Owner in All Branches view sees all
+                    const sBranchId = typeof station.branchId === 'object' ? (station.branchId?._id || station.branchId?.id) : (station.branchId || station.branch);
+                    return String(sBranchId) === String(userAllowedBranchId);
+                  });
+
+                  if (visibleStations.length === 0) {
+                    return (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                        No kitchen station accounts found for this branch.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {visibleStations.map((station, idx, arr) => {
+                        const sBranchId = typeof station.branchId === 'object' ? (station.branchId?._id || station.branchId?.id) : (station.branchId || station.branch);
+                        const canModify = isAdmin || (currentBranchId && String(sBranchId) === String(currentBranchId));
+
+                        return (
+                          <li key={station._id} style={{
+                            padding: '12px 16px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            borderBottom: idx !== arr.length - 1 ? '1px solid #e2e8f0' : 'none'
+                          }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{station.name}</div>
+                              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                {station.email || 'No email'} • {station.branchId?.branchName || 'Branch'}
+                              </div>
+                            </div>
+                            {canModify && (
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setChangePasswordUserId(station);
+                                    setShowKitchenModal(false);
+                                  }}
+                                  title="Reset Password"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                                >
+                                  🔑
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUserToDelete(station);
+                                    setShowKitchenModal(false);
+                                  }}
+                                  title="Delete Station"
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '6px', fontSize: '16px' }}
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                })()}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -1914,7 +2137,7 @@ export default function StaffManagementPanel({
               </div>
             </>
           ) : (
-            <form onSubmit={handleKitchenStationSubmit} autoComplete="off">
+            <form onSubmit={handleKitchenStationSubmit} noValidate autoComplete="off">
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Branch <span style={{ color: '#ef4444' }}>*</span>
@@ -1946,7 +2169,7 @@ export default function StaffManagementPanel({
 
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Kitchen Station Email
+                  Kitchen Station Email <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="email"
@@ -1955,7 +2178,10 @@ export default function StaffManagementPanel({
                   autoCorrect="off"
                   spellCheck="false"
                   value={kitchenForm.email}
-                  onChange={e => setKitchenForm({ ...kitchenForm, email: e.target.value })}
+                  onChange={e => {
+                    setKitchenForm({ ...kitchenForm, email: e.target.value });
+                    if (kitchenFormErrors.email) setKitchenFormErrors(prev => ({ ...prev, email: '' }));
+                  }}
                   placeholder="kitchen@saravana.com"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: '8px',
@@ -1970,14 +2196,17 @@ export default function StaffManagementPanel({
 
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Kitchen Station Password
+                  Kitchen Station Password <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
                   type="password"
                   name="kitchen_station_password_field"
                   autoComplete="new-password"
                   value={kitchenForm.password}
-                  onChange={e => setKitchenForm({ ...kitchenForm, password: e.target.value })}
+                  onChange={e => {
+                    setKitchenForm({ ...kitchenForm, password: e.target.value });
+                    if (kitchenFormErrors.password) setKitchenFormErrors(prev => ({ ...prev, password: '' }));
+                  }}
                   placeholder="••••••••••••"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: '8px',
@@ -1988,6 +2217,7 @@ export default function StaffManagementPanel({
                 {kitchenFormErrors.password && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>{kitchenFormErrors.password}</span>
                 )}
+                <PasswordRequirements password={kitchenForm.password} />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
@@ -2322,13 +2552,6 @@ export default function StaffManagementPanel({
                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Type</div>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px' }}>
                       {viewingStaff.userType === 'STATION' ? 'Station Account' : 'Standard Employee'}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Staff ID</div>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginTop: '2px', fontFamily: 'monospace' }}>
-                      {viewingStaff._id || viewingStaff.id || 'N/A'}
                     </div>
                   </div>
                 </div>
