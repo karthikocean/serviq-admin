@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../config/AppContext';
 import { notificationApi, isDummyNotification } from '../api/Notification.js';
+import ShowNotifications from '../helper/ShowNotifications.js';
 import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
 // Relative time formatting helper
@@ -363,18 +364,33 @@ export default function NotificationModal({ isOpen, onClose }) {
     setCounts(prev => ({
       ...prev,
       totalActive: 0,
+      totalCount: 0,
       customerWebsite: activeSourceTab === 'CUSTOMER' ? 0 : prev.customerWebsite,
       customerWebsiteUnread: activeSourceTab === 'CUSTOMER' ? 0 : prev.customerWebsiteUnread,
       superAdmin: activeSourceTab === 'SUPERADMIN' ? 0 : prev.superAdmin,
-      superAdminUnread: activeSourceTab === 'SUPERADMIN' ? 0 : prev.superAdminUnread
+      superAdminUnread: activeSourceTab === 'SUPERADMIN' ? 0 : prev.superAdminUnread,
+      quickHelp: {
+        orders: 0,
+        water: 0,
+        bill: 0,
+        message: 0
+      }
     }));
     try {
-      await notificationApi.markAllAsRead({
+      const res = await notificationApi.clearNotifications({
         type: activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin',
-        branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
       });
+      if (res && res.status) {
+        ShowNotifications.showAlertNotification(res.message || 'All active notifications cleared successfully.', true);
+      } else {
+        await notificationApi.markAllAsRead({
+          type: activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin',
+          branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        });
+      }
     } catch (e) {
-      console.warn(e);
+      console.warn('Error clearing notifications:', e);
     }
   };
 

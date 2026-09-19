@@ -35,6 +35,7 @@ const ChefIcon = ({ size = 16, color = 'currentColor' }) => (
 import ReportsApi from '../api/Reports';
 import OrderApi from '../api/Order.js';
 import UserApi from '../api/User.js';
+import RoleApi from '../api/Role.js';
 import TableApi from '../api/Table.js';
 import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
@@ -214,8 +215,42 @@ const resolveCategoryName = (catVal, categoriesList = []) => {
   return str;
 };
 
+// Helper: Resolve if a staff member is a waiter
+const isStaffWaiter = (s, rolesList = []) => {
+  if (!s) return false;
+  let roleStr = '';
+  if (typeof s.roleId === 'object' && s.roleId !== null) {
+    roleStr = String(s.roleId.roleName || s.roleId.name || '').toLowerCase();
+  } else if (typeof s.role === 'object' && s.role !== null) {
+    roleStr = String(s.role.roleName || s.role.name || '').toLowerCase();
+  } else if (typeof s.role === 'string' && s.role) {
+    roleStr = s.role.toLowerCase();
+  } else if (s.roleName) {
+    roleStr = String(s.roleName).toLowerCase();
+  } else if (s.designation) {
+    roleStr = String(s.designation).toLowerCase();
+  } else if (typeof s.roleId === 'string' && s.roleId && Array.isArray(rolesList)) {
+    const found = rolesList.find(r => r._id === s.roleId || r.id === s.roleId);
+    if (found) roleStr = String(found.roleName || found.name || '').toLowerCase();
+  }
+
+  if (roleStr.includes('waiter') || roleStr.includes('server') || roleStr.includes('steward') || roleStr.includes('captain')) {
+    return true;
+  }
+
+  const uType = String(s.userType || '').toUpperCase();
+  if ((uType === 'STAFF' || uType === 'EMPLOYEE' || !uType) && 
+      !roleStr.includes('kitchen') && !roleStr.includes('chef') && 
+      !roleStr.includes('manager') && !roleStr.includes('admin') && 
+      !roleStr.includes('owner')) {
+    if (s.assignedTables || s.assignedTablesList || (Array.isArray(s.tables) && s.tables.length > 0)) return true;
+    if (!roleStr) return true;
+  }
+  return false;
+};
+
 // Helper: Calculate Waiter Reports from restaurant orders and staff
-const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], filters = {}, branchesList = []) => {
+const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], filters = {}, branchesList = [], rolesList = []) => {
   const { dateStart, dateEnd, selectedBranchId, searchQuery, page = 0, limit = 10 } = filters;
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'All' && selectedBranchId !== 'ALL';
 
@@ -239,11 +274,7 @@ const computeWaiterReports = (ordersList = [], staffList = [], tablesList = [], 
     : (tablesList || []);
 
   // 3. Identify Waiters
-  // Waiters are users with waiter/server/steward/captain roles, or staff assigned to tables, or staff referenced in orders
-  const waiterRoleStaff = branchStaff.filter(s => {
-    const roleStr = String(s.role || s.roleName || s.designation || (typeof s.role === 'object' ? (s.role?.roleName || s.role?.name) : '') || '').toLowerCase();
-    return roleStr.includes('waiter') || roleStr.includes('server') || roleStr.includes('steward') || roleStr.includes('captain');
-  });
+  const waiterRoleStaff = branchStaff.filter(s => isStaffWaiter(s, rolesList));
 
   const waiterMap = new Map();
   waiterRoleStaff.forEach(s => {
@@ -710,6 +741,7 @@ export default function ReportsPanel({
   const [liveTables, setLiveTables] = useState([]);
   const [liveCategories, setLiveCategories] = useState([]);
   const [liveMenu, setLiveMenu] = useState([]);
+  const [liveRoles, setLiveRoles] = useState([]);
 
   // Modals for Waiter / Order details
   const [selectedOrderForView, setSelectedOrderForView] = useState(null);
@@ -750,12 +782,13 @@ export default function ReportsPanel({
             startDate: dateStart || undefined,
             endDate: dateEnd || undefined
           };
-          const [orderRes, staffRes, tableRes, catRes, menuRes] = await Promise.all([
+          const [orderRes, staffRes, tableRes, catRes, menuRes, rolesRes] = await Promise.all([
             OrderApi.getOrders(branchParam).catch(() => null),
             UserApi.getUsers({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
             TableApi.getTables({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
             MenuApi.getCategories({ limit: 1000 }).catch(() => null),
-            MenuApi.getMenuItems({ branchId: selectedBranchId, limit: 1000 }).catch(() => null)
+            MenuApi.getMenuItems({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
+            RoleApi.getRoles().catch(() => null)
           ]);
 
           if (orderRes?.status && orderRes?.response) orderList = extractServerList(orderRes) || [];
@@ -766,9 +799,13 @@ export default function ReportsPanel({
             if (Array.isArray(cd)) setLiveCategories(cd);
           }
           if (menuRes?.status && menuRes?.response) menuList = extractServerList(menuRes) || [];
+          if (rolesRes?.status && rolesRes?.response) {
+            const rd = rolesRes.response.data || rolesRes.response || [];
+            if (Array.isArray(rd)) setLiveRoles(rd);
+          }
         } else {
           // All Branches: Fetch global + all branches in parallel
-          const [globalOrders, globalStaff, globalTables, catRes, globalMenu] = await Promise.all([
+          const [globalOrders, globalStaff, globalTables, catRes, globalMenu, rolesRes] = await Promise.all([
             OrderApi.getOrders({
               limit: 1000,
               startDate: dateStart || undefined,
@@ -777,12 +814,17 @@ export default function ReportsPanel({
             UserApi.getUsers({ limit: 1000 }).catch(() => null),
             TableApi.getTables({ limit: 1000 }).catch(() => null),
             MenuApi.getCategories({ limit: 1000 }).catch(() => null),
-            MenuApi.getMenuItems({ limit: 1000 }).catch(() => null)
+            MenuApi.getMenuItems({ limit: 1000 }).catch(() => null),
+            RoleApi.getRoles().catch(() => null)
           ]);
 
           if (catRes?.status && catRes?.response) {
             const cd = catRes.response.data || catRes.response.categories || catRes.response;
             if (Array.isArray(cd)) setLiveCategories(cd);
+          }
+          if (rolesRes?.status && rolesRes?.response) {
+            const rd = rolesRes.response.data || rolesRes.response || [];
+            if (Array.isArray(rd)) setLiveRoles(rd);
           }
 
           orderList = extractServerList(globalOrders) || [];
@@ -824,6 +866,22 @@ export default function ReportsPanel({
             });
           }
         }
+
+        // Merge activeRestaurant staff/users
+        const localStaffPool = [
+          ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
+          ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
+        ];
+        localStaffPool.forEach(st => {
+          const exists = staffList.some(u => 
+            String(u._id || u.id) === String(st._id || st.id) ||
+            (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
+            (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
+          );
+          if (!exists) {
+            staffList.push(st);
+          }
+        });
 
         if (!isMounted) return;
 
@@ -1007,14 +1065,21 @@ export default function ReportsPanel({
   // Sync both tab counts accurately
   const syncBothTabCounts = () => {
     try {
-      const computedW = computeWaiterReports(effectiveOrders, effectiveStaff, effectiveTables, {
+      const staffPoolMap = new Map();
+      (effectiveStaff || []).forEach(s => {
+        const key = String(s._id || s.id || s.email || s.name || '').toLowerCase();
+        if (key) staffPoolMap.set(key, s);
+      });
+      const mergedStaff = Array.from(staffPoolMap.values());
+
+      const computedW = computeWaiterReports(effectiveOrders, mergedStaff, effectiveTables, {
         dateStart,
         dateEnd,
         selectedBranchId,
         searchQuery: '',
         page: 0,
         limit: 1000
-      }, effectiveBranches);
+      }, effectiveBranches, liveRoles);
       setWaiterTotalCount(computedW.totalItems || 0);
 
       const computedK = computeKitchenReports(effectiveOrders, effectiveMenu, liveCategories, {
@@ -1039,6 +1104,7 @@ export default function ReportsPanel({
     effectiveStaff.length,
     effectiveTables.length,
     effectiveMenu.length,
+    liveRoles.length,
     dateStart,
     dateEnd,
     selectedBranchId
@@ -1066,9 +1132,22 @@ export default function ReportsPanel({
         const rawWaiters = await fetchMultiBranchReport((f) => ReportsApi.getWaiterReports(f), filters);
         let apiWaiters = aggregateWaiters(rawWaiters);
 
-        const mergedStaff = (apiWaiters && apiWaiters.length > 0)
-          ? apiWaiters
-          : effectiveStaff;
+        // Merge apiWaiters AND effectiveStaff so newly created/updated staff from Staff Management are never dropped
+        const staffPoolMap = new Map();
+        (effectiveStaff || []).forEach(s => {
+          const key = String(s._id || s.id || s.email || s.name || '').toLowerCase();
+          if (key) staffPoolMap.set(key, s);
+        });
+        (apiWaiters || []).forEach(w => {
+          const key = String(w._id || w.id || w.email || w.name || '').toLowerCase();
+          if (key) {
+            const existing = staffPoolMap.get(key) || {};
+            staffPoolMap.set(key, { ...existing, ...w });
+          } else {
+            staffPoolMap.set(key, w);
+          }
+        });
+        const mergedStaff = Array.from(staffPoolMap.values());
 
         const computed = computeWaiterReports(effectiveOrders, mergedStaff, effectiveTables, {
           dateStart,
@@ -1077,7 +1156,7 @@ export default function ReportsPanel({
           searchQuery,
           page,
           limit: 10
-        }, effectiveBranches);
+        }, effectiveBranches, liveRoles);
 
         setWaiterData(computed.data);
         setSummary(computed.summary);
