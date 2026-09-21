@@ -75,7 +75,7 @@ export default function MenuManagement() {
   };
 
   const fetchCategories = async () => {
-    const params = (selectedBranchId && selectedBranchId !== 'ALL') ? { branchId: selectedBranchId, limit: 1000 } : { branchId: 'all', limit: 1000 };
+    const params = (selectedBranchId && selectedBranchId !== 'ALL') ? { branchId: selectedBranchId, limit: 10 } : { branchId: 'all', limit: 10 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data)

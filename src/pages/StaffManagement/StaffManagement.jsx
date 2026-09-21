@@ -43,10 +43,10 @@ export default function StaffManagement() {
   const rawOrders = activeRestaurant.orders || [];
   const rawBranches = activeRestaurant.branches || [];
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId || (typeof s.branchId === 'object' && s.branchId?._id === selectedBranchId) || s.activeBranchId === selectedBranchId) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId || (typeof t.branchId === 'object' && t.branchId?._id === selectedBranchId)) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId || (typeof o.branchId === 'object' && o.branchId?._id === selectedBranchId)) : rawOrders;
   const branches = rawBranches;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {

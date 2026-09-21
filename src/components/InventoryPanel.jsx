@@ -227,7 +227,7 @@ export default function InventoryPanel() {
   // 1. Fetch Categories
   const fetchCategories = useCallback(async () => {
     try {
-      const params = { limit: 1000 };
+      const params = { limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }
@@ -280,7 +280,7 @@ export default function InventoryPanel() {
     setIsLoading(true);
     try {
       const params = {
-        limit: 1000
+        limit: 10
       };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;

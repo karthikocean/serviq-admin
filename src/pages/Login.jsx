@@ -114,7 +114,7 @@ export default function Login() {
     if (resendCountdown > 0) {
       timer = setInterval(() => {
         setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
+      }, 10);
     }
     return () => {
       if (timer) clearInterval(timer);

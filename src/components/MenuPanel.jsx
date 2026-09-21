@@ -89,7 +89,7 @@ export default function MenuPanel({
   const fetchLiveCategories = React.useCallback(async () => {
     if (!activeRestaurant) return;
     try {
-      const params = { limit: 1000 };
+      const params = { limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       } else {

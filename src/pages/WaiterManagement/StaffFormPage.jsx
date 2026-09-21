@@ -77,6 +77,8 @@ export default function StaffFormPage() {
 
   const validate = () => {
     const errors = {};
+    const isKitchen = form.role === 'Kitchen';
+
     if (!form.name.trim()) {
       errors.name = 'Full Name is required.';
     } else if (!/^[a-zA-Z\s.]+$/.test(form.name.trim())) {
@@ -88,10 +90,12 @@ export default function StaffFormPage() {
       errors.phone = mobileErr;
     }
 
-    if (!form.email.trim()) {
-      errors.email = 'Email Address is required.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      errors.email = 'Please enter a valid email address.';
+    if (!isKitchen) {
+      if (!form.email.trim()) {
+        errors.email = 'Email Address is required.';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+        errors.email = 'Please enter a valid email address.';
+      }
     }
 
     const passwordErr = validatePassword(form.password);
@@ -107,14 +111,18 @@ export default function StaffFormPage() {
     e.preventDefault();
     if (!validate()) return;
 
+    const isKitchen = form.role === 'Kitchen';
     const targetStaffId = existingStaff ? existingStaff.id : (isEdit ? staffId : `ST-${Date.now()}`);
+
+    const staffData = {
+      id: targetStaffId,
+      ...form,
+      email: isKitchen ? '' : form.email.trim()
+    };
 
     if (isEdit) {
       if (updateStaff) {
-        updateStaff(activeRestaurant.id, {
-          id: targetStaffId,
-          ...form
-        });
+        updateStaff(activeRestaurant.id, staffData);
       }
       if (assignTablesToWaiter && form.role === 'Waiter') {
         assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
@@ -122,10 +130,7 @@ export default function StaffFormPage() {
       ShowNotifications.showAlertNotification(`Staff member "${form.name}" updated successfully.`, true);
     } else {
       if (addStaff) {
-        addStaff(activeRestaurant.id, {
-          id: targetStaffId,
-          ...form
-        });
+        addStaff(activeRestaurant.id, staffData);
       }
       if (assignTablesToWaiter && form.role === 'Waiter') {
         assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
@@ -302,39 +307,41 @@ export default function StaffFormPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                Email Address <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="email"
-                name="new_staff_email_field"
-                autoComplete="new-password"
-                autoCorrect="off"
-                spellCheck="false"
-                value={form.email}
-                onChange={(e) => {
-                  setForm({ ...form, email: e.target.value });
-                  if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
-                }}
-                placeholder="e.g. ramesh@serviq.com"
-                style={{
-                  width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: formErrors.email ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-              {formErrors.email && (
-                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.email}
-                </span>
-              )}
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: form.role === 'Kitchen' ? '1fr' : '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            {form.role !== 'Kitchen' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                  Email Address <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="email"
+                  name="new_staff_email_field"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  value={form.email}
+                  onChange={(e) => {
+                    setForm({ ...form, email: e.target.value });
+                    if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                  }}
+                  placeholder="e.g. ramesh@serviq.com"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.email ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.email && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.email}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
@@ -396,11 +403,11 @@ export default function StaffFormPage() {
                 </button>
               </div>
               {formErrors.password && (
-                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                          {formErrors.password}
-                        </span>
-                      )}
-                      <PasswordRequirements password={form.password} />
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.password}
+                </span>
+              )}
+              <PasswordRequirements password={form.password} />
             </div>
           </div>
 

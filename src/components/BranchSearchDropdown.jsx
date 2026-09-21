@@ -75,10 +75,10 @@ export default function BranchSearchDropdown() {
   const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  // Fetch branches from API lazily when needed
+  // Fetch branches from API with limit: 10
   const loadBranches = async () => {
     try {
-      const res = await BranchApi.getBranches();
+      const res = await BranchApi.getBranches({ limit: 10 });
       if (res && res.status && res.response) {
         const branchArray = Array.isArray(res.response) 
           ? res.response 
@@ -102,17 +102,24 @@ export default function BranchSearchDropdown() {
           setLocalBranches(mapped);
         }
       }
+      if (typeof contextFetchBranches === 'function') {
+        contextFetchBranches({ limit: 10 });
+      }
     } catch (e) {
       console.warn("Branch fetch error in dropdown:", e);
     }
   };
 
-  // Only load branches when the dropdown is opened and branches are not yet loaded
+  // Load branches on mount and when dropdown is opened
   useEffect(() => {
-    if (isOpen && (!activeRestaurant?.branches || activeRestaurant.branches.length === 0) && localBranches.length === 0) {
+    loadBranches();
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
       loadBranches();
     }
-  }, [isOpen, activeRestaurant?.branches, localBranches.length]);
+  }, [isOpen]);
 
   const rawBranches = (activeRestaurant?.branches && activeRestaurant.branches.length > 0)
     ? activeRestaurant.branches

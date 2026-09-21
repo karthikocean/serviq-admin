@@ -5,6 +5,7 @@ import SubscriptionApi from '../api/Subscription.js';
 import UserApi from '../api/User.js';
 import OrderApi from '../api/Order.js';
 import TableApi from '../api/Table.js';
+import MenuApi from '../api/Menu.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
@@ -199,15 +200,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [liveBranchStaff, setLiveBranchStaff] = useState([]);
   const [liveBranchOrders, setLiveBranchOrders] = useState([]);
   const [liveBranchTables, setLiveBranchTables] = useState([]);
+  const [liveBranchCategories, setLiveBranchCategories] = useState([]);
   const [isLoadingOpData, setIsLoadingOpData] = useState(false);
 
-  // View page operational tables & orders & staff pagination & filters
+  // View page operational tables & orders & staff & kitchen pagination & filters
   const [tablesPage, setTablesPage] = useState(0);
   const [tablesViewMode, setTablesViewMode] = useState('table'); // 'table' | 'grid'
   const [liveTablesPagination, setLiveTablesPagination] = useState(null);
   const [ordersPage, setOrdersPage] = useState(0);
   const [ordersFilter, setOrdersFilter] = useState('all'); // 'all' | 'queue' | 'preparing' | 'ready' | 'completed' | 'cancelled'
   const [staffPage, setStaffPage] = useState(0);
+  const [kdsPage, setKdsPage] = useState(0);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
 
@@ -217,11 +220,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       const branchParams = {
         search: searchTerm ? searchTerm.trim() : undefined,
         status: statusFilter !== 'All' ? statusFilter : undefined,
-        limit: 1000
+        limit: 10
       };
       const [res, usersRes] = await Promise.allSettled([
         BranchApi.getBranches(branchParams),
-        UserApi.getUsers({ limit: 1000 })
+        UserApi.getUsers({ limit: 10 })
       ]);
 
       const branchResponse = res.status === 'fulfilled' ? res.value : null;
@@ -288,11 +291,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const branchId = targetBranch._id || targetBranch.id;
     setIsLoadingOpData(true);
     try {
-      const [usersRes, globalUsersRes, ordersRes, tablesRes] = await Promise.allSettled([
-        UserApi.getUsers({ branchId, limit: 1000 }),
-        UserApi.getUsers({ limit: 1000 }),
-        OrderApi.getOrders({ branchId, limit: 1000 }),
-        TableApi.getTables({ branchId, limit: 1000 })
+      const [usersRes, globalUsersRes, ordersRes, tablesRes, categoriesRes] = await Promise.allSettled([
+        UserApi.getUsers({ branchId, limit: 10 }),
+        UserApi.getUsers({ limit: 10 }),
+        OrderApi.getOrders({ branchId, limit: 10 }),
+        TableApi.getTables({ branchId, limit: 10 }),
+        MenuApi.getCategories({ limit: 10 })
       ]);
 
       let branchUsers = [];
@@ -372,6 +376,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             totalPages: resp?.totalPages || d?.totalPages || Math.ceil(tot / 10),
             currentPage: resp?.currentPage || d?.currentPage || 1
           });
+        }
+      }
+
+      if (categoriesRes.status === 'fulfilled' && categoriesRes.value?.status) {
+        const resp = categoriesRes.value.response;
+        const d = resp?.data || resp;
+        let catList = [];
+        if (Array.isArray(d)) catList = d;
+        else if (Array.isArray(d?.categories)) catList = d.categories;
+        else if (Array.isArray(d?.data)) catList = d.data;
+        else if (Array.isArray(resp?.categories)) catList = resp.categories;
+        if (catList.length > 0) {
+          setLiveBranchCategories(catList);
         }
       }
     } catch (e) {
@@ -683,9 +700,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const targetBranch = branch || (branches.length > 0 ? branches[0] : null);
     setSelectedBranchForTree(targetBranch);
     setOpSubTab('tables');
-    setTablesPage(1);
-    setOrdersPage(1);
-    setStaffPage(1);
+    setTablesPage(0);
+    setOrdersPage(0);
+    setStaffPage(0);
+    setKdsPage(0);
     setOrdersFilter('all');
     setActiveView('hierarchy');
   };
@@ -1394,20 +1412,93 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         })
       : [];
 
-    // 4. Kitchen KDS stations
-    const activeCount = mappedOrders.filter(o => o.status === 'preparing').length;
-    const rawCategories = activeRestaurant?.categories || [];
-    const mappedKitchen = rawCategories.length > 0
-      ? rawCategories.map(cat => {
-          const catName = typeof cat === 'string' ? cat : (cat.name || cat.categoryName || 'Kitchen Station');
-          return {
-            name: `${catName} KDS`,
-            items: cat.description || `Live orders for ${catName}`,
-            load: activeCount > 5 ? 'High' : (activeCount > 2 ? 'Medium' : 'Normal'),
-            loadPercent: Math.min(100, Math.max(10, activeCount * 15))
-          };
-        })
-      : [];
+    // 4. Kitchen KDS stations & live channels
+    const kitchenStaffList = mappedStaff.filter(s => {
+      const r = String(s.role || '').toLowerCase();
+      return r.includes('kitchen') || r.includes('chef') || r.includes('cook');
+    });
+
+    const categoryMap = new Map();
+
+    // Collect from liveBranchCategories
+    (liveBranchCategories || []).forEach(c => {
+      const catName = (typeof c === 'string' ? c : (c.name || c.categoryName || '')).trim();
+      if (catName && !categoryMap.has(catName.toLowerCase())) {
+        categoryMap.set(catName.toLowerCase(), {
+          name: catName,
+          description: typeof c === 'object' && c.description ? c.description : `Live kitchen channel for ${catName}`
+        });
+      }
+    });
+
+    // Collect from activeRestaurant categories
+    const restaurantCats = [
+      ...(activeRestaurant?.menuCategories || []),
+      ...(activeRestaurant?.categories || [])
+    ];
+    restaurantCats.forEach(c => {
+      const catName = (typeof c === 'string' ? c : (c.name || c.categoryName || '')).trim();
+      if (catName && !categoryMap.has(catName.toLowerCase())) {
+        categoryMap.set(catName.toLowerCase(), {
+          name: catName,
+          description: typeof c === 'object' && c.description ? c.description : `Live kitchen channel for ${catName}`
+        });
+      }
+    });
+
+    // If no categories in DB/Restaurant, supply standard restaurant kitchen channels
+    if (categoryMap.size === 0) {
+      const standardStations = [
+        { name: 'Hot Kitchen (Main Courses)', description: 'Curry, Biryani, Rice, Tandoor & Gravies' },
+        { name: 'Appetizers & Starters', description: 'Soups, Salads, Crispy Fries & Starters' },
+        { name: 'Beverages & Bar', description: 'Juices, Shakes, Mocktails & Soft Drinks' },
+        { name: 'Desserts & Bakery', description: 'Pastries, Cakes, Ice Creams & Sweets' }
+      ];
+      standardStations.forEach(s => categoryMap.set(s.name.toLowerCase(), s));
+    }
+
+    const prepCount = mappedOrders.filter(o => o.status === 'preparing').length;
+    const qCount = mappedOrders.filter(o => o.isInQueue).length;
+
+    const mappedKitchen = Array.from(categoryMap.values()).map((cat, idx) => {
+      const catName = typeof cat === 'string' ? cat : (cat.name || cat.categoryName || `Kitchen Channel ${idx + 1}`);
+      const catDesc = typeof cat === 'object' && cat.description ? cat.description : `Live orders for ${catName}`;
+      
+      const stationOrders = mappedOrders.filter(o => {
+        const itemStr = String(o.items || '').toLowerCase();
+        return itemStr.includes(catName.toLowerCase()) || o.status === 'preparing';
+      });
+
+      const stationPrepCount = stationOrders.filter(o => o.status === 'preparing').length;
+      const stationQueueCount = stationOrders.filter(o => o.isInQueue).length;
+
+      let load = 'Normal';
+      let loadPercent = 25;
+      if (stationPrepCount >= 4 || prepCount >= 6) {
+        load = 'High';
+        loadPercent = 85;
+      } else if (stationPrepCount >= 2 || prepCount >= 3) {
+        load = 'Medium';
+        loadPercent = 55;
+      } else if (qCount > 0) {
+        load = 'Normal';
+        loadPercent = 35;
+      }
+
+      return {
+        id: `kds-channel-${idx + 1}`,
+        name: catName.includes('KDS') || catName.includes('Station') ? catName : `${catName} KDS`,
+        stationName: catName,
+        items: catDesc,
+        load,
+        loadPercent,
+        activeOrdersCount: stationPrepCount,
+        queueCount: stationQueueCount,
+        assignedStaff: kitchenStaffList.length > 0 ? kitchenStaffList.map(s => s.name).join(', ') : 'Kitchen Team',
+        staffCount: kitchenStaffList.length,
+        status: 'Active'
+      };
+    });
 
     return {
       staff: mappedStaff,
@@ -1474,7 +1565,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       await fetchOrders();
     }
     setTimeout(() => setIsRefreshingOrders(false), 400);
-    ShowNotifications.showAlertNotification("Live orders queue refreshed successfully.", true);
+    ShowNotifications.showAlertNotification("Order queue refreshed successfully.", true);
   };
 
   // Operational View: Staff Pagination (10 per page, starting at 0)
@@ -1492,6 +1583,23 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const handleStaffPageChange = (newPage) => {
     setStaffPage(newPage);
+  };
+
+  // Operational View: Kitchen KDS Pagination (10 per page, starting at 0)
+  const kdsLimit = 10;
+  const kdsTotal = (opData.kitchen || []).length;
+  const kdsTotalPages = Math.max(1, Math.ceil(kdsTotal / kdsLimit));
+  const kdsCurrentPage = Math.max(0, Math.min(kdsPage, Math.max(0, kdsTotalPages - 1)));
+  const kdsFrom = kdsTotal === 0 ? 0 : kdsCurrentPage * kdsLimit + 1;
+  const kdsTo = Math.min((kdsCurrentPage + 1) * kdsLimit, kdsTotal);
+
+  const paginatedKds = (opData.kitchen || []).slice(
+    kdsCurrentPage * kdsLimit,
+    (kdsCurrentPage + 1) * kdsLimit
+  );
+
+  const handleKdsPageChange = (newPage) => {
+    setKdsPage(newPage);
   };
 
   const handleTablesPageChange = async (newPage) => {
@@ -1640,7 +1748,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '2px solid #f1f5f9', paddingBottom: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => setOpSubTab('tables')}
+              onClick={() => { setOpSubTab('tables'); setTablesPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'tables' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'tables' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
               Tables ({tablesTotal})
@@ -1648,15 +1756,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
             <button
               type="button"
-              onClick={() => setOpSubTab('orders')}
+              onClick={() => { setOpSubTab('orders'); setOrdersPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Live Orders Queue ({inQueueCount})
+              Order Queue ({inQueueCount})
             </button>
 
             <button
               type="button"
-              onClick={() => setOpSubTab('staff')}
+              onClick={() => { setOpSubTab('staff'); setStaffPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'staff' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'staff' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
               Staff ({staffTotal})
@@ -1664,7 +1772,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
             <button
               type="button"
-              onClick={() => setOpSubTab('kitchen')}
+              onClick={() => { setOpSubTab('kitchen'); setKdsPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'kitchen' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'kitchen' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
               Kitchen KDS ({opData.kitchen.length})
@@ -1759,7 +1867,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </colgroup>
                       <thead>
                         <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid var(--primary, #ff7a00)' }}>
-                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>#</th>
+                          <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>S/NO</th>
                           <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Table Name / No</th>
                           <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Seating Capacity</th>
                           <th style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>Floor / Area</th>
@@ -1930,7 +2038,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                    Live Orders Queue & History
+                    Order Queue & History
                   </h4>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: inQueueCount > 0 ? '#22c55e' : '#94a3b8', display: 'inline-block' }}></span>
@@ -1965,7 +2073,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
                 {[
                   { key: 'all', label: 'All History', count: allOrdersCount },
-                  { key: 'queue', label: 'Live Queue', count: inQueueCount },
+                  { key: 'queue', label: 'Order Queue', count: inQueueCount },
                   { key: 'preparing', label: 'Preparing', count: preparingCount },
                   { key: 'ready', label: 'Ready to Serve', count: readyCount }
                 ].map(chip => {
@@ -2255,43 +2363,202 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
           {opSubTab === 'kitchen' && (
             <div style={{ padding: '8px 0' }}>
-              <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>Kitchen Display System (KDS) Channels</h4>
-              {opData.kitchen.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '32px 16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', color: '#64748b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                    Kitchen Display System (KDS) Channels & Stations
+                  </h4>
+                  <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Live status of cooking stations, routed menu categories, and kitchen staff workload for this branch.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <span style={{ 
+                    background: '#f0fdf4', 
+                    color: '#166534', 
+                    fontSize: '12px', 
+                    fontWeight: 700, 
+                    padding: '4px 12px', 
+                    borderRadius: '20px', 
+                    border: '1px solid #bbf7d0',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }}></span>
+                    {opData.kitchen.length} KDS Channel{opData.kitchen.length === 1 ? '' : 's'} Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Station Cards Grid */}
+              {kdsTotal === 0 ? (
+                <div style={{ textAlign: 'center', padding: '36px 16px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', color: '#64748b' }}>
                   <p style={{ margin: 0, fontSize: '13px', fontWeight: 600 }}>No kitchen stations or categories configured for this branch.</p>
                 </div>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-                  {opData.kitchen.map(station => {
-                    let progressColor = '#22c55e'; // Green
-                    if (station.load === 'High') progressColor = '#ef4444'; // Red
-                    else if (station.load === 'Medium') progressColor = '#f59e0b'; // Amber
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '16px' }}>
+                    {paginatedKds.map(station => {
+                      let progressColor = '#22c55e'; // Green
+                      let loadBg = '#f0fdf4';
+                      let loadText = '#166534';
+                      if (station.load === 'High') {
+                        progressColor = '#ef4444'; // Red
+                        loadBg = '#fef2f2';
+                        loadText = '#991b1b';
+                      } else if (station.load === 'Medium') {
+                        progressColor = '#f59e0b'; // Amber
+                        loadBg = '#fffbeb';
+                        loadText = '#92400e';
+                      }
 
-                    return (
-                      <div key={station.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.01)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{station.name}</h5>
-                          <span style={{ fontSize: '10px', background: '#dcfce7', color: '#15803d', fontWeight: 700, padding: '3px 8px', borderRadius: '6px' }}>Active</span>
-                        </div>
-                        
-                        <div>
-                          <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Routed Categories:</span>
-                          <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#0f172a', fontWeight: 700 }}>{station.items}</p>
-                        </div>
+                      return (
+                        <div key={station.id || station.name} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--primary-light, #fff0e6)', color: 'var(--primary, #ff7a00)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '14px' }}>
+                                🍳
+                              </div>
+                              <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>{station.name}</h5>
+                            </div>
+                            <span style={{ 
+                              fontSize: '11px', 
+                              background: loadBg, 
+                              color: loadText, 
+                              fontWeight: 700, 
+                              padding: '3px 8px', 
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: progressColor }}></span>
+                              {station.load} Load
+                            </span>
+                          </div>
+                          
+                          <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #f1f5f9' }}>
+                            <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '2px' }}>
+                              Routed Categories / Menu
+                            </span>
+                            <p style={{ margin: 0, fontSize: '12.5px', color: '#0f172a', fontWeight: 600, lineHeight: 1.4 }}>
+                              {station.items}
+                            </p>
+                          </div>
 
-                        <div style={{ marginTop: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 700 }}>
-                            <span style={{ color: '#475569' }}>Load Status</span>
-                            <span style={{ color: progressColor }}>{station.load} ({station.loadPercent}%)</span>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '8px' }}>
+                              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Active Prep</span>
+                              <div style={{ fontSize: '15px', fontWeight: 800, color: station.activeOrdersCount > 0 ? 'var(--primary, #ff7a00)' : '#0f172a', marginTop: '2px' }}>
+                                {station.activeOrdersCount} Orders
+                              </div>
+                            </div>
+                            <div style={{ background: '#f8fafc', padding: '8px 10px', borderRadius: '8px' }}>
+                              <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Assigned Staff</span>
+                              <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={station.assignedStaff}>
+                                {station.staffCount > 0 ? `${station.staffCount} Staff Member${station.staffCount > 1 ? 's' : ''}` : 'Kitchen Team'}
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${station.loadPercent}%`, height: '100%', background: progressColor, borderRadius: '3px', transition: 'width 0.5s ease-in-out' }}></div>
+
+                          <div style={{ marginTop: '2px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '11px', fontWeight: 700 }}>
+                              <span style={{ color: '#64748b' }}>Capacity & Queue Utilization</span>
+                              <span style={{ color: progressColor }}>{station.loadPercent}%</span>
+                            </div>
+                            <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${station.loadPercent}%`, height: '100%', background: progressColor, borderRadius: '3px', transition: 'width 0.5s ease-in-out' }}></div>
+                            </div>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* KDS PAGINATION CONTROLS */}
+                  {kdsTotal > 0 && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: '18px',
+                      padding: '12px 18px',
+                      background: '#ffffff',
+                      borderRadius: '12px',
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                      flexWrap: 'wrap',
+                      gap: '12px'
+                    }}>
+                      <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+                        Showing <strong style={{ color: '#0f172a' }}>{kdsFrom}</strong> to <strong style={{ color: '#0f172a' }}>{kdsTo}</strong> of <strong style={{ color: '#0f172a' }}>{kdsTotal}</strong> stations (Page {kdsCurrentPage + 1} of {kdsTotalPages})
                       </div>
-                    );
-                  })}
-                </div>
+
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleKdsPageChange(Math.max(0, kdsCurrentPage - 1))}
+                          disabled={kdsCurrentPage === 0}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            background: kdsCurrentPage === 0 ? '#f8fafc' : '#ffffff',
+                            color: kdsCurrentPage === 0 ? '#cbd5e1' : '#334155',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: kdsCurrentPage === 0 ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          Prev
+                        </button>
+
+                        {Array.from({ length: kdsTotalPages }, (_, i) => i).map(pageNum => (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => handleKdsPageChange(pageNum)}
+                            style={{
+                              minWidth: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              fontSize: '13px',
+                              fontWeight: kdsCurrentPage === pageNum ? 700 : 500,
+                              border: kdsCurrentPage === pageNum ? 'none' : '1px solid #e2e8f0',
+                              background: kdsCurrentPage === pageNum ? '#000000' : '#ffffff',
+                              color: kdsCurrentPage === pageNum ? '#ffffff' : '#334155',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {pageNum + 1}
+                          </button>
+                        ))}
+
+                        <button
+                          type="button"
+                          onClick={() => handleKdsPageChange(Math.min(kdsTotalPages - 1, kdsCurrentPage + 1))}
+                          disabled={kdsCurrentPage >= kdsTotalPages - 1 || kdsTotalPages === 0}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            background: kdsCurrentPage >= kdsTotalPages - 1 || kdsTotalPages === 0 ? '#f8fafc' : '#ffffff',
+                            color: kdsCurrentPage >= kdsTotalPages - 1 || kdsTotalPages === 0 ? '#cbd5e1' : '#334155',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: kdsCurrentPage >= kdsTotalPages - 1 || kdsTotalPages === 0 ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -3044,6 +3311,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000', width: '60px' }}>S/NO</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Name</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Location</th>
@@ -3056,14 +3324,21 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           <tbody>
             {filteredBranches.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                   No branches found matching your search.
                 </td>
               </tr>
             ) : (
-              paginatedBranches.map(b => (
+              paginatedBranches.map((b, idx) => {
+                const sNo = page * limit + idx + 1;
+                return (
                 <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   
+                  {/* S/NO */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center', fontWeight: 700, color: '#64748b', fontSize: '12px' }}>
+                    {sNo}
+                  </td>
+
                   {/* 1. Branch Code */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left', whiteSpace: 'nowrap' }}>
                     <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, fontFamily: 'monospace', display: 'inline-block' }}>
@@ -3199,8 +3474,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       )}
                     </div>
                   </td>
-                </tr>
-              ))
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

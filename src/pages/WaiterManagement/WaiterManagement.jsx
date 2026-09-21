@@ -30,9 +30,10 @@ export default function WaiterManagement({ isReports = false }) {
   const rawTables = activeRestaurant.tables || [];
   const rawOrders = activeRestaurant.orders || [];
 
-  const staff = selectedBranchId ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const tables = selectedBranchId ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const orders = selectedBranchId ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId || (typeof s.branchId === 'object' && s.branchId?._id === selectedBranchId) || s.activeBranchId === selectedBranchId) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId || (typeof t.branchId === 'object' && t.branchId?._id === selectedBranchId)) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId || (typeof o.branchId === 'object' && o.branchId?._id === selectedBranchId)) : rawOrders;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {
     if (!table) return null;
