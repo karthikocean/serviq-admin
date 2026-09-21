@@ -106,9 +106,32 @@ export default function AdminLayout() {
     userRoleLower === 'admin' ||
     userRoleLower === 'administrator' ||
     String(currentUser?.name || '').toLowerCase().includes('admin') ||
-    String(currentUser?.email || '').toLowerCase().includes('admin') ||
-    !currentUser?.branchId ||
-    currentUser?.branchId === 'ALL';
+    String(currentUser?.email || '').toLowerCase().includes('admin');
+
+  const isBranchAdmin = 
+    userType === 'BRANCH_ADMIN' || 
+    userType === 'BRANCH ADMIN' || 
+    userRoleLower === 'branch manager' || 
+    userRoleLower === 'branch admin' || 
+    userRoleLower === 'branch_admin' || 
+    userRoleLower.includes('manager') ||
+    userRoleLower === 'manager';
+
+  const isDisallowedStaff = 
+    userRoleLower.includes('waiter') ||
+    userRoleLower.includes('kitchen') ||
+    userRoleLower.includes('chef') ||
+    userRoleLower.includes('cook') ||
+    userRoleLower.includes('server') ||
+    userRoleLower.includes('steward') ||
+    userType === 'STATION' ||
+    ((userType === 'STAFF' || userType === 'EMPLOYEE') && !isRestaurantOwner && !isBranchAdmin);
+
+  if (isDisallowedStaff || (!isRestaurantOwner && !isBranchAdmin)) {
+    ShowNotifications.showAlertNotification("Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to access the Admin Panel.", false);
+    handleLogout();
+    return <Navigate to="/login" replace />;
+  }
 
   const isAdmin = 
     isRestaurantOwner ||

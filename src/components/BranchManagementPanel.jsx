@@ -468,19 +468,27 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const baseBranchLimit = Number(
     matchedLivePlan?.maxBranches ??
     matchedLivePlan?.branchLimit ??
+    matchedLivePlan?.baseBranchLimit ??
+    matchedLivePlan?.branchCapacity ??
+    matchedLivePlan?.allowedBranches ??
+    matchedLivePlan?.maxOutlets ??
+    activePlanData?.baseBranchLimit ??
+    activePlanData?.maxBranches ??
+    activePlanData?.branchLimit ??
+    activePlanData?.branchCapacity ??
+    activePlanData?.allowedBranches ??
+    activePlanData?.maxOutlets ??
+    branchCap?.baseLimit ??
+    branchCap?.base ??
+    branchCap?.maxBranches ??
+    branchCap?.branchLimit ??
+    branchCap?.branchCapacity ??
+    branchCap?.capacity ??
     activeRestaurant?.subscription?.baseBranchLimit ??
     activeRestaurant?.subscription?.maxBranches ??
     activeRestaurant?.subscription?.branchLimit ??
     savedPlanInfo?.baseBranchLimit ??
     savedPlanInfo?.maxBranches ??
-    activePlanData?.baseBranchLimit ??
-    activePlanData?.maxBranches ??
-    activePlanData?.branchLimit ??
-    activePlanData?.branchCapacity ??
-    branchCap?.baseLimit ??
-    branchCap?.base ??
-    branchCap?.maxBranches ??
-    branchCap?.branchLimit ??
     sub.baseBranchLimit ??
     sub.maxBranches ??
     getPlanBranchLimit(planName, 5)
@@ -2977,15 +2985,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {(branches.length >= totalAllowedBranches || remainingBranchSlots <= 0) && (
-            <button
-              type="button"
-              onClick={() => setIsPlanLimitModalOpen(true)}
-              style={{ border: '1px solid #cbd5e1', background: '#ffffff', color: '#0f172a', padding: '8px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-            >
-              + Buy Branch Slot (₹{extraBranchUnitPrice}/mo)
-            </button>
-          )}
           <button
             type="button"
             onClick={() => navigate('/plans-management')}
