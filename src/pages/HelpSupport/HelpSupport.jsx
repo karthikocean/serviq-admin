@@ -124,7 +124,7 @@ export default function HelpSupport() {
     setIsLoading(true);
     try {
       const params = {
-        limit: 1000
+        limit: 10
       };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;

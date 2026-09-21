@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
-import { AVAILABLE_PLANS, getPlanBranchLimit } from '../config/initialData';
+import { AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from '../config/initialData';
 import SubscriptionApi from '../api/Subscription';
 import BranchApi from '../api/Branch';
 import { Modal } from './Modal';
@@ -134,6 +134,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [historySearch, setHistorySearch] = useState('');
   const [localPurchases, setLocalPurchases] = useState([]);
 
+  // Buy Addons Payment Form State
+  const [addonCard, setAddonCard] = useState({
+    number: '4532 8921 4452 9018',
+    name: 'Restaurant Admin',
+    expiry: '12/28',
+    cvv: '889'
+  });
+  const [addonUpiMode, setAddonUpiMode] = useState('qr');
+  const [addonUpiId, setAddonUpiId] = useState('admin@okhdfcbank');
+  const [addonIsUpiVerified, setAddonIsUpiVerified] = useState(true);
+  const [addonSelectedBank, setAddonSelectedBank] = useState('HDFC Bank');
+
   // Payment Checkout Popup State
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
   const [checkoutData, setCheckoutData] = useState(null);
@@ -210,9 +222,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const formatPlanItem = useCallback((rawPlan) => {
     if (!rawPlan) return null;
-    const pName = rawPlan.planName || rawPlan.name || 'Plan';
-    const cleanSlug = pName.toLowerCase().replace(/\s*plan$/i, '').trim();
-    const planId = rawPlan._id || rawPlan.id || `plan-${cleanSlug}`;
+    const rawPName = rawPlan.planName || rawPlan.name || '';
+    const cleanSlug = resolveHumanPlanName(rawPName, rawPlan.monthlyPrice >= 4000 ? 'Premium' : (rawPlan.monthlyPrice < 1500 ? 'Basic' : 'Standard'));
+    const pName = `${cleanSlug} Plan`;
+    const planId = rawPlan._id || rawPlan.id || `plan-${cleanSlug.toLowerCase()}`;
 
     let features = [];
     if (rawPlan.featuresIncluded && typeof rawPlan.featuresIncluded === 'object' && !Array.isArray(rawPlan.featuresIncluded)) {
@@ -454,9 +467,9 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     billingCycle: 'monthly',
     price: 1999,
     annualPrice: 19999,
-    startDate: '2026-01-15',
-    expiryDate: '2027-01-15',
-    nextBillingDate: '2026-09-15',
+    startDate: '2026-08-24',
+    expiryDate: '2027-08-24',
+    nextBillingDate: '2026-09-24',
     baseBranchLimit: 5,
     extraBranchSlots: 0,
     extraBranchPrice: 699,
@@ -471,62 +484,121 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const branchCapacityData = dashboardData?.branchCapacity;
   const extraBranchRateData = dashboardData?.extraBranchRate;
 
-  // Active Plan fields - Prioritize activeRestaurant and local selections over API fallbacks
-  const cleanPlanSlug = String(
-    activeRestaurant?.subscription?.planName ||
-    activeRestaurant?.plan ||
-    activePlanData?.planName ||
-    activePlanData?.name ||
-    sub.planName ||
-    'Standard'
-  )
-    .replace(/^plan-/i)
-    .replace(/\s*plan$/i, '')
-    .trim() || 'Standard';
-
-  const currentPlanName = `${cleanPlanSlug.charAt(0).toUpperCase() + cleanPlanSlug.slice(1)} Plan`;
-  const currentBillingCycle = activePlanData?.billingCycle || (sub.billingCycle === 'annual' ? 'Annual' : 'Monthly');
-  const isAnnualCycle = currentBillingCycle.toLowerCase().includes('annual') || currentBillingCycle.toLowerCase().includes('year');
-
-  const matchedActivePlan = plansList.find(p => {
-    const pSlug = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
-    return pSlug === cleanPlanSlug.toLowerCase();
-  }) || AVAILABLE_PLANS.find(p => {
-    const pSlug = String(p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
-    return pSlug === cleanPlanSlug.toLowerCase();
-  }) || plansList.find(p => p.id === sub.planId || p._id === sub.planId) || AVAILABLE_PLANS[1];
-
-  const currentPlanPrice = isAnnualCycle
-    ? Number(
-        activePlanData?.annualPrice ??
-        activePlanData?.yearlyPrice ??
-        matchedActivePlan?.annualPrice ??
-        matchedActivePlan?.yearlyPrice ??
-        (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : 19999)
-      )
-    : Number(
-        activePlanData?.monthlyPrice ??
-        activePlanData?.basePrice ??
-        activePlanData?.baseValue ??
-        activePlanData?.price ??
-        activePlanData?.amount ??
-        activePlanData?.planPrice ??
-        activePlanData?.monthlyRate ??
-        matchedActivePlan?.monthlyPrice ??
-        matchedActivePlan?.basePrice ??
-        matchedActivePlan?.baseValue ??
-        matchedActivePlan?.price ??
-        1999
-      );
-
-  const nextRenewalFormatted = formatDate(activePlanData?.nextRenewal || sub.nextBillingDate || '2026-09-23');
-  const validityFormatted = formatDate(activePlanData?.validity || sub.expiryDate || '2026-09-23');
-
   let savedPlanInfo = null;
   try {
     const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
     if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
   } catch (e) {}
+
+  // Resolve candidate plan ID and matched plan
+  const candidatePlanId = savedPlanInfo?.planId || 
+                          activeRestaurant?.subscription?.planId || 
+                          activePlanData?.planId || 
+                          activePlanData?._id || 
+                          activePlanData?.id || 
+                          sub.planId;
+
+  const rawCandidateName = savedPlanInfo?.cleanName ||
+                           savedPlanInfo?.planName ||
+                           activeRestaurant?.subscription?.planName ||
+                           activeRestaurant?.plan ||
+                           activePlanData?.planName ||
+                           activePlanData?.name ||
+                           sub.planName;
+
+  const resolvedCandidateSlug = resolveHumanPlanName(rawCandidateName, '');
+
+  let matchedActivePlan = null;
+  if (candidatePlanId) {
+    matchedActivePlan = plansList.find(p => p.id === candidatePlanId || p._id === candidatePlanId) ||
+                        AVAILABLE_PLANS.find(p => p.id === candidatePlanId || p._id === candidatePlanId);
+  }
+
+  if (!matchedActivePlan && resolvedCandidateSlug) {
+    matchedActivePlan = plansList.find(p => {
+      const pSlug = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+      return pSlug === resolvedCandidateSlug.toLowerCase();
+    }) || AVAILABLE_PLANS.find(p => {
+      const pSlug = String(p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+      return pSlug === resolvedCandidateSlug.toLowerCase();
+    });
+  }
+
+  if (!matchedActivePlan) {
+    matchedActivePlan = AVAILABLE_PLANS[1]; // Standard
+  }
+
+  // Active Plan fields - Clean human-readable name guaranteed
+  const cleanPlanSlug = resolveHumanPlanName(
+    savedPlanInfo?.cleanName ||
+    savedPlanInfo?.planName ||
+    matchedActivePlan?.name ||
+    matchedActivePlan?.planName ||
+    activeRestaurant?.subscription?.planName ||
+    activeRestaurant?.plan ||
+    activePlanData?.planName ||
+    activePlanData?.name ||
+    sub.planName,
+    'Standard'
+  );
+
+  const currentPlanName = `${cleanPlanSlug} Plan`;
+
+  const currentBillingCycle = (savedPlanInfo?.billingCycle ? (String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') || String(savedPlanInfo.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
+    (activeRestaurant?.subscription?.billingCycle ? (String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') || String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
+    (activePlanData?.billingCycle ? (String(activePlanData.billingCycle).toLowerCase().includes('annual') || String(activePlanData.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
+    (String(sub.billingCycle).toLowerCase().includes('annual') || String(sub.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly');
+    
+  const isAnnualCycle = currentBillingCycle.toLowerCase().includes('annual') || currentBillingCycle.toLowerCase().includes('year');
+
+  const currentPlanPrice = isAnnualCycle
+    ? Number(
+        (savedPlanInfo?.billingCycle && (String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') || String(savedPlanInfo.billingCycle).toLowerCase().includes('year')) ? (savedPlanInfo?.annualPrice || savedPlanInfo?.price) : null) ??
+        (activeRestaurant?.subscription?.billingCycle && (String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') || String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year')) ? (activeRestaurant?.subscription?.annualPrice || activeRestaurant?.subscription?.price) : null) ??
+        matchedActivePlan?.annualPrice ??
+        matchedActivePlan?.yearlyPrice ??
+        (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
+      )
+    : Number(
+        (savedPlanInfo?.billingCycle && (!String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') && !String(savedPlanInfo.billingCycle).toLowerCase().includes('year')) ? (savedPlanInfo?.monthlyPrice || savedPlanInfo?.price) : null) ??
+        (activeRestaurant?.subscription?.billingCycle && (!String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') && !String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year')) ? (activeRestaurant?.subscription?.monthlyPrice || activeRestaurant?.subscription?.price) : null) ??
+        matchedActivePlan?.monthlyPrice ??
+        matchedActivePlan?.basePrice ??
+        matchedActivePlan?.baseValue ??
+        matchedActivePlan?.price ??
+        (cleanPlanSlug.toLowerCase() === 'premium' ? 4999 : cleanPlanSlug.toLowerCase() === 'basic' ? 999 : 1999)
+      );
+
+  const rawStartDate = savedPlanInfo?.startDate || activeRestaurant?.subscription?.startDate || sub.startDate || activePlanData?.startDate || '2026-09-21';
+  
+  // Calculate dynamic expiry date based on startDate and cycle
+  const getCalculatedExpiryDate = (startStr, isAnnual) => {
+    try {
+      const d = new Date(startStr.includes('/') ? startStr.split('/').reverse().join('-') : startStr);
+      if (isNaN(d.getTime())) return isAnnual ? '2027-09-21' : '2026-10-21';
+      const exp = new Date(d);
+      if (isAnnual) {
+        exp.setFullYear(exp.getFullYear() + 1);
+      } else {
+        exp.setMonth(exp.getMonth() + 1);
+      }
+      return exp.toISOString().split('T')[0];
+    } catch (e) {
+      return isAnnual ? '2027-09-21' : '2026-10-21';
+    }
+  };
+
+  const dynamicCalculatedExpiry = getCalculatedExpiryDate(rawStartDate, isAnnualCycle);
+
+  const rawExpiryDate = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.expiryDate || savedPlanInfo?.validity)) ||
+                        (activeRestaurant?.subscription?.billingCycle && ((String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (activeRestaurant?.subscription?.expiryDate || activeRestaurant?.subscription?.validity)) ||
+                        dynamicCalculatedExpiry;
+
+  const rawNextRenewal = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.nextRenewal || savedPlanInfo?.nextBillingDate)) || rawExpiryDate;
+
+  const startDateFormatted = formatDate(rawStartDate);
+  const validityFormatted = formatDate(rawExpiryDate);
+  const nextRenewalFormatted = formatDate(rawNextRenewal);
 
   // Branch Capacity fields - dynamically prioritize active plan's correct outlet quota
   const branchesList = (apiBranches && apiBranches.length > 0)
@@ -535,6 +607,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const activeBranchesCount = branchesList.length;
 
   const planDefinedLimit = Number(
+    savedPlanInfo?.baseBranchLimit ??
     matchedActivePlan?.maxBranches ??
     matchedActivePlan?.branchLimit ??
     matchedActivePlan?.baseBranchLimit ??
@@ -543,6 +616,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   );
 
   const baseBranchLimit = Number(
+    savedPlanInfo?.baseBranchLimit ??
     activeRestaurant?.subscription?.baseBranchLimit ??
     activeRestaurant?.subscription?.maxBranches ??
     activeRestaurant?.subscription?.branchLimit ??
@@ -555,13 +629,15 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   );
 
   const extraBranchSlots = Number(
-    activeRestaurant?.subscription?.extraBranchSlots !== undefined
-      ? activeRestaurant.subscription.extraBranchSlots
-      : (branchCapacityData?.extraSlots !== undefined 
-          ? branchCapacityData.extraSlots 
-          : (branchCapacityData?.addons !== undefined
-              ? branchCapacityData.addons
-              : (sub.extraBranchSlots || 0)))
+    savedPlanInfo?.extraBranchSlots !== undefined
+      ? savedPlanInfo.extraBranchSlots
+      : (activeRestaurant?.subscription?.extraBranchSlots !== undefined
+          ? activeRestaurant.subscription.extraBranchSlots
+          : (branchCapacityData?.extraSlots !== undefined 
+              ? branchCapacityData.extraSlots 
+              : (branchCapacityData?.addons !== undefined
+                  ? branchCapacityData.addons
+                  : (sub.extraBranchSlots || 0))))
   );
   const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
 
@@ -579,7 +655,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const branchUsagePercent = Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
 
   const extraBranchUnitPrice = extraBranchRateData?.rate !== undefined ? extraBranchRateData.rate : (matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699);
-  const isAutoRenewActive = extraBranchRateData?.autoRenew !== undefined ? extraBranchRateData.autoRenew : (sub.autoRenew !== false);
+  const isAutoRenewActive = savedPlanInfo?.autoRenew !== undefined 
+    ? Boolean(savedPlanInfo.autoRenew) 
+    : (activeRestaurant?.subscription?.autoRenew !== undefined 
+        ? Boolean(activeRestaurant.subscription.autoRenew) 
+        : (extraBranchRateData?.autoRenew !== undefined 
+            ? Boolean(extraBranchRateData.autoRenew) 
+            : (sub.autoRenew !== false)));
 
   const extraBranchSubtotal = extraSlotsToAdd * extraBranchUnitPrice;
   const extraBranchGst = Math.round(extraBranchSubtotal * 0.18);
@@ -769,12 +851,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     if (!targetPlan) return;
     setIsProcessingUpgrade(true);
     const billing = cycleOverride || selectedPlanCycles[targetPlan.id] || upgradeBillingCycle || (currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
-    const billingParam = billing === 'annual' ? 'Annually' : 'Monthly';
+    const isAnnual = billing === 'annual';
+    const billingParam = isAnnual ? 'Annually' : 'Monthly';
     const methodStr = customPaymentMethod || (upgradePaymentMethod === 'upi' ? 'UPI (Google Pay / PhonePe)' : upgradePaymentMethod === 'netbanking' ? 'HDFC NetBanking' : 'Credit Card');
-    const paymentParam = methodStr.includes('UPI') ? 'UPI' : (methodStr.includes('NetBanking') ? 'NetBanking' : 'Credit Card');
-    const cleanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
+    const cleanName = resolveHumanPlanName(targetPlan.name || targetPlan.planName || targetPlan.id);
     const branchLimit = targetPlan.maxBranches || targetPlan.branchLimit || getPlanBranchLimit(cleanName, 5);
-    const planPrice = billing === 'annual' ? (targetPlan.annualPrice || 49999) : (targetPlan.monthlyPrice || 4999);
+    const planPrice = isAnnual ? (targetPlan.annualPrice || 49999) : (targetPlan.monthlyPrice || 4999);
 
     let apiResult = null;
     try {
@@ -801,23 +883,47 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     const subId = subData?.subscriptionId || subData?._id || `SUB-${Date.now().toString().slice(-6)}`;
     const finalAmount = subData?.amountPaid || subData?.planPrice || planPrice;
     const finalStartDate = subData?.startDate || new Date().toISOString();
-    const finalEndDate = subData?.endDate || subData?.renewalDate;
-    const finalRenewalDate = subData?.renewalDate || subData?.endDate;
+    
+    const now = new Date();
+    const startDateFormattedStr = now.toISOString().split('T')[0];
+    const expiryDateObj = new Date(now);
+    if (isAnnual) {
+      expiryDateObj.setFullYear(now.getFullYear() + 1);
+    } else {
+      expiryDateObj.setMonth(now.getMonth() + 1);
+    }
+    const expiryDateFormattedStr = expiryDateObj.toISOString().split('T')[0];
+
+    const finalEndDate = subData?.endDate || subData?.renewalDate || expiryDateFormattedStr;
+    const finalRenewalDate = subData?.renewalDate || subData?.endDate || expiryDateFormattedStr;
     const maxBranches = subData?.maxBranches || branchLimit;
     const extraBranches = subData?.extraBranches !== undefined ? subData.extraBranches : extraBranchSlots;
 
+    const planSaveInfo = {
+      planId: targetPlan.id || `plan-${cleanName.toLowerCase()}`,
+      planName: `${cleanName} Plan`,
+      cleanName: cleanName,
+      billingCycle: isAnnual ? 'annual' : 'monthly',
+      price: planPrice,
+      annualPrice: targetPlan.annualPrice || (targetPlan.monthlyPrice ? targetPlan.monthlyPrice * 10 : 19999),
+      monthlyPrice: targetPlan.monthlyPrice || 1999,
+      baseBranchLimit: branchLimit,
+      startDate: startDateFormattedStr,
+      expiryDate: expiryDateFormattedStr,
+      validity: expiryDateFormattedStr,
+      nextBillingDate: expiryDateFormattedStr,
+      nextRenewal: expiryDateFormattedStr,
+      autoRenew: isAutoRenewActive,
+      paymentMethod: methodStr,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      sessionStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
+      localStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
+    } catch (e) {}
+
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
       upgradeSubscriptionPlan(activeRestaurant.id, targetPlan.id, billing, methodStr);
-    }
-    if (upgradeRestaurantPlan && activeRestaurant?.id) {
-      upgradeRestaurantPlan(activeRestaurant.id, cleanName);
-    }
-
-    const nextBillingDateFormatted = new Date();
-    if (billing === 'annual') {
-      nextBillingDateFormatted.setFullYear(nextBillingDateFormatted.getFullYear() + 1);
-    } else {
-      nextBillingDateFormatted.setMonth(nextBillingDateFormatted.getMonth() + 1);
     }
 
     const newInvoice = {
@@ -841,11 +947,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         ...(prev?.activePlan || {}),
         planId: targetPlan.id,
         planName: `${cleanName} Plan`,
-        billingCycle: subData?.billingCycle || billingParam,
-        price: subData?.planPrice || planPrice,
+        billingCycle: isAnnual ? 'Annually' : 'Monthly',
+        price: planPrice,
+        annualPrice: targetPlan.annualPrice || (planPrice * 10),
+        monthlyPrice: targetPlan.monthlyPrice || 1999,
         baseBranchLimit: maxBranches,
-        nextRenewal: finalRenewalDate || nextBillingDateFormatted.toISOString(),
-        validity: finalEndDate || nextBillingDateFormatted.toISOString(),
+        startDate: startDateFormattedStr,
+        nextRenewal: finalRenewalDate,
+        validity: finalEndDate,
         status: subData?.status || 'Active'
       },
       branchCapacity: {
@@ -877,6 +986,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     setIsProcessingUpgrade(false);
     setIsUpgradeModalOpen(false);
     setSelectedPlanForUpgrade(null);
+    window.dispatchEvent(new Event('plan_updated'));
     await fetchDashboardData(false);
   };
 
@@ -916,7 +1026,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     // Realistic authorization delay
     await new Promise(resolve => setTimeout(resolve, 900));
 
-    handleSelectOrSwitchPlan(
+    await handleSelectOrSwitchPlan(
       checkoutData.plan,
       checkoutData.isRenewal,
       checkoutData.cycle,
@@ -954,7 +1064,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   };
 
   const handleToggleAutoRenew = () => {
-    toggleSubscriptionAutoRenew(activeRestaurant.id);
+    if (typeof toggleSubscriptionAutoRenew === 'function') {
+      toggleSubscriptionAutoRenew(activeRestaurant?.id || 'rest-1');
+    } else {
+      const nextAuto = !isAutoRenewActive;
+      try {
+        const raw = sessionStorage.getItem('activePlanSelection');
+        const parsed = raw ? JSON.parse(raw) : {};
+        parsed.autoRenew = nextAuto;
+        sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
+      } catch (e) {}
+    }
+    window.dispatchEvent(new Event('plan_updated'));
     ShowNotifications.showAlertNotification(
       `Auto-renewal has been ${!isAutoRenewActive ? 'enabled' : 'disabled'}.`,
       true
@@ -1011,8 +1132,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
           <div>
             <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
-              <span>Next: <strong style={{ color: '#0f172a' }}>{nextRenewalFormatted}</strong></span>
-              <span>Valid: <strong style={{ color: '#0f172a' }}>{validityFormatted}</strong></span>
+              <span>Start: <strong style={{ color: '#0f172a' }}>{startDateFormatted}</strong></span>
+              <span>Valid Till: <strong style={{ color: '#0f172a' }}>{validityFormatted}</strong></span>
             </div>
             <button
               type="button"
@@ -1487,12 +1608,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               </div>
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Payment Method Selector & Detailed Input Fields */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
                 Select Payment Method:
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '14px' }}>
                 {[
                   { id: 'card', label: 'Credit Card', sub: '•••• 4242' },
                   { id: 'upi', label: 'UPI / QR', sub: 'Instant UPI' },
@@ -1515,6 +1636,297 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   </div>
                 ))}
               </div>
+
+              {/* PAYMENT SUB-PANEL: UPI / QR */}
+              {paymentMethod === 'upi' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {/* Mode switcher: QR vs VPA */}
+                  <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAddonUpiMode('qr')}
+                      style={{
+                        flex: 1,
+                        padding: '7px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: addonUpiMode === 'qr' ? '#ffffff' : 'transparent',
+                        color: addonUpiMode === 'qr' ? '#0f172a' : '#64748b',
+                        boxShadow: addonUpiMode === 'qr' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
+                      }}
+                    >
+                      ⚡ Scan QR Code
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddonUpiMode('vpa')}
+                      style={{
+                        flex: 1,
+                        padding: '7px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: addonUpiMode === 'vpa' ? '#ffffff' : 'transparent',
+                        color: addonUpiMode === 'vpa' ? '#0f172a' : '#64748b',
+                        boxShadow: addonUpiMode === 'vpa' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
+                      }}
+                    >
+                      🆔 Enter UPI ID
+                    </button>
+                  </div>
+
+                  {addonUpiMode === 'qr' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '10px', padding: '6px 0' }}>
+                      <div style={{
+                        width: '130px',
+                        height: '130px',
+                        background: '#ffffff',
+                        border: '2px solid #0f172a',
+                        borderRadius: '12px',
+                        padding: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
+                      }}>
+                        <svg width="114" height="114" viewBox="0 0 100 100" fill="#0f172a">
+                          <rect x="5" y="5" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="10" y="10" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="15" y="15" width="10" height="10" rx="1" fill="#0f172a" />
+                          <rect x="65" y="5" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="70" y="10" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="75" y="15" width="10" height="10" rx="1" fill="#0f172a" />
+                          <rect x="5" y="65" width="30" height="30" rx="4" fill="#0f172a" />
+                          <rect x="10" y="70" width="20" height="20" rx="2" fill="#ffffff" />
+                          <rect x="15" y="75" width="10" height="10" rx="1" fill="#0f172a" />
+                          <rect x="42" y="10" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="24" width="8" height="8" fill="#0f172a" />
+                          <rect x="10" y="42" width="8" height="8" fill="#0f172a" />
+                          <rect x="24" y="42" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="42" width="16" height="16" rx="2" fill="#ff5a1f" />
+                          <rect x="65" y="42" width="8" height="8" fill="#0f172a" />
+                          <rect x="79" y="42" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="42" y="65" width="8" height="8" fill="#0f172a" />
+                          <rect x="42" y="79" width="8" height="8" fill="#ff5a1f" />
+                          <rect x="65" y="65" width="12" height="12" fill="#0f172a" />
+                          <rect x="80" y="80" width="10" height="10" fill="#0f172a" />
+                        </svg>
+                      </div>
+
+                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                        Scan QR with any UPI App: <strong style={{ color: '#0f172a' }}>Google Pay, PhonePe, Paytm, BHIM, CRED</strong>
+                      </div>
+                      <div style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 700, padding: '3px 10px', borderRadius: '20px', border: '1px solid #a7f3d0' }}>
+                        ⏱️ QR Active • Valid for 10:00 mins
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                        Enter Virtual Payment Address (UPI ID):
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          placeholder="e.g. restaurant@okhdfcbank or merchant@upi"
+                          value={addonUpiId}
+                          onChange={(e) => {
+                            setAddonUpiId(e.target.value);
+                            setAddonIsUpiVerified(false);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: addonIsUpiVerified ? '1.5px solid #10b981' : '1.5px solid #cbd5e1',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            outline: 'none'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (addonUpiId.includes('@')) {
+                              setAddonIsUpiVerified(true);
+                              ShowNotifications.showAlertNotification("UPI ID verified successfully! (Restaurant Admin)", true);
+                            } else {
+                              ShowNotifications.showAlertNotification("Please enter a valid UPI ID (e.g., username@upi)", false);
+                            }
+                          }}
+                          style={{
+                            padding: '10px 16px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: addonIsUpiVerified ? '#10b981' : '#0f172a',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {addonIsUpiVerified ? '✓ Verified' : 'Verify'}
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                        {['@okhdfcbank', '@okaxis', '@paytm', '@ybl'].map(handle => (
+                          <button
+                            key={handle}
+                            type="button"
+                            onClick={() => {
+                              const prefix = addonUpiId.includes('@') ? addonUpiId.split('@')[0] : (addonUpiId || 'merchant');
+                              setAddonUpiId(`${prefix}${handle}`);
+                              setAddonIsUpiVerified(true);
+                            }}
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #e2e8f0',
+                              background: '#f8fafc',
+                              fontSize: '11px',
+                              color: '#64748b',
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            +{handle}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAYMENT SUB-PANEL: Credit / Debit Card */}
+              {paymentMethod === 'card' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Card Number
+                    </label>
+                    <input
+                      type="text"
+                      value={addonCard.number}
+                      onChange={(e) => setAddonCard(prev => ({ ...prev, number: e.target.value }))}
+                      placeholder="4532 8921 4452 9018"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Cardholder Name
+                    </label>
+                    <input
+                      type="text"
+                      value={addonCard.name}
+                      onChange={(e) => setAddonCard(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Name on card"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        Expiry (MM/YY)
+                      </label>
+                      <input
+                        type="text"
+                        value={addonCard.expiry}
+                        onChange={(e) => setAddonCard(prev => ({ ...prev, expiry: e.target.value }))}
+                        placeholder="MM/YY"
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                        CVV / CVC
+                      </label>
+                      <input
+                        type="password"
+                        maxLength="4"
+                        value={addonCard.cvv}
+                        onChange={(e) => setAddonCard(prev => ({ ...prev, cvv: e.target.value }))}
+                        placeholder="•••"
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px', fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PAYMENT SUB-PANEL: Net Banking */}
+              {paymentMethod === 'netbanking' && (
+                <div style={{ background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+                    Select Popular Bank:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {['HDFC Bank', 'ICICI Bank', 'State Bank of India', 'Axis Bank'].map(bank => (
+                      <div
+                        key={bank}
+                        onClick={() => setAddonSelectedBank(bank)}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: addonSelectedBank === bank ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
+                          background: addonSelectedBank === bank ? 'var(--primary-light)' : '#ffffff',
+                          cursor: 'pointer',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          color: addonSelectedBank === bank ? 'var(--primary)' : '#0f172a',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: addonSelectedBank === bank ? 'var(--primary)' : '#cbd5e1' }}></span>
+                        {bank}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                      Or Choose Other Bank:
+                    </label>
+                    <select
+                      value={addonSelectedBank}
+                      onChange={(e) => setAddonSelectedBank(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1.5px solid #cbd5e1',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        background: '#ffffff',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="HDFC Bank">HDFC Bank</option>
+                      <option value="ICICI Bank">ICICI Bank</option>
+                      <option value="State Bank of India">State Bank of India</option>
+                      <option value="Axis Bank">Axis Bank</option>
+                      <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                      <option value="Punjab National Bank">Punjab National Bank</option>
+                      <option value="Bank of Baroda">Bank of Baroda</option>
+                      <option value="Canara Bank">Canara Bank</option>
+                      <option value="Union Bank of India">Union Bank of India</option>
+                      <option value="IndusInd Bank">IndusInd Bank</option>
+                      <option value="IDFC FIRST Bank">IDFC FIRST Bank</option>
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>

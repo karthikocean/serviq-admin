@@ -31,7 +31,7 @@ export default function OrderManagement() {
   const fetchOrdersAndStaff = async () => {
     try {
       const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-      const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000';
+      const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&limit=10` : '?limit=10';
 
       let fetchedOrders = [];
       let paginationInfo = null;
@@ -39,8 +39,8 @@ export default function OrderManagement() {
       // 1. Fetch orders, staff/users & tables in parallel
       const [orderRes, staffRes, tableRes] = await Promise.all([
         apiClient.get(`/orders${branchParam}`).catch(() => null),
-        apiClient.get(`/users${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000'}`).catch(() => null),
-        apiClient.get(`/tables${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=1000` : '?limit=1000'}`).catch(() => null)
+        apiClient.get(`/users${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=10` : '?limit=10'}`).catch(() => null),
+        apiClient.get(`/tables${isBranchFiltered ? `?branchId=${selectedBranchId}&limit=10` : '?limit=10'}`).catch(() => null)
       ]);
 
       if (orderRes && (orderRes.status === 200 || orderRes.status === 201 || orderRes.data?.success || orderRes.data?.status)) {

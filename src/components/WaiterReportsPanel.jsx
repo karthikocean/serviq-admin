@@ -107,7 +107,7 @@ export default function WaiterReportsPanel({
           endDate: dateEnd || undefined,
           branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
           waiterName: filterWaiter !== 'All' ? filterWaiter : undefined,
-          limit: 1000
+          limit: 10
         };
         const res = await ReportsApi.getWaiterReports(filters);
         if (isMounted && res && res.status) {

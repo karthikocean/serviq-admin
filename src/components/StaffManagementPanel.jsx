@@ -79,10 +79,14 @@ const TableAssignIcon = ({ size = 16, color = 'currentColor' }) => (
 export default function StaffManagementPanel({
   tables = [],
   orders = [],
+  updateStaff: propUpdateStaff,
+  deleteStaff: propDeleteStaff,
   handleOpenAssignTablesModal,
   openKitchenSettingsModal
 }) {
-  const { currentUser: user, selectedBranchId, activeRestaurant } = useContext(AppContext);
+  const { currentUser: user, selectedBranchId, activeRestaurant, updateStaff: ctxUpdateStaff, deleteStaff: ctxDeleteStaff } = useContext(AppContext);
+  const updateStaff = propUpdateStaff || ctxUpdateStaff;
+  const deleteStaff = propDeleteStaff || ctxDeleteStaff;
   const roleStr = typeof user?.role === 'object' && user?.role !== null
     ? (user?.role?.roleName || user?.role?.name || '')
     : (typeof user?.role === 'string' ? user.role : '');
@@ -368,7 +372,7 @@ export default function StaffManagementPanel({
 
     // 4. Duty Status filter
     if (dutyFilter && dutyFilter !== 'All') {
-      const isOnDuty = u.dutyStatus === 'ON_DUTY' || (!u.dutyStatus && u.isActive !== false);
+      const isOnDuty = u.dutyStatus === 'ON_DUTY' || u.status === 'On Duty' || (!u.dutyStatus && u.status !== 'Off Duty' && u.dutyStatus !== 'OFF_DUTY');
       if (dutyFilter === 'ON_DUTY' && !isOnDuty) return false;
       if (dutyFilter === 'OFF_DUTY' && isOnDuty) return false;
     }
@@ -664,16 +668,67 @@ export default function StaffManagementPanel({
   };
 
   const handleToggleDuty = async (user) => {
-    const nextDutyStatus = (user.dutyStatus === 'ON_DUTY' || !user.dutyStatus) ? 'OFF_DUTY' : 'ON_DUTY';
-    // Optimistic local update
-    setApiUsers(prev => prev.map(u => String(u._id || u.id) === String(user._id || user.id) ? { ...u, dutyStatus: nextDutyStatus } : u));
-    const payload = { dutyStatus: nextDutyStatus };
-    const res = await UserApi.updateUser(user._id || user.id, payload);
-    if (res?.status) {
-      fetchData();
+    const isCurrentlyOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
+    const nextDutyStatus = isCurrentlyOnDuty ? 'OFF_DUTY' : 'ON_DUTY';
+    const nextStatus = isCurrentlyOnDuty ? 'Off Duty' : 'On Duty';
+    const targetId = user._id || user.id;
+
+    // 1. Optimistic local update in table list
+    setApiUsers(prev => prev.map(u => {
+      if (String(u._id || u.id) === String(targetId)) {
+        return {
+          ...u,
+          dutyStatus: nextDutyStatus,
+          status: (u.isActive !== undefined && (u.status === 'Active' || u.status === 'Inactive')) ? u.status : nextStatus
+        };
+      }
+      return u;
+    }));
+
+    // 2. Update local AppState / activeRestaurant staff pool if available
+    if (updateStaff && activeRestaurant?.id) {
+      updateStaff(activeRestaurant.id, {
+        ...user,
+        id: targetId,
+        dutyStatus: nextDutyStatus,
+        status: nextStatus
+      });
+    }
+
+    // 3. Update backend API with complete payload to pass schema validations
+    const resolvedRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
+    const resolvedBranchId = typeof user.branchId === 'object' ? (user.branchId?._id || user.branchId?.id) : (user.branchId || user.branch);
+    const roleName = getStaffRoleName(user).toLowerCase();
+    const isBranchAdmin = roleName.includes('manager') || roleName.includes('admin') || user.userType === 'BRANCH_ADMIN';
+    const isKitchen = roleName.includes('kitchen');
+
+    const payload = {
+      name: user.name || 'Staff Member',
+      phoneNumber: user.phoneNumber || user.phone || '9999999999',
+      dutyStatus: nextDutyStatus,
+      status: user.isActive !== false ? 'Active' : 'Inactive',
+      userType: user.userType || (isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')
+    };
+
+    if (resolvedRoleId && isObjectId(resolvedRoleId)) {
+      payload.roleId = resolvedRoleId;
+    }
+    if (resolvedBranchId && resolvedBranchId !== 'ALL') {
+      payload.branchId = resolvedBranchId;
+    }
+    if (user.email && !isKitchen) {
+      payload.email = user.email;
+    }
+
+    try {
+      const res = await UserApi.updateUser(targetId, payload);
       ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
-    } else {
-      fetchData();
+      if (res?.status) {
+        fetchData();
+      }
+    } catch (err) {
+      console.warn("UserApi.updateUser error:", err);
+      ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
     }
   };
 
@@ -800,21 +855,23 @@ export default function StaffManagementPanel({
       ShowNotifications.showAlertNotification('No user records to export.', false);
       return;
     }
-    const headers = ['Full Name', 'Branch', 'Role', 'Email', 'Phone', 'Account Status', 'Duty Status'];
+    const headers = ['Full Name', 'Branch', 'Role', 'Email', 'Phone', 'Status', 'Duty Status'];
     const rows = apiUsers.map(u => {
       const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
       const uBranchId = typeof u.branchId === 'object' ? u.branchId?._id : u.branchId;
       const uRole = u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
+      const isKitchen = uRole.toLowerCase().includes('kitchen');
       const branchObj = u.branchId?.branchName ? u.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
       const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
+      const isStaffActive = u.isActive !== undefined ? Boolean(u.isActive) : (u.status !== 'Inactive');
       return [
         `"${u.name}"`,
         `"${uBranch}"`,
         `"${uRole}"`,
-        `"${u.email || ''}"`,
-        `"${u.phoneNumber}"`,
-        `"${u.isActive ? 'Active' : 'Inactive'}"`,
-        `"${u.dutyStatus || 'On Duty'}"`
+        `"${isKitchen ? '' : (u.email || '')}"`,
+        `"${u.phoneNumber || u.phone || ''}"`,
+        `"${isStaffActive ? 'Active' : 'Inactive'}"`,
+        `"${u.dutyStatus === 'OFF_DUTY' ? 'Off Duty' : 'On Duty'}"`
       ];
     });
 
@@ -1166,10 +1223,10 @@ export default function StaffManagementPanel({
 
   // Calculate KPIs based on branchScopedStaff
   const waitersCount = branchScopedStaff.filter(s => isStaffWaiter(s)).length;
-  const waitersOnDuty = branchScopedStaff.filter(s => isStaffWaiter(s) && (s.dutyStatus === 'ON_DUTY' || !s.dutyStatus)).length;
+  const waitersOnDuty = branchScopedStaff.filter(s => isStaffWaiter(s) && (s.dutyStatus === 'ON_DUTY' || s.status === 'On Duty' || (!s.dutyStatus && s.status !== 'Off Duty' && s.dutyStatus !== 'OFF_DUTY'))).length;
 
   const kitchenStaffCount = branchScopedStaff.filter(s => isStaffKitchen(s)).length;
-  const kitchenOnDuty = branchScopedStaff.filter(s => isStaffKitchen(s) && (s.dutyStatus === 'ON_DUTY' || !s.dutyStatus)).length;
+  const kitchenOnDuty = branchScopedStaff.filter(s => isStaffKitchen(s) && (s.dutyStatus === 'ON_DUTY' || s.status === 'On Duty' || (!s.dutyStatus && s.status !== 'Off Duty' && s.dutyStatus !== 'OFF_DUTY'))).length;
 
   const branchScopedTables = apiTables.filter(t => {
     if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
@@ -1436,6 +1493,7 @@ export default function StaffManagementPanel({
               <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
               <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
               <th style={{ minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
+              <th style={{ minWidth: '110px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
               <th style={{ minWidth: '120px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
               <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
@@ -1450,7 +1508,8 @@ export default function StaffManagementPanel({
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
-              const isOnDuty = user.dutyStatus === 'ON_DUTY' || !user.dutyStatus; // default to on duty
+              const isOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
+              const isStaffActive = user.isActive !== undefined ? Boolean(user.isActive) : (user.status !== 'Inactive');
               const assignedTables = isWaiter ? apiTables
                 .filter(t => {
                   const assigned = resolveTableAssignedWaiter(t, apiUsers);
@@ -1494,9 +1553,11 @@ export default function StaffManagementPanel({
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {user.name}
                         </div>
-                        <div style={{ fontSize: '11px', color: user.isActive ? '#64748b' : '#ef4444', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {user.isActive ? user.email || 'No email' : 'Account Inactive'}
-                        </div>
+                        {!isKitchen && (
+                          <div style={{ fontSize: '11px', color: isStaffActive ? '#64748b' : '#ef4444', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {user.email || 'No email'}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -1518,7 +1579,7 @@ export default function StaffManagementPanel({
                     </span>
                   </td>
 
-                  {/* 5. Branch */}
+                  {/* 4. Branch */}
                   <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
                     {uBranchName}
                   </td>
@@ -1569,7 +1630,32 @@ export default function StaffManagementPanel({
                     )}
                   </td>
 
-                  {/* 7. Duty Status with Toggle */}
+                  {/* 7. Status */}
+                  <td style={{ padding: '12px 12px', textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      background: isStaffActive ? '#dcfce7' : '#fee2e2',
+                      color: isStaffActive ? '#15803d' : '#b91c1c',
+                      border: `1.5px solid ${isStaffActive ? '#bbf7d0' : '#fecaca'}`
+                    }}>
+                      <span style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: isStaffActive ? '#16a34a' : '#dc2626',
+                        display: 'inline-block'
+                      }}></span>
+                      {isStaffActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+
+                  {/* 8. Duty Status with Toggle */}
                   <td style={{ padding: '12px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <button
                       type="button"
@@ -1610,7 +1696,7 @@ export default function StaffManagementPanel({
                     </button>
                   </td>
 
-                  {/* 8. Actions */}
+                  {/* 9. Actions */}
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       <button
@@ -2262,10 +2348,13 @@ export default function StaffManagementPanel({
               options={apiUsers.filter(s => {
                 const rName = s.roleId?.roleName || apiRoles.find(r => r._id === s.roleId)?.roleName;
                 return rName?.toLowerCase().includes('waiter');
-              }).map(s => ({
-                value: s._id,
-                label: `${s.name} (${(!s.dutyStatus || s.dutyStatus === 'ON_DUTY') ? 'On Duty' : 'Off Duty'})`
-              }))}
+              }).map(s => {
+                const isWaiterOnDuty = s.dutyStatus === 'ON_DUTY' || s.status === 'On Duty' || (!s.dutyStatus && s.status !== 'Off Duty' && s.dutyStatus !== 'OFF_DUTY');
+                return {
+                  value: s._id,
+                  label: `${s.name} (${isWaiterOnDuty ? 'On Duty' : 'Off Duty'})`
+                };
+              })}
               placeholder="Select a Waiter..."
             />
           </div>
@@ -2426,7 +2515,7 @@ export default function StaffManagementPanel({
             const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
             const isWaiter = uRoleName.toLowerCase().includes('waiter');
             const isKitchen = uRoleName.toLowerCase().includes('kitchen');
-            const isOnDuty = viewingStaff.dutyStatus === 'ON_DUTY' || !viewingStaff.dutyStatus;
+            const isOnDuty = viewingStaff.dutyStatus === 'ON_DUTY' || viewingStaff.status === 'On Duty' || (!viewingStaff.dutyStatus && viewingStaff.status !== 'Off Duty' && viewingStaff.dutyStatus !== 'OFF_DUTY');
             const assignedTables = isWaiter ? apiTables
               .filter(t => {
                 const assigned = resolveTableAssignedWaiter(t, apiUsers);
@@ -2541,12 +2630,14 @@ export default function StaffManagementPanel({
                     </div>
                   </div>
 
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {viewingStaff.email || 'None'}
+                  {!isKitchen && (
+                    <div>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Address</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#334155', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {viewingStaff.email || 'None'}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <div>
                     <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Account Type</div>

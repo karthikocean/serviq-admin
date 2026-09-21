@@ -491,14 +491,14 @@ export default function OrdersPanel({
     try {
       const isBranchFiltered = branchId && branchId !== 'ALL' && branchId !== 'all';
       const branchParam = isBranchFiltered ? `branchId=${branchId}&` : '';
-      const menuParams = { limit: 1000 };
+      const menuParams = { limit: 10 };
       if (isBranchFiltered) {
         menuParams.branchId = branchId;
       }
 
       const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
         MenuApi.getMenuItems(menuParams).catch(() => null),
-        apiClient.get(`/menu/categories?${branchParam}limit=1000`).catch(() => null),
+        apiClient.get(`/menu/categories?${branchParam}limit=10`).catch(() => null),
         apiClient.get(`/tables?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null),
         apiClient.get(`/users?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null)
       ]);
@@ -516,7 +516,7 @@ export default function OrdersPanel({
 
       // Always ensure full menu catalog from MenuApi is available so all items from Menu Management appear
       try {
-        const allMenuRes = await MenuApi.getMenuItems({ limit: 1000 });
+        const allMenuRes = await MenuApi.getMenuItems({ limit: 10 });
         if (allMenuRes?.status && allMenuRes.response) {
           const allD = allMenuRes.response;
           const allArr = Array.isArray(allD)

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit } from './initialData';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
 import { isTokenExpired } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -370,12 +370,12 @@ export const AppProvider = ({ children }) => {
     }).filter(Boolean);
   };
 
-  const fetchTables = async () => {
+  const fetchTables = async (params = {}) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MemberApi.getTables({ limit: 10 });
+      const res = await MemberApi.getTables({ limit: 10, ...params });
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
@@ -391,14 +391,16 @@ export const AppProvider = ({ children }) => {
               id: t.tableNumber || t.tableNo || t.id,
               tableNumber: t.tableNumber || t.tableNo || t.id,
               tableNo: t.tableNo || t.tableNumber || t.id,
-              seats: t.seatingCapacity || t.seats,
-              seatingCapacity: t.seatingCapacity || t.seats,
+              seats: t.seatingCapacity ?? t.seats ?? 4,
+              seatingCapacity: t.seatingCapacity ?? t.seats ?? 4,
               status: isOcc ? 'Occupied' : (statusStr || 'Free'),
               isActive: t.isActive,
               assignedWaiter: t.assignedWaiter || null,
               assignedWaiterId: backendWaiterId || localT?.assignedWaiterId || null,
               tempWaiterId: t.coverWaiterId || t.tempWaiterId || localT?.tempWaiterId || null,
               assignedQrId: t.assignedQrId || null,
+              qrUrl: t.qrUrl || null,
+              section: t.section || 'Main Dining',
               branchId: t.branchId
             };
           });
@@ -481,7 +483,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const queryParams = { limit: 1000, ...params };
+      const queryParams = { limit: 10, ...params };
       const res = await MenuApi.getMenuItems(queryParams);
       if (res && res.status && res.response) {
         const menuData = Array.isArray(res.response.data)
@@ -510,8 +512,9 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
+      const branchParams = { limit: 10, ...params };
       const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(params),
+        BranchApi.getBranches(branchParams),
         UserApi.getUsers({ limit: 10 })
       ]);
 
@@ -565,14 +568,14 @@ export const AppProvider = ({ children }) => {
                 managerName: resolvedMgr,
                 mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
                 email: b.email || b.managerEmail || '',
-                address: b.address?.street || b.address || b.street || '',
-                country: b.address?.country || b.country || '',
-                state: b.address?.state || b.state || '',
-                city: b.address?.city || b.city || '',
-                pincode: b.address?.pincode || b.pincode || '',
+                address: typeof b.address === 'object' && b.address !== null ? (b.address.street || '') : (b.address || b.street || ''),
+                country: typeof b.address === 'object' && b.address !== null ? (b.address.country || '') : (b.country || ''),
+                state: typeof b.address === 'object' && b.address !== null ? (b.address.state || '') : (b.state || ''),
+                city: typeof b.address === 'object' && b.address !== null ? (b.address.city || '') : (b.city || ''),
+                pincode: typeof b.address === 'object' && b.address !== null ? (b.address.pincode || '') : (b.pincode || ''),
                 openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
                 status: b.status || 'Active',
-                totalTables: b.totalTables || 10
+                totalTables: b.totalTables !== undefined ? b.totalTables : 0
               };
             });
 
@@ -595,6 +598,12 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
+      let savedPlan = null;
+      try {
+        const rawSaved = sessionStorage.getItem('activePlanSelection');
+        if (rawSaved) savedPlan = JSON.parse(rawSaved);
+      } catch (e) {}
+
       const [dashRes, plansRes] = await Promise.allSettled([
         SubscriptionApi.getDashboard(),
         SubscriptionApi.getPlans()
@@ -646,50 +655,68 @@ export const AppProvider = ({ children }) => {
         const data = res.response.data || res.response;
         const activePlan = data.activePlan;
 
-        const rawName = activePlan?.planName || activePlan?.name || savedPlan?.planName || 'Standard';
-        const cleanName = String(rawName).replace(/\s*plan$/i, '').trim() || 'Standard';
+        const rawName = savedPlan?.cleanName || savedPlan?.planName || activePlan?.planName || activePlan?.name || 'Standard';
+        const cleanName = resolveHumanPlanName(rawName);
         const matchedLive = livePlans.find(lp => {
           const lName = String(lp.planName || lp.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
           return lName === cleanName.toLowerCase();
         });
 
+        const matchedPlanConfig = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanName.toLowerCase())) || AVAILABLE_PLANS[1];
+
         const resolvedLimit = Number(
+          savedPlan?.baseBranchLimit ??
           matchedLive?.maxBranches ??
           matchedLive?.branchLimit ??
           matchedLive?.baseBranchLimit ??
-          matchedLive?.branchCapacity ??
-          matchedLive?.allowedBranches ??
-          matchedLive?.maxOutlets ??
-          activePlan?.baseBranchLimit ??
-          activePlan?.maxBranches ??
-          activePlan?.branchLimit ??
-          activePlan?.branchCapacity ??
-          activePlan?.allowedBranches ??
-          activePlan?.maxOutlets ??
-          data.branchCapacity?.baseLimit ??
-          data.branchCapacity?.base ??
-          data.branchCapacity?.maxBranches ??
-          data.branchCapacity?.branchLimit ??
-          data.branchCapacity?.branchCapacity ??
-          data.branchCapacity?.capacity ??
-          savedPlan?.baseBranchLimit ??
-          getPlanBranchLimit(activePlan?.planName || savedPlan?.cleanName || 'Standard', 5)
+          matchedPlanConfig?.maxBranches ??
+          matchedPlanConfig?.branchLimit ??
+          getPlanBranchLimit(cleanName, 5)
         );
 
-        const resolvedPrice = Number(
-          matchedLive?.monthlyPrice ??
-          matchedLive?.basePrice ??
-          matchedLive?.baseValue ??
-          matchedLive?.price ??
-          activePlan?.monthlyPrice ??
-          activePlan?.basePrice ??
-          activePlan?.baseValue ??
-          activePlan?.price ??
-          activePlan?.planPrice ??
-          activePlan?.amount ??
-          savedPlan?.price ??
-          1999
-        );
+        const isCycleAnnual = String(savedPlan?.billingCycle || activePlan?.billingCycle || 'monthly').toLowerCase().includes('annual');
+
+        const resolvedPrice = isCycleAnnual
+          ? Number(
+              savedPlan?.annualPrice ??
+              savedPlan?.price ??
+              matchedLive?.annualPrice ??
+              matchedLive?.yearlyPrice ??
+              matchedPlanConfig?.annualPrice ??
+              (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999)
+            )
+          : Number(
+              savedPlan?.monthlyPrice ??
+              savedPlan?.price ??
+              matchedLive?.monthlyPrice ??
+              matchedLive?.basePrice ??
+              matchedPlanConfig?.monthlyPrice ??
+              (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999)
+            );
+
+        const now = new Date();
+        const nextDate = new Date(now);
+        if (isCycleAnnual) {
+          nextDate.setFullYear(now.getFullYear() + 1);
+        } else {
+          nextDate.setMonth(now.getMonth() + 1);
+        }
+
+        const resolvedStartDate = savedPlan?.startDate || activePlan?.startDate || now.toISOString().split('T')[0];
+        
+        // Dynamically calculate expiry date matching the cycle and start date
+        const calcStartDate = new Date(resolvedStartDate.includes('/') ? resolvedStartDate.split('/').reverse().join('-') : resolvedStartDate);
+        const validStartDate = isNaN(calcStartDate.getTime()) ? now : calcStartDate;
+        const calcExp = new Date(validStartDate);
+        if (isCycleAnnual) {
+          calcExp.setFullYear(calcExp.getFullYear() + 1);
+        } else {
+          calcExp.setMonth(calcExp.getMonth() + 1);
+        }
+        const calcExpiryStr = calcExp.toISOString().split('T')[0];
+
+        const resolvedRenewalDate = (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.nextRenewal || savedPlan?.nextBillingDate)) || calcExpiryStr;
+        const resolvedExpiryDate = (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.expiryDate || savedPlan?.validity)) || calcExpiryStr;
 
         if (activePlan || (savedPlan && savedPlan.cleanName)) {
           setRestaurantsData(prev => {
@@ -702,19 +729,27 @@ export const AppProvider = ({ children }) => {
                 plan: cleanName,
                 subscription: {
                   ...(baseRest.subscription || {}),
-                  planId: activePlan?.planId || savedPlan?.planId || `plan-${cleanName.toLowerCase()}`,
-                  planName: cleanName,
+                  planId: savedPlan?.planId || activePlan?.planId || `plan-${cleanName.toLowerCase()}`,
+                  planName: `${cleanName} Plan`,
                   status: activePlan?.status || 'Active',
-                  billingCycle: activePlan?.billingCycle || savedPlan?.billingCycle || 'monthly',
+                  billingCycle: isCycleAnnual ? 'annual' : 'monthly',
                   price: resolvedPrice,
+                  monthlyPrice: matchedLive?.monthlyPrice || matchedPlanConfig?.monthlyPrice || (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999),
+                  annualPrice: matchedLive?.annualPrice || matchedPlanConfig?.annualPrice || (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999),
                   baseBranchLimit: resolvedLimit,
                   maxBranches: resolvedLimit,
-                  extraBranchSlots: data.branchCapacity?.extraSlots !== undefined 
-                    ? data.branchCapacity.extraSlots 
-                    : (data.branchCapacity?.addons !== undefined
-                        ? data.branchCapacity.addons
-                        : (baseRest.subscription?.extraBranchSlots || 0)),
-                  extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 499
+                  startDate: resolvedStartDate,
+                  nextBillingDate: resolvedRenewalDate,
+                  expiryDate: resolvedExpiryDate,
+                  extraBranchSlots: savedPlan?.extraBranchSlots !== undefined
+                    ? savedPlan.extraBranchSlots
+                    : (data.branchCapacity?.extraSlots !== undefined 
+                        ? data.branchCapacity.extraSlots 
+                        : (data.branchCapacity?.addons !== undefined
+                            ? data.branchCapacity.addons
+                            : (baseRest.subscription?.extraBranchSlots || 0))),
+                  extraBranchPrice: data.extraBranchRate?.rate || baseRest.subscription?.extraBranchPrice || 699,
+                  autoRenew: savedPlan?.autoRenew !== undefined ? savedPlan.autoRenew : (baseRest.subscription?.autoRenew !== false)
                 }
               }
             };
@@ -724,6 +759,154 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       console.warn("Failed to fetch subscription in AppContext:", e);
     }
+  };
+
+  const upgradeSubscriptionPlan = (id, planId, billingCycle = 'monthly', paymentMethod = 'Online Payment') => {
+    const cleanName = resolveHumanPlanName(planId);
+    const planConfig = AVAILABLE_PLANS.find(p => p.id === planId || p._id === planId || p.name.toLowerCase().includes(cleanName.toLowerCase())) || AVAILABLE_PLANS[1];
+    
+    const isAnnual = String(billingCycle).toLowerCase().includes('annual') || String(billingCycle).toLowerCase().includes('year');
+    const branchLimit = planConfig.branchLimit || planConfig.maxBranches || getPlanBranchLimit(cleanName, 5);
+    const monthlyPrice = planConfig.monthlyPrice || (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999);
+    const annualPrice = planConfig.annualPrice || (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999);
+    const price = isAnnual ? annualPrice : monthlyPrice;
+    
+    const now = new Date();
+    const startDateStr = now.toISOString().split('T')[0];
+    const expiryDateObj = new Date(now);
+    if (isAnnual) {
+      expiryDateObj.setFullYear(now.getFullYear() + 1);
+    } else {
+      expiryDateObj.setMonth(now.getMonth() + 1);
+    }
+    const expiryDateStr = expiryDateObj.toISOString().split('T')[0];
+    const nextRenewalStr = expiryDateStr;
+
+    const savedSelection = {
+      planId: planConfig.id || `plan-${cleanPlanSlug.toLowerCase()}`,
+      planName: `${cleanName} Plan`,
+      cleanName: cleanName,
+      billingCycle: isAnnual ? 'annual' : 'monthly',
+      price: price,
+      monthlyPrice: monthlyPrice,
+      annualPrice: annualPrice,
+      baseBranchLimit: branchLimit,
+      startDate: startDateStr,
+      expiryDate: expiryDateStr,
+      validity: expiryDateStr,
+      nextBillingDate: nextRenewalStr,
+      nextRenewal: nextRenewalStr,
+      paymentMethod: paymentMethod,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      sessionStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
+      localStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
+    } catch (e) {}
+
+    setRestaurantsData(prev => {
+      const targetId = id || currentRestaurantId || 'rest-1';
+      const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
+      return {
+        ...prev,
+        [targetId]: {
+          ...baseRest,
+          plan: cleanName,
+          subscription: {
+            ...(baseRest.subscription || {}),
+            planId: savedSelection.planId,
+            planName: `${cleanName} Plan`,
+            status: 'Active',
+            billingCycle: savedSelection.billingCycle,
+            price: price,
+            monthlyPrice: monthlyPrice,
+            annualPrice: annualPrice,
+            baseBranchLimit: branchLimit,
+            maxBranches: branchLimit,
+            startDate: startDateStr,
+            expiryDate: expiryDateStr,
+            nextBillingDate: nextRenewalStr
+          }
+        }
+      };
+    });
+
+    window.dispatchEvent(new Event('plan_updated'));
+  };
+
+  const upgradeRestaurantPlan = (id, planName, billingCycle = 'monthly', paymentMethod = 'Online Payment') => {
+    const cleanName = String(planName).replace(/\s*plan$/i, '').trim();
+    const targetPlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanName.toLowerCase())) || AVAILABLE_PLANS[1];
+    upgradeSubscriptionPlan(id, targetPlan.id, billingCycle, paymentMethod);
+  };
+
+  const toggleSubscriptionAutoRenew = (id) => {
+    setRestaurantsData(prev => {
+      const targetId = id || currentRestaurantId || 'rest-1';
+      const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
+      const currentAutoRenew = baseRest.subscription?.autoRenew !== false;
+      const nextAutoRenew = !currentAutoRenew;
+
+      try {
+        const raw = sessionStorage.getItem('activePlanSelection');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.autoRenew = nextAutoRenew;
+          sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
+        }
+      } catch (e) {}
+
+      return {
+        ...prev,
+        [targetId]: {
+          ...baseRest,
+          subscription: {
+            ...(baseRest.subscription || {}),
+            autoRenew: nextAutoRenew
+          }
+        }
+      };
+    });
+
+    try {
+      SubscriptionApi.updateAutoRenew({ autoRenew: true }).catch(() => {});
+    } catch (e) {}
+
+    window.dispatchEvent(new Event('plan_updated'));
+  };
+
+  const purchaseExtraBranchSlots = (id, slotsCount = 1, paymentMethod = 'Credit Card') => {
+    const slots = Number(slotsCount) || 1;
+    setRestaurantsData(prev => {
+      const targetId = id || currentRestaurantId || 'rest-1';
+      const baseRest = prev[targetId] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
+      const currentSlots = Number(baseRest.subscription?.extraBranchSlots || 0);
+      const nextSlots = currentSlots + slots;
+
+      try {
+        const raw = sessionStorage.getItem('activePlanSelection');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          parsed.extraBranchSlots = nextSlots;
+          sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
+        }
+      } catch (e) {}
+
+      return {
+        ...prev,
+        [targetId]: {
+          ...baseRest,
+          subscription: {
+            ...(baseRest.subscription || {}),
+            extraBranchSlots: nextSlots
+          }
+        }
+      };
+    });
+
+    window.dispatchEvent(new Event('branch_updated'));
+    window.dispatchEvent(new Event('plan_updated'));
   };
 
   // Global automatic eager initData removed so that navigating to specific pages only calls the APIs needed for that page.
@@ -1144,220 +1327,6 @@ export const AppProvider = ({ children }) => {
     } catch (e) {
       console.error(e);
     }
-  };
-
-  const upgradeRestaurantPlan = (id, planName) => {
-    const raw = String(planName || '').toLowerCase();
-    const clean = raw.replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim();
-    const targetPlan = AVAILABLE_PLANS.find(p => 
-      p.id.toLowerCase() === raw ||
-      p.id.toLowerCase() === `plan-${clean}` ||
-      p.name.toLowerCase() === raw ||
-      p.name.toLowerCase().includes(clean) ||
-      clean.includes(p.name.toLowerCase().replace(/\s*plan$/i, '').trim())
-    ) || {
-      id: `plan-${clean}`,
-      name: `${clean.charAt(0).toUpperCase() + clean.slice(1)} Plan`,
-      branchLimit: getPlanBranchLimit(clean, 5),
-      monthlyPrice: clean === 'enterprise' ? 9999 : clean === 'premium' ? 4999 : clean === 'standard' ? 1999 : 999,
-      annualPrice: clean === 'enterprise' ? 99990 : clean === 'premium' ? 49999 : clean === 'standard' ? 19999 : 9999,
-      extraBranchPrice: clean === 'enterprise' ? 399 : clean === 'premium' ? 499 : clean === 'standard' ? 699 : 799
-    };
-
-    const cleanPlanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
-    const baseLimit = Number(targetPlan.maxBranches ?? targetPlan.branchLimit ?? targetPlan.baseBranchLimit ?? targetPlan.branchCapacity ?? getPlanBranchLimit(cleanPlanName, 5));
-
-    try {
-      sessionStorage.setItem('activePlanSelection', JSON.stringify({
-        planId: targetPlan.id,
-        planName: targetPlan.name,
-        cleanName: cleanPlanName,
-        baseBranchLimit: baseLimit,
-        maxBranches: baseLimit,
-        branchLimit: baseLimit,
-        branchCapacity: baseLimit,
-        billingCycle: 'monthly'
-      }));
-    } catch (e) {}
-
-    setRestaurantsData(prev => {
-      const rest = prev[id] || prev['rest-1'] || initialRestaurantsData['rest-1'] || {};
-      const now = new Date();
-      const nextMonth = new Date(now);
-      nextMonth.setMonth(now.getMonth() + 1);
-
-      const existingInvoices = rest.subscriptionInvoices || [];
-      const newInvoice = {
-        id: `INV-PLN-${Date.now().toString().slice(-6)}`,
-        planName: `${targetPlan.name} Plan`,
-        description: `Plan Upgrade to ${targetPlan.name} Plan`,
-        branchesIncluded: baseLimit,
-        amount: targetPlan.monthlyPrice,
-        date: now.toISOString().split('T')[0],
-        paymentMethod: "Credit Card (•••• 4242)",
-        status: "Paid"
-      };
-
-      return {
-        ...prev,
-        [id || 'rest-1']: {
-          ...rest,
-          plan: cleanPlanName,
-          subscription: {
-            ...(rest.subscription || {}),
-            planId: targetPlan.id,
-            planName: targetPlan.name,
-            status: 'Active',
-            price: targetPlan.monthlyPrice,
-            annualPrice: targetPlan.annualPrice,
-            baseBranchLimit: baseLimit,
-            maxBranches: baseLimit,
-            branchLimit: baseLimit,
-            branchCapacity: baseLimit,
-            extraBranchPrice: targetPlan.extraBranchPrice || 499,
-            nextBillingDate: nextMonth.toISOString().split('T')[0]
-          },
-          subscriptionInvoices: [newInvoice, ...existingInvoices]
-        }
-      };
-    });
-  };
-
-  const upgradeSubscriptionPlan = (id, planId, billingCycle = 'monthly', paymentMethod = 'Credit Card (•••• 4242)') => {
-    const rawId = String(planId || '').toLowerCase();
-    const cleanSlug = rawId.replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim();
-    const targetPlan = AVAILABLE_PLANS.find(p => 
-      p.id.toLowerCase() === rawId || 
-      p.id.toLowerCase() === `plan-${cleanSlug}` ||
-      p.name.toLowerCase() === rawId ||
-      p.name.toLowerCase().includes(cleanSlug) ||
-      cleanSlug.includes(p.name.toLowerCase().replace(/\s*plan$/i, '').trim())
-    ) || AVAILABLE_PLANS[1];
-
-    const cleanPlanName = targetPlan.name.replace(/\s*plan$/i, '').trim();
-    const baseLimit = Number(targetPlan.maxBranches ?? targetPlan.branchLimit ?? targetPlan.baseBranchLimit ?? targetPlan.branchCapacity ?? getPlanBranchLimit(cleanPlanName, 5));
-    const amount = billingCycle === 'annual' ? targetPlan.annualPrice : targetPlan.monthlyPrice;
-
-    try {
-      sessionStorage.setItem('activePlanSelection', JSON.stringify({
-        planId: targetPlan.id,
-        planName: targetPlan.name,
-        cleanName: cleanPlanName,
-        baseBranchLimit: baseLimit,
-        maxBranches: baseLimit,
-        branchLimit: baseLimit,
-        branchCapacity: baseLimit,
-        billingCycle
-      }));
-    } catch (e) {}
-
-    setRestaurantsData(prev => {
-      const targetId = id || currentRestaurantId || 'rest-1';
-      const rest = prev[targetId] || initialRestaurantsData[targetId] || initialRestaurantsData['rest-1'] || {};
-
-      const now = new Date();
-      const nextDate = new Date(now);
-      if (billingCycle === 'annual') {
-        nextDate.setFullYear(now.getFullYear() + 1);
-      } else {
-        nextDate.setMonth(now.getMonth() + 1);
-      }
-
-      const existingInvoices = rest.subscriptionInvoices || [];
-      const newInvoice = {
-        id: `INV-PLN-${Date.now().toString().slice(-6)}`,
-        planName: `${targetPlan.name} (${billingCycle === 'annual' ? 'Annual' : 'Monthly'})`,
-        description: `Plan Upgrade to ${targetPlan.name} (${billingCycle})`,
-        branchesIncluded: baseLimit,
-        amount: amount,
-        date: now.toISOString().split('T')[0],
-        paymentMethod: paymentMethod,
-        status: "Paid"
-      };
-
-      return {
-        ...prev,
-        [targetId]: {
-          ...rest,
-          plan: cleanPlanName,
-          subscription: {
-            ...(rest.subscription || {}),
-            planId: targetPlan.id,
-            planName: targetPlan.name,
-            status: 'Active',
-            billingCycle: billingCycle,
-            price: targetPlan.monthlyPrice,
-            annualPrice: targetPlan.annualPrice,
-            baseBranchLimit: baseLimit,
-            maxBranches: baseLimit,
-            branchLimit: baseLimit,
-            branchCapacity: baseLimit,
-            extraBranchPrice: targetPlan.extraBranchPrice || 499,
-            nextBillingDate: nextDate.toISOString().split('T')[0]
-          },
-          subscriptionInvoices: [newInvoice, ...existingInvoices]
-        }
-      };
-    });
-  };
-
-  const purchaseExtraBranchSlots = (id, slotCount = 1, paymentMethod = 'Credit Card (•••• 4242)') => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      const currentSub = rest.subscription || {
-        planName: rest.plan || 'Standard',
-        baseBranchLimit: getPlanBranchLimit(rest.plan || 'Standard', 5),
-        extraBranchSlots: 0,
-        extraBranchPrice: 699
-      };
-
-      const unitPrice = currentSub.extraBranchPrice || 699;
-      const amount = unitPrice * slotCount;
-      const now = new Date();
-
-      const existingInvoices = rest.subscriptionInvoices || [];
-      const newInvoice = {
-        id: `INV-SLOT-${Date.now().toString().slice(-6)}`,
-        planName: `${currentSub.planName || 'Standard'} Add-on`,
-        description: `Additional Branch Slot x${slotCount} (Recurring Add-on)`,
-        branchesIncluded: slotCount,
-        amount: amount,
-        date: now.toISOString().split('T')[0],
-        paymentMethod: paymentMethod,
-        status: "Paid"
-      };
-
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          subscription: {
-            ...currentSub,
-            extraBranchSlots: (currentSub.extraBranchSlots || 0) + slotCount
-          },
-          subscriptionInvoices: [newInvoice, ...existingInvoices]
-        }
-      };
-    });
-  };
-
-  const toggleSubscriptionAutoRenew = (id) => {
-    setRestaurantsData(prev => {
-      const rest = prev[id];
-      if (!rest) return prev;
-      const currentSub = rest.subscription || {};
-      return {
-        ...prev,
-        [id]: {
-          ...rest,
-          subscription: {
-            ...currentSub,
-            autoRenew: !currentSub.autoRenew
-          }
-        }
-      };
-    });
   };
 
   const updateDiningTableSeats = (id, tableId, seats) => {

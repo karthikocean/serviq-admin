@@ -45,7 +45,7 @@ export default function CategoryListPanel({
     if (!activeRestaurant) return;
     try {
       const params = {
-        limit: 1000,
+        limit: 10,
         search: searchQuery ? searchQuery.trim() : undefined
       };
       if (selectedBranchId && selectedBranchId !== 'ALL') {

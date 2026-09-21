@@ -118,7 +118,7 @@ export default function BillingHistory() {
         endDate: endDate || undefined,
         search: searchTerm ? searchTerm.trim() : undefined,
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
-        limit: 1000
+        limit: 10
       };
 
       const result = await BillingApi.getBillingHistory(filters);
