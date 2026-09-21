@@ -74,6 +74,70 @@ class NotificationApi {
       };
     }
   }
+
+  async clearNotifications(params = {}) {
+    try {
+      const cleanParams = {};
+      Object.keys(params).forEach((key) => {
+        if (
+          params[key] !== undefined &&
+          params[key] !== null &&
+          params[key] !== "" &&
+          params[key] !== "ALL" &&
+          params[key] !== "all"
+        ) {
+          cleanParams[key] = params[key];
+        }
+      });
+
+      let response;
+      try {
+        response = await apiClient.delete("/notifications/clear", {
+          params: cleanParams,
+          data: cleanParams,
+        });
+      } catch (err) {
+        if (err?.response?.status === 404 || err?.response?.status === 405) {
+          try {
+            response = await apiClient.post("/notifications/clear", cleanParams, {
+              params: cleanParams,
+            });
+          } catch (postErr) {
+            if (postErr?.response?.status === 404 || postErr?.response?.status === 405) {
+              response = await apiClient.put("/notifications/clear", cleanParams, {
+                params: cleanParams,
+              });
+            } else {
+              throw postErr;
+            }
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      if (response && (response.status === 200 || response.status === 201)) {
+        return {
+          status: true,
+          response: response.data,
+          message: response.data?.message || "All active notifications cleared successfully.",
+          data: response.data?.data,
+        };
+      }
+      return { status: false, response: response?.data };
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to clear notifications.";
+      console.warn("NotificationApi clearNotifications error:", errorMessage);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+        message: errorMessage,
+      };
+    }
+  }
 }
 
 export const isDummyNotification = (item) => {
