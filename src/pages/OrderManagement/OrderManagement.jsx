@@ -137,23 +137,23 @@ export default function OrderManagement() {
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
   const displayOrders = isBranchFiltered
     ? apiOrders.filter(o => {
-        const bId = String(o.branchId?._id || o.branchId?.id || o.branchId || o.branch?._id || o.branch || '');
-        return !bId || bId === String(selectedBranchId);
-      })
+      const bId = String(o.branchId?._id || o.branchId?.id || o.branchId || o.branch?._id || o.branch || '');
+      return !bId || bId === String(selectedBranchId);
+    })
     : apiOrders;
 
   const displayStaff = isBranchFiltered
     ? apiStaff.filter(s => {
-        const bId = String(s.branchId?._id || s.branchId?.id || s.branchId || s.branch?._id || s.branch || '');
-        return !bId || bId === String(selectedBranchId);
-      })
+      const bId = String(s.branchId?._id || s.branchId?.id || s.branchId || s.branch?._id || s.branch || '');
+      return !bId || bId === String(selectedBranchId);
+    })
     : apiStaff;
 
   const displayTables = isBranchFiltered
     ? apiTables.filter(t => {
-        const bId = String(t.branchId?._id || t.branchId?.id || t.branchId || t.branch?._id || t.branch || '');
-        return !bId || bId === String(selectedBranchId);
-      })
+      const bId = String(t.branchId?._id || t.branchId?.id || t.branchId || t.branch?._id || t.branch || '');
+      return !bId || bId === String(selectedBranchId);
+    })
     : apiTables;
 
   return (

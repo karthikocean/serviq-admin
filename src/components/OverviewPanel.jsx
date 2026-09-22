@@ -256,26 +256,6 @@ export default function OverviewPanel({
     fetchLiveOrders();
     fetchLiveTables();
     fetchAllBranchTables();
-
-    const interval = setInterval(() => {
-      fetchDashboardStats();
-      fetchLiveOrders();
-      fetchLiveTables();
-      fetchAllBranchTables();
-    }, 10000);
-
-    const onFocus = () => {
-      fetchDashboardStats();
-      fetchLiveOrders();
-      fetchLiveTables();
-      fetchAllBranchTables();
-    };
-    window.addEventListener('focus', onFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
   }, [selectedBranchId, isSpecificBranch]);
 
   // Current view tables and orders

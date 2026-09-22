@@ -178,6 +178,8 @@ export default function CategoryListPanel({
     const errors = {};
     if (!formName.trim()) {
       errors.name = 'Category Name is required.';
+    } else if (/\d/.test(formName.trim())) {
+      errors.name = 'Category Name should not contain numbers.';
     } else if (formName.trim().length < 2) {
       errors.name = 'Category Name must be at least 2 characters.';
     }
@@ -303,7 +305,8 @@ export default function CategoryListPanel({
                 type="text"
                 value={formName}
                 onChange={e => {
-                  setFormName(e.target.value);
+                  const sanitized = e.target.value.replace(/[0-9]/g, '');
+                  setFormName(sanitized);
                   if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
                 }}
                 placeholder="e.g. Starters, Main Course, Beverages..."

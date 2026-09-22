@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
+import BranchApi from '../api/Branch.js';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -146,6 +147,7 @@ export default function OrdersPanel({
   const [apiCategories, setApiCategories] = useState([]);
   const [apiMenuItems, setApiMenuItems] = useState([]);
   const [apiTables, setApiTables] = useState(Array.isArray(tables) ? tables : []);
+  const [apiBranches, setApiBranches] = useState([]);
   const [modalWaiters, setModalWaiters] = useState([]);
   const [modalSelectedBranchId, setModalSelectedBranchId] = useState('');
   const [taxRate, setTaxRate] = useState(5);
@@ -155,6 +157,30 @@ export default function OrdersPanel({
       setApiTables(tables);
     }
   }, [tables]);
+
+  useEffect(() => {
+    const loadBranchesForPanel = async () => {
+      try {
+        const res = await BranchApi.getBranches({ limit: 100 });
+        if (res && res.status && res.response) {
+          const branchArray = Array.isArray(res.response) 
+            ? res.response 
+            : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
+          if (Array.isArray(branchArray)) {
+            setApiBranches(branchArray.map(b => ({
+              id: b._id || b.id,
+              _id: b._id || b.id,
+              branchName: b.branchName || b.name,
+              branchCode: b.branchCode || b.code
+            })));
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load branches in OrdersPanel:", e);
+      }
+    };
+    loadBranchesForPanel();
+  }, []);
 
   useEffect(() => {
     const loadTablesForPanel = async () => {
@@ -1220,7 +1246,7 @@ export default function OrdersPanel({
                 Branch <span style={{ color: '#ef4444' }}>*</span>
               </label>
               {(() => {
-                const allBranchesList = activeRestaurant?.branches || [];
+                const allBranchesList = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
                 const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
                 const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
                   ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
@@ -3062,7 +3088,7 @@ export default function OrdersPanel({
                 <SearchableSelect
                   value={modalSelectedBranchId || ''}
                   onChange={handleModalBranchChange}
-                  options={(activeRestaurant?.branches || []).map(b => ({
+                  options={(apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || [])).map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
                   }))}
@@ -3072,9 +3098,10 @@ export default function OrdersPanel({
                 <input
                   type="text"
                   value={(() => {
-                    const bObj = (activeRestaurant?.branches || []).find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
-                      || (activeRestaurant?.branches || [])[0];
-                    return bObj ? `${bObj.branchName || bObj.name || 'Serviq Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Serviq Branch';
+                    const branchSource = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
+                    const bObj = branchSource.find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
+                      || branchSource[0];
+                    return bObj ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Branch';
                   })()}
                   readOnly
                   disabled

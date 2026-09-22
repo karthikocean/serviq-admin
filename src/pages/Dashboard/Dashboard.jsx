@@ -51,19 +51,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    const interval = setInterval(() => {
-      fetchDashboardData();
-    }, 10000);
-
-    const onFocus = () => {
-      fetchDashboardData();
-    };
-    window.addEventListener('focus', onFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
   }, [fetchDashboardData]);
 
   if (!activeRestaurant) return null;

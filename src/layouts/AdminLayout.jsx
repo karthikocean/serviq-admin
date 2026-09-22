@@ -57,10 +57,8 @@ export default function AdminLayout() {
       }
     };
     fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, [selectedBranchId, isNotificationModalOpen]);
 
@@ -167,11 +165,19 @@ export default function AdminLayout() {
     return !!modulePermissions[action];
   };
 
-  const rawSubPlanName = activeRestaurant?.subscription?.planName || 
+  let savedPlanInfo = null;
+  try {
+    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
+  } catch (e) {}
+
+  const rawSubPlanName = savedPlanInfo?.cleanName || 
+    savedPlanInfo?.planName ||
+    activeRestaurant?.subscription?.planName || 
     activeRestaurant?.subscription?.planId || 
     activeRestaurant?.plan || 
-    'Premium';
-  const cleanSubPlan = String(rawSubPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Premium';
+    'Standard';
+  const cleanSubPlan = String(rawSubPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Standard';
   const currentSubPlan = cleanSubPlan;
 
   const isTabAllowed = (permissionKey) => {

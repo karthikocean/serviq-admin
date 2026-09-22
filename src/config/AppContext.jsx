@@ -165,7 +165,7 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
 ];
 
 export const KNOWN_RESTAURANT_MAP = {
-  'test@gmail.com': 'Spice Route Restaurantt',
+  'test@gmail.com': 'Spice Route Restaurat',
   'alice@gmail.com': 'AZ',
   'test2@gmail.com': 'test',
   'saravana@gmail.com': 'Saravana Bhavan',
@@ -251,6 +251,13 @@ export const AppProvider = ({ children }) => {
                 planId: savedPlan.planId,
                 planName: savedPlan.planName,
                 status: 'Active',
+                billingCycle: savedPlan.billingCycle || 'monthly',
+                price: savedPlan.price,
+                monthlyPrice: savedPlan.monthlyPrice,
+                annualPrice: savedPlan.annualPrice,
+                startDate: savedPlan.startDate,
+                expiryDate: savedPlan.expiryDate,
+                nextBillingDate: savedPlan.nextBillingDate || savedPlan.nextRenewal,
                 baseBranchLimit: savedPlan.baseBranchLimit || getPlanBranchLimit(savedPlan.cleanName, 5)
               }
             };
@@ -366,7 +373,14 @@ export const AppProvider = ({ children }) => {
 
     const dynamicOwner = currentUser?.ownerName || (currentUser?.userType === 'RESTAURANT_OWNER' ? currentUser?.name : null) || rawActive.ownerName || 'Administrator';
     const dynamicEmail = currentUser?.email || rawActive.email || '';
-    const dynamicPlan = currentUser?.plan || rawActive.plan || 'Standard';
+
+    let savedPlanInfo = null;
+    try {
+      const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+      if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
+    } catch (e) {}
+
+    const dynamicPlan = savedPlanInfo?.cleanName || currentUser?.plan || rawActive.plan || 'Standard';
 
     return {
       ...rawActive,
@@ -379,6 +393,18 @@ export const AppProvider = ({ children }) => {
       subscription: {
         ...(rawActive.subscription || {}),
         ...(currentUser?.subscription || {}),
+        ...(savedPlanInfo ? {
+          planId: savedPlanInfo.planId,
+          planName: savedPlanInfo.planName || `${savedPlanInfo.cleanName} Plan`,
+          billingCycle: savedPlanInfo.billingCycle,
+          price: savedPlanInfo.price,
+          monthlyPrice: savedPlanInfo.monthlyPrice,
+          annualPrice: savedPlanInfo.annualPrice,
+          baseBranchLimit: savedPlanInfo.baseBranchLimit,
+          startDate: savedPlanInfo.startDate,
+          expiryDate: savedPlanInfo.expiryDate,
+          nextBillingDate: savedPlanInfo.nextBillingDate
+        } : {}),
         planName: dynamicPlan
       }
     };
@@ -860,7 +886,7 @@ export const AppProvider = ({ children }) => {
     const nextRenewalStr = expiryDateStr;
 
     const savedSelection = {
-      planId: planConfig.id || `plan-${cleanPlanSlug.toLowerCase()}`,
+      planId: planConfig.id || `plan-${cleanName.toLowerCase()}`,
       planName: `${cleanName} Plan`,
       cleanName: cleanName,
       billingCycle: isAnnual ? 'annual' : 'monthly',
@@ -881,6 +907,34 @@ export const AppProvider = ({ children }) => {
       sessionStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
       localStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
     } catch (e) {}
+
+    // Synchronize currentUser in state and sessionStorage so activeRestaurant subscription computes consistently
+    setCurrentUser(prevUser => {
+      if (!prevUser) return prevUser;
+      const updatedUser = {
+        ...prevUser,
+        plan: cleanName,
+        subscription: {
+          ...(prevUser.subscription || {}),
+          planId: savedSelection.planId,
+          planName: `${cleanName} Plan`,
+          status: 'Active',
+          billingCycle: isAnnual ? 'annual' : 'monthly',
+          price: price,
+          monthlyPrice: monthlyPrice,
+          annualPrice: annualPrice,
+          baseBranchLimit: branchLimit,
+          maxBranches: branchLimit,
+          startDate: startDateStr,
+          expiryDate: expiryDateStr,
+          nextBillingDate: nextRenewalStr
+        }
+      };
+      try {
+        sessionStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      } catch (e) {}
+      return updatedUser;
+    });
 
     setRestaurantsData(prev => {
       const targetId = id || currentRestaurantId || 'rest-1';
@@ -910,6 +964,7 @@ export const AppProvider = ({ children }) => {
     });
 
     window.dispatchEvent(new Event('plan_updated'));
+    window.dispatchEvent(new Event('storage'));
   };
 
   const upgradeRestaurantPlan = (id, planName, billingCycle = 'monthly', paymentMethod = 'Online Payment') => {
@@ -986,7 +1041,12 @@ export const AppProvider = ({ children }) => {
     window.dispatchEvent(new Event('plan_updated'));
   };
 
-  // Global automatic eager initData removed so that navigating to specific pages only calls the APIs needed for that page.
+  // Automatically fetch live branches from API for current user
+  useEffect(() => {
+    if (currentUser) {
+      fetchBranches({ limit: 100 });
+    }
+  }, [currentUser?.id, currentUser?.restaurantId]);
 
   // Sync theme changes with body class and css variables
   useEffect(() => {
@@ -1086,7 +1146,25 @@ export const AppProvider = ({ children }) => {
             ? 'RESTAURANT_OWNER' 
             : (roleStr || apiUser.role || (isManagerOrBranchAdmin ? 'Branch manager' : 'Staff'));
 
-          const user = {
+          const emailKey = cleanEmail.toLowerCase().trim();
+          const tokenRestName = extractRestaurantFromToken(token);
+          const mappedRestName = KNOWN_RESTAURANT_MAP[emailKey];
+
+          const resolvedRestaurantName = 
+            apiUser.restaurantName || 
+            apiUser.restaurant_name ||
+            (typeof apiUser.restaurant === 'object' ? (apiUser.restaurant?.restaurantName || apiUser.restaurant?.name) : '') ||
+            payload?.data?.restaurantName ||
+            payload?.restaurantName ||
+            (typeof payload?.data?.restaurant === 'object' ? (payload?.data?.restaurant?.restaurantName || payload?.data?.restaurant?.name) : '') ||
+            tokenRestName ||
+            mappedRestName ||
+            '';
+
+          const resolvedOwnerName = apiUser.ownerName || apiUser.name || 'Administrator';
+          const resolvedDisplayName = apiUser.name || resolvedOwnerName || resolvedRestaurantName || 'Restaurant Admin';
+
+          const user = {     
             id: apiUser.id || apiUser._id,
             name: resolvedDisplayName,
             restaurantName: resolvedRestaurantName || mappedRestName || 'Main Branch',

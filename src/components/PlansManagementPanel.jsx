@@ -358,6 +358,36 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
       if (dashValue && dashValue.status && dashValue.response) {
         const data = dashValue.response?.data?.data || dashValue.response?.data || dashValue.response;
+        try {
+          const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+          if (rawSaved) {
+            const savedPlan = JSON.parse(rawSaved);
+            if (savedPlan && savedPlan.cleanName) {
+              const isAnnual = String(savedPlan.billingCycle).toLowerCase().includes('annual') || String(savedPlan.billingCycle).toLowerCase().includes('year');
+              if (data) {
+                data.activePlan = {
+                  ...(data.activePlan || {}),
+                  planId: savedPlan.planId,
+                  _id: savedPlan.planId,
+                  id: savedPlan.planId,
+                  planName: savedPlan.planName || `${savedPlan.cleanName} Plan`,
+                  name: savedPlan.planName || `${savedPlan.cleanName} Plan`,
+                  cleanName: savedPlan.cleanName,
+                  billingCycle: isAnnual ? 'Annually' : 'Monthly',
+                  price: savedPlan.price || (isAnnual ? savedPlan.annualPrice : savedPlan.monthlyPrice) || data.activePlan?.price,
+                  monthlyPrice: savedPlan.monthlyPrice || data.activePlan?.monthlyPrice,
+                  annualPrice: savedPlan.annualPrice || data.activePlan?.annualPrice,
+                  baseBranchLimit: savedPlan.baseBranchLimit || data.activePlan?.baseBranchLimit,
+                  maxBranches: savedPlan.baseBranchLimit || data.activePlan?.maxBranches,
+                  startDate: savedPlan.startDate || data.activePlan?.startDate,
+                  validity: savedPlan.expiryDate || savedPlan.validity || data.activePlan?.validity,
+                  nextRenewal: savedPlan.nextRenewal || savedPlan.nextBillingDate || data.activePlan?.nextRenewal,
+                  status: 'Active'
+                };
+              }
+            }
+          }
+        } catch (e) {}
         setDashboardData(data);
       }
 
@@ -450,12 +480,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     window.addEventListener('plan_updated', handleSync);
     window.addEventListener('branch_updated', handleSync);
     window.addEventListener('storage', handleSync);
-    window.addEventListener('focus', handleSync);
     return () => {
       window.removeEventListener('plan_updated', handleSync);
       window.removeEventListener('branch_updated', handleSync);
       window.removeEventListener('storage', handleSync);
-      window.removeEventListener('focus', handleSync);
     };
   }, [fetchDashboardData]);
 
@@ -490,57 +518,42 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
   } catch (e) {}
 
-  // Resolve candidate plan ID and matched plan
-  const candidatePlanId = savedPlanInfo?.planId || 
-                          activeRestaurant?.subscription?.planId || 
-                          activePlanData?.planId || 
-                          activePlanData?._id || 
-                          activePlanData?.id || 
-                          sub.planId;
-
-  const rawCandidateName = savedPlanInfo?.cleanName ||
-                           savedPlanInfo?.planName ||
-                           activeRestaurant?.subscription?.planName ||
-                           activeRestaurant?.plan ||
-                           activePlanData?.planName ||
-                           activePlanData?.name ||
-                           sub.planName;
-
-  const resolvedCandidateSlug = resolveHumanPlanName(rawCandidateName, '');
-
-  let matchedActivePlan = null;
-  if (candidatePlanId) {
-    matchedActivePlan = plansList.find(p => p.id === candidatePlanId || p._id === candidatePlanId) ||
-                        AVAILABLE_PLANS.find(p => p.id === candidatePlanId || p._id === candidatePlanId);
-  }
-
-  if (!matchedActivePlan && resolvedCandidateSlug) {
-    matchedActivePlan = plansList.find(p => {
-      const pSlug = String(p.planName || p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
-      return pSlug === resolvedCandidateSlug.toLowerCase();
-    }) || AVAILABLE_PLANS.find(p => {
-      const pSlug = String(p.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
-      return pSlug === resolvedCandidateSlug.toLowerCase();
-    });
-  }
-
-  if (!matchedActivePlan) {
-    matchedActivePlan = AVAILABLE_PLANS[1]; // Standard
-  }
-
   // Active Plan fields - Clean human-readable name guaranteed
   const cleanPlanSlug = resolveHumanPlanName(
     savedPlanInfo?.cleanName ||
     savedPlanInfo?.planName ||
-    matchedActivePlan?.name ||
-    matchedActivePlan?.planName ||
     activeRestaurant?.subscription?.planName ||
     activeRestaurant?.plan ||
+    activePlanData?.cleanName ||
     activePlanData?.planName ||
     activePlanData?.name ||
     sub.planName,
     'Standard'
   );
+
+  const candidatePlanId = savedPlanInfo?.planId || 
+                          activeRestaurant?.subscription?.planId || 
+                          activePlanData?.planId || 
+                          activePlanData?._id || 
+                          activePlanData?.id || 
+                          `plan-${cleanPlanSlug.toLowerCase()}`;
+
+  let matchedActivePlan = plansList.find(p => {
+    const pSlug = resolveHumanPlanName(p.planName || p.name || p.id, '');
+    return pSlug.toLowerCase() === cleanPlanSlug.toLowerCase();
+  }) || AVAILABLE_PLANS.find(p => {
+    const pSlug = resolveHumanPlanName(p.name || p.id, '');
+    return pSlug.toLowerCase() === cleanPlanSlug.toLowerCase();
+  });
+
+  if (!matchedActivePlan && candidatePlanId) {
+    matchedActivePlan = plansList.find(p => p.id === candidatePlanId || p._id === candidatePlanId) ||
+                        AVAILABLE_PLANS.find(p => p.id === candidatePlanId || p._id === candidatePlanId);
+  }
+
+  if (!matchedActivePlan) {
+    matchedActivePlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase())) || AVAILABLE_PLANS[1];
+  }
 
   const currentPlanName = `${cleanPlanSlug} Plan`;
 
@@ -553,15 +566,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const currentPlanPrice = isAnnualCycle
     ? Number(
-        (savedPlanInfo?.billingCycle && (String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') || String(savedPlanInfo.billingCycle).toLowerCase().includes('year')) ? (savedPlanInfo?.annualPrice || savedPlanInfo?.price) : null) ??
-        (activeRestaurant?.subscription?.billingCycle && (String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') || String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year')) ? (activeRestaurant?.subscription?.annualPrice || activeRestaurant?.subscription?.price) : null) ??
+        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.annualPrice || (isAnnualCycle ? savedPlanInfo?.price : null))) ??
         matchedActivePlan?.annualPrice ??
         matchedActivePlan?.yearlyPrice ??
         (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
       )
     : Number(
-        (savedPlanInfo?.billingCycle && (!String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') && !String(savedPlanInfo.billingCycle).toLowerCase().includes('year')) ? (savedPlanInfo?.monthlyPrice || savedPlanInfo?.price) : null) ??
-        (activeRestaurant?.subscription?.billingCycle && (!String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') && !String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year')) ? (activeRestaurant?.subscription?.monthlyPrice || activeRestaurant?.subscription?.price) : null) ??
+        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.monthlyPrice || (!isAnnualCycle ? savedPlanInfo?.price : null))) ??
         matchedActivePlan?.monthlyPrice ??
         matchedActivePlan?.basePrice ??
         matchedActivePlan?.baseValue ??
@@ -860,19 +871,24 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
     let apiResult = null;
     try {
+      const planMongoId = targetPlan._id || targetPlan.id || targetPlan.planId;
       if (isRenewal) {
         apiResult = await SubscriptionApi.renewSubscription({
-          planId: targetPlan._id || targetPlan.id || targetPlan.planId,
-          plan: targetPlan._id || targetPlan.id || targetPlan.planId,
+          newPlanId: planMongoId,
+          planId: planMongoId,
+          plan: planMongoId,
+          _id: planMongoId,
           billingCycle: billingParam,
-          paymentMethod: paymentParam
+          paymentMethod: methodStr
         });
       } else {
         apiResult = await SubscriptionApi.upgradeSubscription({
-          planId: targetPlan._id || targetPlan.id || targetPlan.planId,
-          plan: targetPlan._id || targetPlan.id || targetPlan.planId,
+          newPlanId: planMongoId,
+          planId: planMongoId,
+          plan: planMongoId,
+          _id: planMongoId,
           billingCycle: billingParam,
-          paymentMethod: paymentParam
+          paymentMethod: methodStr
         });
       }
     } catch (err) {
