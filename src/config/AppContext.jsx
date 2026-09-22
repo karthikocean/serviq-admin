@@ -196,6 +196,7 @@ export const extractRestaurantFromToken = (token) => {
 };
 
 const loadSavedUser = () => {
+  
   try {
     // Clear any legacy localStorage items
     localStorage.clear();
@@ -1084,24 +1085,6 @@ export const AppProvider = ({ children }) => {
           const resolvedRole = isRestaurantOwner 
             ? 'RESTAURANT_OWNER' 
             : (roleStr || apiUser.role || (isManagerOrBranchAdmin ? 'Branch manager' : 'Staff'));
-
-          const emailKey = cleanEmail.toLowerCase().trim();
-          const tokenRestName = extractRestaurantFromToken(token);
-          const mappedRestName = KNOWN_RESTAURANT_MAP[emailKey];
-
-          const resolvedRestaurantName = 
-            apiUser.restaurantName || 
-            apiUser.restaurant_name ||
-            (typeof apiUser.restaurant === 'object' ? (apiUser.restaurant?.restaurantName || apiUser.restaurant?.name) : '') ||
-            payload?.data?.restaurantName ||
-            payload?.restaurantName ||
-            (typeof payload?.data?.restaurant === 'object' ? (payload?.data?.restaurant?.restaurantName || payload?.data?.restaurant?.name) : '') ||
-            tokenRestName ||
-            mappedRestName ||
-            '';
-
-          const resolvedOwnerName = apiUser.ownerName || apiUser.name || 'Administrator';
-          const resolvedDisplayName = apiUser.name || resolvedOwnerName || resolvedRestaurantName || 'Restaurant Admin';
 
           const user = {
             id: apiUser.id || apiUser._id,
