@@ -223,7 +223,7 @@ export default function RolesPermissionsPanel() {
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', margin: '0 0 16px 0', fontFamily: "'Outfit', sans-serif" }}>
               {viewState === 'edit' ? `Edit Role Permissions: ${editingRoleName}` : 'Add New Role'}
             </h2>
-            <div style={{ maxWidth: '400px' }}>
+            <div style={{ maxWidth: '450px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                 Role Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
@@ -234,15 +234,20 @@ export default function RolesPermissionsPanel() {
                   setEditingRoleName(e.target.value);
                   if (roleNameError) setRoleNameError('');
                 }}
-                disabled={viewState === 'edit'}
-                placeholder="e.g. Branch Manager"
+                disabled={viewState === 'edit' && isOwnerRole(editingRoleName)}
+                placeholder="e.g. Branch Manager, Cashier, Kitchen Supervisor"
                 style={{
                   width: '100%',
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  border: roleNameError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  border: roleNameError ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
                   fontSize: '14px',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  color: '#0f172a',
+                  backgroundColor: (viewState === 'edit' && isOwnerRole(editingRoleName)) ? '#f8fafc' : '#ffffff',
+                  cursor: (viewState === 'edit' && isOwnerRole(editingRoleName)) ? 'not-allowed' : 'text',
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
                 }}
               />
               {roleNameError && (

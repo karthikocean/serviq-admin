@@ -177,6 +177,8 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route';
+
   const selectedBranch = branches.find(b => 
     String(b.id || b._id) === String(selectedBranchId) || 
     String(b.branchCode) === String(selectedBranchId)
@@ -237,7 +239,7 @@ export default function BranchSearchDropdown() {
               {isBranchLocked ? 'Assigned Branch' : 'Branch Filter'}
             </span>
             <span className="branch-search-value">
-              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : 'All Branches'}
+              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : mainBranchName}
             </span>
           </div>
         </div>
@@ -295,8 +297,13 @@ export default function BranchSearchDropdown() {
 
           {/* OPTIONS LIST */}
           <div className="branch-search-options-list">
-            {/* ALL BRANCHES OPTION */}
-            {(!searchQuery || 'all branches'.includes(searchQuery.toLowerCase())) && (
+            {/* MAIN BRANCH / HQ OPTION */}
+            {(!searchQuery || 
+              'all branches'.includes(searchQuery.toLowerCase()) || 
+              'main branch'.includes(searchQuery.toLowerCase()) || 
+              'spice route'.includes(searchQuery.toLowerCase()) ||
+              mainBranchName.toLowerCase().includes(searchQuery.toLowerCase())
+            ) && (
               <div
                 className={`branch-search-option ${selectedBranchId === null || selectedBranchId === 'ALL' ? 'selected' : ''}`}
                 onClick={() => handleSelectBranch(null)}
@@ -306,10 +313,10 @@ export default function BranchSearchDropdown() {
                 </div>
                 <div className="branch-option-info">
                   <div className="branch-option-title-row">
-                    <span className="branch-option-name">All Branches (HQ)</span>
+                    <span className="branch-option-name">{mainBranchName} (Main Branch)</span>
                     <span className="branch-badge-total">{branches.length} TOTAL</span>
                   </div>
-                  <span className="branch-option-subtext">Aggregated data across all active outlets</span>
+                  <span className="branch-option-subtext">Main Branch • Aggregated data across all active outlets</span>
                 </div>
                 <div className="branch-option-action">
                   {(selectedBranchId === null || selectedBranchId === 'ALL') && <CheckIcon size={15} color="var(--primary)" />}

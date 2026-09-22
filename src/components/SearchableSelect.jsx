@@ -118,7 +118,15 @@ export default function SearchableSelect({
     if (typeof value === 'object' && value !== null && value.value !== undefined) {
       return normalizedOptions.find(opt => String(opt.value) === String(value.value)) || value;
     }
-    return normalizedOptions.find(opt => String(opt.value) === String(value)) || { value, label: String(value) };
+    const match = normalizedOptions.find(opt => String(opt.value) === String(value));
+    if (match) return match;
+
+    // Guard against showing raw 24-char ObjectId hex string to users
+    const strVal = String(value);
+    if (/^[0-9a-fA-F]{24}$/.test(strVal)) {
+      return null;
+    }
+    return { value, label: strVal };
   }, [value, normalizedOptions, isMulti]);
 
   // Custom styles for Serviq design system with responsive bounds

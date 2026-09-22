@@ -88,6 +88,7 @@ export default function UserListPanel() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showUserPassword, setShowUserPassword] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -133,53 +134,28 @@ export default function UserListPanel() {
 
     const clean = String(targetRoleIdOrName || '').toLowerCase().trim();
     const matched = (currentRoles || []).find(r => {
-      if (!isObjectId(r._id)) return false;
+      const id = r._id || r.id;
+      if (!isObjectId(id)) return false;
       const name = String(r.roleName || r.name || '').toLowerCase().trim();
-      if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
-      if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
-      if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
-      return name === clean;
+      return name === clean || (clean && name.includes(clean)) || (clean && clean.includes(name));
     });
 
-    if (matched && isObjectId(matched._id)) return matched._id;
+    if (matched && isObjectId(matched._id || matched.id)) return (matched._id || matched.id);
 
     try {
       const serverRoles = await RoleApi.getRoles();
-      if (serverRoles?.status && Array.isArray(serverRoles.response.data)) {
-        const sMatch = serverRoles.response.data.find(r => {
-          if (!isObjectId(r._id)) return false;
-          const name = String(r.roleName || r.name || '').toLowerCase().trim();
-          if (clean.includes('branch') || clean.includes('manager')) return name.includes('branch') || name.includes('manager') || name.includes('admin');
-          if (clean.includes('kitchen')) return name.includes('kitchen') || name.includes('chef');
-          if (clean.includes('waiter')) return name.includes('waiter') || name.includes('server');
-          return name === clean;
-        });
-        if (sMatch && isObjectId(sMatch._id)) return sMatch._id;
-      }
+      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data) 
+        ? serverRoles.response.data 
+        : (Array.isArray(serverRoles?.response) ? serverRoles.response : []);
+      const sMatch = sRoles.find(r => {
+        const id = r._id || r.id;
+        if (!isObjectId(id)) return false;
+        const name = String(r.roleName || r.name || '').toLowerCase().trim();
+        return name === clean || (clean && name.includes(clean)) || (clean && clean.includes(name));
+      });
+      if (sMatch && isObjectId(sMatch._id || sMatch.id)) return (sMatch._id || sMatch.id);
     } catch (e) {
       console.error("Error checking roles:", e);
-    }
-
-    let roleTitle = 'Branch manager';
-    if (clean.includes('kitchen')) roleTitle = 'Kitchen';
-    else if (clean.includes('waiter')) roleTitle = 'Waiter';
-
-    try {
-      const createRes = await RoleApi.createRole({
-        roleName: roleTitle,
-        permissions: {
-          dashboard: { view: true, add: true, edit: true, delete: false },
-          orders: { view: true, add: true, edit: true, delete: false },
-          menu: { view: true, add: false, edit: false, delete: false },
-          tables: { view: true, add: true, edit: true, delete: false }
-        }
-      }, true);
-      const createdId = createRes?.response?.data?._id || createRes?.response?.data?.id;
-      if (createdId && isObjectId(createdId)) {
-        return createdId;
-      }
-    } catch (createErr) {
-      console.error("Error creating role:", createErr);
     }
 
     return targetRoleIdOrName;
@@ -215,27 +191,10 @@ export default function UserListPanel() {
       setTotalRecords(usersRes.response.total || 0);
     }
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
-    if (rolesRes?.status && Array.isArray(rolesRes.response.data)) {
-      const mapped = mapToStandardRoles(rolesRes.response.data);
-      setApiRoles(mapped);
-
-      const missing = mapped.filter(r => !isObjectId(r._id));
-      if (missing.length > 0) {
-        Promise.all(missing.map(mr => RoleApi.createRole({
-          roleName: mr.roleName,
-          permissions: {
-            dashboard: { view: true, add: true, edit: true, delete: false },
-            orders: { view: true, add: true, edit: true, delete: false },
-            menu: { view: true, add: false, edit: false, delete: false },
-            tables: { view: true, add: true, edit: true, delete: false }
-          }
-        }, true))).then(async () => {
-          const freshRolesRes = await RoleApi.getRoles();
-          if (freshRolesRes?.status && Array.isArray(freshRolesRes.response.data)) {
-            setApiRoles(mapToStandardRoles(freshRolesRes.response.data));
-          }
-        }).catch(err => console.error("Auto-seeding roles error:", err));
-      }
+    if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
+      setApiRoles(rolesRes.response.data);
+    } else if (rolesRes?.status && Array.isArray(rolesRes.response)) {
+      setApiRoles(rolesRes.response);
     } else {
       setApiRoles(DEFAULT_STAFF_ROLES);
     }
@@ -711,31 +670,55 @@ export default function UserListPanel() {
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Password <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <input
-                  type="password"
-                  name="user_panel_password_field"
-                  autoComplete="new-password"
-                  value={userForm.password}
-                  onChange={e => {
-                    setUserForm({ ...userForm, password: e.target.value });
-                    if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                  }}
-                  placeholder="••••••••••••"
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                    fontSize: '14px',
-                    boxSizing: 'border-box'
-                  }}
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showUserPassword ? 'text' : 'password'}
+                    name="user_panel_password_field"
+                    autoComplete="new-password"
+                    value={userForm.password}
+                    onChange={e => {
+                      setUserForm({ ...userForm, password: e.target.value });
+                      if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                    }}
+                    placeholder="••••••••••••"
+                    style={{
+                      width: '100%',
+                      padding: '10px 42px 10px 14px',
+                      borderRadius: '8px',
+                      border: formErrors.password ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                      fontSize: '14px',
+                      boxSizing: 'border-box',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowUserPassword(!showUserPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b'
+                    }}
+                    title={showUserPassword ? "Hide Password" : "Show Password"}
+                  >
+                    {showUserPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                  </button>
+                </div>
                 {formErrors.password && (
                   <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                     {formErrors.password}
                   </span>
                 )}
-              <PasswordRequirements password={userForm.password} />
+                <PasswordRequirements password={userForm.password} />
               </div>
             )}
 

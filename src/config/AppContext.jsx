@@ -940,7 +940,9 @@ export const AppProvider = ({ children }) => {
 
         if (token && apiUser) {
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
-          const roleStr = typeof apiUser.role === 'object' && apiUser.role !== null ? (apiUser.role.roleName || apiUser.role.name || '') : (apiUser.role || '');
+          const roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
+                          (typeof apiUser.roleId === 'object' && apiUser.roleId !== null) ? apiUser.roleId : null;
+          const roleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
           const roleUpper = roleStr.toUpperCase();
           const roleLower = roleStr.toLowerCase().trim();
           const emailLower = cleanEmail.toLowerCase().trim();
@@ -950,34 +952,39 @@ export const AppProvider = ({ children }) => {
             userTypeUpper === 'OWNER' || 
             userTypeUpper === 'SUPER ADMIN' || 
             userTypeUpper === 'SUPER_ADMIN' ||
+            userTypeUpper === 'ADMIN' ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
             roleUpper === 'OWNER' ||
+            roleUpper === 'ADMIN' ||
+            roleLower === 'admin' ||
             String(apiUser.name || '').toLowerCase().includes('admin') ||
             emailLower.includes('admin');
 
-          const isBranchAdmin = 
+          const isManagerOrBranchAdmin = 
             userTypeUpper === 'BRANCH_ADMIN' ||
             userTypeUpper === 'BRANCH ADMIN' ||
-            roleLower === 'branch manager' ||
-            roleLower === 'branch admin' ||
-            roleLower === 'branch_admin' ||
-            roleLower === 'manager' ||
-            roleLower === 'admin';
+            userTypeUpper === 'MANAGER' ||
+            roleLower.includes('manager') ||
+            roleLower.includes('admin') ||
+            roleLower.includes('supervisor');
 
-          // Strictly block staff members (Waiters, Kitchen staff, Station, etc.) from Admin Panel login.
-          // Staff credentials are only for the mobile app, not the Admin panel.
-          const isStaffOrDisallowed = 
-            roleLower.includes('waiter') ||
-            roleLower.includes('kitchen') ||
-            roleLower.includes('chef') ||
-            roleLower.includes('cook') ||
-            roleLower.includes('server') ||
-            roleLower.includes('steward') ||
-            userTypeUpper === 'STATION' ||
-            ((userTypeUpper === 'STAFF' || userTypeUpper === 'EMPLOYEE') && !isRestaurantOwner && !isBranchAdmin);
+          // ONLY Waiter and Kitchen staff are disallowed from Admin Panel login.
+          // Branch managers, Managers, and all other management roles have login access.
+          const isDisallowedStaff = 
+            !isRestaurantOwner &&
+            !isManagerOrBranchAdmin &&
+            (
+              roleLower.includes('waiter') ||
+              roleLower.includes('kitchen') ||
+              roleLower.includes('chef') ||
+              roleLower.includes('cook') ||
+              roleLower.includes('server') ||
+              roleLower.includes('steward') ||
+              userTypeUpper === 'STATION'
+            );
 
-          if (isStaffOrDisallowed || (!isRestaurantOwner && !isBranchAdmin)) {
+          if (isDisallowedStaff) {
             sessionStorage.removeItem("userToken");
             sessionStorage.removeItem("token");
             sessionStorage.removeItem("currentUser");
@@ -998,13 +1005,18 @@ export const AppProvider = ({ children }) => {
             ? (apiUser.branchId._id || apiUser.branchId.id)
             : (apiUser.branchId || apiUser.activeBranchId || '');
 
+          const resolvedRole = isRestaurantOwner 
+            ? 'RESTAURANT_OWNER' 
+            : (roleStr || apiUser.role || (isManagerOrBranchAdmin ? 'Branch manager' : 'Staff'));
+
           const user = {
             id: apiUser.id || apiUser._id,
             name: apiUser.name || apiUser.ownerName || apiUser.restaurantName || 'Restaurant Admin',
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber || '',
-            userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : 'BRANCH_ADMIN'),
-            role: isRestaurantOwner ? 'RESTAURANT_OWNER' : (apiUser.role || 'Branch Manager'),
+            userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : (isManagerOrBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')),
+            role: resolvedRole,
+            roleId: apiUser.roleId || apiUser.role,
             restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
             activeBranchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL'),
             branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')

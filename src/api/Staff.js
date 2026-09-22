@@ -13,7 +13,7 @@ const extractErrorMessage = (error, defaultMsg) => {
 class StaffApi {
   async getStaff(params = "") {
     try {
-      const cleanParams = { limit: 10, page: 0 };
+      const cleanParams = { limit: 100, page: 0 };
       if (typeof params === 'string') {
         if (params && params !== 'ALL' && params !== 'All') {
           cleanParams.branchId = params;
@@ -32,7 +32,7 @@ class StaffApi {
           cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
         }
         if (cleanParams.limit !== undefined) {
-          cleanParams.limit = Number(cleanParams.limit) || 10;
+          cleanParams.limit = Number(cleanParams.limit) || 100;
         }
       }
       const response = await apiClient.get("/users", { params: cleanParams });

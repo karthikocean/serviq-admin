@@ -111,23 +111,26 @@ export default function AdminLayout() {
   const isBranchAdmin = 
     userType === 'BRANCH_ADMIN' || 
     userType === 'BRANCH ADMIN' || 
-    userRoleLower === 'branch manager' || 
-    userRoleLower === 'branch admin' || 
-    userRoleLower === 'branch_admin' || 
-    userRoleLower.includes('manager') ||
-    userRoleLower === 'manager';
+    userType === 'MANAGER' ||
+    userRoleLower.includes('manager') || 
+    userRoleLower.includes('admin') ||
+    userRoleLower.includes('supervisor');
 
+  // ONLY Waiter and Kitchen staff are disallowed from Admin Panel
   const isDisallowedStaff = 
-    userRoleLower.includes('waiter') ||
-    userRoleLower.includes('kitchen') ||
-    userRoleLower.includes('chef') ||
-    userRoleLower.includes('cook') ||
-    userRoleLower.includes('server') ||
-    userRoleLower.includes('steward') ||
-    userType === 'STATION' ||
-    ((userType === 'STAFF' || userType === 'EMPLOYEE') && !isRestaurantOwner && !isBranchAdmin);
+    !isRestaurantOwner &&
+    !isBranchAdmin &&
+    (
+      userRoleLower.includes('waiter') ||
+      userRoleLower.includes('kitchen') ||
+      userRoleLower.includes('chef') ||
+      userRoleLower.includes('cook') ||
+      userRoleLower.includes('server') ||
+      userRoleLower.includes('steward') ||
+      userType === 'STATION'
+    );
 
-  if (isDisallowedStaff || (!isRestaurantOwner && !isBranchAdmin)) {
+  if (isDisallowedStaff) {
     ShowNotifications.showAlertNotification("Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to access the Admin Panel.", false);
     handleLogout();
     return <Navigate to="/login" replace />;
@@ -325,6 +328,18 @@ export default function AdminLayout() {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
                 </span>
                 <span className="sidebar-item-label">Dashboard</span>
+              </Link>
+            </li>
+          )}
+
+          {/* Roles & Permission */}
+          {isTabAllowed('roles-permissions') && (
+            <li className={`sidebar-item ${isRolesActive ? 'active' : ''}`}>
+              <Link to="/roles-permissions" onClick={handleCloseAllDropdowns}>
+                <span className="sidebar-icon-box">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </span>
+                <span className="sidebar-item-label">Roles & Permission</span>
               </Link>
             </li>
           )}

@@ -6,6 +6,7 @@ import TableApi from '../../api/Table';
 import StaffApi from '../../api/Staff';
 import UserApi from '../../api/User';
 import BranchApi from '../../api/Branch';
+import RoleApi from '../../api/Role';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 
 export default function TableFormPage() {
@@ -25,6 +26,7 @@ export default function TableFormPage() {
   const isBranchLocked = !isAdminOrOwner;
 
   const [branches, setBranches] = useState(() => activeRestaurant?.branches || []);
+  const [allRoles, setAllRoles] = useState([]);
   const [allStaff, setAllStaff] = useState(() => {
     if (Array.isArray(activeRestaurant?.staff) && activeRestaurant.staff.length > 0) return activeRestaurant.staff;
     if (Array.isArray(activeRestaurant?.users) && activeRestaurant.users.length > 0) return activeRestaurant.users;
@@ -84,23 +86,32 @@ export default function TableFormPage() {
 
   const fetchStaff = async (branchId) => {
     try {
-      const res = await StaffApi.getStaff(branchId);
+      const cleanBranchId = branchId && branchId !== 'ALL' ? branchId : undefined;
+      const [staffRes, userRes, rolesRes] = await Promise.all([
+        StaffApi.getStaff({ branchId: cleanBranchId, limit: 100 }),
+        UserApi.getUsers({ branchId: cleanBranchId, limit: 100 }),
+        RoleApi.getRoles({ limit: 50 })
+      ]);
+
       let staffData = [];
-      if (res?.status && res.response) {
-        if (Array.isArray(res.response?.data)) staffData = res.response.data;
-        else if (Array.isArray(res.response?.users)) staffData = res.response.users;
-        else if (Array.isArray(res.response?.staff)) staffData = res.response.staff;
-        else if (Array.isArray(res.response)) staffData = res.response;
+      if (staffRes?.status && staffRes.response) {
+        const raw = staffRes.response?.data || staffRes.response?.users || staffRes.response?.staff || (Array.isArray(staffRes.response) ? staffRes.response : []);
+        if (Array.isArray(raw)) staffData = [...raw];
       }
-      if (staffData.length === 0) {
-        try {
-          const uRes = await UserApi.getUsers({ branchId: branchId && branchId !== 'ALL' ? branchId : undefined, limit: 10 });
-          if (uRes?.status && uRes.response) {
-            const ud = uRes.response?.data || uRes.response?.users || (Array.isArray(uRes.response) ? uRes.response : []);
-            if (Array.isArray(ud) && ud.length > 0) staffData = ud;
-          }
-        } catch (e) {}
+      if (userRes?.status && userRes.response) {
+        const uRaw = userRes.response?.data || userRes.response?.users || (Array.isArray(userRes.response) ? userRes.response : []);
+        if (Array.isArray(uRaw)) {
+          uRaw.forEach(u => {
+            const exists = staffData.some(s => String(s._id || s.id) === String(u._id || u.id));
+            if (!exists) staffData.push(u);
+          });
+        }
       }
+      if (rolesRes?.status && rolesRes.response) {
+        const rRaw = rolesRes.response?.data || (Array.isArray(rolesRes.response) ? rolesRes.response : []);
+        if (Array.isArray(rRaw)) setAllRoles(rRaw);
+      }
+
       if (staffData.length === 0) {
         const localStaff = activeRestaurant?.staff || activeRestaurant?.users || [];
         if (localStaff.length > 0) staffData = localStaff;
@@ -144,23 +155,46 @@ export default function TableFormPage() {
 
   useEffect(() => {
     if (existingTable) {
-      setForm({
+      const wId = (typeof existingTable.assignedWaiter === 'object' && existingTable.assignedWaiter !== null)
+        ? (existingTable.assignedWaiter._id || existingTable.assignedWaiter.id)
+        : (existingTable.assignedWaiter || existingTable.assignedWaiterId?._id || existingTable.assignedWaiterId || '');
+      
+      const wName = (typeof existingTable.assignedWaiter === 'object' && existingTable.assignedWaiter !== null)
+        ? (existingTable.assignedWaiter.name || existingTable.assignedWaiter.fullName)
+        : (existingTable.assignedWaiterName || (typeof existingTable.assignedWaiterId === 'object' ? existingTable.assignedWaiterId.name : null));
+
+      setForm(prev => ({
+        ...prev,
         id: existingTable.tableNumber || existingTable.tableNum || existingTable.id || '',
         branchId: existingTable.branchId || selectedBranchId || '',
         name: existingTable.name || '',
         seats: existingTable.seatingCapacity ?? existingTable.seats ?? 4,
         section: existingTable.section || 'Main Dining',
         status: existingTable.status || 'Free',
-        assignedWaiterId: existingTable.assignedWaiter?._id || existingTable.assignedWaiter || existingTable.assignedWaiterId || ''
-      });
+        assignedWaiterId: wId ? String(wId) : ''
+      }));
+
+      // If existingTable has assigned waiter object, immediately register in allStaff if missing
+      if (wId && wName) {
+        setAllStaff(prev => {
+          const exists = prev.some(s => String(s._id || s.id) === String(wId));
+          if (!exists) {
+            return [...prev, { _id: String(wId), id: String(wId), name: wName, role: 'Waiter', branchId: existingTable.branchId }];
+          }
+          return prev;
+        });
+      }
     }
-  }, [existingTable]);
+  }, [existingTable, selectedBranchId]);
 
   // Filter waiters by role and branch (Waiters ONLY)
   const isOnlyWaiter = (s) => {
     if (!s) return false;
+    const roleIdStr = typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?._id || s.roleId?.id) : s.roleId;
+    const roleFromList = allRoles.find(r => String(r._id || r.id) === String(roleIdStr));
     const roleName = String(
-      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : (s.roleId && !String(s.roleId).match(/^[0-9a-fA-F]{24}$/) ? s.roleId : '')) ||
+      (typeof s.roleId === 'object' && s.roleId !== null ? (s.roleId?.roleName || s.roleId?.name) : '') ||
+      (roleFromList?.roleName || roleFromList?.name || '') ||
       (typeof s.role === 'object' && s.role !== null ? (s.role?.roleName || s.role?.name) : (s.role && !String(s.role).match(/^[0-9a-fA-F]{24}$/) ? s.role : '')) ||
       s.roleName ||
       s.designation ||
@@ -194,6 +228,8 @@ export default function TableFormPage() {
     return (
       roleName.includes('waiter') ||
       roleName.includes('server') ||
+      roleName.includes('steward') ||
+      roleName.includes('captain') ||
       roleName === 'waiter' ||
       userType === 'WAITER' ||
       userType === 'SERVER'
@@ -206,10 +242,32 @@ export default function TableFormPage() {
 
   const availableWaiters = allWaiters.filter(s => {
     if (!form.branchId || form.branchId === 'ALL') return true;
-    const staffBranchId = s.branchId?._id || s.branchId || s.branch?._id || s.branch;
+    const staffBranchId = typeof s.branchId === 'object' && s.branchId !== null 
+      ? (s.branchId._id || s.branchId.id) 
+      : (s.branchId || (typeof s.branch === 'object' ? s.branch?._id : s.branch));
     if (!staffBranchId || staffBranchId === 'ALL') return true;
     return String(staffBranchId) === String(form.branchId);
   });
+
+  // If the table currently has an assigned waiter, ensure that waiter is ALWAYS available in the options
+  const currentAssignedId = String(form.assignedWaiterId || '');
+  if (currentAssignedId && currentAssignedId !== 'Unassigned' && currentAssignedId !== 'null') {
+    const isAlreadyPresent = availableWaiters.some(w => String(w._id || w.id || w.name) === currentAssignedId);
+    if (!isAlreadyPresent) {
+      const foundInAll = allStaff.find(s => String(s._id || s.id || s.name) === currentAssignedId);
+      const fallbackName = (typeof existingTable?.assignedWaiter === 'object' ? existingTable.assignedWaiter?.name : null) || 
+        existingTable?.assignedWaiterName || 
+        foundInAll?.name || 
+        'Assigned Waiter';
+      
+      availableWaiters.push({
+        _id: currentAssignedId,
+        id: currentAssignedId,
+        name: fallbackName,
+        role: 'Waiter'
+      });
+    }
+  }
 
   // Build map of waiters assigned to existing tables
   const waiterAssignedTableMap = {};
@@ -254,7 +312,7 @@ export default function TableFormPage() {
   availableWaiters.forEach(w => {
     const wId = String(w._id || w.id || '');
     const wName = String(w.name || '').trim().toLowerCase();
-    const assignedTableNum = waiterAssignedTableMap[wId] || waiterAssignedTableMap[wName];
+    const assignedTableNum = waiterAssignedTableMap[wId] || (wName ? waiterAssignedTableMap[wName] : null);
     if (assignedTableNum) {
       assignedWaiters.push({
         ...w,
@@ -267,14 +325,23 @@ export default function TableFormPage() {
 
   const waiterOptions = [
     { value: '', label: '-- None (Unassigned) --' },
-    ...unassignedWaiters.map(w => ({
-      value: w._id || w.id || w.name,
-      label: `${w.name} (Unassigned)`
-    })),
-    ...assignedWaiters.map(w => ({
-      value: w._id || w.id || w.name,
-      label: `${w.name} (Assigned to Table ${w.assignedTableNum})`
-    }))
+    ...unassignedWaiters.map(w => {
+      const displayName = w.name || w.fullName || w.email || 'Waiter';
+      return {
+        value: String(w._id || w.id || w.name),
+        label: `${displayName} (Unassigned)`
+      };
+    }),
+    ...assignedWaiters.map(w => {
+      const displayName = w.name || w.fullName || w.email || 'Waiter';
+      const isCurrentTable = String(w.assignedTableNum) === String(form.id);
+      return {
+        value: String(w._id || w.id || w.name),
+        label: isCurrentTable
+          ? `${displayName} (Assigned to this table)`
+          : `${displayName} (Assigned to Table ${w.assignedTableNum})`
+      };
+    })
   ];
 
   const validate = () => {

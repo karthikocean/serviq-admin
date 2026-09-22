@@ -5,11 +5,30 @@ import ShowNotifications from '../../helper/ShowNotifications';
 import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/ValidationHelper';
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import RoleApi from '../../api/Role';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
   const { staffId } = useParams();
   const { activeRestaurant, addStaff, updateStaff, selectedBranchId, currentUser, assignTablesToWaiter } = useAppState();
+
+  const [availableRoles, setAvailableRoles] = useState([]);
+
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const res = await RoleApi.getRoles();
+        if (res?.status && Array.isArray(res.response?.data)) {
+          setAvailableRoles(res.response.data);
+        } else if (res?.status && Array.isArray(res.response)) {
+          setAvailableRoles(res.response);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch roles in StaffFormPage:", err);
+      }
+    };
+    fetchRoles();
+  }, []);
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -265,7 +284,11 @@ export default function StaffFormPage() {
               <SearchableSelect
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                options={[
+                options={availableRoles.length > 0 ? availableRoles.map(r => ({
+                  value: r.roleName || r.name,
+                  label: r.roleName || r.name
+                })) : [
+                  { value: 'Manager', label: 'Manager' },
                   { value: 'Branch manager', label: 'Branch manager' },
                   { value: 'Kitchen', label: 'Kitchen' },
                   { value: 'Waiter', label: 'Waiter' }
