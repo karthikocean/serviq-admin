@@ -177,7 +177,7 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route';
+  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Main Branch';
 
   const selectedBranch = branches.find(b => 
     String(b.id || b._id) === String(selectedBranchId) || 
@@ -301,7 +301,6 @@ export default function BranchSearchDropdown() {
             {(!searchQuery || 
               'all branches'.includes(searchQuery.toLowerCase()) || 
               'main branch'.includes(searchQuery.toLowerCase()) || 
-              'spice route'.includes(searchQuery.toLowerCase()) ||
               mainBranchName.toLowerCase().includes(searchQuery.toLowerCase())
             ) && (
               <div

@@ -645,7 +645,7 @@ export default function OverviewPanel({
               style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px', background: '#ffffff' }}
               onClick={() => onSelectBranch(null)}
             >
-              ← View {activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route'}
+              ← View {activeRestaurant?.restaurantName || activeRestaurant?.name || 'Main Branch'}
             </button>
           )}
         </div>
@@ -1073,7 +1073,7 @@ export default function OverviewPanel({
           <div className="feed-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div>
               <h2 className="feed-title" style={{ fontSize: '16px', fontWeight: 700, color: 'var(--black)', margin: 0 }}>
-                Live Order Feed {selectedBranch ? `(${selectedBranch.branchCode})` : `(${activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route'})`}
+                Live Order Feed {selectedBranch ? `(${selectedBranch.branchCode})` : `(${activeRestaurant?.restaurantName || activeRestaurant?.name || 'Main Branch'})`}
               </h2>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

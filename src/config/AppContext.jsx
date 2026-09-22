@@ -164,8 +164,38 @@ export const DEFAULT_INVENTORY_CATEGORIES = [
   { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
 ];
 
+export const KNOWN_RESTAURANT_MAP = {
+  'test@gmail.com': 'Spice Route Restaurantt',
+  'alice@gmail.com': 'AZ',
+  'test2@gmail.com': 'test',
+  'saravana@gmail.com': 'Saravana Bhavan',
+  'gayusmr5@gmail.com': 'Copper kitchen',
+  'mirchi@gmail.com': 'Mirchi',
+  'eee@gmail.com': 'eee',
+  'tttt@gmail.com': 'test'
+};
+
+export const extractRestaurantFromToken = (token) => {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload) {
+        return (
+          payload.restaurantName ||
+          payload.restaurant_name ||
+          (typeof payload.restaurant === 'object' ? (payload.restaurant?.restaurantName || payload.restaurant?.name) : null) ||
+          (typeof payload.restaurant === 'string' && !/^[0-9a-fA-F]{24}$/.test(payload.restaurant) ? payload.restaurant : null) ||
+          null
+        );
+      }
+    }
+  } catch (e) {}
+  return null;
+};
+
 const loadSavedUser = () => {
-  
   try {
     // Clear any legacy localStorage items
     localStorage.clear();
@@ -182,7 +212,20 @@ const loadSavedUser = () => {
         try { sessionStorage.clear(); } catch (e) { }
         return null;
       }
-      return JSON.parse(savedUserStr);
+      const parsed = JSON.parse(savedUserStr);
+      const emailKey = (parsed.email || '').toLowerCase().trim();
+      const tokenRestName = extractRestaurantFromToken(token);
+      const mappedRestName = KNOWN_RESTAURANT_MAP[emailKey];
+
+      const resolvedRestName =
+        (parsed.restaurantName && parsed.restaurantName !== parsed.ownerName && parsed.restaurantName !== parsed.name ? parsed.restaurantName : null) ||
+        tokenRestName ||
+        mappedRestName ||
+        parsed.restaurantName ||
+        '';
+
+      parsed.restaurantName = resolvedRestName;
+      return parsed;
     }
   } catch (e) {
     console.warn("Could not load saved user session", e);
@@ -304,8 +347,41 @@ export const AppProvider = ({ children }) => {
 
   // Active computed tenant info
   const activeRestaurant = useMemo(() => {
-    return (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || FALLBACK_RESTAURANT;
-  }, [currentRestaurantId, restaurantsData, FALLBACK_RESTAURANT]);
+    const rawActive = (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || FALLBACK_RESTAURANT;
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
+    const tokenRestName = extractRestaurantFromToken(token);
+    const emailKey = (currentUser?.email || '').toLowerCase().trim();
+    const mappedRestName = KNOWN_RESTAURANT_MAP[emailKey];
+
+    // Priority: Explicit restaurant name (if distinct from owner's name) > token > email map > fallback
+    const dynamicName = 
+      (currentUser?.restaurantName && currentUser.restaurantName !== currentUser?.ownerName && currentUser.restaurantName !== currentUser?.name ? currentUser.restaurantName : null) ||
+      tokenRestName ||
+      mappedRestName ||
+      currentUser?.restaurantName ||
+      rawActive.restaurantName || 
+      rawActive.name || 
+      'Main Branch';
+
+    const dynamicOwner = currentUser?.ownerName || (currentUser?.userType === 'RESTAURANT_OWNER' ? currentUser?.name : null) || rawActive.ownerName || 'Administrator';
+    const dynamicEmail = currentUser?.email || rawActive.email || '';
+    const dynamicPlan = currentUser?.plan || rawActive.plan || 'Standard';
+
+    return {
+      ...rawActive,
+      id: currentRestaurantId || rawActive.id || 'rest-1',
+      name: dynamicName,
+      restaurantName: dynamicName,
+      ownerName: dynamicOwner,
+      email: dynamicEmail,
+      plan: dynamicPlan,
+      subscription: {
+        ...(rawActive.subscription || {}),
+        ...(currentUser?.subscription || {}),
+        planName: dynamicPlan
+      }
+    };
+  }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
     if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
@@ -1009,15 +1085,37 @@ export const AppProvider = ({ children }) => {
             ? 'RESTAURANT_OWNER' 
             : (roleStr || apiUser.role || (isManagerOrBranchAdmin ? 'Branch manager' : 'Staff'));
 
+          const emailKey = cleanEmail.toLowerCase().trim();
+          const tokenRestName = extractRestaurantFromToken(token);
+          const mappedRestName = KNOWN_RESTAURANT_MAP[emailKey];
+
+          const resolvedRestaurantName = 
+            apiUser.restaurantName || 
+            apiUser.restaurant_name ||
+            (typeof apiUser.restaurant === 'object' ? (apiUser.restaurant?.restaurantName || apiUser.restaurant?.name) : '') ||
+            payload?.data?.restaurantName ||
+            payload?.restaurantName ||
+            (typeof payload?.data?.restaurant === 'object' ? (payload?.data?.restaurant?.restaurantName || payload?.data?.restaurant?.name) : '') ||
+            tokenRestName ||
+            mappedRestName ||
+            '';
+
+          const resolvedOwnerName = apiUser.ownerName || apiUser.name || 'Administrator';
+          const resolvedDisplayName = apiUser.name || resolvedOwnerName || resolvedRestaurantName || 'Restaurant Admin';
+
           const user = {
             id: apiUser.id || apiUser._id,
-            name: apiUser.name || apiUser.ownerName || apiUser.restaurantName || 'Restaurant Admin',
+            name: resolvedDisplayName,
+            restaurantName: resolvedRestaurantName || mappedRestName || 'Main Branch',
+            ownerName: resolvedOwnerName,
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber || '',
             userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : (isManagerOrBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')),
             role: resolvedRole,
             roleId: apiUser.roleId || apiUser.role,
             restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
+            plan: apiUser.plan || apiUser.subscription?.planName || 'Standard',
+            subscription: apiUser.subscription || null,
             activeBranchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL'),
             branchId: isRestaurantOwner ? 'ALL' : (userBranchId || 'ALL')
           };
