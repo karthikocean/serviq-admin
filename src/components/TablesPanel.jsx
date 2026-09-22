@@ -118,25 +118,28 @@ export default function TablesPanel({
       return table.assignedWaiter;
     }
     if (table.assignedWaiterId) {
-      const found = staff.find(s => s.id === table.assignedWaiterId);
+      if (typeof table.assignedWaiterId === 'object' && table.assignedWaiterId !== null) {
+        return table.assignedWaiterId.name || '';
+      }
+      const found = staff.find(s => String(s.id || s._id) === String(table.assignedWaiterId));
       if (found) return found.name;
     }
     return null;
   };
 
-
   // Filtered tables based on search and status
   const filteredTables = displayTables.filter(t => {
     const q = searchTerm.toLowerCase().trim();
-    const tableIdStr = (t.id || '').toLowerCase();
-    const waiter = (getWaiterName(t) || '').toLowerCase();
-    const section = (t.section || '').toLowerCase();
+    const tableIdStr = String(t.tableNumber || t.tableNo || t.tableNum || t.name || t.id || '').toLowerCase();
+    const waiter = String(getWaiterName(t) || '').toLowerCase();
+    const section = String(t.section || '').toLowerCase();
     const matchesSearch = !q || tableIdStr.includes(q) || waiter.includes(q) || section.includes(q);
 
+    const statusLower = String(t.status || '').toLowerCase();
     const matchesStatus =
       statusFilter === 'All' ? true :
-        statusFilter === 'Free' ? (t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available') :
-          statusFilter === 'Occupied' ? (t.status?.toLowerCase() === 'occupied') : true;
+        statusFilter === 'Free' ? (statusLower === 'free' || statusLower === 'available') :
+          statusFilter === 'Occupied' ? (statusLower === 'occupied') : true;
 
     return matchesSearch && matchesStatus;
   });

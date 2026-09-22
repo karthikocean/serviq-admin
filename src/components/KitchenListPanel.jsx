@@ -135,7 +135,6 @@ export default function KitchenListPanel({
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>KITCHEN STAFF NAME</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE NUMBER</th>
-                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>EMAIL ADDRESS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACTIVE ORDERS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>COMPLETED ORDERS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>DUTY STATUS</th>
@@ -159,7 +158,6 @@ export default function KitchenListPanel({
                       {s.name}
                     </td>
                     <td style={{ padding: '16px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.phone}</td>
-                    <td style={{ padding: '16px 14px', fontSize: '12px', fontWeight: 500, color: '#475569' }}>{s.email}</td>
                     <td style={{ padding: '16px 14px', textAlign: 'center', fontSize: '13px', fontWeight: 800, color: '#ea580c' }}>
                       {activeOrdersCount}
                     </td>
@@ -213,7 +211,7 @@ export default function KitchenListPanel({
               })}
               {kitchenStaff.length === 0 && (
                 <tr>
-                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No kitchen staff registered. Click "Add Kitchen Staff" to start.
                   </td>
                 </tr>

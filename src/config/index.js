@@ -22,11 +22,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-
-
-    IMAGE_BASE_URL = "http://192.168.88.12:5000/public";
-    BASE_URL = "http://192.168.88.12:5000/api/admin";
-    server = "http://192.168.88.12:5000";
+    IMAGE_BASE_URL = "http://192.168.88.19:5000/public";
+    BASE_URL = "http://192.168.88.19:5000/api/admin";
+    server = "http://192.168.88.19:5000";
     break;
 }
 
@@ -45,7 +43,7 @@ export const getCustomerScanUrl = (item) => {
     return `${CUSTOMER_APP_URL}/scan/${last || '6a8bff25e04c3475c4894348'}`;
   }
 
-  if (item?.qrUrl && typeof item.qrUrl === 'string' && item.qrUrl.includes('/scan/')) {
+  if (item?.qrUrl && typeof item.qrUrl === 'string' && item.qrUrl.startsWith('http')) {
     return item.qrUrl;
   }
 

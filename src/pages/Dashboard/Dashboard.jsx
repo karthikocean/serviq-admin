@@ -28,7 +28,7 @@ export default function Dashboard() {
       const [tablesRes, ordersRes, branchesRes, usersRes] = await Promise.allSettled([
         TableApi.getTables(branchParam),
         OrderApi.getOrders(branchParam),
-        BranchApi.getBranches(),
+        BranchApi.getBranches({ limit: 10 }),
         UserApi.getUsers(branchParam)
       ]);
 
@@ -53,8 +53,17 @@ export default function Dashboard() {
     fetchDashboardData();
     const interval = setInterval(() => {
       fetchDashboardData();
-    }, 15000);
-    return () => clearInterval(interval);
+    }, 10000);
+
+    const onFocus = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [fetchDashboardData]);
 
   if (!activeRestaurant) return null;

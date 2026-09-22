@@ -258,6 +258,48 @@ export const AVAILABLE_PLANS = [
   }
 ];
 
+export const isMongoId = (str) => {
+  return typeof str === 'string' && /^[0-9a-fA-F]{24}$/.test(str.trim());
+};
+
+export const resolveHumanPlanName = (rawInput, defaultName = 'Standard') => {
+  if (!rawInput) return defaultName;
+  if (typeof rawInput === 'object') {
+    const candidate = rawInput.name || rawInput.planName || rawInput.cleanName || rawInput.title;
+    if (candidate && !isMongoId(candidate)) {
+      return resolveHumanPlanName(candidate, defaultName);
+    }
+    const idCandidate = rawInput._id || rawInput.id || rawInput.planId;
+    if (idCandidate) {
+      return resolveHumanPlanName(idCandidate, defaultName);
+    }
+    return defaultName;
+  }
+  
+  const str = String(rawInput).trim();
+  if (!str || str === 'undefined' || str === 'null') return defaultName;
+  
+  if (isMongoId(str)) {
+    const matched = AVAILABLE_PLANS.find(p => p.id === str || p._id === str || p.id === `plan-${str}`);
+    if (matched && matched.name && !isMongoId(matched.name)) {
+      return matched.name.replace(/\s*plan$/i, '').trim();
+    }
+    return defaultName;
+  }
+  
+  const cleaned = str.replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim();
+  if (isMongoId(cleaned)) {
+    return defaultName;
+  }
+  
+  if (cleaned.toLowerCase().includes('premium')) return 'Premium';
+  if (cleaned.toLowerCase().includes('standard')) return 'Standard';
+  if (cleaned.toLowerCase().includes('basic')) return 'Basic';
+  if (cleaned.toLowerCase().includes('enterprise')) return 'Enterprise';
+
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+};
+
 export const getPlanBranchLimit = (planName, defaultLimit = 5) => {
   const name = (planName || '').toLowerCase();
   if (name.includes('premium')) return 8;

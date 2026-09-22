@@ -59,7 +59,7 @@ export default function Billing() {
     // Fallback: If no tables returned by API, derive active tables from OrderApi / activeRestaurant.orders
     if (fetchedTables.length === 0) {
       try {
-        const orderParams = isSingleBranch ? { branchId: selectedBranchId, limit: 1000 } : { limit: 1000 };
+        const orderParams = isSingleBranch ? { branchId: selectedBranchId, limit: 10 } : { limit: 10 };
         const orderRes = await OrderApi.getOrders(orderParams).catch(() => null);
         const oResp = orderRes?.status ? (orderRes.response?.data || orderRes.response?.orders || orderRes.response) : null;
         const orderList = Array.isArray(oResp) ? oResp : (Array.isArray(activeRestaurant?.orders) ? activeRestaurant.orders : []);

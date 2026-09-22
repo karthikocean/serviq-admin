@@ -8,6 +8,22 @@ import SearchableSelect from '../../components/SearchableSelect.jsx';
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import { validatePassword } from '../../helper/ValidationHelper';
 
+const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
 export default function StaffManagement() {
   const {
     activeRestaurant,
@@ -29,6 +45,7 @@ export default function StaffManagement() {
   // Kitchen settings modal states
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [kitchenPasswordInput, setKitchenPasswordInput] = useState('');
+  const [showKitchenPassword, setShowKitchenPassword] = useState(false);
   const [kitchenError, setKitchenError] = useState('');
 
   if (!activeRestaurant) return null;
@@ -43,10 +60,10 @@ export default function StaffManagement() {
   const rawOrders = activeRestaurant.orders || [];
   const rawBranches = activeRestaurant.branches || [];
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId) : rawStaff;
-  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId) : rawTables;
-  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId) : rawOrders;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId || (typeof s.branchId === 'object' && s.branchId?._id === selectedBranchId) || s.activeBranchId === selectedBranchId) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId || (typeof t.branchId === 'object' && t.branchId?._id === selectedBranchId)) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId || (typeof o.branchId === 'object' && o.branchId?._id === selectedBranchId)) : rawOrders;
   const branches = rawBranches;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {
@@ -358,26 +375,49 @@ export default function StaffManagement() {
             <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
               Kitchen Station Password <span style={{ color: '#ef4444' }}>*</span>
             </label>
-            <input
-              type="text"
-              value={kitchenPasswordInput}
-              onChange={(e) => {
-                setKitchenPasswordInput(e.target.value);
-                if (kitchenError) setKitchenError('');
-              }}
-              placeholder="••••••••••••"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: kitchenError ? '1.5px solid #ef4444' : '1.5px solid #fdba74',
-                fontSize: '14px',
-                fontWeight: 600,
-                outline: 'none',
-                backgroundColor: '#fff',
-                boxSizing: 'border-box'
-              }}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type={showKitchenPassword ? 'text' : 'password'}
+                value={kitchenPasswordInput}
+                onChange={(e) => {
+                  setKitchenPasswordInput(e.target.value);
+                  if (kitchenError) setKitchenError('');
+                }}
+                placeholder="••••••••••••"
+                style={{
+                  width: '100%',
+                  padding: '10px 42px 10px 14px',
+                  borderRadius: '8px',
+                  border: kitchenError ? '1.5px solid #ef4444' : '1.5px solid #fdba74',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  backgroundColor: '#fff',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowKitchenPassword(!showKitchenPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b'
+                }}
+                title={showKitchenPassword ? "Hide Password" : "Show Password"}
+              >
+                {showKitchenPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
             {kitchenError && (
               <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                 {kitchenError}

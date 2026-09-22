@@ -98,7 +98,7 @@ export default function KitchenReportsPanel({
           endDate: dateEnd || undefined,
           branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
           staffName: filterStaff !== 'All' ? filterStaff : undefined,
-          limit: 1000
+          limit: 10
         };
         const res = await ReportsApi.getKitchenReports(filters);
         if (isMounted && res && res.status) {

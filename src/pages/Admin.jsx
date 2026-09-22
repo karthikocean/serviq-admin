@@ -38,6 +38,15 @@ const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   </svg>
 );
 
+const EyeOffIcon = ({ size = 18, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
@@ -297,6 +306,8 @@ export default function Admin() {
   // 6. Staff states
   const [staffForm, setStaffForm] = useState({ id: '', name: '', role: 'Waiter', phone: '', email: '', password: '', status: 'On Duty' });
   const [kitchenPasswordForm, setKitchenPasswordForm] = useState('');
+  const [showAdminStaffPassword, setShowAdminStaffPassword] = useState(false);
+  const [showAdminKitchenPassword, setShowAdminKitchenPassword] = useState(false);
 
   const pageTitle = {
     'menu-form': menuForm.id ? ' Edit Menu Item' : ' Add New Menu Item',
@@ -1732,15 +1743,39 @@ export default function Admin() {
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Password</label>
-                    <input
-                      type="password"
-                      name="admin_staff_password_field"
-                      autoComplete="new-password"
-                      value={staffForm.password}
-                      onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
-                      required
-                      placeholder="••••••••••••"
-                    />
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <input
+                        type={showAdminStaffPassword ? 'text' : 'password'}
+                        name="admin_staff_password_field"
+                        autoComplete="new-password"
+                        value={staffForm.password}
+                        onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+                        required
+                        placeholder="••••••••••••"
+                        style={{ width: '100%', paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminStaffPassword(!showAdminStaffPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#64748b'
+                        }}
+                        title={showAdminStaffPassword ? "Hide Password" : "Show Password"}
+                      >
+                        {showAdminStaffPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                      </button>
+                    </div>
                   </div>
                   <PasswordRequirements password={staffForm.password} />
                 </div>
@@ -1782,13 +1817,37 @@ export default function Admin() {
                 </div>
                 <div className="form-group" style={{ marginBottom: '20px' }}>
                   <label>Kitchen Login Password</label>
-                  <input
-                    type="text"
-                    value={kitchenPasswordForm}
-                    onChange={(e) => setKitchenPasswordForm(e.target.value)}
-                    required
-                    placeholder="e.g. kitchen123"
-                  />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type={showAdminKitchenPassword ? 'text' : 'password'}
+                      value={kitchenPasswordForm}
+                      onChange={(e) => setKitchenPasswordForm(e.target.value)}
+                      required
+                      placeholder="e.g. kitchen123"
+                      style={{ width: '100%', paddingRight: '40px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAdminKitchenPassword(!showAdminKitchenPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#64748b'
+                      }}
+                      title={showAdminKitchenPassword ? "Hide Password" : "Show Password"}
+                    >
+                      {showAdminKitchenPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
                   <button type="button" className="btn btn-outline" style={{ padding: '10px 24px' }} onClick={() => setActivePage(null)}>Cancel</button>

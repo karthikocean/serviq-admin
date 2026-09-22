@@ -75,10 +75,10 @@ export default function BranchSearchDropdown() {
   const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  // Fetch branches from API lazily when needed
+  // Fetch branches from API with limit: 10
   const loadBranches = async () => {
     try {
-      const res = await BranchApi.getBranches();
+      const res = await BranchApi.getBranches({ limit: 10 });
       if (res && res.status && res.response) {
         const branchArray = Array.isArray(res.response) 
           ? res.response 
@@ -102,17 +102,24 @@ export default function BranchSearchDropdown() {
           setLocalBranches(mapped);
         }
       }
+      if (typeof contextFetchBranches === 'function') {
+        contextFetchBranches({ limit: 10 });
+      }
     } catch (e) {
       console.warn("Branch fetch error in dropdown:", e);
     }
   };
 
-  // Only load branches when the dropdown is opened and branches are not yet loaded
+  // Load branches on mount and when dropdown is opened
   useEffect(() => {
-    if (isOpen && (!activeRestaurant?.branches || activeRestaurant.branches.length === 0) && localBranches.length === 0) {
+    loadBranches();
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
       loadBranches();
     }
-  }, [isOpen, activeRestaurant?.branches, localBranches.length]);
+  }, [isOpen]);
 
   const rawBranches = (activeRestaurant?.branches && activeRestaurant.branches.length > 0)
     ? activeRestaurant.branches
@@ -169,6 +176,8 @@ export default function BranchSearchDropdown() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route';
 
   const selectedBranch = branches.find(b => 
     String(b.id || b._id) === String(selectedBranchId) || 
@@ -230,7 +239,7 @@ export default function BranchSearchDropdown() {
               {isBranchLocked ? 'Assigned Branch' : 'Branch Filter'}
             </span>
             <span className="branch-search-value">
-              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : 'All Branches'}
+              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : mainBranchName}
             </span>
           </div>
         </div>
@@ -288,8 +297,13 @@ export default function BranchSearchDropdown() {
 
           {/* OPTIONS LIST */}
           <div className="branch-search-options-list">
-            {/* ALL BRANCHES OPTION */}
-            {(!searchQuery || 'all branches'.includes(searchQuery.toLowerCase())) && (
+            {/* MAIN BRANCH / HQ OPTION */}
+            {(!searchQuery || 
+              'all branches'.includes(searchQuery.toLowerCase()) || 
+              'main branch'.includes(searchQuery.toLowerCase()) || 
+              'spice route'.includes(searchQuery.toLowerCase()) ||
+              mainBranchName.toLowerCase().includes(searchQuery.toLowerCase())
+            ) && (
               <div
                 className={`branch-search-option ${selectedBranchId === null || selectedBranchId === 'ALL' ? 'selected' : ''}`}
                 onClick={() => handleSelectBranch(null)}
@@ -299,10 +313,10 @@ export default function BranchSearchDropdown() {
                 </div>
                 <div className="branch-option-info">
                   <div className="branch-option-title-row">
-                    <span className="branch-option-name">All Branches (HQ)</span>
+                    <span className="branch-option-name">{mainBranchName} (Main Branch)</span>
                     <span className="branch-badge-total">{branches.length} TOTAL</span>
                   </div>
-                  <span className="branch-option-subtext">Aggregated data across all active outlets</span>
+                  <span className="branch-option-subtext">Main Branch • Aggregated data across all active outlets</span>
                 </div>
                 <div className="branch-option-action">
                   {(selectedBranchId === null || selectedBranchId === 'ALL') && <CheckIcon size={15} color="var(--primary)" />}

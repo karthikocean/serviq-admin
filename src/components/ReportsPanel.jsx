@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import * as XLSX from 'xlsx';
+import '../pages/Reports/Reports.css';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -778,16 +779,16 @@ export default function ReportsPanel({
         if (isBranchFiltered) {
           const branchParam = {
             branchId: selectedBranchId,
-            limit: 1000,
+            limit: 10,
             startDate: dateStart || undefined,
             endDate: dateEnd || undefined
           };
           const [orderRes, staffRes, tableRes, catRes, menuRes, rolesRes] = await Promise.all([
             OrderApi.getOrders(branchParam).catch(() => null),
-            UserApi.getUsers({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
-            TableApi.getTables({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
-            MenuApi.getCategories({ limit: 1000 }).catch(() => null),
-            MenuApi.getMenuItems({ branchId: selectedBranchId, limit: 1000 }).catch(() => null),
+            UserApi.getUsers({ branchId: selectedBranchId, limit: 10 }).catch(() => null),
+            TableApi.getTables({ branchId: selectedBranchId, limit: 10 }).catch(() => null),
+            MenuApi.getCategories({ limit: 10 }).catch(() => null),
+            MenuApi.getMenuItems({ branchId: selectedBranchId, limit: 10 }).catch(() => null),
             RoleApi.getRoles().catch(() => null)
           ]);
 
@@ -807,14 +808,14 @@ export default function ReportsPanel({
           // All Branches: Fetch global + all branches in parallel
           const [globalOrders, globalStaff, globalTables, catRes, globalMenu, rolesRes] = await Promise.all([
             OrderApi.getOrders({
-              limit: 1000,
+              limit: 10,
               startDate: dateStart || undefined,
               endDate: dateEnd || undefined
             }).catch(() => null),
-            UserApi.getUsers({ limit: 1000 }).catch(() => null),
-            TableApi.getTables({ limit: 1000 }).catch(() => null),
-            MenuApi.getCategories({ limit: 1000 }).catch(() => null),
-            MenuApi.getMenuItems({ limit: 1000 }).catch(() => null),
+            UserApi.getUsers({ limit: 10 }).catch(() => null),
+            TableApi.getTables({ limit: 10 }).catch(() => null),
+            MenuApi.getCategories({ limit: 10 }).catch(() => null),
+            MenuApi.getMenuItems({ limit: 10 }).catch(() => null),
             RoleApi.getRoles().catch(() => null)
           ]);
 
@@ -839,13 +840,13 @@ export default function ReportsPanel({
               const [bOrders, bStaff, bTables, bMenu] = await Promise.all([
                 OrderApi.getOrders({
                   branchId: bId,
-                  limit: 1000,
+                  limit: 10,
                   startDate: dateStart || undefined,
                   endDate: dateEnd || undefined
                 }).catch(() => null),
-                UserApi.getUsers({ branchId: bId, limit: 1000 }).catch(() => null),
-                TableApi.getTables({ branchId: bId, limit: 1000 }).catch(() => null),
-                MenuApi.getMenuItems({ branchId: bId, limit: 1000 }).catch(() => null)
+                UserApi.getUsers({ branchId: bId, limit: 10 }).catch(() => null),
+                TableApi.getTables({ branchId: bId, limit: 10 }).catch(() => null),
+                MenuApi.getMenuItems({ branchId: bId, limit: 10 }).catch(() => null)
               ]);
               return {
                 orders: extractServerList(bOrders) || [],
@@ -1078,7 +1079,7 @@ export default function ReportsPanel({
         selectedBranchId,
         searchQuery: '',
         page: 0,
-        limit: 1000
+        limit: 10
       }, effectiveBranches, liveRoles);
       setWaiterTotalCount(computedW.totalItems || 0);
 
@@ -1089,7 +1090,7 @@ export default function ReportsPanel({
         filterCategory: 'All',
         searchQuery: '',
         page: 0,
-        limit: 1000
+        limit: 10
       }, effectiveBranches);
       setKitchenTotalCount(computedK.totalItems || 0);
     } catch (err) {
@@ -1677,230 +1678,232 @@ export default function ReportsPanel({
         overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
       }}>
-        {/* 1. WAITER PERFORMANCE REPORT TABLE */}
-        {activeReportTab === 'waiter' && (
-          <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ width: '70px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO</th>
-                <th style={{ minWidth: '220px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>WAITER NAME</th>
-                <th style={{ minWidth: '140px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>DUTY STATUS</th>
-                <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED TABLES</th>
-                <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>TOTAL REVENUE</th>
-                <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG ORDER VALUE</th>
-                <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
-                    <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading waiter reports...
-                  </td>
+        <div className="reports-table-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '4px' }}>
+          {/* 1. WAITER PERFORMANCE REPORT TABLE */}
+          {activeReportTab === 'waiter' && (
+            <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                  <th style={{ width: '70px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO</th>
+                  <th style={{ minWidth: '220px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>WAITER NAME</th>
+                  <th style={{ minWidth: '140px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>DUTY STATUS</th>
+                  <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>ASSIGNED TABLES</th>
+                  <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>TOTAL REVENUE</th>
+                  <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG ORDER VALUE</th>
+                  <th style={{ minWidth: '130px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
-              ) : waiterData.length === 0 ? (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
-                    No waiter performance records found for this period.
-                  </td>
-                </tr>
-              ) : (
-                waiterData.map((w, index) => (
-                  <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {currentPagination.page * currentPagination.limit + index + 1}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '50%',
-                          background: '#ecfdf5',
-                          border: '1.5px solid #a7f3d0',
-                          color: '#166534',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14px',
-                          fontWeight: 800,
-                          flexShrink: 0
-                        }}>
-                          {toDisplayText(w.name, 'W').charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                            {toDisplayText(w.name, 'Waiter')}
-                          </div>
-                          <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap' }}>
-                            {toDisplayText(w.email)} {w.phone ? `· ${toDisplayText(w.phone)}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        letterSpacing: '0.3px',
-                        width: '105px',
-                        minWidth: '105px',
-                        whiteSpace: 'nowrap',
-                        boxSizing: 'border-box',
-                        flexShrink: 0,
-                        backgroundColor: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
-                        color: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#166534' : '#64748b',
-                        border: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '1.5px solid #86efac' : '1.5px solid #cbd5e1'
-                      }}>
-                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#16a34a' : '#94a3b8', flexShrink: 0 }}></span>
-                        {toDisplayText(w.dutyStatus) === 'ON_DUTY' ? 'ON DUTY' : 'OFF DUTY'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'left' }}>
-                      <span style={{ fontSize: '12.5px', color: '#334155', fontWeight: 600, display: 'inline-block' }}>
-                        {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.map(t => toDisplayText(t)).join(', ') : 'None'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
-                      {currency}{Number(w.totalRevenue || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: '#475569', fontSize: '13.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
-                      {currency}{toDisplayText(w.averageOrderValue, '0.00')}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedWaiterOrdersModal(w)}
-                        title="View Orders Fulfilled"
-                        style={{
-                          background: '#fff0e6',
-                          border: '1px solid #ffd8bf',
-                          color: 'var(--primary, #ff7a00)',
-                          cursor: 'pointer',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '11.5px',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '5px',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <EyeIcon size={14} color="var(--primary, #ff7a00)" />
-                        Orders ({Number(w.ordersServed || w.orders?.length || 0)})
-                      </button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                      <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading waiter reports...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        )}
-
-        {/* 2. KITCHEN PREPARATION REPORT TABLE */}
-        {activeReportTab === 'kitchen' && (
-          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ width: '70px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO</th>
-                <th style={{ minWidth: '240px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>FOOD ITEM</th>
-                <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>CATEGORY</th>
-                <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QUANTITY PREPARED</th>
-                <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG PREP TIME</th>
-                <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>REVENUE GENERATED</th>
-                <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>KITCHEN STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
-                    <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading kitchen reports...
-                  </td>
-                </tr>
-              ) : kitchenData.length === 0 ? (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
-                    No kitchen preparation records found for this period.
-                  </td>
-                </tr>
-              ) : (
-                kitchenData.map((k, index) => {
-                  const statusStr = toDisplayText(k.kitchenStatus || k.status, 'Completed');
-                  const isInProgress = statusStr === 'In Progress' || statusStr === 'Preparing';
-                  const isReady = statusStr === 'Ready' || statusStr === 'High Demand';
-
-                  let badgeBg = '#ecfdf5';
-                  let badgeBorder = '#a7f3d0';
-                  let badgeText = '#065f46';
-                  let dotColor = '#10b981';
-
-                  if (isInProgress) {
-                    badgeBg = '#fff7ed';
-                    badgeBorder = '#fed7aa';
-                    badgeText = '#9a3412';
-                    dotColor = '#f59e0b';
-                  } else if (isReady) {
-                    badgeBg = '#eff6ff';
-                    badgeBorder = '#bfdbfe';
-                    badgeText = '#1e40af';
-                    dotColor = '#3b82f6';
-                  }
-
-                  return (
-                    <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
+                ) : waiterData.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                      No waiter performance records found for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  waiterData.map((w, index) => (
+                    <tr key={w.id} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
                       <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         {currentPagination.page * currentPagination.limit + index + 1}
                       </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a', fontSize: '13.5px', textAlign: 'left' }}>
-                        {toDisplayText(k.foodItem || k.itemName, 'Food Item')}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontSize: '11.5px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>
-                          {toDisplayText(k.category, 'Main Course')}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#ea580c', fontSize: '14px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
-                        {Number(k.quantityPrepared || 0)} <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>dishes</span>
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', color: '#64748b', fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {toDisplayText(k.avgPrepTime, '15 mins')}
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
-                        {currency}{Number(k.revenueGenerated || 0).toLocaleString('en-IN')}
+                      <td style={{ padding: '14px 16px', textAlign: 'left' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: '#ecfdf5',
+                            border: '1.5px solid #a7f3d0',
+                            color: '#166534',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '14px',
+                            fontWeight: 800,
+                            flexShrink: 0
+                          }}>
+                            {toDisplayText(w.name, 'W').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                              {toDisplayText(w.name, 'Waiter')}
+                            </div>
+                            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                              {toDisplayText(w.email)} {w.phone ? `· ${toDisplayText(w.phone)}` : ''}
+                            </div>
+                          </div>
+                        </div>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '5px',
-                          padding: '4px 12px',
-                          borderRadius: '12px',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '5px 12px',
+                          borderRadius: '20px',
                           fontSize: '11px',
                           fontWeight: 800,
-                          backgroundColor: badgeBg,
-                          border: `1px solid ${badgeBorder}`,
-                          color: badgeText
+                          letterSpacing: '0.3px',
+                          width: '105px',
+                          minWidth: '105px',
+                          whiteSpace: 'nowrap',
+                          boxSizing: 'border-box',
+                          flexShrink: 0,
+                          backgroundColor: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#dcfce7' : '#f1f5f9',
+                          color: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#166534' : '#64748b',
+                          border: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '1.5px solid #86efac' : '1.5px solid #cbd5e1'
                         }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor }}></span>
-                          {statusStr}
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: toDisplayText(w.dutyStatus) === 'ON_DUTY' ? '#16a34a' : '#94a3b8', flexShrink: 0 }}></span>
+                          {toDisplayText(w.dutyStatus) === 'ON_DUTY' ? 'ON DUTY' : 'OFF DUTY'}
                         </span>
                       </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'left' }}>
+                        <span style={{ fontSize: '12.5px', color: '#334155', fontWeight: 600, display: 'inline-block' }}>
+                          {Array.isArray(w.assignedTablesList) && w.assignedTablesList.length > 0 ? w.assignedTablesList.map(t => toDisplayText(t)).join(', ') : 'None'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+                        {currency}{Number(w.totalRevenue || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 700, color: '#475569', fontSize: '13.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+                        {currency}{toDisplayText(w.averageOrderValue, '0.00')}
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWaiterOrdersModal(w)}
+                          title="View Orders Fulfilled"
+                          style={{
+                            background: '#fff0e6',
+                            border: '1px solid #ffd8bf',
+                            color: 'var(--primary, #ff7a00)',
+                            cursor: 'pointer',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            fontSize: '11.5px',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <EyeIcon size={14} color="var(--primary, #ff7a00)" />
+                          Orders ({Number(w.ordersServed || w.orders?.length || 0)})
+                        </button>
+                      </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        )}
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
+
+          {/* 2. KITCHEN PREPARATION REPORT TABLE */}
+          {activeReportTab === 'kitchen' && (
+            <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
+                  <th style={{ width: '70px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO</th>
+                  <th style={{ minWidth: '240px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>FOOD ITEM</th>
+                  <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', whiteSpace: 'nowrap' }}>CATEGORY</th>
+                  <th style={{ minWidth: '160px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QUANTITY PREPARED</th>
+                  <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>AVG PREP TIME</th>
+                  <th style={{ minWidth: '180px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>REVENUE GENERATED</th>
+                  <th style={{ minWidth: '150px', padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>KITCHEN STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                      <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading kitchen reports...
+                    </td>
+                  </tr>
+                ) : kitchenData.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b', fontSize: '14px' }}>
+                      No kitchen preparation records found for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  kitchenData.map((k, index) => {
+                    const statusStr = toDisplayText(k.kitchenStatus || k.status, 'Completed');
+                    const isInProgress = statusStr === 'In Progress' || statusStr === 'Preparing';
+                    const isReady = statusStr === 'Ready' || statusStr === 'High Demand';
+
+                    let badgeBg = '#ecfdf5';
+                    let badgeBorder = '#a7f3d0';
+                    let badgeText = '#065f46';
+                    let dotColor = '#10b981';
+
+                    if (isInProgress) {
+                      badgeBg = '#fff7ed';
+                      badgeBorder = '#fed7aa';
+                      badgeText = '#9a3412';
+                      dotColor = '#f59e0b';
+                    } else if (isReady) {
+                      badgeBg = '#eff6ff';
+                      badgeBorder = '#bfdbfe';
+                      badgeText = '#1e40af';
+                      dotColor = '#3b82f6';
+                    }
+
+                    return (
+                      <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', height: '62px', transition: 'background-color 0.15s' }}>
+                        <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '13px', color: '#0f172a', fontFamily: 'monospace', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          {currentPagination.page * currentPagination.limit + index + 1}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a', fontSize: '13.5px', textAlign: 'left' }}>
+                          {toDisplayText(k.foodItem || k.itemName, 'Food Item')}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '11.5px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>
+                            {toDisplayText(k.category, 'Main Course')}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#ea580c', fontSize: '14px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+                          {Number(k.quantityPrepared || 0)} <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 500 }}>dishes</span>
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', color: '#64748b', fontSize: '12.5px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {toDisplayText(k.avgPrepTime, '15 mins')}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', fontWeight: 800, color: '#16a34a', fontSize: '14.5px', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap' }}>
+                          {currency}{Number(k.revenueGenerated || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '4px 12px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            backgroundColor: badgeBg,
+                            border: `1px solid ${badgeBorder}`,
+                            color: badgeText
+                          }}>
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: dotColor }}></span>
+                            {statusStr}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
 
       {/* Pagination Footer */}

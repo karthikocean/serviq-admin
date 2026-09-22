@@ -103,7 +103,7 @@ export default function StockReductionPanel() {
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const baseParams = { limit: 1000 };
+      const baseParams = { limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         baseParams.branchId = selectedBranchId;
       }
