@@ -140,7 +140,8 @@ export default function KitchenListPanel({
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>DUTY STATUS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
-            </thead>
+            </thead> 
+            
             <tbody>
               {paginatedStaff.map((s, index) => {
                 const globalIndex = page * limit + index;
