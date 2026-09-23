@@ -375,10 +375,8 @@ export default function Admin() {
       }
     };
     fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, [selectedBranchId, isNotificationModalOpen]);
 
@@ -1400,7 +1398,7 @@ export default function Admin() {
                     <input
                       type="text"
                       value={customCategoryInput}
-                      onChange={(e) => setCustomCategoryInput(e.target.value)}
+                      onChange={(e) => setCustomCategoryInput(e.target.value.replace(/[0-9]/g, ''))}
                       placeholder="e.g. Rice Platters"
                       required
                       style={{
@@ -1432,6 +1430,10 @@ export default function Admin() {
                       onClick={async () => {
                         const catName = customCategoryInput.trim();
                         if (catName) {
+                          if (/\d/.test(catName)) {
+                            ShowNotifications.showAlertNotification('Category Name should not contain numbers.', false);
+                            return;
+                          }
                           try {
                             const res = await MenuApi.createCategory({
                               name: catName,

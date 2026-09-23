@@ -293,10 +293,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     try {
       const [usersRes, globalUsersRes, ordersRes, tablesRes, categoriesRes] = await Promise.allSettled([
         UserApi.getUsers({ branchId, limit: 10 }),
-        UserApi.getUsers({ limit: 10 }),
-        OrderApi.getOrders({ branchId, limit: 10 }),
-        TableApi.getTables({ branchId, limit: 10 }),
-        MenuApi.getCategories({ limit: 10 })
+        UserApi.getUsers({ limit: 200 }),
+        OrderApi.getOrders({ branchId, limit: 200 }),
+        TableApi.getTables({ branchId, limit: 200 }),
+        MenuApi.getCategories({ limit: 100 })
       ]);
 
       let branchUsers = [];
@@ -1197,15 +1197,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   useEffect(() => {
     if (activeView === 'hierarchy' && currentViewBranch) {
       fetchBranchOperationalData(currentViewBranch);
-      const pollTimer = setInterval(() => {
-        fetchBranchOperationalData(currentViewBranch);
-        if (typeof fetchOrders === 'function') {
-          fetchOrders();
-        }
-      }, 10000);
-      return () => clearInterval(pollTimer);
     }
-  }, [activeView, currentViewBranch, fetchBranchOperationalData, fetchOrders]);
+  }, [activeView, currentViewBranch, fetchBranchOperationalData]);
 
   // Live computed operational data for current branch
   const opData = (() => {
@@ -1510,18 +1503,35 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   // Operational View Pagination: Tables (10 per page, starting at 0)
   const tablesLimit = 10;
-  const tablesTotal = liveTablesPagination?.total || opData.tables.length;
-  const tablesTotalPages = liveTablesPagination?.totalPages || Math.max(1, Math.ceil(tablesTotal / tablesLimit));
+  const tablesTotal = opData.tables.length;
+  const tablesTotalPages = Math.max(1, Math.ceil(tablesTotal / tablesLimit));
   const tablesCurrentPage = Math.max(0, Math.min(tablesPage, Math.max(0, tablesTotalPages - 1)));
   const tablesFrom = tablesTotal === 0 ? 0 : tablesCurrentPage * tablesLimit + 1;
   const tablesTo = Math.min((tablesCurrentPage + 1) * tablesLimit, tablesTotal);
 
-  const paginatedTables = (liveTablesPagination && opData.tables.length <= tablesLimit)
-    ? opData.tables
-    : opData.tables.slice(
-        tablesCurrentPage * tablesLimit,
-        (tablesCurrentPage + 1) * tablesLimit
-      );
+  const paginatedTables = opData.tables.slice(
+    tablesCurrentPage * tablesLimit,
+    (tablesCurrentPage + 1) * tablesLimit
+  );
+
+  const handleTablesPageChange = (newPage) => {
+    setTablesPage(newPage);
+  };
+
+  const getTablesPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = tablesCurrentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(tablesTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i - 1);
+    }
+    return pages;
+  };
 
   // Operational View: Orders calculation, filtering & pagination (limit 10, starting at 0)
   const filteredOrders = (opData.orders || []).filter(ord => {
@@ -1557,6 +1567,21 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setOrdersPage(newPage);
   };
 
+  const getOrdersPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = ordersCurrentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(ordersTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i - 1);
+    }
+    return pages;
+  };
+
   const handleRefreshOrders = async () => {
     if (!currentViewBranch) return;
     setIsRefreshingOrders(true);
@@ -1585,6 +1610,21 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setStaffPage(newPage);
   };
 
+  const getStaffPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = staffCurrentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(staffTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i - 1);
+    }
+    return pages;
+  };
+
   // Operational View: Kitchen KDS Pagination (10 per page, starting at 0)
   const kdsLimit = 10;
   const kdsTotal = (opData.kitchen || []).length;
@@ -1602,27 +1642,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setKdsPage(newPage);
   };
 
-  const handleTablesPageChange = async (newPage) => {
-    setTablesPage(newPage);
-    if (currentViewBranch && liveTablesPagination) {
-      const branchId = currentViewBranch._id || currentViewBranch.id;
-      try {
-        const res = await TableApi.getTables({ branchId, page: newPage, limit: tablesLimit });
-        if (res?.status && res?.response) {
-          const d = res.response.data || res.response;
-          let list = [];
-          if (Array.isArray(d)) list = d;
-          else if (Array.isArray(d?.tables)) list = d.tables;
-          else if (Array.isArray(d?.data?.tables)) list = d.data.tables;
-          else if (Array.isArray(d?.data)) list = d.data;
-          if (list.length > 0) setLiveBranchTables(list);
-          const pag = res.response.pagination || d.pagination;
-          if (pag) setLiveTablesPagination(pag);
-        }
-      } catch (e) {
-        console.warn("Failed to fetch next tables page:", e);
-      }
+  const getKdsPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = kdsCurrentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(kdsTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
     }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i - 1);
+    }
+    return pages;
   };
 
   // ==========================================
@@ -1759,7 +1791,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => { setOpSubTab('orders'); setOrdersPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Order Queue ({inQueueCount})
+              Orders ({allOrdersCount})
             </button>
 
             <button
@@ -1987,7 +2019,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       Prev
                     </button>
 
-                    {Array.from({ length: tablesTotalPages }, (_, i) => i).map(pageNum => (
+                    {getTablesPageNumbers().map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -2207,7 +2239,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     >
                       Prev
                     </button>
-                    {Array.from({ length: ordersTotalPages }, (_, i) => i).map(pageNum => (
+                    {getOrdersPageNumbers().map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -2326,7 +2358,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     >
                       Prev
                     </button>
-                    {Array.from({ length: staffTotalPages }, (_, i) => i).map(pageNum => (
+                    {getStaffPageNumbers().map(pageNum => (
                       <button
                         key={pageNum}
                         type="button"
@@ -2515,7 +2547,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           Prev
                         </button>
 
-                        {Array.from({ length: kdsTotalPages }, (_, i) => i).map(pageNum => (
+                        {getKdsPageNumbers().map(pageNum => (
                           <button
                             key={pageNum}
                             type="button"

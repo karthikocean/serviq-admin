@@ -51,10 +51,16 @@ class SubscriptionApi {
 
   async renewSubscription(payload = {}) {
     try {
+      const planIdentifier = payload.newPlanId || payload._id || payload.planId || payload.plan || payload.id;
       const cleanPayload = {
+        newPlanId: planIdentifier,
+        planId: planIdentifier,
+        plan: planIdentifier,
+        _id: planIdentifier,
         billingCycle: payload.billingCycle || 'Monthly',
         paymentMethod: payload.paymentMethod || 'UPI',
-        ...payload
+        ...payload,
+        newPlanId: planIdentifier
       };
       const response = await apiClient.post("/subscription/renew", cleanPayload);
       if (response.status === 200 || response.status === 201) {
@@ -82,12 +88,16 @@ class SubscriptionApi {
 
   async upgradeSubscription(payload = {}) {
     try {
+      const planIdentifier = payload.newPlanId || payload._id || payload.planId || payload.plan || payload.id;
       const cleanPayload = {
-        planId: payload.planId || payload.plan || payload.id,
-        plan: payload.plan || payload.planId || payload.id,
+        newPlanId: planIdentifier,
+        planId: planIdentifier,
+        plan: planIdentifier,
+        _id: planIdentifier,
         billingCycle: payload.billingCycle || 'Annually',
         paymentMethod: payload.paymentMethod || 'UPI',
-        ...payload
+        ...payload,
+        newPlanId: planIdentifier
       };
       const response = await apiClient.post("/subscription/upgrade", cleanPayload);
       if (response.status === 200 || response.status === 201) {

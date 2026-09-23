@@ -100,6 +100,10 @@ export default function MenuManagement() {
       setCustomCategoryError('Please enter a valid category name.');
       return;
     }
+    if (/\d/.test(categoryName)) {
+      setCustomCategoryError('Category Name should not contain numbers.');
+      return;
+    }
 
     // Check if category already exists
     const existing = categories.find(c => c.name?.toLowerCase() === categoryName.toLowerCase());
@@ -830,7 +834,8 @@ export default function MenuManagement() {
               type="text"
               value={customCategoryInput}
               onChange={(e) => {
-                setCustomCategoryInput(e.target.value);
+                const sanitized = e.target.value.replace(/[0-9]/g, '');
+                setCustomCategoryInput(sanitized);
                 if (customCategoryError) setCustomCategoryError('');
               }}
               onKeyDown={(e) => {

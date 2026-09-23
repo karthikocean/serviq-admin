@@ -150,6 +150,55 @@ export default function TablesPanel({
   const totalPages = Math.ceil(filteredTables.length / limit) || 1;
   const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
 
+  const handleDownloadQrPng = async (tableId, qrUrl) => {
+    try {
+      const downloadUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&format=png&data=${encodeURIComponent(qrUrl)}`;
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error('Fetch failed');
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `QR-Table-${tableId}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.warn('Direct blob fetch failed, falling back to canvas download:', err);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 500;
+          canvas.height = img.naturalHeight || 500;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const blobUrl = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = blobUrl;
+              link.download = `QR-Table-${tableId}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(blobUrl);
+            }
+          }, 'image/png');
+        } catch (canvasErr) {
+          console.error('Canvas export failed:', canvasErr);
+          window.open(`https://api.qrserver.com/v1/create-qr-code/?size=500x500&format=png&data=${encodeURIComponent(qrUrl)}`, '_blank');
+        }
+      };
+      img.onerror = () => {
+        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=500x500&format=png&data=${encodeURIComponent(qrUrl)}`, '_blank');
+      };
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&format=png&data=${encodeURIComponent(qrUrl)}`;
+    }
+  };
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -856,93 +905,35 @@ export default function TablesPanel({
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
                 Scan to View Menu & Place Order
               </div>
-              <div style={{
-                marginTop: '10px',
-                padding: '8px 12px',
-                background: '#f8fafc',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '8px'
-              }}>
-                <span style={{ fontSize: '11px', color: '#64748b', wordBreak: 'break-all', textAlign: 'left', fontFamily: 'monospace' }}>
-                  {viewingQrTable.qrUrl}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(viewingQrTable.qrUrl);
-                    ShowNotifications.showAlertNotification("Customer scan URL copied!", true);
-                  }}
-                  style={{
-                    background: '#ff5a1f',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '5px',
-                    padding: '4px 10px',
-                    fontSize: '11px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  Copy URL
-                </button>
-              </div>
             </div>
 
             {/* Modal Actions */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', width: '100%' }}>
+            <div style={{ width: '100%' }}>
               <button
                 type="button"
-                onClick={() => {
-                  window.print();
-                }}
+                onClick={() => handleDownloadQrPng(viewingQrTable.tableId, viewingQrTable.qrUrl)}
                 style={{
-                  padding: '10px',
-                  borderRadius: '8px',
+                  width: '100%',
+                  padding: '12px 20px',
+                  borderRadius: '10px',
                   border: 'none',
-                  background: 'var(--primary)',
+                  background: 'var(--primary, #ff5a1f)',
                   color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '13px',
+                  fontWeight: 800,
+                  fontSize: '14px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px'
+                  gap: '8px',
+                  boxSizing: 'border-box',
+                  boxShadow: '0 4px 14px rgba(255, 90, 31, 0.25)',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                <PrintIcon size={15} /> Print Standee
+                <DownloadIcon size={16} color="#ffffff" /> Download PNG
               </button>
-
-              <a
-                href={viewingQrTable.qrImgSrc}
-                download={`QR-Table-${viewingQrTable.tableId}.png`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  padding: '10px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#0f172a',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  textDecoration: 'none'
-                }}
-              >
-                <DownloadIcon size={15} /> Download PNG
-              </a>
             </div>
-
 
           </div>
         </Modal>

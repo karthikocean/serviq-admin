@@ -75,15 +75,15 @@ export default function BranchSearchDropdown() {
   const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  // Fetch branches from API with limit: 10
+  // Fetch branches from API with limit: 100
   const loadBranches = async () => {
     try {
-      const res = await BranchApi.getBranches({ limit: 10 });
+      const res = await BranchApi.getBranches({ limit: 100 });
       if (res && res.status && res.response) {
         const branchArray = Array.isArray(res.response) 
           ? res.response 
           : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
-        if (Array.isArray(branchArray) && branchArray.length > 0) {
+        if (Array.isArray(branchArray)) {
           const mapped = branchArray.map(b => ({
             id: b._id || b.id,
             _id: b._id || b.id,
@@ -93,17 +93,17 @@ export default function BranchSearchDropdown() {
             managerName: b.managerName || b.branchManager || 'Unassigned',
             mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
             email: b.email || b.managerEmail || '',
-            address: b.address?.street || b.address || b.street || '',
-            city: b.address?.city || b.city || '',
-            state: b.address?.state || b.state || '',
+            address: typeof b.address === 'object' && b.address !== null ? (b.address.street || '') : (b.address || b.street || ''),
+            city: typeof b.address === 'object' && b.address !== null ? (b.address.city || '') : (b.city || ''),
+            state: typeof b.address === 'object' && b.address !== null ? (b.address.state || '') : (b.state || ''),
             status: b.status || 'Active',
-            totalTables: b.totalTables || 10
+            totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0)
           }));
           setLocalBranches(mapped);
         }
       }
       if (typeof contextFetchBranches === 'function') {
-        contextFetchBranches({ limit: 10 });
+        contextFetchBranches({ limit: 100 });
       }
     } catch (e) {
       console.warn("Branch fetch error in dropdown:", e);
@@ -121,9 +121,8 @@ export default function BranchSearchDropdown() {
     }
   }, [isOpen]);
 
-  const rawBranches = (activeRestaurant?.branches && activeRestaurant.branches.length > 0)
-    ? activeRestaurant.branches
-    : localBranches;
+  // Strictly use live API response branches (only fall back to context if context itself holds API branches)
+  const rawBranches = localBranches.length > 0 ? localBranches : (activeRestaurant?.branches || []);
 
   const branches = rawBranches.map(b => ({
     ...b,
@@ -177,7 +176,7 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route';
+  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Main Branch';
 
   const selectedBranch = branches.find(b => 
     String(b.id || b._id) === String(selectedBranchId) || 
@@ -301,7 +300,6 @@ export default function BranchSearchDropdown() {
             {(!searchQuery || 
               'all branches'.includes(searchQuery.toLowerCase()) || 
               'main branch'.includes(searchQuery.toLowerCase()) || 
-              'spice route'.includes(searchQuery.toLowerCase()) ||
               mainBranchName.toLowerCase().includes(searchQuery.toLowerCase())
             ) && (
               <div
