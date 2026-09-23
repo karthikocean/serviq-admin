@@ -237,7 +237,7 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 200 });
+      const res = await TableApi.getTables({ limit: 10});
       if (res && res.status && res.response) {
         const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
         if (tList.length > 0) {
@@ -289,6 +289,7 @@ export default function OverviewPanel({
             return {
               ...c,
               count: Number(c.count),
+              revenue: c.revenue !== undefined ? Number(Number(c.revenue).toFixed(2)) : undefined,
               percentage: c.percentage !== undefined && Number(c.percentage) > 0 ? Number(c.percentage) : calculatedPct,
               color: c.color || defaultColors[idx % defaultColors.length]
             };
@@ -318,7 +319,7 @@ export default function OverviewPanel({
           }
           const entry = catMap.get(cat);
           entry.count += qty;
-          entry.revenue += rev;
+          entry.revenue = Number((entry.revenue + rev).toFixed(2));
         });
       });
 
@@ -329,7 +330,7 @@ export default function OverviewPanel({
           .map((c, idx) => ({
             name: c.name,
             count: c.count,
-            revenue: c.revenue,
+            revenue: Number((c.revenue || 0).toFixed(2)),
             percentage: Math.round((c.count / totalItems) * 100),
             color: defaultColors[idx % defaultColors.length]
           }));
@@ -889,11 +890,11 @@ export default function OverviewPanel({
                 return (
                   <div key={b.branchId || b.id || b.branchCode || idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: hasRevenue ? 'var(--primary)' : 'var(--text-main)', marginBottom: '8px' }}>
-                      {b.formattedRevenue || `₹${b.revenue || 0}`}
+                      {b.formattedRevenue || `₹${Number(Number(b.revenue || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
                     </span>
                     <div style={{ height: '110px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '8px' }}>
                       <div
-                        title={`${b.branchName || b.branchCode}: ${b.formattedRevenue || `₹${b.revenue || 0}`} (${b.ordersCount || 0} orders)`}
+                        title={`${b.branchName || b.branchCode}: ${b.formattedRevenue || `₹${Number(Number(b.revenue || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`} (${b.ordersCount || 0} orders)`}
                         style={{ 
                           width: '36px', 
                           height: `${pct}%`, 
@@ -926,11 +927,11 @@ export default function OverviewPanel({
                 return (
                   <div key={item.label || item.month || idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1 }}>
                     <span style={{ fontSize: '11px', fontWeight: 700, color: hasRevenue ? 'var(--primary)' : 'var(--text-main)', marginBottom: '8px' }}>
-                      {item.formattedRevenue || (item.revenue !== undefined ? `₹${item.revenue}` : item.val)}
+                      {item.formattedRevenue || (item.revenue !== undefined ? `₹${Number(Number(item.revenue || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}` : item.val)}
                     </span>
                     <div style={{ height: '110px', width: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', marginBottom: '8px' }}>
                       <div
-                        title={`${item.label || item.month} ${item.year || ''}: ${item.formattedRevenue || `₹${item.revenue || 0}`} • ${item.ordersCount || 0} Orders`}
+                        title={`${item.label || item.month} ${item.year || ''}: ${item.formattedRevenue || `₹${Number(Number(item.revenue || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`} • ${item.ordersCount || 0} Orders`}
                         style={{ 
                           width: '32px', 
                           height: `${pct}%`, 
@@ -960,8 +961,8 @@ export default function OverviewPanel({
             <h3 
               className="feed-title" 
               style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--black)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-              onClick={() => navigate('/reports?tab=waiter')}
-              title="Click to view Waiter Reports"
+              onClick={() => navigate('/reports?tab=kitchen')}
+              title="Click to view Kitchen Reports"
             >
               Order Breakdown
             </h3>
@@ -971,7 +972,7 @@ export default function OverviewPanel({
               </span>
               <button
                 type="button"
-                onClick={() => navigate('/reports?tab=waiter')}
+                onClick={() => navigate('/reports?tab=kitchen')}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -997,7 +998,7 @@ export default function OverviewPanel({
                   e.currentTarget.style.color = '#ff5a1f';
                   e.currentTarget.style.borderColor = '#fed7aa';
                 }}
-                title="View Detailed Waiter Reports"
+                title="View Detailed Kitchen Reports"
               >
                 <span>View All</span>
                 <span style={{ fontSize: '12px', lineHeight: 1 }}>→</span>
@@ -1019,7 +1020,7 @@ export default function OverviewPanel({
                         {cat.name}
                         {cat.count !== undefined && (
                           <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
-                            ({cat.count} {cat.count === 1 ? 'item' : 'items'} • ₹{cat.revenue || 0})
+                            ({cat.count} {cat.count === 1 ? 'item' : 'items'} • ₹{Number(Number(cat.revenue || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })})
                           </span>
                         )}
                       </span>
@@ -1147,7 +1148,7 @@ export default function OverviewPanel({
                           {itemSummary}
                         </td>
                         <td style={{ padding: '14px 14px', fontWeight: 700, color: 'var(--primary)', textAlign: 'right', fontSize: '13.5px' }}>
-                          <div>₹{ord.total}</div>
+                          <div>₹{Number(Number(ord.total || 0).toFixed(2)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
                           {ord.billingStatus && (
                             <span style={{ fontSize: '10.5px', textTransform: 'uppercase', color: ord.billingStatus === 'paid' ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
                               {ord.billingStatus}

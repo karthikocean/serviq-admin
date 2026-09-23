@@ -293,10 +293,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     try {
       const [usersRes, globalUsersRes, ordersRes, tablesRes, categoriesRes] = await Promise.allSettled([
         UserApi.getUsers({ branchId, limit: 10 }),
-        UserApi.getUsers({ limit: 200 }),
-        OrderApi.getOrders({ branchId, limit: 200 }),
-        TableApi.getTables({ branchId, limit: 200 }),
-        MenuApi.getCategories({ limit: 100 })
+        UserApi.getUsers({ limit: 10}),
+        OrderApi.getOrders({ branchId, limit: 10}),
+        TableApi.getTables({ branchId, limit: 10}),
+        MenuApi.getCategories({ limit: 10 })
       ]);
 
       let branchUsers = [];

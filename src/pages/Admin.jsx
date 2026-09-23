@@ -1430,22 +1430,28 @@ export default function Admin() {
                       onClick={async () => {
                         const catName = customCategoryInput.trim();
                         if (catName) {
-                          if (/\d/.test(catName)) {
-                            ShowNotifications.showAlertNotification('Category Name should not contain numbers.', false);
+                          if (catName.length < 2) {
+                            ShowNotifications.showAlertNotification('Category Name must be at least 2 characters.', false);
                             return;
                           }
                           try {
-                            const res = await MenuApi.createCategory({
+                            const targetBranch = (selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (activeRestaurant?.branches?.length > 0 ? (activeRestaurant.branches[0]._id || activeRestaurant.branches[0].id) : undefined);
+                            const payload = {
                               name: catName,
                               description: '',
-                              status: 'AVAILABLE',
-                              branchId: selectedBranchId || (activeRestaurant?.branches?.length > 0 ? (activeRestaurant.branches[0]._id || activeRestaurant.branches[0].id) : '')
-                            });
+                              status: 'AVAILABLE'
+                            };
+                            if (targetBranch) payload.branchId = targetBranch;
+                            const res = await MenuApi.createCategory(payload);
                             if (res?.status) {
                               ShowNotifications.showAlertNotification(`Category "${catName}" created successfully!`, true);
+                            } else {
+                              const errorMsg = res?.response?.data?.message || res?.response?.message || 'Failed to create category';
+                              ShowNotifications.showAlertNotification(errorMsg, false);
                             }
                           } catch (err) {
                             console.error('Failed to create category:', err);
+                            ShowNotifications.showAlertNotification('Failed to create category', false);
                           }
                           setMenuForm({ ...menuForm, category: catName });
                           setShowCustomCategoryModal(false);

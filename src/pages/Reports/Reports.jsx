@@ -7,11 +7,13 @@ import './Reports.css';
 export default function Reports() {
   const { activeRestaurant, selectedBranchId } = useAppState();
   const [searchParams] = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'kitchen' ? 'kitchen' : 'waiter';
+  const validTabs = ['sales', 'items', 'orders', 'waiter', 'kitchen', 'tax'];
+  const tabParam = searchParams.get('tab');
+  const initialTab = validTabs.includes(tabParam) ? tabParam : 'sales';
 
   if (!activeRestaurant) return null;
 
-  const branches = activeRestaurant.branches || [];
+  const branches = React.useMemo(() => activeRestaurant?.branches || [], [activeRestaurant?.branches]);
 
   return (
     <ReportsPanel

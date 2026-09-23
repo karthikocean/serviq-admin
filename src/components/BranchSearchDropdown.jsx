@@ -72,47 +72,24 @@ export default function BranchSearchDropdown() {
   const { activeRestaurant, currentUser, selectedBranchId, setSelectedBranchId, fetchBranches: contextFetchBranches } = useAppState();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [localBranches, setLocalBranches] = useState([]);
   const dropdownRef = useRef(null);
 
-  // Fetch branches from API with limit: 100
+  // Load branches via AppContext if not already available
   const loadBranches = async () => {
     try {
-      const res = await BranchApi.getBranches({ limit: 100 });
-      if (res && res.status && res.response) {
-        const branchArray = Array.isArray(res.response) 
-          ? res.response 
-          : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
-        if (Array.isArray(branchArray)) {
-          const mapped = branchArray.map(b => ({
-            id: b._id || b.id,
-            _id: b._id || b.id,
-            branchName: b.branchName || b.name,
-            branchCode: b.branchCode || b.code,
-            branchManager: b.managerName || b.branchManager || 'Unassigned',
-            managerName: b.managerName || b.branchManager || 'Unassigned',
-            mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
-            email: b.email || b.managerEmail || '',
-            address: typeof b.address === 'object' && b.address !== null ? (b.address.street || '') : (b.address || b.street || ''),
-            city: typeof b.address === 'object' && b.address !== null ? (b.address.city || '') : (b.city || ''),
-            state: typeof b.address === 'object' && b.address !== null ? (b.address.state || '') : (b.state || ''),
-            status: b.status || 'Active',
-            totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0)
-          }));
-          setLocalBranches(mapped);
-        }
-      }
       if (typeof contextFetchBranches === 'function') {
-        contextFetchBranches({ limit: 100 });
+        contextFetchBranches({ limit: 10 });
       }
     } catch (e) {
       console.warn("Branch fetch error in dropdown:", e);
     }
   };
 
-  // Load branches on mount and when dropdown is opened
+  // Only trigger fetch on mount if branches are not yet loaded in context
   useEffect(() => {
-    loadBranches();
+    if (!activeRestaurant?.branches || activeRestaurant.branches.length === 0) {
+      loadBranches();
+    }
   }, []);
 
   useEffect(() => {
@@ -121,8 +98,7 @@ export default function BranchSearchDropdown() {
     }
   }, [isOpen]);
 
-  // Strictly use live API response branches (only fall back to context if context itself holds API branches)
-  const rawBranches = localBranches.length > 0 ? localBranches : (activeRestaurant?.branches || []);
+  const rawBranches = activeRestaurant?.branches || [];
 
   const branches = rawBranches.map(b => ({
     ...b,

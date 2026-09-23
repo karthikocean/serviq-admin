@@ -161,7 +161,7 @@ export default function OrdersPanel({
   useEffect(() => {
     const loadBranchesForPanel = async () => {
       try {
-        const res = await BranchApi.getBranches({ limit: 100 });
+        const res = await BranchApi.getBranches({ limit: 10 });
         if (res && res.status && res.response) {
           const branchArray = Array.isArray(res.response) 
             ? res.response 

@@ -88,9 +88,9 @@ export default function TableFormPage() {
     try {
       const cleanBranchId = branchId && branchId !== 'ALL' ? branchId : undefined;
       const [staffRes, userRes, rolesRes] = await Promise.all([
-        StaffApi.getStaff({ branchId: cleanBranchId, limit: 100 }),
-        UserApi.getUsers({ branchId: cleanBranchId, limit: 100 }),
-        RoleApi.getRoles({ limit: 50 })
+        StaffApi.getStaff({ branchId: cleanBranchId, limit: 10 }),
+        UserApi.getUsers({ branchId: cleanBranchId, limit: 10 }),
+        RoleApi.getRoles({ limit: 10 })
       ]);
 
       let staffData = [];

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from '../../config/AppContext';
 import OrdersPanel from '../../components/OrdersPanel';
 import apiClient from '../../config/index.js';
+import { isBranchMatch } from '../../helper/BranchHelper';
 import './OrderManagement.css';
 
 export default function OrderManagement() {
@@ -134,26 +135,17 @@ export default function OrderManagement() {
 
   if (!activeRestaurant) return null;
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
   const displayOrders = isBranchFiltered
-    ? apiOrders.filter(o => {
-      const bId = String(o.branchId?._id || o.branchId?.id || o.branchId || o.branch?._id || o.branch || '');
-      return !bId || bId === String(selectedBranchId);
-    })
+    ? apiOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
     : apiOrders;
 
   const displayStaff = isBranchFiltered
-    ? apiStaff.filter(s => {
-      const bId = String(s.branchId?._id || s.branchId?.id || s.branchId || s.branch?._id || s.branch || '');
-      return !bId || bId === String(selectedBranchId);
-    })
+    ? apiStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || []))
     : apiStaff;
 
   const displayTables = isBranchFiltered
-    ? apiTables.filter(t => {
-      const bId = String(t.branchId?._id || t.branchId?.id || t.branchId || t.branch?._id || t.branch || '');
-      return !bId || bId === String(selectedBranchId);
-    })
+    ? apiTables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []))
     : apiTables;
 
   return (

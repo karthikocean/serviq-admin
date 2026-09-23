@@ -231,7 +231,7 @@ export default function BillingPanel({
 
       if (foundIds.size === 0) {
         try {
-          const liveRes = await OrderApi.getOrders({ limit: 100 });
+          const liveRes = await OrderApi.getOrders({ limit: 10 });
           const liveList = liveRes?.status ? (liveRes.response?.data || liveRes.response?.orders || []) : [];
           liveList.forEach(o => {
             if (!isMongoObjectId(o._id)) return;
