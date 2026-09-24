@@ -616,16 +616,7 @@ export const AppProvider = ({ children }) => {
     if (!token) return;
     try {
       const branchParams = { limit: 10, ...params };
-      const [res, usersRes] = await Promise.allSettled([
-        BranchApi.getBranches(branchParams),
-        UserApi.getUsers({ limit: 10 })
-      ]);
-
-      const branchResponse = res.status === 'fulfilled' ? res.value : null;
-      const usersList = (usersRes.status === 'fulfilled' && usersRes.value?.status && Array.isArray(usersRes.value.response?.data))
-        ? usersRes.value.response.data
-        : [];
-      const staffList = usersList;
+      const branchResponse = await BranchApi.getBranches(branchParams);
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
         const branchArray = Array.isArray(branchResponse.response) 
@@ -658,9 +649,7 @@ export const AppProvider = ({ children }) => {
             };
 
             const mappedBranches = branchArray.map(b => {
-              const mgr = resolveBranchManagerName(b, usersList, staffList);
-              const contactNum = resolveBranchContactNumber(b, usersList, staffList);
-              const resolvedMgr = (mgr && mgr !== 'Unassigned') ? mgr : ((b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned'));
+              const resolvedMgr = (b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned');
 
               return {
                 id: b._id || b.id,
@@ -669,7 +658,7 @@ export const AppProvider = ({ children }) => {
                 branchCode: b.branchCode || b.code,
                 branchManager: resolvedMgr,
                 managerName: resolvedMgr,
-                mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
+                mobileNumber: b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || '',
                 email: b.email || b.managerEmail || '',
                 address: typeof b.address === 'object' && b.address !== null ? (b.address.street || '') : (b.address || b.street || ''),
                 country: typeof b.address === 'object' && b.address !== null ? (b.address.country || '') : (b.country || ''),
@@ -678,9 +667,21 @@ export const AppProvider = ({ children }) => {
                 pincode: typeof b.address === 'object' && b.address !== null ? (b.address.pincode || '') : (b.pincode || ''),
                 openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
                 status: b.status || 'Active',
-                totalTables: b.totalTables !== undefined ? b.totalTables : 0
+                totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0)
               };
             });
+
+            // Prevent state reference invalidation if branches haven't changed
+            const prevBranches = rest.branches || [];
+            if (
+              prevBranches.length === mappedBranches.length &&
+              prevBranches.every((pb, idx) => {
+                const mb = mappedBranches[idx];
+                return pb && mb && (pb.id === mb.id || pb._id === mb._id) && pb.branchName === mb.branchName && pb.status === mb.status;
+              })
+            ) {
+              return prev;
+            }
 
             return {
               ...prev,
@@ -1044,7 +1045,7 @@ export const AppProvider = ({ children }) => {
   // Automatically fetch live branches from API for current user
   useEffect(() => {
     if (currentUser) {
-      fetchBranches({ limit: 100 });
+      fetchBranches({ limit: 10 });
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
 

@@ -229,7 +229,7 @@ export default function StaffManagementPanel({
 
     const userParams = {
       page: 0,
-      limit: 500,
+      limit: 10
     };
     if (searchQuery && searchQuery.trim()) {
       userParams.search = searchQuery.trim();

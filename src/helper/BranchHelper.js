@@ -316,8 +316,9 @@ export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
 };
 
 export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => {
-  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All') return true;
+  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All' || String(targetBranchId).toLowerCase() === 'all branches') return true;
   if (!itemBranch) return false;
+  if (itemBranch.isServerReport === true) return true;
 
   const targetStr = String(typeof targetBranchId === 'object' && targetBranchId !== null ? (targetBranchId._id || targetBranchId.id || targetBranchId.branchCode || '') : targetBranchId).toLowerCase().trim();
   const targetBranchObj = Array.isArray(branchesList)
@@ -328,51 +329,66 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
       )
     : (typeof targetBranchId === 'object' && targetBranchId !== null ? targetBranchId : null);
 
-  const targetId = targetBranchObj ? String(targetBranchObj._id || targetBranchObj.id || '').toLowerCase().trim() : targetStr;
-  const targetCode = targetBranchObj ? String(targetBranchObj.branchCode || targetBranchObj.code || '').toLowerCase().trim() : targetStr;
-  const targetName = targetBranchObj ? String(targetBranchObj.branchName || targetBranchObj.name || '').toLowerCase().trim() : '';
+  const targetKeys = new Set([targetStr]);
+  if (targetBranchObj) {
+    if (targetBranchObj._id) targetKeys.add(String(targetBranchObj._id).toLowerCase().trim());
+    if (targetBranchObj.id) targetKeys.add(String(targetBranchObj.id).toLowerCase().trim());
+    if (targetBranchObj.branchCode) targetKeys.add(String(targetBranchObj.branchCode).toLowerCase().trim());
+    if (targetBranchObj.code) targetKeys.add(String(targetBranchObj.code).toLowerCase().trim());
+    if (targetBranchObj.branchName) targetKeys.add(String(targetBranchObj.branchName).toLowerCase().trim());
+    if (targetBranchObj.name) targetKeys.add(String(targetBranchObj.name).toLowerCase().trim());
+  }
 
-  // Extract all identifiers from itemBranch
+  // Extract candidate branch identifiers
   let itemIds = [];
 
-  const extractFromObject = (obj) => {
-    if (!obj || typeof obj !== 'object') return;
-    if (obj._id) itemIds.push(String(obj._id).toLowerCase().trim());
-    if (obj.id) itemIds.push(String(obj.id).toLowerCase().trim());
-    if (obj.branchCode) itemIds.push(String(obj.branchCode).toLowerCase().trim());
-    if (obj.code) itemIds.push(String(obj.code).toLowerCase().trim());
-    if (obj.branchName) itemIds.push(String(obj.branchName).toLowerCase().trim());
-    if (obj.name) itemIds.push(String(obj.name).toLowerCase().trim());
+  const extractFromBranchObj = (obj) => {
+    if (!obj) return;
+    if (typeof obj === 'string' || typeof obj === 'number') {
+      itemIds.push(String(obj).toLowerCase().trim());
+    } else if (typeof obj === 'object') {
+      if (obj._id) itemIds.push(String(obj._id).toLowerCase().trim());
+      if (obj.id) itemIds.push(String(obj.id).toLowerCase().trim());
+      if (obj.branchId) extractFromBranchObj(obj.branchId);
+      if (obj.branchCode) itemIds.push(String(obj.branchCode).toLowerCase().trim());
+      if (obj.code) itemIds.push(String(obj.code).toLowerCase().trim());
+      if (obj.branchName) itemIds.push(String(obj.branchName).toLowerCase().trim());
+      if (obj.name) itemIds.push(String(obj.name).toLowerCase().trim());
+    }
   };
 
   if (typeof itemBranch === 'object' && itemBranch !== null) {
-    extractFromObject(itemBranch);
-    if (itemBranch.branchId) {
-      if (typeof itemBranch.branchId === 'object') extractFromObject(itemBranch.branchId);
-      else itemIds.push(String(itemBranch.branchId).toLowerCase().trim());
+    // Check entity branch reference fields first
+    const branchFields = [
+      itemBranch.branchId,
+      itemBranch.branch,
+      itemBranch.restaurantBranchId,
+      itemBranch.activeBranchId,
+      itemBranch.branch_id,
+      itemBranch.outletId,
+      typeof itemBranch.table === 'object' ? (itemBranch.table?.branchId || itemBranch.table?.branch) : null,
+      typeof itemBranch.tableId === 'object' ? (itemBranch.tableId?.branchId || itemBranch.tableId?.branch) : null
+    ];
+
+    if (Array.isArray(itemBranch.branches)) {
+      itemBranch.branches.forEach(b => branchFields.push(b));
     }
-    if (itemBranch.branch) {
-      if (typeof itemBranch.branch === 'object') extractFromObject(itemBranch.branch);
-      else itemIds.push(String(itemBranch.branch).toLowerCase().trim());
+    if (Array.isArray(itemBranch.branchIds)) {
+      itemBranch.branchIds.forEach(b => branchFields.push(b));
     }
-    if (itemBranch.restaurantBranchId) {
-      if (typeof itemBranch.restaurantBranchId === 'object') extractFromObject(itemBranch.restaurantBranchId);
-      else itemIds.push(String(itemBranch.restaurantBranchId).toLowerCase().trim());
-    }
-    if (itemBranch.activeBranchId) {
-      if (typeof itemBranch.activeBranchId === 'object') extractFromObject(itemBranch.activeBranchId);
-      else itemIds.push(String(itemBranch.activeBranchId).toLowerCase().trim());
+
+    const validBranchFields = branchFields.filter(f => f !== undefined && f !== null && f !== '');
+    if (validBranchFields.length > 0) {
+      validBranchFields.forEach(f => extractFromBranchObj(f));
+    } else if (itemBranch.branchCode || itemBranch.branchName || itemBranch.managerName || itemBranch.city || itemBranch.address) {
+      // It is an actual branch object
+      extractFromBranchObj(itemBranch);
     }
   } else if (typeof itemBranch === 'string') {
     itemIds.push(itemBranch.toLowerCase().trim());
   }
 
-  return itemIds.some(id => 
-    id === targetStr || 
-    (targetId && id === targetId) || 
-    (targetCode && id === targetCode) || 
-    (targetName && id === targetName)
-  );
+  return itemIds.some(id => targetKeys.has(id));
 };
 
 export default {

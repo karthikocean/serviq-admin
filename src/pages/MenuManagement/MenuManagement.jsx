@@ -5,10 +5,12 @@ import MenuPanel from '../../components/MenuPanel';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import MenuApi from '../../api/Menu.js';
+import BranchApi from '../../api/Branch.js';
 import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import { cleanRelativeImagePath, getImageUrl } from '../../helper/ImageHelper.js';
+import { isBranchMatch } from '../../helper/BranchHelper.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -65,17 +67,21 @@ export default function MenuManagement() {
 
     const res = await MenuApi.getMenuItems(params);
     if (res?.status && res.response) {
+      let rawList = [];
       if (res.response.data && res.response.data.items) {
-        setMenuItems(res.response.data.items);
+        rawList = res.response.data.items;
       } else {
-        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-        setMenuItems(arr);
+        rawList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       }
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
+        rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, branches));
+      }
+      setMenuItems(rawList);
     }
   };
 
   const fetchCategories = async () => {
-    const params = (selectedBranchId && selectedBranchId !== 'ALL') ? { branchId: selectedBranchId, limit: 10 } : { branchId: 'all', limit: 10 };
+    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, limit: 10 } : { branchId: 'all', limit: 10 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data)
@@ -83,7 +89,10 @@ export default function MenuManagement() {
         : (Array.isArray(res.response.data?.items)
             ? res.response.data.items
             : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
-      const cleanList = catArray.filter(cat => !cat?.isDelete);
+      let cleanList = catArray.filter(cat => !cat?.isDelete);
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
+        cleanList = cleanList.filter(c => isBranchMatch(c, selectedBranchId, branches));
+      }
       setCategories(cleanList);
       const availableOnly = cleanList.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
       if (availableOnly.length > 0 && !menuForm.category) {
@@ -91,6 +100,30 @@ export default function MenuManagement() {
       }
     }
   };
+
+  const [liveBranches, setLiveBranches] = useState([]);
+
+  const fetchBranches = React.useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches();
+      if (res?.status) {
+        const rawBranches = res.response?.data || (Array.isArray(res.response) ? res.response : []);
+        setLiveBranches(rawBranches);
+      } else if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    } catch (e) {
+      if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    }
+  }, [activeRestaurant]);
+
+  React.useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
+  const branches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
 
   const [isAddingCategory, setIsAddingCategory] = useState(false);
 
@@ -100,8 +133,8 @@ export default function MenuManagement() {
       setCustomCategoryError('Please enter a valid category name.');
       return;
     }
-    if (/\d/.test(categoryName)) {
-      setCustomCategoryError('Category Name should not contain numbers.');
+    if (categoryName.length < 2) {
+      setCustomCategoryError('Category Name must be at least 2 characters.');
       return;
     }
 
@@ -119,12 +152,15 @@ export default function MenuManagement() {
     setIsAddingCategory(true);
     setCustomCategoryError('');
     try {
+      const targetBranchId = menuForm.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
       const payload = {
         name: categoryName,
         description: '',
-        status: 'AVAILABLE',
-        branchId: menuForm.branchId || selectedBranchId || (activeRestaurant.branches?.length > 0 ? (activeRestaurant.branches[0]._id || activeRestaurant.branches[0].id) : '')
+        status: 'AVAILABLE'
       };
+      if (targetBranchId && targetBranchId !== 'ALL') {
+        payload.branchId = targetBranchId;
+      }
 
       const res = await MenuApi.createCategory(payload);
       if (res?.status) {
@@ -153,7 +189,7 @@ export default function MenuManagement() {
         // Refresh categories from API
         fetchCategories();
       } else {
-        const errorMsg = res?.response?.message || res?.response?.data?.message || 'Failed to create category. Please try again.';
+        const errorMsg = res?.response?.data?.message || res?.response?.message || 'Failed to create category. Please try again.';
         setCustomCategoryError(errorMsg);
         ShowNotifications.showAlertNotification(errorMsg, false);
       }

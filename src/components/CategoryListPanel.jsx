@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
+import BranchApi from '../api/Branch.js';
 import { useAppState } from '../config/AppContext';
 import SearchableSelect from './SearchableSelect.jsx';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -37,9 +39,33 @@ export default function CategoryListPanel({
 }) {
   const { currentUser, selectedBranchId } = useAppState();
   const [allCategories, setAllCategories] = useState([]);
+  const [liveBranches, setLiveBranches] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const limit = 10;
+
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches();
+      if (res?.status) {
+        const rawBranches = res.response?.data || (Array.isArray(res.response) ? res.response : []);
+        setLiveBranches(rawBranches);
+      } else if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    } catch (e) {
+      if (activeRestaurant?.branches) {
+        setLiveBranches(activeRestaurant.branches);
+      }
+    }
+  }, [activeRestaurant]);
+
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
+  const branches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
 
   const fetchCategoriesData = async () => {
     if (!activeRestaurant) return;
@@ -80,7 +106,10 @@ export default function CategoryListPanel({
     }
   }, [categories]);
 
-  const displayCategories = allCategories;
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const displayCategories = isBranchFiltered
+    ? allCategories.filter(c => isBranchMatch(c, selectedBranchId, branches))
+    : allCategories;
 
   const totalItems = displayCategories.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / limit));
@@ -136,8 +165,6 @@ export default function CategoryListPanel({
     userRoleLower === 'restaurant_owner' ||
     userRoleLower === 'restaurant owner';
 
-  const branches = activeRestaurant?.branches || [];
-
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
@@ -164,10 +191,10 @@ export default function CategoryListPanel({
 
   const handleOpenEdit = (item) => {
     setEditingItem(item);
-    setFormName(item.name);
-    setFormDesc(item.description);
+    setFormName(item.name || '');
+    setFormDesc(item.description || '');
     setFormStatus(item.status || 'AVAILABLE');
-    const itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || (selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
+    const itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
     setFormBranchId(itemBranch || '');
     setFormErrors({});
     setViewMode('form');
@@ -178,13 +205,11 @@ export default function CategoryListPanel({
     const errors = {};
     if (!formName.trim()) {
       errors.name = 'Category Name is required.';
-    } else if (/\d/.test(formName.trim())) {
-      errors.name = 'Category Name should not contain numbers.';
     } else if (formName.trim().length < 2) {
       errors.name = 'Category Name must be at least 2 characters.';
     }
 
-    if (isRestaurantOwner && !formBranchId) {
+    if (isRestaurantOwner && branches.length > 0 && !formBranchId) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -193,37 +218,50 @@ export default function CategoryListPanel({
       return;
     }
 
+    setIsSubmitting(true);
+    const finalBranch = formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
     const payload = {
       name: formName.trim(),
       description: formDesc.trim(),
-      status: formStatus,
-      branchId: formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined)
+      status: formStatus || 'AVAILABLE'
     };
+    if (finalBranch && finalBranch !== 'ALL') {
+      payload.branchId = finalBranch;
+    }
 
-    if (editingItem) {
-      if (editingItem._id) {
-        const res = await MenuApi.updateCategory(editingItem._id, payload);
-        if (res.status) {
-          ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
+    try {
+      if (editingItem) {
+        if (editingItem._id) {
+          const res = await MenuApi.updateCategory(editingItem._id, payload);
+          if (res?.status) {
+            ShowNotifications.showAlertNotification(`Category "${formName.trim()}" updated successfully!`, true);
+            if (refreshCategories) refreshCategories();
+            fetchCategoriesData();
+            setViewMode('list');
+          } else {
+            const errMsg = res?.response?.data?.message || res?.response?.message || 'Failed to update category';
+            ShowNotifications.showAlertNotification(errMsg, false);
+          }
+        } else {
+          ShowNotifications.showAlertNotification('Cannot update default placeholder category. Delete and create a new one.', false);
+        }
+      } else {
+        const res = await MenuApi.createCategory(payload);
+        if (res?.status) {
+          ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
           if (refreshCategories) refreshCategories();
           fetchCategoriesData();
           setViewMode('list');
         } else {
-          ShowNotifications.showAlertNotification('Failed to update category', false);
+          const errMsg = res?.response?.data?.message || res?.response?.message || 'Failed to create category';
+          ShowNotifications.showAlertNotification(errMsg, false);
         }
-      } else {
-        ShowNotifications.showAlertNotification('Cannot update default placeholder category. Delete and create a new one.', false);
       }
-    } else {
-      const res = await MenuApi.createCategory(payload);
-      if (res.status) {
-        ShowNotifications.showAlertNotification(`Category "${formName.trim()}" added successfully!`, true);
-        if (refreshCategories) refreshCategories();
-        fetchCategoriesData();
-        setViewMode('list');
-      } else {
-        ShowNotifications.showAlertNotification('Failed to create category', false);
-      }
+    } catch (err) {
+      console.error("Error saving category:", err);
+      ShowNotifications.showAlertNotification('Failed to save category. Please try again.', false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -305,8 +343,7 @@ export default function CategoryListPanel({
                 type="text"
                 value={formName}
                 onChange={e => {
-                  const sanitized = e.target.value.replace(/[0-9]/g, '');
-                  setFormName(sanitized);
+                  setFormName(e.target.value);
                   if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
                 }}
                 placeholder="e.g. Starters, Main Course, Beverages..."
@@ -331,7 +368,7 @@ export default function CategoryListPanel({
             {/* Branch Assignment Field */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
+                Branch Assignment {isRestaurantOwner && branches.length > 0 && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               {(() => {
                 const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
@@ -419,6 +456,7 @@ export default function CategoryListPanel({
               <button
                 type="button"
                 className="btn btn-outline"
+                disabled={isSubmitting}
                 onClick={() => setViewMode('list')}
                 style={{ padding: '10px 24px' }}
               >
@@ -426,19 +464,21 @@ export default function CategoryListPanel({
               </button>
               <button
                 type="submit"
+                disabled={isSubmitting}
                 style={{
-                  background: '#ff5a1f',
+                  background: isSubmitting ? '#94a3b8' : '#ff5a1f',
                   border: 'none',
                   color: '#ffffff',
                   fontWeight: '700',
                   padding: '10px 26px',
                   borderRadius: '8px',
                   fontSize: '14px',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+                  opacity: isSubmitting ? 0.8 : 1
                 }}
               >
-                {editingItem ? 'Save Changes' : 'Add Category'}
+                {isSubmitting ? 'Saving...' : (editingItem ? 'Save Changes' : 'Add Category')}
               </button>
             </div>
           </form>

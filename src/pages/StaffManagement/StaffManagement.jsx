@@ -7,6 +7,7 @@ import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import { validatePassword } from '../../helper/ValidationHelper';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 const EyeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -61,9 +62,9 @@ export default function StaffManagement() {
   const rawBranches = activeRestaurant.branches || [];
 
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
-  const staff = isBranchFiltered ? rawStaff.filter(s => s.branchId === selectedBranchId || (typeof s.branchId === 'object' && s.branchId?._id === selectedBranchId) || s.activeBranchId === selectedBranchId) : rawStaff;
-  const tables = isBranchFiltered ? rawTables.filter(t => t.branchId === selectedBranchId || (typeof t.branchId === 'object' && t.branchId?._id === selectedBranchId)) : rawTables;
-  const orders = isBranchFiltered ? rawOrders.filter(o => o.branchId === selectedBranchId || (typeof o.branchId === 'object' && o.branchId?._id === selectedBranchId)) : rawOrders;
+  const staff = isBranchFiltered ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || [])) : rawStaff;
+  const tables = isBranchFiltered ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || [])) : rawTables;
+  const orders = isBranchFiltered ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || [])) : rawOrders;
   const branches = rawBranches;
 
   const resolveTableAssignedWaiter = (table, staffList = staff) => {

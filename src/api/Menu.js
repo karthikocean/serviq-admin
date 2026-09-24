@@ -55,49 +55,89 @@ class MenuApi {
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit) || 10;
       }
-      const response = await apiClient.get("/menu/categories", { params: cleanParams });
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.get("/menu/categories", { params: cleanParams });
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.get("/menu/category", { params: cleanParams });
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       console.error("Failed to fetch categories", error);
-      return { status: false, response: error };
+      return { status: false, response: error?.response?.data || error };
     }
   }
 
   async createCategory(data) {
     try {
-      const response = await apiClient.post("/menu/category", data);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.post("/menu/category", data);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.post("/menu/categories", data);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       console.error("Failed to create category", error);
-      return { status: false, response: error };
+      return { status: false, response: error?.response?.data || error };
     }
   }
 
   async updateCategory(id, data) {
     try {
-      const response = await apiClient.put(`/menu/category/${id}`, data);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.put(`/menu/category/${id}`, data);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.put(`/menu/categories/${id}`, data);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       console.error("Failed to update category", error);
-      return { status: false, response: error };
+      return { status: false, response: error?.response?.data || error };
     }
   }
 
   async deleteCategory(id) {
     try {
-      const response = await apiClient.delete(`/menu/category/${id}`);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.delete(`/menu/category/${id}`);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.delete(`/menu/categories/${id}`);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       console.error("Failed to delete category", error);
-      return { status: false, response: error };
+      return { status: false, response: error?.response?.data || error };
     }
   }
 

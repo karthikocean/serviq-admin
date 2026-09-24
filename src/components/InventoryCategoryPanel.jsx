@@ -7,6 +7,7 @@ import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -204,8 +205,13 @@ export default function InventoryCategoryPanel() {
     return getItemsForCategory(category).length;
   };
 
-  // Client-side search and status filtering
-  const filteredCategories = categories.filter(c => {
+  // Client-side search and status filtering strictly isolated by branch
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const branchScopedCategories = isBranchFiltered
+    ? categories.filter(c => isBranchMatch(c, selectedBranchId, branches))
+    : categories;
+
+  const filteredCategories = branchScopedCategories.filter(c => {
     const matchesSearch =
       (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.description || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -273,7 +279,7 @@ export default function InventoryCategoryPanel() {
       errors.name = 'Category Name must be at least 2 characters.';
     }
 
-    if (isRestaurantOwner) {
+    if (isRestaurantOwner && branches.length > 0) {
       if (!formBranchId) {
         errors.branchId = 'Branch selection is required.';
       }
@@ -434,7 +440,7 @@ export default function InventoryCategoryPanel() {
             {/* Branch Assignment Field */}
             <div className="form-group">
               <label style={{ display: 'block', marginBottom: '6px', fontWeight: 700, fontSize: '13px', color: '#0f172a' }}>
-                Branch Assignment <span style={{ color: '#dc2626' }}>*</span>
+                Branch Assignment {isRestaurantOwner && (branches.length > 0 || liveBranches.length > 0) && <span style={{ color: '#dc2626' }}>*</span>}
               </label>
               {(() => {
                 const allBranchesList = (liveBranches && liveBranches.length > 0) ? liveBranches : (branches && branches.length > 0 ? branches : (activeRestaurant?.branches || []));

@@ -51,6 +51,7 @@ const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
 
 import MenuApi from '../api/Menu.js';
 import { getImageUrl } from '../helper/ImageHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 export default function MenuPanel({
   categories = [],
@@ -80,7 +81,11 @@ export default function MenuPanel({
   const limit = 10;
   const [totalPages, setTotalPages] = useState(1);
 
-  const activeCategoryList = liveCategories.length > 0 ? liveCategories : (Array.isArray(categories) ? categories : []);
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const rawCategoryList = liveCategories.length > 0 ? liveCategories : (Array.isArray(categories) ? categories : []);
+  const activeCategoryList = isBranchFiltered
+    ? rawCategoryList.filter(c => isBranchMatch(c, selectedBranchId, activeRestaurant?.branches || []))
+    : rawCategoryList;
   const combinedCategories = activeCategoryList.filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false && !c.isDelete);
   const categoriesList = ['All Items', ...combinedCategories.map(c => c._id || c.id)];
 
@@ -152,16 +157,19 @@ export default function MenuPanel({
     }
     const res = await MenuApi.getMenuItems(params);
     if (res?.status && res.response) {
+      let rawList = [];
       if (res.response.data && res.response.data.items) {
-        setPaginatedMenu(res.response.data.items);
-        setTotalItems(res.response.data.total || 0);
-        setTotalPages(Math.ceil((res.response.data.total || 0) / limit) || 1);
+        rawList = res.response.data.items;
       } else {
-        const arr = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-        setPaginatedMenu(arr);
-        setTotalItems(res.response.total || arr.length);
-        setTotalPages(res.response.totalPages || Math.ceil(arr.length / limit) || 1);
+        rawList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       }
+      if (isBranchFiltered) {
+        rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, activeRestaurant?.branches || []));
+      }
+      setPaginatedMenu(rawList);
+      const totalCount = (isBranchFiltered && res.response.data?.total === undefined) ? rawList.length : (res.response.data?.total || rawList.length);
+      setTotalItems(totalCount);
+      setTotalPages(Math.ceil(totalCount / limit) || 1);
     }
   };
 

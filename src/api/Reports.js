@@ -10,7 +10,7 @@ class ReportsApi {
         if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
           cleanParams[key] = val;
         }
-      });
+      });                                    
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (filters.waiter && !cleanParams.waiter && filters.waiter !== 'All' && filters.waiter !== 'ALL') cleanParams.waiter = filters.waiter;

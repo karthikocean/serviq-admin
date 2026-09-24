@@ -79,7 +79,7 @@ class OrderApi {
       // If id is not a 24-character hex MongoDB ObjectId, attempt to resolve it
       if (typeof id === 'string' && !/^[0-9a-fA-F]{24}$/.test(id.trim())) {
         try {
-          const res = await apiClient.get('/orders', { params: { limit: 100 } });
+          const res = await apiClient.get('/orders', { params: { limit: 10 } });
           const orders = res?.data?.data || res?.data?.orders || [];
           const matched = orders.find(o => 
             o.orderId === id || o.id === id || o.orderNumber === id || o.customOrderId === id
@@ -123,7 +123,7 @@ class OrderApi {
       // If id is not a 24-character hex MongoDB ObjectId, attempt to resolve it
       if (typeof id === 'string' && !/^[0-9a-fA-F]{24}$/.test(id.trim())) {
         try {
-          const res = await apiClient.get('/orders', { params: { limit: 100 } });
+          const res = await apiClient.get('/orders', { params: { limit: 10 } });
           const orders = res?.data?.data || res?.data?.orders || [];
           const matched = orders.find(o => 
             o.orderId === id || o.id === id || o.orderNumber === id || o.customOrderId === id
