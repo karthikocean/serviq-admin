@@ -306,22 +306,26 @@ export const AppProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  // Periodic token expiration check & auto-logout
+  // Periodic token expiration check & live profile active status verification
   useEffect(() => {
-    const checkTokenExpiry = () => {
+    const checkStatus = () => {
       const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
-      if (token && isTokenExpired(token)) {
-        ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
-        logout();
+      if (token) {
+        if (isTokenExpired(token)) {
+          ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
+          logout();
+        } else {
+          fetchProfile();
+        }
       }
     };
 
-    const interval = setInterval(checkTokenExpiry, 15000);
-    window.addEventListener('focus', checkTokenExpiry);
+    const interval = setInterval(checkStatus, 15000);
+    window.addEventListener('focus', checkStatus);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', checkTokenExpiry);
+      window.removeEventListener('focus', checkStatus);
     };
   }, []);
 
@@ -1042,9 +1046,98 @@ export const AppProvider = ({ children }) => {
     window.dispatchEvent(new Event('plan_updated'));
   };
 
-  // Automatically fetch live branches from API for current user
+  const fetchProfile = async () => {
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
+    if (!token) return null;
+    try {
+      const res = await AuthApi.getProfile();
+      if (res && res.status && res.data) {
+        const profileData = res.data;
+
+        // Verify if profile is inactive or deleted
+        const isInactive = 
+          profileData.isActive === false || 
+          profileData.isDelete === true || 
+          String(profileData.status || '').toLowerCase() === 'inactive' ||
+          String(profileData.status || '').toLowerCase() === 'disabled' ||
+          String(profileData.status || '').toLowerCase() === 'suspended';
+
+        if (isInactive) {
+          ShowNotifications.showAlertNotification("Account is inactive. Contact support.", false);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return null;
+        }
+
+        setCurrentUser(prevUser => {
+          const updatedUser = {
+            ...(prevUser || {}),
+            ...profileData,
+            id: profileData._id || profileData.id || prevUser?.id,
+            _id: profileData._id || prevUser?._id,
+            name: profileData.name || prevUser?.name,
+            email: profileData.email || prevUser?.email,
+            phoneNumber: profileData.phoneNumber || prevUser?.phoneNumber,
+            profileImage: profileData.profileImage || prevUser?.profileImage,
+            userType: profileData.userType || prevUser?.userType,
+            restaurantId: profileData.restaurantId || prevUser?.restaurantId,
+            isActive: profileData.isActive !== undefined ? profileData.isActive : prevUser?.isActive,
+            status: profileData.status || prevUser?.status,
+            dutyStatus: profileData.dutyStatus || prevUser?.dutyStatus,
+            autoAccept: profileData.autoAccept !== undefined ? profileData.autoAccept : prevUser?.autoAccept,
+            createdAt: profileData.createdAt || prevUser?.createdAt,
+            updatedAt: profileData.updatedAt || prevUser?.updatedAt
+          };
+          try {
+            sessionStorage.setItem("currentUser", JSON.stringify(updatedUser));
+          } catch (e) {}
+          return updatedUser;
+        });
+        return res.data;
+      } else if (res && !res.status) {
+        const rawErr = String(res.message || res.response?.message || res.response?.data?.message || '').toLowerCase();
+        if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('contact support')) {
+          ShowNotifications.showAlertNotification(res.message || "Account is inactive. Contact support.", false);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return null;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch admin profile:", e);
+      const rawErr = String(e?.response?.data?.message || e?.message || '').toLowerCase();
+      if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended')) {
+        ShowNotifications.showAlertNotification("Account is inactive. Contact support.", false);
+        sessionStorage.removeItem("userToken");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("currentUser");
+        try { sessionStorage.clear(); localStorage.clear(); } catch (err) {}
+        setCurrentUser(null);
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+      }
+    }
+    return null;
+  };
+
+  // Automatically fetch live profile and branches from API for current user
   useEffect(() => {
-    if (currentUser) {
+    const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
+    if (token) {
+      fetchProfile();
       fetchBranches({ limit: 10 });
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
@@ -2583,6 +2676,7 @@ export const AppProvider = ({ children }) => {
         activeRestaurant,
         selectedBranchId,
         setSelectedBranchId,
+        fetchProfile,
         fetchBranches,
         fetchSubscriptionDashboard,
         fetchOrders,

@@ -123,9 +123,7 @@ export default function HelpSupport() {
   const fetchTickets = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = {
-        limit: 10
-      };
+      const params = {};
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }

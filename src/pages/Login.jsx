@@ -232,27 +232,37 @@ export default function Login() {
         navigate('/dashboard', { replace: true });
       } else {
         const rawErr = String(res?.error || '').toLowerCase();
+        const isEmailSyntaxValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
         
-        if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted') || rawErr.includes('waiter') || rawErr.includes('kitchen')) {
+        if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('contact support')) {
+          const isRestaurantInactive = rawErr.includes('restaurant');
+          const inactiveMsg = isRestaurantInactive ? 'Restaurant is inactive. Contact support.' : (res?.error || 'Account is inactive. Contact support.');
+          setFormErrors({ email: false, password: true, passwordMsg: inactiveMsg });
+        } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted') || rawErr.includes('waiter') || rawErr.includes('kitchen')) {
           setFormErrors({ email: false, password: true, passwordMsg: res?.error || 'Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to log into the Admin Panel.' });
-        } else if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered')) {
+        } else if (!isEmailSyntaxValid && (rawErr.includes('invalid email') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered'))) {
           setFormErrors({ email: true, password: false, passwordMsg: '' });
         } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('mismatch') || rawErr.includes('invalid credential') || rawErr.includes('invalid password')) {
           setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
         } else {
-          setFormErrors({ email: true, password: true, passwordMsg: res?.error || 'Incorrect password. Please check and try again.' });
+          setFormErrors({ email: false, password: true, passwordMsg: res?.error || 'Incorrect email or password. Please check and try again.' });
         }
       }
     } catch (err) {
       const rawErr = String(err.message || '').toLowerCase();
-      if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted')) {
+      const isEmailSyntaxValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+      if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('contact support')) {
+        const isRestaurantInactive = rawErr.includes('restaurant');
+        const inactiveMsg = isRestaurantInactive ? 'Restaurant is inactive. Contact support.' : (err.message || 'Account is inactive. Contact support.');
+        setFormErrors({ email: false, password: true, passwordMsg: inactiveMsg });
+      } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted')) {
         setFormErrors({ email: false, password: true, passwordMsg: err.message || 'Access Denied: Staff members are not permitted to log into the Admin Panel.' });
-      } else if (rawErr.includes('mail') || rawErr.includes('user not found') || rawErr.includes('user does not exist')) {
+      } else if (!isEmailSyntaxValid && (rawErr.includes('invalid email') || rawErr.includes('user not found') || rawErr.includes('user does not exist'))) {
         setFormErrors({ email: true, password: false, passwordMsg: '' });
       } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('invalid')) {
         setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
       } else {
-        setFormErrors({ email: true, password: true, passwordMsg: err.message || 'Incorrect password. Please check and try again.' });
+        setFormErrors({ email: false, password: true, passwordMsg: err.message || 'Incorrect email or password. Please check and try again.' });
       }
     } finally {
       setIsLoading(false);

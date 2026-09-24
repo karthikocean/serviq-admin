@@ -204,6 +204,37 @@ class AuthApi {
       };
     }
   }
+
+  async getProfile() {
+    try {
+      const response = await apiClient.get("/profile");
+      if (response.status === 200 || response.status === 201) {
+        const isSuccess = response.data?.success !== false;
+        return {
+          status: isSuccess,
+          message: response.data?.message,
+          data: response.data?.data,
+          response: response.data
+        };
+      }
+      return {
+        status: false,
+        message: response.data?.message || "Failed to fetch profile.",
+        response: response.data
+      };
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.response?.message ||
+        error?.message ||
+        "Failed to fetch profile.";
+      return {
+        status: false,
+        message: errorMessage,
+        response: error?.response?.data || error
+      };
+    }
+  }
 }
 
 export default new AuthApi();

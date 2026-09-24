@@ -131,6 +131,7 @@ export default function MenuPanel({
     return () => clearTimeout(timer);
   }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId, liveCategories]);
 
+  
   const fetchPaginatedMenu = async () => {
     if (!activeRestaurant) return;
     const trimmed = (menuSearch || '').trim();

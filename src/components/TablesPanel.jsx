@@ -453,7 +453,7 @@ export default function TablesPanel({
           <SearchIcon size={15} color="#64748b" />
           <input
             type="text"
-            placeholder="Search by table #, waiter, section..."
+            placeholder="Search by table , waiter, section..."
             value={searchTerm}
             onKeyDown={e => {
               if (e.key === ' ' && !e.currentTarget.value) {

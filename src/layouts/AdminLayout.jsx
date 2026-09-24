@@ -12,11 +12,19 @@ export default function AdminLayout() {
     currentUser,
     activeRestaurant,
     logout,
-    selectedBranchId
+    selectedBranchId,
+    fetchProfile
   } = useAppState();
 
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Universal profile verification on route navigation & page load
+  useEffect(() => {
+    if (fetchProfile) {
+      fetchProfile();
+    }
+  }, [location.pathname]);
 
   // If unauthenticated, redirect to login
   if (!currentUser) {
@@ -634,7 +642,7 @@ export default function AdminLayout() {
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <button
                 style={{
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  background: currentUser?.profileImage ? 'transparent' : 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                   color: 'white',
                   border: 'none',
                   width: '40px',
@@ -651,11 +659,16 @@ export default function AdminLayout() {
                   justifyContent: 'center',
                   flexShrink: 0,
                   padding: 0,
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  overflow: 'hidden'
                 }}
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               >
-                {restaurantName.charAt(0).toUpperCase()}
+                {currentUser?.profileImage ? (
+                  <img src={currentUser.profileImage} alt={currentUser?.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  (currentUser?.name || restaurantName || 'S').charAt(0).toUpperCase()
+                )}
               </button>
 
               {isProfileMenuOpen && (
@@ -668,7 +681,7 @@ export default function AdminLayout() {
                     position: 'absolute',
                     top: '52px',
                     right: '0',
-                    width: '260px',
+                    width: '270px',
                     background: '#1e1e1e',
                     borderRadius: '16px',
                     boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
@@ -676,9 +689,9 @@ export default function AdminLayout() {
                     zIndex: 1000,
                     overflow: 'hidden'
                   }}>
-                    <div style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #333333' }}>
+                    <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid #333333' }}>
                       <div style={{
-                        background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                        background: currentUser?.profileImage ? 'transparent' : 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                         color: 'white',
                         width: '48px',
                         height: '48px',
@@ -688,17 +701,39 @@ export default function AdminLayout() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        overflow: 'hidden'
                       }}>
-                        {restaurantName.charAt(0).toUpperCase()}
+                        {currentUser?.profileImage ? (
+                          <img src={currentUser.profileImage} alt={currentUser?.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          (currentUser?.name || restaurantName || 'S').charAt(0).toUpperCase()
+                        )}
                       </div>
                       <div style={{ overflow: 'hidden' }}>
                         <div style={{ fontWeight: 700, fontSize: '15px', color: '#ffffff', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                           {currentUser?.name || 'Serviq Admin'}
                         </div>
                         <div style={{ fontSize: '12px', color: '#a1a1aa', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                          {currentUser?.email || 'admin@saravana.com'}
+                          {currentUser?.email || 'admin@serviq.com'}
                         </div>
+                        {currentUser?.phoneNumber && (
+                          <div style={{ fontSize: '11px', color: '#71717a', marginTop: '2px' }}>
+                            {currentUser.phoneNumber}
+                          </div>
+                        )}
+                        {(currentUser?.dutyStatus || currentUser?.userType) && (
+                          <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '10px', background: '#3f3f46', color: '#e4e4e7', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              {currentUser?.userType || 'RESTAURANT_OWNER'}
+                            </span>
+                            {currentUser?.dutyStatus && (
+                              <span style={{ fontSize: '10px', background: currentUser.dutyStatus === 'ON_DUTY' ? '#166534' : '#27272a', color: currentUser.dutyStatus === 'ON_DUTY' ? '#86efac' : '#a1a1aa', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                {currentUser.dutyStatus}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 

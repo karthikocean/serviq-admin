@@ -103,14 +103,17 @@ apiClient.interceptors.response.use(
     return response;
   },
   function (error) {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      const errorMsg = String(error.response.data?.message || error.response.data?.error || '').toLowerCase();
+    if (error.response) {
+      const errorMsg = String(error.response.data?.message || error.response.data?.error || error.response.data?.data?.message || '').toLowerCase();
       const isAuthIssue =
         errorMsg.includes('expired') ||
         errorMsg.includes('jwt') ||
         errorMsg.includes('unauthorized') ||
         errorMsg.includes('invalid token') ||
         errorMsg.includes('token missing') ||
+        errorMsg.includes('inactive') ||
+        errorMsg.includes('disabled') ||
+        errorMsg.includes('suspended') ||
         error.response.status === 401;
 
       const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
@@ -121,7 +124,7 @@ apiClient.interceptors.response.use(
         sessionStorage.removeItem("currentUser");
         try { sessionStorage.clear(); localStorage.clear(); } catch (e) { }
 
-        // Automatically redirect to login page when token is expired/invalid
+        // Automatically redirect to login page when token is expired/invalid/inactive
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }
