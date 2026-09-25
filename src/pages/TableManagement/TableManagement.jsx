@@ -53,8 +53,7 @@ export default function TableManagement() {
       const params = {
         branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
         search: activeSearch ? activeSearch.trim() : undefined,
-        status: activeStatus !== 'All' ? activeStatus : undefined,
-        limit: 10
+        status: activeStatus !== 'All' ? activeStatus : undefined
       };
       const tablesRes = await TableApi.getTables(params);
       if (tablesRes.status && tablesRes.response?.data) {

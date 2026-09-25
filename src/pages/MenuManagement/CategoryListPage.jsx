@@ -6,11 +6,15 @@ import MenuApi from '../../api/Menu';
 
 export default function CategoryListPage() {
   const navigate = useNavigate();
-  const { activeRestaurant } = useAppState();
+  const { activeRestaurant, selectedBranchId } = useAppState();
   const [categories, setCategories] = useState([]);
 
   const fetchCategories = async () => {
-    const res = await MenuApi.getCategories({ limit: 10 });
+    const params = { limit: 10 };
+    if (selectedBranchId && selectedBranchId !== 'ALL') {
+      params.branchId = selectedBranchId;
+    }
+    const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       setCategories(catArray);
@@ -19,7 +23,7 @@ export default function CategoryListPage() {
 
   useEffect(() => {
     fetchCategories();
-  }, [activeRestaurant]);
+  }, [activeRestaurant, selectedBranchId]);
 
   if (!activeRestaurant) return null;
 

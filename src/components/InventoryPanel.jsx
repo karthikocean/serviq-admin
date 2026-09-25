@@ -279,9 +279,7 @@ export default function InventoryPanel() {
   const fetchItems = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params = {
-        limit: 10
-      };
+      const params = {};
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       }

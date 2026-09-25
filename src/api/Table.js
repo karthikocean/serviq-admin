@@ -4,7 +4,7 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class MemberApi {
   async getTables(params = {}) {
     try {
-      const cleanParams = { limit: 10, page: 0 };
+      const cleanParams = {};
       Object.keys(params).forEach(key => {
         if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
