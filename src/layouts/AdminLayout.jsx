@@ -173,17 +173,10 @@ export default function AdminLayout() {
     return !!modulePermissions[action];
   };
 
-  let savedPlanInfo = null;
-  try {
-    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
-  } catch (e) {}
-
-  const rawSubPlanName = savedPlanInfo?.cleanName || 
-    savedPlanInfo?.planName ||
-    activeRestaurant?.subscription?.planName || 
-    activeRestaurant?.subscription?.planId || 
+  const rawSubPlanName = activeRestaurant?.subscription?.planName || 
     activeRestaurant?.plan || 
+    currentUser?.subscription?.planName || 
+    currentUser?.plan || 
     'Standard';
   const cleanSubPlan = String(rawSubPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Standard';
   const currentSubPlan = cleanSubPlan;

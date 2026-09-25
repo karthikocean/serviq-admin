@@ -275,6 +275,8 @@ export default function InventoryCategoryPanel() {
     const errors = {};
     if (!formName.trim()) {
       errors.name = 'Category Name is required.';
+    } else if (/\d/.test(formName)) {
+      errors.name = 'Numbers are not allowed in Category Name.';
     } else if (formName.trim().length < 2) {
       errors.name = 'Category Name must be at least 2 characters.';
     }
@@ -415,8 +417,20 @@ export default function InventoryCategoryPanel() {
                 type="text"
                 value={formName}
                 onChange={e => {
-                  setFormName(e.target.value);
-                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                  const val = e.target.value;
+                  const cleaned = val.replace(/[0-9]/g, '');
+                  setFormName(cleaned);
+                  if (val !== cleaned) {
+                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                  } else if (formErrors.name) {
+                    setFormErrors({ ...formErrors, name: '' });
+                  }
+                }}
+                onKeyDown={e => {
+                  if (/[0-9]/.test(e.key)) {
+                    e.preventDefault();
+                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                  }
                 }}
                 placeholder="e.g. Dairy, Spices, Grains, Vegetables..."
                 disabled={isSubmitting}

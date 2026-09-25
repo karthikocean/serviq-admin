@@ -22,9 +22,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.88.19:5000/public";
-    BASE_URL = "http://192.168.88.19:5000/api/admin";
-    server = "http://192.168.88.19:5000";
+    IMAGE_BASE_URL = "http://192.168.88.14:5000/public";
+    BASE_URL = "http://192.168.88.14:5000/api/admin";
+    server = "http://192.168.88.14:5000";
     break;
 }
 
@@ -104,8 +104,19 @@ apiClient.interceptors.response.use(
   },
   function (error) {
     if (error.response) {
+      const status = error.response.status;
+      const code = error.response.data?.code;
       const errorMsg = String(error.response.data?.message || error.response.data?.error || error.response.data?.data?.message || '').toLowerCase();
+      
+      const isRestaurantDeactivated = 
+        code === 'RESTAURANT_INACTIVE' || 
+        code === 'RESTAURANT_DEACTIVATED' || 
+        (errorMsg.includes('restaurant') && (errorMsg.includes('inactive') || errorMsg.includes('deactivat') || errorMsg.includes('disabled') || errorMsg.includes('suspended')));
+
       const isAuthIssue =
+        isRestaurantDeactivated ||
+        code === 'USER_INACTIVE' ||
+        code === 'ROLE_INACTIVE' ||
         errorMsg.includes('expired') ||
         errorMsg.includes('jwt') ||
         errorMsg.includes('unauthorized') ||
@@ -114,15 +125,21 @@ apiClient.interceptors.response.use(
         errorMsg.includes('inactive') ||
         errorMsg.includes('disabled') ||
         errorMsg.includes('suspended') ||
-        error.response.status === 401;
+        errorMsg.includes('deactivat') ||
+        status === 401 ||
+        status === 403;
 
       const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
 
       if (token && isAuthIssue) {
+        if (isRestaurantDeactivated || errorMsg.includes('restaurant') || errorMsg.includes('deactivat') || errorMsg.includes('inactive')) {
+          sessionStorage.setItem("deactivatedToast", "Your restaurant account has been deactivated. Please contact the Super Admin.");
+        }
+
         sessionStorage.removeItem("userToken");
         sessionStorage.removeItem("token");
         sessionStorage.removeItem("currentUser");
-        try { sessionStorage.clear(); localStorage.clear(); } catch (e) { }
+        try { localStorage.clear(); } catch (e) { }
 
         // Automatically redirect to login page when token is expired/invalid/inactive
         if (!window.location.pathname.includes('/login')) {

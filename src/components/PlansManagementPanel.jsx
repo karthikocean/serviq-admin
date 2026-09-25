@@ -358,36 +358,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
       if (dashValue && dashValue.status && dashValue.response) {
         const data = dashValue.response?.data?.data || dashValue.response?.data || dashValue.response;
-        try {
-          const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-          if (rawSaved) {
-            const savedPlan = JSON.parse(rawSaved);
-            if (savedPlan && savedPlan.cleanName) {
-              const isAnnual = String(savedPlan.billingCycle).toLowerCase().includes('annual') || String(savedPlan.billingCycle).toLowerCase().includes('year');
-              if (data) {
-                data.activePlan = {
-                  ...(data.activePlan || {}),
-                  planId: savedPlan.planId,
-                  _id: savedPlan.planId,
-                  id: savedPlan.planId,
-                  planName: savedPlan.planName || `${savedPlan.cleanName} Plan`,
-                  name: savedPlan.planName || `${savedPlan.cleanName} Plan`,
-                  cleanName: savedPlan.cleanName,
-                  billingCycle: isAnnual ? 'Annually' : 'Monthly',
-                  price: savedPlan.price || (isAnnual ? savedPlan.annualPrice : savedPlan.monthlyPrice) || data.activePlan?.price,
-                  monthlyPrice: savedPlan.monthlyPrice || data.activePlan?.monthlyPrice,
-                  annualPrice: savedPlan.annualPrice || data.activePlan?.annualPrice,
-                  baseBranchLimit: savedPlan.baseBranchLimit || data.activePlan?.baseBranchLimit,
-                  maxBranches: savedPlan.baseBranchLimit || data.activePlan?.maxBranches,
-                  startDate: savedPlan.startDate || data.activePlan?.startDate,
-                  validity: savedPlan.expiryDate || savedPlan.validity || data.activePlan?.validity,
-                  nextRenewal: savedPlan.nextRenewal || savedPlan.nextBillingDate || data.activePlan?.nextRenewal,
-                  status: 'Active'
-                };
-              }
-            }
-          }
-        } catch (e) {}
         setDashboardData(data);
       }
 
@@ -512,30 +482,24 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const branchCapacityData = dashboardData?.branchCapacity;
   const extraBranchRateData = dashboardData?.extraBranchRate;
 
-  let savedPlanInfo = null;
-  try {
-    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
-  } catch (e) {}
-
-  // Active Plan fields - Clean human-readable name guaranteed
+  // Active Plan fields - Clean human-readable name guaranteed from API / profile
   const cleanPlanSlug = resolveHumanPlanName(
-    savedPlanInfo?.cleanName ||
-    savedPlanInfo?.planName ||
-    activeRestaurant?.subscription?.planName ||
-    activeRestaurant?.plan ||
     activePlanData?.cleanName ||
     activePlanData?.planName ||
     activePlanData?.name ||
+    activeRestaurant?.subscription?.planName ||
+    activeRestaurant?.plan ||
+    currentUser?.subscription?.planName ||
+    currentUser?.plan ||
     sub.planName,
     'Standard'
   );
 
-  const candidatePlanId = savedPlanInfo?.planId || 
-                          activeRestaurant?.subscription?.planId || 
-                          activePlanData?.planId || 
+  const candidatePlanId = activePlanData?.planId || 
                           activePlanData?._id || 
-                          activePlanData?.id || 
+                          activePlanData?.id ||
+                          activeRestaurant?.subscription?.planId || 
+                          currentUser?.subscription?.planId ||
                           `plan-${cleanPlanSlug.toLowerCase()}`;
 
   let matchedActivePlan = plansList.find(p => {
@@ -555,32 +519,34 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     matchedActivePlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase())) || AVAILABLE_PLANS[1];
   }
 
-  const currentPlanName = `${cleanPlanSlug} Plan`;
+  const currentPlanName = activePlanData?.planName 
+    ? (activePlanData.planName.toLowerCase().includes('plan') ? activePlanData.planName : `${activePlanData.planName} Plan`)
+    : `${cleanPlanSlug} Plan`;
 
-  const currentBillingCycle = (savedPlanInfo?.billingCycle ? (String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') || String(savedPlanInfo.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
+  const currentBillingCycle = (activePlanData?.billingCycle ? (String(activePlanData.billingCycle).toLowerCase().includes('annual') || String(activePlanData.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
     (activeRestaurant?.subscription?.billingCycle ? (String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') || String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
-    (activePlanData?.billingCycle ? (String(activePlanData.billingCycle).toLowerCase().includes('annual') || String(activePlanData.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
     (String(sub.billingCycle).toLowerCase().includes('annual') || String(sub.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly');
     
   const isAnnualCycle = currentBillingCycle.toLowerCase().includes('annual') || currentBillingCycle.toLowerCase().includes('year');
 
-  const currentPlanPrice = isAnnualCycle
-    ? Number(
-        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.annualPrice || (isAnnualCycle ? savedPlanInfo?.price : null))) ??
-        matchedActivePlan?.annualPrice ??
-        matchedActivePlan?.yearlyPrice ??
-        (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
-      )
-    : Number(
-        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.monthlyPrice || (!isAnnualCycle ? savedPlanInfo?.price : null))) ??
-        matchedActivePlan?.monthlyPrice ??
-        matchedActivePlan?.basePrice ??
-        matchedActivePlan?.baseValue ??
-        matchedActivePlan?.price ??
-        (cleanPlanSlug.toLowerCase() === 'premium' ? 4999 : cleanPlanSlug.toLowerCase() === 'basic' ? 999 : 1999)
+  const currentPlanPrice = (activePlanData?.price !== undefined && activePlanData?.price !== null)
+    ? Number(activePlanData.price)
+    : (isAnnualCycle
+        ? Number(
+            matchedActivePlan?.annualPrice ??
+            matchedActivePlan?.yearlyPrice ??
+            (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
+          )
+        : Number(
+            matchedActivePlan?.monthlyPrice ??
+            matchedActivePlan?.basePrice ??
+            matchedActivePlan?.baseValue ??
+            matchedActivePlan?.price ??
+            (cleanPlanSlug.toLowerCase() === 'premium' ? 4999 : cleanPlanSlug.toLowerCase() === 'basic' ? 999 : 1999)
+          )
       );
 
-  const rawStartDate = savedPlanInfo?.startDate || activeRestaurant?.subscription?.startDate || sub.startDate || activePlanData?.startDate || '2026-09-21';
+  const rawStartDate = activePlanData?.startDate || activeRestaurant?.subscription?.startDate || sub.startDate || '2026-09-21';
   
   // Calculate dynamic expiry date based on startDate and cycle
   const getCalculatedExpiryDate = (startStr, isAnnual) => {
@@ -601,11 +567,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const dynamicCalculatedExpiry = getCalculatedExpiryDate(rawStartDate, isAnnualCycle);
 
-  const rawExpiryDate = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.expiryDate || savedPlanInfo?.validity)) ||
+  const rawExpiryDate = activePlanData?.validity || 
+                        activePlanData?.expiryDate || 
                         (activeRestaurant?.subscription?.billingCycle && ((String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (activeRestaurant?.subscription?.expiryDate || activeRestaurant?.subscription?.validity)) ||
                         dynamicCalculatedExpiry;
 
-  const rawNextRenewal = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.nextRenewal || savedPlanInfo?.nextBillingDate)) || rawExpiryDate;
+  const rawNextRenewal = activePlanData?.nextRenewal || 
+                         activePlanData?.nextBillingDate || 
+                         rawExpiryDate;
 
   const startDateFormatted = formatDate(rawStartDate);
   const validityFormatted = formatDate(rawExpiryDate);
@@ -618,61 +587,69 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const activeBranchesCount = branchesList.length;
 
   const planDefinedLimit = Number(
-    savedPlanInfo?.baseBranchLimit ??
-    matchedActivePlan?.maxBranches ??
-    matchedActivePlan?.branchLimit ??
-    matchedActivePlan?.baseBranchLimit ??
-    matchedActivePlan?.branchCapacity ??
-    getPlanBranchLimit(cleanPlanSlug, 5)
-  );
-
-  const baseBranchLimit = Number(
-    savedPlanInfo?.baseBranchLimit ??
-    activeRestaurant?.subscription?.baseBranchLimit ??
-    activeRestaurant?.subscription?.maxBranches ??
-    activeRestaurant?.subscription?.branchLimit ??
-    planDefinedLimit ??
+    branchCapacityData?.base ??
     activePlanData?.baseBranchLimit ??
     activePlanData?.maxBranches ??
     activePlanData?.branchLimit ??
     activePlanData?.branchCapacity ??
+    matchedActivePlan?.maxBranches ??
+    matchedActivePlan?.branchLimit ??
     getPlanBranchLimit(cleanPlanSlug, 5)
   );
 
-  const extraBranchSlots = Number(
-    savedPlanInfo?.extraBranchSlots !== undefined
-      ? savedPlanInfo.extraBranchSlots
-      : (activeRestaurant?.subscription?.extraBranchSlots !== undefined
-          ? activeRestaurant.subscription.extraBranchSlots
-          : (branchCapacityData?.extraSlots !== undefined 
-              ? branchCapacityData.extraSlots 
-              : (branchCapacityData?.addons !== undefined
-                  ? branchCapacityData.addons
-                  : (sub.extraBranchSlots || 0))))
+  const baseBranchLimit = Number(
+    branchCapacityData?.base ??
+    activePlanData?.baseBranchLimit ??
+    activePlanData?.maxBranches ??
+    activePlanData?.branchLimit ??
+    activePlanData?.branchCapacity ??
+    activeRestaurant?.subscription?.baseBranchLimit ??
+    planDefinedLimit
   );
-  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
 
-  const usedBranchesCount = branchCapacityData?.used !== undefined
-    ? Number(branchCapacityData.used)
-    : (branchCapacityData?.activeBranches !== undefined
-        ? Number(branchCapacityData.activeBranches)
-        : (branchCapacityData?.currentBranches !== undefined
-            ? Number(branchCapacityData.currentBranches)
-            : (branchCapacityData?.branchesCount !== undefined
-                ? Number(branchCapacityData.branchesCount)
-                : activeBranchesCount)));
+  const extraBranchSlots = Number(
+    branchCapacityData?.addons ??
+    branchCapacityData?.extraSlots ??
+    activeRestaurant?.subscription?.extraBranchSlots ??
+    sub.extraBranchSlots ??
+    0
+  );
 
-  const remainingSlots = Math.max(0, totalAllowedBranches - usedBranchesCount);
-  const branchUsagePercent = Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
+  const totalAllowedBranches = Number(
+    branchCapacityData?.total ??
+    (baseBranchLimit + extraBranchSlots)
+  );
 
-  const extraBranchUnitPrice = extraBranchRateData?.rate !== undefined ? extraBranchRateData.rate : (matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699);
-  const isAutoRenewActive = savedPlanInfo?.autoRenew !== undefined 
-    ? Boolean(savedPlanInfo.autoRenew) 
+  const usedBranchesCount = Number(
+    branchCapacityData?.used ??
+    branchCapacityData?.activeBranches ??
+    branchCapacityData?.currentBranches ??
+    branchCapacityData?.branchesCount ??
+    activeBranchesCount
+  );
+
+  const remainingSlots = Number(
+    branchCapacityData?.available ??
+    Math.max(0, totalAllowedBranches - usedBranchesCount)
+  );
+
+  const branchUsagePercent = Number(
+    branchCapacityData?.percentUsed ??
+    Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100))
+  );
+
+  const extraBranchUnitPrice = Number(
+    extraBranchRateData?.rate ??
+    matchedActivePlan?.extraBranchPrice ??
+    sub.extraBranchPrice ??
+    699
+  );
+
+  const isAutoRenewActive = extraBranchRateData?.autoRenew !== undefined
+    ? Boolean(extraBranchRateData.autoRenew)
     : (activeRestaurant?.subscription?.autoRenew !== undefined 
         ? Boolean(activeRestaurant.subscription.autoRenew) 
-        : (extraBranchRateData?.autoRenew !== undefined 
-            ? Boolean(extraBranchRateData.autoRenew) 
-            : (sub.autoRenew !== false)));
+        : (sub.autoRenew !== false));
 
   const extraBranchSubtotal = extraSlotsToAdd * extraBranchUnitPrice;
   const extraBranchGst = Math.round(extraBranchSubtotal * 0.18);
@@ -730,22 +707,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   let rawList = [...localPurchases, ...allApiInvoices];
 
   // If lastRechargeData exists and its transaction/date is not in list yet, include it
-  if (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date || lastRechargeData.transactionId)) {
+  if (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.transactionId || lastRechargeData.invoice || lastRechargeData.invoiceId)) {
+    const lastRecInvoiceId = lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId;
     const isAlreadyPresent = rawList.some(inv => 
-      (lastRechargeData.transactionId && (inv.id === lastRechargeData.transactionId || inv.transactionId === lastRechargeData.transactionId || inv.invoiceNumber === lastRechargeData.transactionId)) ||
+      (lastRecInvoiceId && (inv.id === lastRecInvoiceId || inv.transactionId === lastRecInvoiceId || inv.invoiceNumber === lastRecInvoiceId || inv.invoice === lastRecInvoiceId)) ||
       (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount || inv.totalAmount) === Number(lastRechargeData.amount))
     );
 
     if (!isAlreadyPresent) {
       rawList.unshift({
-        id: lastRechargeData.transactionId || lastRechargeData.invoiceId || `INV-SLOT-${Date.now().toString().slice(-6)}`,
-        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'Standard Add-on' : `${currentPlanName}`),
-        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'addon' : 'subscription',
-        description: lastRechargeData.description || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? `Additional Branch Slot x${branchCapacityData?.addons || 2} (Recurring Add-on)` : `${currentPlanName} - Monthly Subscription Renewal`),
-        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.addons || 2,
-        amount: lastRechargeData.amount || 1650,
+        id: lastRecInvoiceId || `INV-RECHARGE-${Date.now().toString().slice(-6)}`,
+        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650) ? 'Standard Add-on' : `${currentPlanName}`),
+        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650) ? 'addon' : 'subscription',
+        description: lastRechargeData.description || ((lastRechargeData.amount === 1650) ? `Additional Branch Slot (Recurring Add-on)` : `${currentPlanName} Subscription Renewal`),
+        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.total || baseBranchLimit,
+        amount: lastRechargeData.amount || 0,
         date: lastRechargeData.date || new Date().toISOString(),
-        paymentMethod: lastRechargeData.paymentMethod || 'Credit Card (•••• 4242)',
+        paymentMethod: lastRechargeData.paymentMethod || 'Online Payment',
         status: lastRechargeData.status || 'Paid'
       });
     }
@@ -765,8 +743,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const addonInvoices = invoices.filter(inv => inv.type === 'addon');
   const subscriptionInvoices = invoices.filter(inv => inv.type !== 'addon');
 
-  const lastRecharge = (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date)) ? {
-    id: lastRechargeData.transactionId || lastRechargeData.invoiceId || invoices[0]?.id || 'PLAN-ACTIVE',
+  const lastRecharge = (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId)) ? {
+    id: lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId || invoices[0]?.id || 'PLAN-ACTIVE',
     planName: lastRechargeData.planName || invoices[0]?.planName || currentPlanName,
     description: lastRechargeData.description || invoices[0]?.description || `${currentPlanName} Subscription Renewal`,
     amount: lastRechargeData.amount !== undefined ? lastRechargeData.amount : (invoices[0]?.amount || currentPlanPrice),
@@ -934,8 +912,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       updatedAt: new Date().toISOString()
     };
     try {
-      sessionStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
-      localStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
+      sessionStorage.removeItem('activePlanSelection');
+      localStorage.removeItem('activePlanSelection');
     } catch (e) {}
 
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
@@ -1082,14 +1060,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const handleToggleAutoRenew = () => {
     if (typeof toggleSubscriptionAutoRenew === 'function') {
       toggleSubscriptionAutoRenew(activeRestaurant?.id || 'rest-1');
-    } else {
-      const nextAuto = !isAutoRenewActive;
-      try {
-        const raw = sessionStorage.getItem('activePlanSelection');
-        const parsed = raw ? JSON.parse(raw) : {};
-        parsed.autoRenew = nextAuto;
-        sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
-      } catch (e) {}
+      sessionStorage.removeItem('activePlanSelection');
+      localStorage.removeItem('activePlanSelection');
     }
     window.dispatchEvent(new Event('plan_updated'));
     ShowNotifications.showAlertNotification(
@@ -2059,11 +2031,9 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             {/* 3 PLAN COMPARISON CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' }}>
               {plansList.map(plan => {
-                const planClean = plan.name.toLowerCase().replace(/\s*plan$/i, '').trim();
-                const currentClean = cleanPlanSlug.toLowerCase();
-                const isCurrentPlan = currentClean === planClean || 
-                  plan.id === sub.planId || 
-                  (sub.planName && plan.name.toLowerCase().includes(sub.planName.toLowerCase()));
+                const planClean = (plan.name || plan.planName || plan.id || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+                const currentClean = (cleanPlanSlug || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+                const isCurrentPlan = planClean === currentClean;
 
                 const planCycle = selectedPlanCycles[plan.id] || 'monthly';
                 const isAnnual = planCycle === 'annual';

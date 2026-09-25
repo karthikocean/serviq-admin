@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import InventoryPanel from '../../components/InventoryPanel';
 import ShowNotifications from '../../helper/ShowNotifications';
+import { isModuleAllowedForPlan } from '../../config/initialData';
 
 export default function InventoryManagement() {
   const navigate = useNavigate();
@@ -10,10 +11,7 @@ export default function InventoryManagement() {
 
   const planName = (activeRestaurant?.subscription?.planName || activeRestaurant?.plan || '').toLowerCase();
   const planId = (activeRestaurant?.subscription?.planId || '').toLowerCase();
-  const isPremium = planName.includes('premium') || planId.includes('premium') || planName.includes('enterprise') || planId.includes('enterprise');
-
-  // Interactive live preview toggle for admins (default false so non-premium plans are gated)
-  const [isPreviewUnlocked, setIsPreviewUnlocked] = useState(false);
+  const isPremium = isModuleAllowedForPlan('inventory', activeRestaurant) || planName.includes('premium') || planId.includes('premium') || planName.includes('enterprise') || planId.includes('enterprise');
 
   const handleInstantUpgradeToPremium = () => {
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
@@ -24,72 +22,10 @@ export default function InventoryManagement() {
     }
   };
 
-  // If on Premium plan OR preview unlocked, render the full Inventory Panel
-  if (isPremium || isPreviewUnlocked) {
+  // If on Premium plan, render the full Inventory Panel
+  if (isPremium) {
     return (
       <div style={{ width: '100%' }}>
-        {!isPremium && isPreviewUnlocked && (
-          <div style={{
-            background: 'linear-gradient(90deg, #fffbeb 0%, #fef3c7 100%)',
-            border: '1px solid #fde68a',
-            borderRadius: '12px',
-            padding: '12px 20px',
-            marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '18px' }}>⚡</span>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#92400e', display: 'block' }}>
-                  Interactive Preview Mode Active (Premium Plan Exclusive Feature)
-                </span>
-                <span style={{ fontSize: '12px', color: '#b45309' }}>
-                  You are exploring all features of the Inventory Management module.
-                </span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setIsPreviewUnlocked(false)}
-                style={{
-                  background: '#ffffff',
-                  color: '#92400e',
-                  border: '1px solid #fde68a',
-                  padding: '7px 14px',
-                  borderRadius: '7px',
-                  fontWeight: 700,
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-              >
-                Close Preview
-              </button>
-              <button
-                type="button"
-                onClick={handleInstantUpgradeToPremium}
-                style={{
-                  background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '7px 18px',
-                  borderRadius: '7px',
-                  fontWeight: 800,
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)'
-                }}
-              >
-                Upgrade to Premium
-              </button>
-            </div>
-          </div>
-        )}
         <InventoryPanel />
       </div>
     );
@@ -182,27 +118,6 @@ export default function InventoryManagement() {
           >
             <span>Upgrade to Premium Plan (₹4,999/mo)</span>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsPreviewUnlocked(true)}
-            style={{
-              background: '#f8fafc',
-              color: '#0f172a',
-              border: '1.5px solid #cbd5e1',
-              borderRadius: '10px',
-              padding: '14px 26px',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <span style={{ fontSize: '16px' }}>⚡</span>
-            <span>Try Interactive Demo</span>
           </button>
         </div>
 

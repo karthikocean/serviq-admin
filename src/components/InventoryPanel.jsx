@@ -8,6 +8,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateTimeDMY } from '../helper/DateHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 // Clean SVG Icons
 const BoxIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -423,14 +424,11 @@ export default function InventoryPanel() {
 
   // Items filtered by branch
   const branchItems = useMemo(() => {
-    if (!selectedBranchId || selectedBranchId === 'ALL') {
+    if (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All') {
       return items;
     }
-    return items.filter(i => {
-      const itemBranchId = typeof i.branchId === 'object' ? (i.branchId?._id || i.branchId?.id) : i.branchId;
-      return !itemBranchId || itemBranchId === 'ALL' || String(itemBranchId) === String(selectedBranchId);
-    });
-  }, [items, selectedBranchId]);
+    return items.filter(i => isBranchMatch(i, selectedBranchId, availableBranches));
+  }, [items, selectedBranchId, availableBranches]);
 
   // Dynamic Unique Categories & Items List for Dropdowns
   const dynamicCatNames = useMemo(() => {

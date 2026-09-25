@@ -235,39 +235,7 @@ const loadSavedUser = () => {
 };
 
 export const AppProvider = ({ children }) => {
-  const [restaurantsData, setRestaurantsData] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem('activePlanSelection');
-      if (raw) {
-        const savedPlan = JSON.parse(raw);
-        if (savedPlan && savedPlan.cleanName) {
-          const base = { ...initialRestaurantsData };
-          if (base['rest-1']) {
-            base['rest-1'] = {
-              ...base['rest-1'],
-              plan: savedPlan.cleanName,
-              subscription: {
-                ...base['rest-1'].subscription,
-                planId: savedPlan.planId,
-                planName: savedPlan.planName,
-                status: 'Active',
-                billingCycle: savedPlan.billingCycle || 'monthly',
-                price: savedPlan.price,
-                monthlyPrice: savedPlan.monthlyPrice,
-                annualPrice: savedPlan.annualPrice,
-                startDate: savedPlan.startDate,
-                expiryDate: savedPlan.expiryDate,
-                nextBillingDate: savedPlan.nextBillingDate || savedPlan.nextRenewal,
-                baseBranchLimit: savedPlan.baseBranchLimit || getPlanBranchLimit(savedPlan.cleanName, 5)
-              }
-            };
-          }
-          return base;
-        }
-      }
-    } catch (e) {}
-    return initialRestaurantsData;
-  });
+  const [restaurantsData, setRestaurantsData] = useState(() => initialRestaurantsData);
   const [currentUser, setCurrentUser] = useState(loadSavedUser);
   const [currentRestaurantId, setCurrentRestaurantId] = useState(initialRestaurantsData['rest-1'] ? 'rest-1' : null);
   // Active Tenant settings overrides / defaults
@@ -378,13 +346,8 @@ export const AppProvider = ({ children }) => {
     const dynamicOwner = currentUser?.ownerName || (currentUser?.userType === 'RESTAURANT_OWNER' ? currentUser?.name : null) || rawActive.ownerName || 'Administrator';
     const dynamicEmail = currentUser?.email || rawActive.email || '';
 
-    let savedPlanInfo = null;
-    try {
-      const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-      if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
-    } catch (e) {}
-
-    const dynamicPlan = savedPlanInfo?.cleanName || currentUser?.plan || rawActive.plan || 'Standard';
+    const activeSub = rawActive.subscription || currentUser?.subscription || (typeof currentUser?.restaurant === 'object' ? currentUser.restaurant?.subscription : null) || null;
+    const dynamicPlan = rawActive.plan || currentUser?.plan || activeSub?.planName || activeSub?.name || (typeof currentUser?.restaurant === 'object' ? currentUser.restaurant?.plan : null) || 'Standard';
 
     return {
       ...rawActive,
@@ -396,20 +359,9 @@ export const AppProvider = ({ children }) => {
       plan: dynamicPlan,
       subscription: {
         ...(rawActive.subscription || {}),
-        ...(currentUser?.subscription || {}),
-        ...(savedPlanInfo ? {
-          planId: savedPlanInfo.planId,
-          planName: savedPlanInfo.planName || `${savedPlanInfo.cleanName} Plan`,
-          billingCycle: savedPlanInfo.billingCycle,
-          price: savedPlanInfo.price,
-          monthlyPrice: savedPlanInfo.monthlyPrice,
-          annualPrice: savedPlanInfo.annualPrice,
-          baseBranchLimit: savedPlanInfo.baseBranchLimit,
-          startDate: savedPlanInfo.startDate,
-          expiryDate: savedPlanInfo.expiryDate,
-          nextBillingDate: savedPlanInfo.nextBillingDate
-        } : {}),
-        planName: dynamicPlan
+        ...(activeSub || {}),
+        planName: activeSub?.planName || `${dynamicPlan} Plan`,
+        features: activeSub?.features || rawActive.subscription?.features || currentUser?.subscription?.features || {}
       }
     };
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
@@ -706,12 +658,6 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
-      let savedPlan = null;
-      try {
-        const rawSaved = sessionStorage.getItem('activePlanSelection');
-        if (rawSaved) savedPlan = JSON.parse(rawSaved);
-      } catch (e) {}
-
       const [dashRes, plansRes] = await Promise.allSettled([
         SubscriptionApi.getDashboard(),
         SubscriptionApi.getPlans()
@@ -763,7 +709,7 @@ export const AppProvider = ({ children }) => {
         const data = res.response.data || res.response;
         const activePlan = data.activePlan;
 
-        const rawName = savedPlan?.cleanName || savedPlan?.planName || activePlan?.planName || activePlan?.name || 'Standard';
+        const rawName = activePlan?.planName || activePlan?.cleanName || activePlan?.name || currentUser?.subscription?.planName || currentUser?.plan || 'Standard';
         const cleanName = resolveHumanPlanName(rawName);
         const matchedLive = livePlans.find(lp => {
           const lName = String(lp.planName || lp.name || '').toLowerCase().replace(/\s*plan$/i, '').trim();
@@ -773,7 +719,6 @@ export const AppProvider = ({ children }) => {
         const matchedPlanConfig = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanName.toLowerCase())) || AVAILABLE_PLANS[1];
 
         const resolvedLimit = Number(
-          savedPlan?.baseBranchLimit ??
           matchedLive?.maxBranches ??
           matchedLive?.branchLimit ??
           matchedLive?.baseBranchLimit ??
@@ -782,24 +727,23 @@ export const AppProvider = ({ children }) => {
           getPlanBranchLimit(cleanName, 5)
         );
 
-        const isCycleAnnual = String(savedPlan?.billingCycle || activePlan?.billingCycle || 'monthly').toLowerCase().includes('annual');
+        const isCycleAnnual = String(activePlan?.billingCycle || 'monthly').toLowerCase().includes('annual');
 
-        const resolvedPrice = isCycleAnnual
-          ? Number(
-              savedPlan?.annualPrice ??
-              savedPlan?.price ??
-              matchedLive?.annualPrice ??
-              matchedLive?.yearlyPrice ??
-              matchedPlanConfig?.annualPrice ??
-              (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999)
-            )
-          : Number(
-              savedPlan?.monthlyPrice ??
-              savedPlan?.price ??
-              matchedLive?.monthlyPrice ??
-              matchedLive?.basePrice ??
-              matchedPlanConfig?.monthlyPrice ??
-              (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999)
+        const resolvedPrice = (activePlan?.price !== undefined && activePlan?.price !== null)
+          ? Number(activePlan.price)
+          : (isCycleAnnual
+              ? Number(
+                  matchedLive?.annualPrice ??
+                  matchedLive?.yearlyPrice ??
+                  matchedPlanConfig?.annualPrice ??
+                  (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999)
+                )
+              : Number(
+                  matchedLive?.monthlyPrice ??
+                  matchedLive?.basePrice ??
+                  matchedPlanConfig?.monthlyPrice ??
+                  (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999)
+                )
             );
 
         const now = new Date();
@@ -810,7 +754,7 @@ export const AppProvider = ({ children }) => {
           nextDate.setMonth(now.getMonth() + 1);
         }
 
-        const resolvedStartDate = savedPlan?.startDate || activePlan?.startDate || now.toISOString().split('T')[0];
+        const resolvedStartDate = activePlan?.startDate || savedPlan?.startDate || now.toISOString().split('T')[0];
         
         // Dynamically calculate expiry date matching the cycle and start date
         const calcStartDate = new Date(resolvedStartDate.includes('/') ? resolvedStartDate.split('/').reverse().join('-') : resolvedStartDate);
@@ -823,8 +767,8 @@ export const AppProvider = ({ children }) => {
         }
         const calcExpiryStr = calcExp.toISOString().split('T')[0];
 
-        const resolvedRenewalDate = (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.nextRenewal || savedPlan?.nextBillingDate)) || calcExpiryStr;
-        const resolvedExpiryDate = (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.expiryDate || savedPlan?.validity)) || calcExpiryStr;
+        const resolvedRenewalDate = activePlan?.nextRenewal || activePlan?.nextBillingDate || (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.nextRenewal || savedPlan?.nextBillingDate)) || calcExpiryStr;
+        const resolvedExpiryDate = activePlan?.validity || activePlan?.expiryDate || (savedPlan?.billingCycle && (String(savedPlan.billingCycle).toLowerCase().includes('annual')) === isCycleAnnual && (savedPlan?.expiryDate || savedPlan?.validity)) || calcExpiryStr;
 
         if (activePlan || (savedPlan && savedPlan.cleanName)) {
           setRestaurantsData(prev => {
@@ -842,6 +786,7 @@ export const AppProvider = ({ children }) => {
                   status: activePlan?.status || 'Active',
                   billingCycle: isCycleAnnual ? 'annual' : 'monthly',
                   price: resolvedPrice,
+                  features: activePlan?.features || baseRest.subscription?.features || {},
                   monthlyPrice: matchedLive?.monthlyPrice || matchedPlanConfig?.monthlyPrice || (cleanName.toLowerCase() === 'premium' ? 4999 : cleanName.toLowerCase() === 'basic' ? 999 : 1999),
                   annualPrice: matchedLive?.annualPrice || matchedPlanConfig?.annualPrice || (cleanName.toLowerCase() === 'premium' ? 49999 : cleanName.toLowerCase() === 'basic' ? 9999 : 19999),
                   baseBranchLimit: resolvedLimit,
@@ -861,6 +806,27 @@ export const AppProvider = ({ children }) => {
                 }
               }
             };
+          });
+
+          setCurrentUser(prevUser => {
+            if (!prevUser) return prevUser;
+            const updatedUser = {
+              ...prevUser,
+              plan: cleanName,
+              subscription: {
+                ...(prevUser.subscription || {}),
+                planId: savedPlan?.planId || activePlan?.planId || `plan-${cleanName.toLowerCase()}`,
+                planName: `${cleanName} Plan`,
+                status: activePlan?.status || 'Active',
+                billingCycle: isCycleAnnual ? 'annual' : 'monthly',
+                price: resolvedPrice,
+                features: activePlan?.features || prevUser.subscription?.features || {}
+              }
+            };
+            try {
+              sessionStorage.setItem("currentUser", JSON.stringify(updatedUser));
+            } catch (e) {}
+            return updatedUser;
           });
         }
       }
@@ -909,8 +875,8 @@ export const AppProvider = ({ children }) => {
     };
 
     try {
-      sessionStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
-      localStorage.setItem('activePlanSelection', JSON.stringify(savedSelection));
+      sessionStorage.removeItem('activePlanSelection');
+      localStorage.removeItem('activePlanSelection');
     } catch (e) {}
 
     // Synchronize currentUser in state and sessionStorage so activeRestaurant subscription computes consistently
@@ -985,15 +951,6 @@ export const AppProvider = ({ children }) => {
       const currentAutoRenew = baseRest.subscription?.autoRenew !== false;
       const nextAutoRenew = !currentAutoRenew;
 
-      try {
-        const raw = sessionStorage.getItem('activePlanSelection');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          parsed.autoRenew = nextAutoRenew;
-          sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
-        }
-      } catch (e) {}
-
       return {
         ...prev,
         [targetId]: {
@@ -1021,15 +978,6 @@ export const AppProvider = ({ children }) => {
       const currentSlots = Number(baseRest.subscription?.extraBranchSlots || 0);
       const nextSlots = currentSlots + slots;
 
-      try {
-        const raw = sessionStorage.getItem('activePlanSelection');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          parsed.extraBranchSlots = nextSlots;
-          sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
-        }
-      } catch (e) {}
-
       return {
         ...prev,
         [targetId]: {
@@ -1054,16 +1002,39 @@ export const AppProvider = ({ children }) => {
       if (res && res.status && res.data) {
         const profileData = res.data;
 
-        // Verify if profile is inactive or deleted
+        // Verify if profile or restaurant is inactive or deleted
+        const restObj = typeof profileData.restaurant === 'object' && profileData.restaurant !== null
+          ? profileData.restaurant
+          : (typeof profileData.restaurantId === 'object' && profileData.restaurantId !== null
+              ? profileData.restaurantId
+              : null);
+
+        const restStatus = String(
+          restObj?.status || 
+          profileData.restaurantStatus || 
+          profileData.restaurant_status || 
+          ''
+        ).toLowerCase().trim();
+
+        const isRestActiveFlag = 
+          restObj?.isActive !== undefined ? restObj.isActive :
+          restObj?.active !== undefined ? restObj.active :
+          profileData.isRestaurantActive !== undefined ? profileData.isRestaurantActive :
+          profileData.restaurantActive !== undefined ? profileData.restaurantActive : true;
+
+        const isRestaurantInactive = 
+          isRestActiveFlag === false || 
+          ['inactive', 'disabled', 'suspended', 'blocked', 'deactivated'].includes(restStatus);
+
         const isInactive = 
           profileData.isActive === false || 
           profileData.isDelete === true || 
-          String(profileData.status || '').toLowerCase() === 'inactive' ||
-          String(profileData.status || '').toLowerCase() === 'disabled' ||
-          String(profileData.status || '').toLowerCase() === 'suspended';
+          ['inactive', 'disabled', 'suspended'].includes(String(profileData.status || '').toLowerCase()) ||
+          isRestaurantInactive;
 
         if (isInactive) {
-          ShowNotifications.showAlertNotification("Account is inactive. Contact support.", false);
+          const inactiveMsg = "Your restaurant account has been deactivated. Please contact the Super Admin.";
+          sessionStorage.setItem("deactivatedToast", inactiveMsg);
           sessionStorage.removeItem("userToken");
           sessionStorage.removeItem("token");
           sessionStorage.removeItem("currentUser");
@@ -1071,11 +1042,16 @@ export const AppProvider = ({ children }) => {
           setCurrentUser(null);
           if (!window.location.pathname.includes('/login')) {
             window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(inactiveMsg, false);
           }
           return null;
         }
 
         setCurrentUser(prevUser => {
+          const livePlan = profileData.plan || profileData.subscription?.planName || restObj?.plan || restObj?.subscription?.planName || prevUser?.plan;
+          const liveSub = profileData.subscription || restObj?.subscription || prevUser?.subscription;
+
           const updatedUser = {
             ...(prevUser || {}),
             ...profileData,
@@ -1087,6 +1063,8 @@ export const AppProvider = ({ children }) => {
             profileImage: profileData.profileImage || prevUser?.profileImage,
             userType: profileData.userType || prevUser?.userType,
             restaurantId: profileData.restaurantId || prevUser?.restaurantId,
+            plan: livePlan || prevUser?.plan || 'Standard',
+            subscription: liveSub || prevUser?.subscription || null,
             isActive: profileData.isActive !== undefined ? profileData.isActive : prevUser?.isActive,
             status: profileData.status || prevUser?.status,
             dutyStatus: profileData.dutyStatus || prevUser?.dutyStatus,
@@ -1133,12 +1111,13 @@ export const AppProvider = ({ children }) => {
     return null;
   };
 
-  // Automatically fetch live profile and branches from API for current user
+  // Automatically fetch live profile, branches, and subscription dashboard from API for current user
   useEffect(() => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (token) {
       fetchProfile();
       fetchBranches({ limit: 10 });
+      fetchSubscriptionDashboard();
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
 
@@ -1170,6 +1149,45 @@ export const AppProvider = ({ children }) => {
         const apiUser = payload?.data?.user || payload?.data?.admin || payload?.data?.restaurant || payload?.user || payload?.admin || payload?.restaurant || payload?.data;
 
         if (token && apiUser) {
+          // Verify if restaurant is inactive
+          const restObj = typeof apiUser.restaurant === 'object' && apiUser.restaurant !== null 
+            ? apiUser.restaurant 
+            : (typeof apiUser.restaurantId === 'object' && apiUser.restaurantId !== null 
+                ? apiUser.restaurantId 
+                : (typeof payload?.data?.restaurant === 'object' ? payload.data.restaurant : (typeof payload?.restaurant === 'object' ? payload.restaurant : null)));
+
+          const restStatus = String(
+            restObj?.status || 
+            apiUser.restaurantStatus || 
+            apiUser.restaurant_status || 
+            payload?.data?.restaurantStatus ||
+            payload?.restaurantStatus ||
+            ''
+          ).toLowerCase().trim();
+
+          const isRestActiveFlag = 
+            restObj?.isActive !== undefined ? restObj.isActive :
+            restObj?.active !== undefined ? restObj.active :
+            apiUser.isRestaurantActive !== undefined ? apiUser.isRestaurantActive :
+            apiUser.restaurantActive !== undefined ? apiUser.restaurantActive : true;
+
+          const isRestaurantInactive = 
+            isRestActiveFlag === false || 
+            ['inactive', 'disabled', 'suspended', 'blocked', 'deactivated'].includes(restStatus);
+
+          if (isRestaurantInactive) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Your restaurant account has been deactivated. Please contact the Super Admin."
+            };
+          }
+
           const userTypeUpper = (apiUser.userType || '').toUpperCase();
           const roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
                           (typeof apiUser.roleId === 'object' && apiUser.roleId !== null) ? apiUser.roleId : null;

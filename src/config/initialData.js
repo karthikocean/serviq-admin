@@ -311,6 +311,8 @@ export const getPlanBranchLimit = (planName, defaultLimit = 5) => {
 
 export const isModuleAllowedForPlan = (moduleKey, planSource = 'Standard') => {
   let planStr = '';
+  let features = null;
+
   if (typeof planSource === 'string') {
     planStr = planSource;
   } else if (planSource && typeof planSource === 'object') {
@@ -320,18 +322,36 @@ export const isModuleAllowedForPlan = (moduleKey, planSource = 'Standard') => {
       planSource.subscription?.planName || 
       planSource.subscription?.planId || 
       planSource.subscription?.plan || 
+      planSource.activePlan?.planName ||
       '';
+    features = planSource.features || 
+      planSource.subscription?.features || 
+      planSource.activePlan?.features || 
+      null;
   }
   const plan = (planStr || 'Standard').toLowerCase();
   const key = (moduleKey || '').toLowerCase().replace(/[-_]/g, '');
 
-  // Inventory Management: Available ONLY in Premium or Enterprise plans
+  // Inventory Management: Available ONLY in Premium or Enterprise plans, or if features explicitly unlocks it
   if (key.includes('inventory') || key.includes('stock')) {
+    if (features && typeof features === 'object') {
+      if (features.inventory === true || features['inventory'] === true || features['inventory-management'] === true) {
+        return true;
+      }
+      if (features.inventory === false || features['inventory'] === false || features['inventory-management'] === false) {
+        return false;
+      }
+    }
     return plan.includes('premium') || plan.includes('enterprise');
   }
 
   // Staff / Waiter / Kitchen: Available in Standard, Premium, and Enterprise (Disabled on Basic)
   if (key.includes('staff') || key.includes('waiter') || key.includes('kitchen')) {
+    if (features && typeof features === 'object') {
+      if (features['waiter-list'] === true || features['kitchen-list'] === true || features['staff'] === true) {
+        return true;
+      }
+    }
     return !plan.includes('basic');
   }
 

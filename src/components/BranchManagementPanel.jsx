@@ -464,14 +464,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     extraBranchPrice: 699
   };
 
-  let savedPlanInfo = null;
-  try {
-    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
-  } catch (e) {}
-
   // Prioritize activeRestaurant subscription and plan over API dashboard fallbacks
-  const rawPlanName = activeRestaurant?.subscription?.planName || activeRestaurant?.plan || savedPlanInfo?.planName || savedPlanInfo?.cleanName || activePlanData?.planName || 'Standard';
+  const rawPlanName = activePlanData?.planName || activeRestaurant?.subscription?.planName || activeRestaurant?.plan || currentUser?.subscription?.planName || currentUser?.plan || 'Standard';
   const cleanPlanName = String(rawPlanName).replace(/^plan-/i, '').replace(/\s*plan$/i, '').trim() || 'Standard';
   const planName = cleanPlanName;
 

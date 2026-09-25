@@ -133,6 +133,10 @@ export default function MenuManagement() {
       setCustomCategoryError('Please enter a valid category name.');
       return;
     }
+    if (/\d/.test(customCategoryInput)) {
+      setCustomCategoryError('Numbers are not allowed in Category Name.');
+      return;
+    }
     if (categoryName.length < 2) {
       setCustomCategoryError('Category Name must be at least 2 characters.');
       return;
@@ -870,12 +874,20 @@ export default function MenuManagement() {
               type="text"
               value={customCategoryInput}
               onChange={(e) => {
-                const sanitized = e.target.value.replace(/[0-9]/g, '');
+                const val = e.target.value;
+                const sanitized = val.replace(/[0-9]/g, '');
                 setCustomCategoryInput(sanitized);
-                if (customCategoryError) setCustomCategoryError('');
+                if (val !== sanitized) {
+                  setCustomCategoryError('Numbers are not allowed in Category Name.');
+                } else if (customCategoryError) {
+                  setCustomCategoryError('');
+                }
               }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (/[0-9]/.test(e.key)) {
+                  e.preventDefault();
+                  setCustomCategoryError('Numbers are not allowed in Category Name.');
+                } else if (e.key === 'Enter') {
                   e.preventDefault();
                   handleAddCustomCategory();
                 }

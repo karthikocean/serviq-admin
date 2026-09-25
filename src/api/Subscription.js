@@ -89,16 +89,17 @@ class SubscriptionApi {
   async upgradeSubscription(payload = {}) {
     try {
       const planIdentifier = payload.newPlanId || payload._id || payload.planId || payload.plan || payload.id;
+      const rawCycle = payload.billingCycle || payload.cycle || 'Monthly';
+      const cleanCycle = String(rawCycle).toLowerCase().includes('annual') || String(rawCycle).toLowerCase().includes('year')
+        ? 'Annually'
+        : 'Monthly';
+
       const cleanPayload = {
         newPlanId: planIdentifier,
-        planId: planIdentifier,
-        plan: planIdentifier,
-        _id: planIdentifier,
-        billingCycle: payload.billingCycle || 'Annually',
-        paymentMethod: payload.paymentMethod || 'UPI',
-        ...payload,
-        newPlanId: planIdentifier
+        paymentMethod: payload.paymentMethod || 'Credit Card',
+        billingCycle: cleanCycle
       };
+
       const response = await apiClient.post("/subscription/upgrade", cleanPayload);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
