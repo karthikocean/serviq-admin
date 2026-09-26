@@ -327,7 +327,8 @@ export const AppProvider = ({ children }) => {
 
   // Active computed tenant info
   const activeRestaurant = useMemo(() => {
-    const rawActive = (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || FALLBACK_RESTAURANT;
+    const targetId = currentRestaurantId || 'rest-1';
+    const rawActive = restaurantsData[targetId] || (currentRestaurantId ? restaurantsData[currentRestaurantId] : null) || restaurantsData['rest-1'] || FALLBACK_RESTAURANT;
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     const tokenRestName = extractRestaurantFromToken(token);
     const emailKey = (currentUser?.email || '').toLowerCase().trim();
@@ -346,8 +347,24 @@ export const AppProvider = ({ children }) => {
     const dynamicOwner = currentUser?.ownerName || (currentUser?.userType === 'RESTAURANT_OWNER' ? currentUser?.name : null) || rawActive.ownerName || 'Administrator';
     const dynamicEmail = currentUser?.email || rawActive.email || '';
 
-    const activeSub = rawActive.subscription || currentUser?.subscription || (typeof currentUser?.restaurant === 'object' ? currentUser.restaurant?.subscription : null) || null;
-    const dynamicPlan = rawActive.plan || currentUser?.plan || activeSub?.planName || activeSub?.name || (typeof currentUser?.restaurant === 'object' ? currentUser.restaurant?.plan : null) || 'Standard';
+    const userSub = currentUser?.subscription || (typeof currentUser?.restaurant === 'object' ? currentUser.restaurant?.subscription : null);
+    const rawSub = rawActive.subscription;
+
+    const mergedFeatures = {
+      ...(rawSub?.features || {}),
+      ...(userSub?.features || {})
+    };
+
+    const activeSub = {
+      ...(rawSub || {}),
+      ...(userSub || {}),
+      features: mergedFeatures
+    };
+
+    const userPlan = currentUser?.plan || userSub?.planName || userSub?.plan;
+    const rawPlan = (rawActive && rawActive !== FALLBACK_RESTAURANT) ? rawActive.plan : null;
+
+    const dynamicPlan = userPlan || rawPlan || activeSub?.planName || rawActive?.plan || 'Standard';
 
     return {
       ...rawActive,
@@ -358,10 +375,10 @@ export const AppProvider = ({ children }) => {
       email: dynamicEmail,
       plan: dynamicPlan,
       subscription: {
-        ...(rawActive.subscription || {}),
-        ...(activeSub || {}),
-        planName: activeSub?.planName || `${dynamicPlan} Plan`,
-        features: activeSub?.features || rawActive.subscription?.features || currentUser?.subscription?.features || {}
+        ...(rawSub || {}),
+        ...(userSub || {}),
+        planName: userSub?.planName || activeSub?.planName || `${dynamicPlan} Plan`,
+        features: mergedFeatures
       }
     };
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
@@ -658,6 +675,12 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
+      let savedPlan = null;
+      try {
+        const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
+        if (rawSaved) savedPlan = JSON.parse(rawSaved);
+      } catch (e) {}
+
       const [dashRes, plansRes] = await Promise.allSettled([
         SubscriptionApi.getDashboard(),
         SubscriptionApi.getPlans()
@@ -1049,8 +1072,21 @@ export const AppProvider = ({ children }) => {
         }
 
         setCurrentUser(prevUser => {
-          const livePlan = profileData.plan || profileData.subscription?.planName || restObj?.plan || restObj?.subscription?.planName || prevUser?.plan;
-          const liveSub = profileData.subscription || restObj?.subscription || prevUser?.subscription;
+          const profileSub = profileData.subscription || restObj?.subscription;
+          const prevSub = prevUser?.subscription;
+
+          const mergedFeatures = {
+            ...(prevSub?.features || {}),
+            ...(profileSub?.features || {})
+          };
+
+          const mergedSub = (prevSub || profileSub) ? {
+            ...(prevSub || {}),
+            ...(profileSub || {}),
+            features: mergedFeatures
+          } : null;
+
+          const livePlan = prevUser?.plan || prevSub?.planName || profileData.plan || profileSub?.planName || restObj?.plan || 'Standard';
 
           const updatedUser = {
             ...(prevUser || {}),
@@ -1063,8 +1099,8 @@ export const AppProvider = ({ children }) => {
             profileImage: profileData.profileImage || prevUser?.profileImage,
             userType: profileData.userType || prevUser?.userType,
             restaurantId: profileData.restaurantId || prevUser?.restaurantId,
-            plan: livePlan || prevUser?.plan || 'Standard',
-            subscription: liveSub || prevUser?.subscription || null,
+            plan: livePlan,
+            subscription: mergedSub,
             isActive: profileData.isActive !== undefined ? profileData.isActive : prevUser?.isActive,
             status: profileData.status || prevUser?.status,
             dutyStatus: profileData.dutyStatus || prevUser?.dutyStatus,

@@ -246,10 +246,19 @@ export default function StaffFormPage() {
                   ? allBranchesList.find(b => String(b.id || b._id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
                   : null;
                 const currentBranchObj = headerBranchObj 
-                  || allBranchesList.find(b => String(b.id || b._id) === String(form.branchId))
-                  || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))
-                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
-                const effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (form.branchId || '');
+                  || (form.branchId ? (allBranchesList.find(b => String(b.id || b._id) === String(form.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))) : null);
+                let effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (form.branchId || '');
+                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                  effectiveVal = '';
+                }
+
+                const branchOptions = [
+                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...allBranchesList.map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                  }))
+                ];
 
                 return (
                   <div>
@@ -257,12 +266,7 @@ export default function StaffFormPage() {
                       value={effectiveVal}
                       onChange={e => setForm({ ...form, branchId: e.target.value })}
                       isDisabled={isLocked}
-                      options={allBranchesList.length === 0 ? [
-                        { value: '', label: 'Main Branch' }
-                      ] : allBranchesList.map(b => ({
-                        value: b._id || b.id,
-                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
-                      }))}
+                      options={branchOptions}
                       placeholder="Select Branch..."
                     />
                     {isLocked && (

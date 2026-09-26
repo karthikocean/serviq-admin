@@ -633,10 +633,19 @@ export default function MenuManagement() {
                           ? allBranchesList.find(b => String(b.id || b._id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
                           : null;
                         const currentBranchObj = headerBranchObj 
-                          || allBranchesList.find(b => String(b.id || b._id) === String(menuForm.branchId))
-                          || allBranchesList.find(b => String(b.branchCode) === String(menuForm.branchId))
-                          || (allBranchesList.length > 0 ? allBranchesList[0] : null);
-                        const effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (menuForm.branchId || '');
+                          || (menuForm.branchId ? (allBranchesList.find(b => String(b.id || b._id) === String(menuForm.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(menuForm.branchId))) : null);
+                        let effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (menuForm.branchId || '');
+                        if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                          effectiveVal = '';
+                        }
+
+                        const branchOptions = [
+                          { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                          ...allBranchesList.map(b => ({
+                            value: b._id || b.id,
+                            label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                          }))
+                        ];
 
                         return (
                           <div>
@@ -644,12 +653,7 @@ export default function MenuManagement() {
                               value={effectiveVal}
                               onChange={e => setMenuForm({ ...menuForm, branchId: e.target.value })}
                               isDisabled={isLocked}
-                              options={allBranchesList.length === 0 ? [
-                                { value: '', label: 'Main Branch' }
-                              ] : allBranchesList.map(b => ({
-                                value: b._id || b.id,
-                                label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
-                              }))}
+                              options={branchOptions}
                               placeholder="Select Branch..."
                             />
                             {isLocked && (

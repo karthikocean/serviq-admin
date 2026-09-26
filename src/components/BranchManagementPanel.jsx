@@ -89,6 +89,20 @@ const TreeIcon = ({ size = 18, color = 'currentColor' }) => (
     <line x1="17.5" y1="10" x2="17.5" y2="14"></line>
   </svg>
 );
+const KeyIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4.1a1 1 0 0 0-1.4 0l-2.1 2.1a1 1 0 0 0 0 1.3Z" />
+    <path d="m15.5 7.5-3 3" />
+    <path d="M10.5 12.5 3 20v1a1 1 0 0 0 1 1h1v-1a1 1 0 0 1 1-1h1v-1a1 1 0 0 1 1-1h1v-1a1 1 0 0 1 1-1h1v-1a1 1 0 0 0 0-1.4l-1.5-1.6" />
+  </svg>
+);
+
+const PowerIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v10" />
+    <path d="M18.4 6.6a9 9 0 1 1-12.8 0" />
+  </svg>
+);
 
 const initialBranchState = {
   id: '',
@@ -111,6 +125,7 @@ const initialBranchState = {
   username: '',
   gstNumber: '',
   fssaiNumber: '',
+  billPrefix: '',
   isMainBranch: false
 };
 
@@ -194,6 +209,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // Delete modal state
   const [branchToDelete, setBranchToDelete] = useState(null);
 
+  // Reset password modal state
+  const [resetPasswordBranch, setResetPasswordBranch] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetPasswordError, setResetPasswordError] = useState('');
+  const [isSavingResetPassword, setIsSavingResetPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
+
   const [apiBranches, setApiBranches] = useState([]);
   const [apiUsers, setApiUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -275,6 +299,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate ? b.openingDate.split('T')[0] : ''),
             status: b.status || 'Active',
             totalTables: b.totalTables || (Array.isArray(b.tables) ? b.tables.length : 0),
+            gstNumber: b.gstNumber || b.gstin || '',
+            fssaiNumber: b.fssaiNumber || b.fssai || '',
+            billPrefix: b.billPrefix || b.invoicePrefix || '',
             isMainBranch: b.isMainBranch || false
           };
         });
@@ -679,8 +706,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       status: branch.status || 'Active',
       totalTables: branch.totalTables || 10,
       username: branch.username || '',
-      gstNumber: branch.gstNumber || '',
-      fssaiNumber: branch.fssaiNumber || '',
+      gstNumber: branch.gstNumber || branch.gstin || '',
+      fssaiNumber: branch.fssaiNumber || branch.fssai || '',
+      billPrefix: branch.billPrefix || branch.invoicePrefix || '',
       isMainBranch: branch.isMainBranch || false
     });
     setFormErrors({});
@@ -708,6 +736,66 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
     setBranchToDelete(branch);
+  };
+
+  const handleToggleBranchStatus = async (branch) => {
+    const branchId = branch.id || branch._id;
+    const newStatus = branch.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      await BranchApi.updateBranch(branchId, { status: newStatus });
+      if (typeof updateBranch === 'function') {
+        updateBranch(branchId, { status: newStatus });
+      }
+      ShowNotifications.showAlertNotification(
+        `Branch "${branch.branchName || branch.name}" is now ${newStatus}.`,
+        true
+      );
+      fetchBranches();
+    } catch (err) {
+      console.error("Failed to update branch status", err);
+      setApiBranches(prev => prev.map(b => (b.id === branchId || b._id === branchId) ? { ...b, status: newStatus } : b));
+      ShowNotifications.showAlertNotification(
+        `Branch "${branch.branchName || branch.name}" is now ${newStatus}.`,
+        true
+      );
+    }
+  };
+
+  const handleOpenResetPasswordModal = (branch) => {
+    setResetPasswordBranch(branch);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setResetPasswordError('');
+    setShowResetPassword(false);
+    setShowResetConfirmPassword(false);
+  };
+
+  const handleSaveResetPassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      setResetPasswordError('Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setResetPasswordError('Passwords do not match.');
+      return;
+    }
+
+    setIsSavingResetPassword(true);
+    try {
+      const branchId = resetPasswordBranch.id || resetPasswordBranch._id;
+      await BranchApi.updateBranch(branchId, { password: newPassword });
+      ShowNotifications.showAlertNotification(
+        `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
+        true
+      );
+      setResetPasswordBranch(null);
+    } catch (err) {
+      console.error("Failed to reset password", err);
+      ShowNotifications.showAlertNotification("Failed to reset password.", false);
+    } finally {
+      setIsSavingResetPassword(false);
+    }
   };
 
   // Form Validation logic
@@ -772,43 +860,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.email = emailErr;
     }
 
-    // 7. Password & Confirm Password validation (min 6 characters)
-    const hasPassword = Boolean(branchForm.password && String(branchForm.password).trim());
-    const hasConfirm = Boolean(branchForm.confirmPassword && String(branchForm.confirmPassword).trim());
-
-    if (!isEditing) {
-      if (!hasPassword) {
-        errors.password = 'Password is required.';
-      } else {
-        const pErr = validatePassword(branchForm.password, 'Password');
-        if (pErr) errors.password = pErr;
-      }
-
-      // Confirm Password validation
-      if (!hasConfirm) {
-        errors.confirmPassword = 'Confirm Password is required.';
-      } else if (String(branchForm.password).trim() !== String(branchForm.confirmPassword).trim()) {
-        errors.confirmPassword = 'Passwords do not match.';
-      }
-    } else {
-      // In edit mode: validate if user types a new password or confirm password
-      if (hasPassword || hasConfirm) {
-        if (!hasPassword) {
-          errors.password = 'New Password is required.';
-        } else {
-          const pErr = validatePassword(branchForm.password, 'New Password');
-          if (pErr) errors.password = pErr;
-        }
-
-        if (!hasConfirm) {
-          errors.confirmPassword = 'Confirm Password is required.';
-        } else if (String(branchForm.password).trim() !== String(branchForm.confirmPassword).trim()) {
-          errors.confirmPassword = 'Passwords do not match.';
-        }
-      }
-    }
-
-    // 8. Address (Street Address) - Required
+    // 7. Address (Street Address) - Required
     const addressTrimmed = (branchForm.address || '').trim();
     if (!addressTrimmed) {
       errors.address = 'Street Address is required.';
@@ -2682,150 +2734,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </span>
                     )}
                   </div>
-
-                  {/* Field 8: Password */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      {isEditing ? 'New Password' : 'Password'} {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{
-                        position: 'absolute',
-                        left: '14px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#ec4899',
-                        pointerEvents: 'none'
-                      }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect width="18" height="11" x="3" y="11" rx="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                      </span>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        name="branch_mgr_password_field"
-                        autoComplete="new-password"
-                        placeholder="••••••••••••"
-                        value={branchForm.password}
-                        onChange={e => {
-                          setBranchForm({ ...branchForm, password: e.target.value });
-                          if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 42px 12px 40px',
-                          borderRadius: '8px',
-                          border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '14px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#64748b'
-                        }}
-                        title={showPassword ? "Hide Password" : "Show Password"}
-                      >
-                        {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Field 9: Confirm Password */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Confirm Password {!isEditing && <span style={{ color: '#ef4444' }}>*</span>}
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <span style={{
-                        position: 'absolute',
-                        left: '14px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#ec4899',
-                        pointerEvents: 'none'
-                      }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect width="18" height="11" x="3" y="11" rx="2" />
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                        </svg>
-                      </span>
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        name="branch_mgr_confirm_password_field"
-                        autoComplete="new-password"
-                        placeholder="••••••••••••"
-                        value={branchForm.confirmPassword}
-                        onChange={e => {
-                          setBranchForm({ ...branchForm, confirmPassword: e.target.value });
-                          if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 42px 12px 40px',
-                          borderRadius: '8px',
-                          border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          fontSize: '14px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#64748b'
-                        }}
-                        title={showConfirmPassword ? "Hide Password" : "Show Password"}
-                      >
-                        {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-                      </button>
-                    </div>
-                    {formErrors.confirmPassword && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.confirmPassword}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <PasswordRequirements
-                      password={branchForm.password}
-                      confirmPassword={branchForm.confirmPassword}
-                      showConfirmMatch={true}
-                    />
-                  </div>
-
                 </div>
               </div>
 
@@ -2970,6 +2878,81 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </div>
               </div>
 
+              {/* Section 4: Tax & Compliance */}
+              <div style={{ background: '#f8fafc', padding: '20px 24px', borderRadius: '14px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  4. Tax & Compliance
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      GSTIN (GST Identification Number)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 33AAAAA0000A1Z5"
+                      value={branchForm.gstNumber}
+                      onChange={e => setBranchForm({ ...branchForm, gstNumber: e.target.value.toUpperCase() })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      FSSAI License Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 12421008000123"
+                      value={branchForm.fssaiNumber}
+                      onChange={e => setBranchForm({ ...branchForm, fssaiNumber: e.target.value.replace(/[^0-9]/g, '') })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 5: Billing Configuration */}
+              <div style={{ background: '#f8fafc', padding: '20px 24px', borderRadius: '14px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  5. Billing Configuration
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                      Invoice / Bill Prefix
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. INV- or BILL- or SR-"
+                      value={branchForm.billPrefix}
+                      onChange={e => setBranchForm({ ...branchForm, billPrefix: e.target.value.toUpperCase() })}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border)',
+                        fontSize: '14px',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
             </div>
 
             {/* Actions */}
@@ -3048,107 +3031,35 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         </div>
       </div>
 
-      {/* 2. Branch Quota & Plan Status Banner */}
-      <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '14px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TreeIcon size={20} color="var(--primary)" />
-          </div>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
-              Subscription Tier: <span style={{ color: 'var(--primary)' }}>{planName} Plan (Max {baseBranchLimit} Outlets)</span>
-            </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-              Branch Capacity: <strong>{branches.length}</strong> of <strong>{totalAllowedBranches}</strong> Outlets Permitted
-              {remainingBranchSlots === 0 ? (
-                <span style={{ color: '#ef4444', fontWeight: 700, marginLeft: '6px' }}>• (0 Slots Remaining)</span>
-              ) : (
-                <span style={{ color: '#10b981', fontWeight: 700, marginLeft: '6px' }}>• ({remainingBranchSlots} Slot{remainingBranchSlots > 1 ? 's' : ''} Available)</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => navigate('/plans-management')}
-            style={{ border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', padding: '8px 16px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-          >
-            Manage Plan Quotas →
-          </button>
-        </div>
-      </div>
-
-
-      {/* 3. Search & Filter Bar */}
-      <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '14px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
-          <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
-            <input
-              type="text"
-              placeholder="Search branch name, code, manager, city..."
-              value={searchTerm}
-              onKeyDown={e => {
-                if (e.key === ' ' && !e.currentTarget.value) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value.replace(/^\s+/, '');
-                setSearchTerm(val);
-              }}
-              style={{ width: '100%', height: '38px', padding: '0 16px 0 38px', borderRadius: '8px', border: '1.5px solid var(--border)', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
-            />
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}>
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: '200px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Status:</span>
-          <div style={{ flex: 1 }}>
-            <SearchableSelect
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              options={[
-                { value: 'All', label: 'All Status' },
-                { value: 'Active', label: 'Active Only' },
-                { value: 'Inactive', label: 'Inactive Only' }
-              ]}
-              placeholder="Filter Status..."
-            />
-          </div>
-        </div>
-      </div>
-
       {/* 4. Branch List Table */}
       <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000', width: '60px' }}>S/NO</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000', width: '50px' }}>S/NO</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Code</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Branch Name</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Location</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Manager</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Contact</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Mobile</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>City</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Tables</th>
               <th style={{ padding: '14px 10px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Status</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Created Date</th>
               <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#000000' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredBranches.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                <td colSpan="10" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                   No branches found matching your search.
                 </td>
               </tr>
             ) : (
               paginatedBranches.map((b, idx) => {
                 const sNo = page * limit + idx + 1;
+                const createdDateStr = b.openingDate ? b.openingDate.split('T')[0] : (b.createdAt ? b.createdAt.split('T')[0] : 'N/A');
+
                 return (
                 <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }} onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   
@@ -3185,14 +3096,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     </div>
                   </td>
 
-                  {/* 3. Location */}
-                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ color: '#334155', fontWeight: 600, fontSize: '13px', lineHeight: '1.4' }}>
-                      {b.city ? `${b.city}${b.state ? `, ${b.state}` : ''}` : (b.state || 'Not Specified')}
-                    </div>
-                  </td>
-
-                  {/* 4. Manager */}
+                  {/* 3. Manager */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {(() => {
@@ -3230,33 +3134,45 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     </div>
                   </td>
 
-                  {/* 5. Contact */}
-                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                        {b.mobileNumber || 'N/A'}
-                      </div>
-                      {b.email && (
-                        <div style={{ fontSize: '11px', color: '#64748b', wordBreak: 'break-all' }}>
-                          {b.email}
-                        </div>
-                      )}
+                  {/* 4. Mobile */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
+                      {b.mobileNumber || 'N/A'}
                     </div>
                   </td>
 
-                  {/* 6. Status */}
+                  {/* 5. City */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ color: '#334155', fontWeight: 600, fontSize: '13px' }}>
+                      {b.city || 'N/A'}
+                    </div>
+                  </td>
+
+                  {/* 6. Tables */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center' }}>
+                    <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>
+                      {b.totalTables || 0}
+                    </span>
+                  </td>
+
+                  {/* 7. Status */}
                   <td style={{ padding: '14px 10px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Badge status={b.status === 'Active' ? 'Active' : 'Inactive'} />
                     </div>
                   </td>
 
-                  {/* 7. Actions */}
+                  {/* 8. Created Date */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap', color: '#64748b', fontSize: '12px', fontWeight: 600 }}>
+                    {createdDateStr}
+                  </td>
+
+                  {/* 9. Actions */}
                   <td style={{ padding: '14px 12px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                       <button
                         type="button"
-                        title="View Operational Details"
+                        title="View Details"
                         onClick={() => handleOpenHierarchy(b)}
                         style={{ border: 'none', background: '#eff6ff', color: '#2563eb', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
                         onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
@@ -3278,16 +3194,42 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         </button>
                       )}
 
-                      {hasPermission('branch-management', 'delete') && (
+                      {hasPermission('branch-management', 'edit') && (
                         <button
                           type="button"
-                          title="Delete Branch"
-                          onClick={() => handleDeleteBranchClick(b)}
-                          style={{ border: 'none', background: '#fef2f2', color: '#ef4444', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                          title={b.status === 'Active' ? 'Deactivate Branch' : 'Activate Branch'}
+                          onClick={() => handleToggleBranchStatus(b)}
+                          style={{
+                            border: 'none',
+                            background: b.status === 'Active' ? '#f0fdf4' : '#fff7ed',
+                            color: b.status === 'Active' ? '#166534' : '#c2410c',
+                            width: '30px',
+                            height: '30px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s',
+                            flexShrink: 0
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
                         >
-                          <TrashIcon size={14} />
+                          <PowerIcon size={14} />
+                        </button>
+                      )}
+
+                      {hasPermission('branch-management', 'edit') && (
+                        <button
+                          type="button"
+                          title="Reset Password"
+                          onClick={() => handleOpenResetPasswordModal(b)}
+                          style={{ border: 'none', background: '#f5f3ff', color: '#7c3aed', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#ede9fe'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#f5f3ff'}
+                        >
+                          <KeyIcon size={14} />
                         </button>
                       )}
                     </div>
@@ -3497,6 +3439,126 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {/* RESET BRANCH MANAGER PASSWORD MODAL */}
+      {resetPasswordBranch && (
+        <Modal
+          isOpen={Boolean(resetPasswordBranch)}
+          onClose={() => !isSavingResetPassword && setResetPasswordBranch(null)}
+          title={`🔑 Reset Password — ${resetPasswordBranch.branchName || resetPasswordBranch.name}`}
+          maxWidth="460px"
+        >
+          <form onSubmit={handleSaveResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
+            <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
+              Set a new login password for branch manager <strong>{resetPasswordBranch.branchManager || resetPasswordBranch.managerName || 'Manager'}</strong> ({resetPasswordBranch.branchCode}).
+            </p>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                New Password <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  placeholder="Enter new password (min 6 chars)"
+                  value={newPassword}
+                  onChange={e => {
+                    setNewPassword(e.target.value);
+                    if (resetPasswordError) setResetPasswordError('');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 40px 10px 14px',
+                    borderRadius: '8px',
+                    border: resetPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b'
+                  }}
+                >
+                  {showResetPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                Confirm New Password <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showResetConfirmPassword ? 'text' : 'password'}
+                  placeholder="Re-enter new password"
+                  value={confirmNewPassword}
+                  onChange={e => {
+                    setConfirmNewPassword(e.target.value);
+                    if (resetPasswordError) setResetPasswordError('');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 40px 10px 14px',
+                    borderRadius: '8px',
+                    border: resetPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirmPassword(!showResetConfirmPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b'
+                  }}
+                >
+                  {showResetConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                </button>
+              </div>
+              {resetPasswordError && (
+                <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {resetPasswordError}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+              <button
+                type="button"
+                onClick={() => setResetPasswordBranch(null)}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingResetPassword}
+                style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: isSavingResetPassword ? 'wait' : 'pointer' }}
+              >
+                {isSavingResetPassword ? 'Saving...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
         </Modal>
       )}
 

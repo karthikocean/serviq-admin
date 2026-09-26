@@ -163,23 +163,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [checkoutAutoRenew, setCheckoutAutoRenew] = useState(true);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
-  // Popup Managed Plans State (Ordered: Premium -> Standard -> Basic to match screenshot)
+  // Popup Managed Plans State (Ordered: Basic -> Standard -> Premium)
   const [plansList, setPlansList] = useState([
     {
-      id: 'plan-premium',
-      name: 'Premium Plan',
+      id: 'plan-basic',
+      name: 'Basic Plan',
       status: 'Active',
-      tagline: 'Advanced operations with integrated Kitchen KDS displays and advanced billing.',
-      monthlyPrice: 4999,
-      annualPrice: 49999,
-      maxBranches: 8,
+      tagline: 'Essential tools for small eateries, QR menu ordering and simple table management.',
+      monthlyPrice: 999,
+      annualPrice: 9999,
+      maxBranches: 3,
       features: [
         { name: 'Menu Management', included: true },
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
-        { name: 'Waiter Management', included: true },
-        { name: 'Kitchen Management', included: true },
-        { name: 'Inventory Management', included: true }
+        { name: 'Waiter Management', included: false },
+        { name: 'Kitchen Management', included: false },
+        { name: 'Inventory Management', included: false }
       ]
     },
     {
@@ -200,20 +200,20 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       ]
     },
     {
-      id: 'plan-basic',
-      name: 'Basic Plan',
+      id: 'plan-premium',
+      name: 'Premium Plan',
       status: 'Active',
-      tagline: 'Essential tools for small eateries, QR menu ordering and simple table management.',
-      monthlyPrice: 999,
-      annualPrice: 9999,
-      maxBranches: 3,
+      tagline: 'Advanced operations with integrated Kitchen KDS displays, advanced billing, and inventory.',
+      monthlyPrice: 4999,
+      annualPrice: 49999,
+      maxBranches: 8,
       features: [
         { name: 'Menu Management', included: true },
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
-        { name: 'Waiter Management', included: false },
-        { name: 'Kitchen Management', included: false },
-        { name: 'Inventory Management', included: false }
+        { name: 'Waiter Management', included: true },
+        { name: 'Kitchen Management', included: true },
+        { name: 'Inventory Management', included: true }
       ]
     }
   ]);
@@ -382,8 +382,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       }
 
       if (fetchedPlans.length > 0) {
-        // Sort descending by monthly price: Premium -> Standard -> Basic
-        fetchedPlans.sort((a, b) => (b.monthlyPrice || 0) - (a.monthlyPrice || 0));
+        // Sort ascending by monthly price: Basic -> Standard -> Premium
+        fetchedPlans.sort((a, b) => (a.monthlyPrice || 0) - (b.monthlyPrice || 0));
         setPlansList(fetchedPlans);
         
         // Sync AVAILABLE_PLANS in memory with live backend values from Super Admin
@@ -1385,27 +1385,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         {/* History Table */}
         <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
           <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px' }}>
-            <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '150px' }}>Recharge Date</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Invoice #</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '220px' }}>Plan & Recharge Item</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Amount Paid</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Status</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '140px' }}>Action</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Recharge Date</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Invoice #</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '200px' }}>Plan & Recharge Item</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Type</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Payment Method</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '120px' }}>Amount Paid</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '100px' }}>Status</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading || isRefreshing ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
                       <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading recharge history...
                     </td>
                   </tr>
                 ) : filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
                       No recharge records found.
                     </td>
                   </tr>
@@ -1413,6 +1415,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   filteredInvoices.map((inv, idx) => {
                     const isLatest = idx === 0;
                     const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
+                    const isRenewalItem = inv.type === 'renewal' || (inv.description || '').toLowerCase().includes('renewal');
+
+                    const itemTypeLabel = isAddon ? 'Add-On' : (isRenewalItem ? 'Renewal' : 'Subscription');
+                    const itemTypeBg = isAddon ? '#eff6ff' : (isRenewalItem ? '#fef3c7' : '#f0fdf4');
+                    const itemTypeColor = isAddon ? '#1d4ed8' : (isRenewalItem ? '#b45309' : '#15803d');
+                    const itemTypeBorder = isAddon ? '#bfdbfe' : (isRenewalItem ? '#fde68a' : '#bbf7d0');
 
                     return (
                       <tr key={inv.id} style={{ borderBottom: idx !== filteredInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>
@@ -1424,9 +1432,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                                 Latest
                               </span>
                             )}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                            via {inv.paymentMethod}
                           </div>
                         </td>
 
@@ -1443,12 +1448,36 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           </div>
                         </td>
 
+                        {/* Type Column */}
+                        <td style={{ padding: '14px 14px', textAlign: 'center' }}>
+                          <span style={{
+                            background: itemTypeBg,
+                            color: itemTypeColor,
+                            border: `1px solid ${itemTypeBorder}`,
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '3px 10px',
+                            borderRadius: '6px',
+                            display: 'inline-block'
+                          }}>
+                            {itemTypeLabel}
+                          </span>
+                        </td>
+
+                        {/* Payment Method Column */}
+                        <td style={{ padding: '14px 14px', color: '#334155', fontWeight: 600, fontSize: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>💳</span>
+                            <span>{inv.paymentMethod || 'Online Payment'}</span>
+                          </div>
+                        </td>
+
                         <td style={{ padding: '14px 18px', fontWeight: 800, color: '#0f172a' }}>
                           <div style={{ fontSize: '14px', color: '#0f172a' }}>₹{inv.amount ? inv.amount.toLocaleString() : '1,999'}</div>
                           <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>incl. GST</div>
                         </td>
 
-                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <td style={{ padding: '14px 14px', textAlign: 'center' }}>
                           <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', border: '1px solid #bbf7d0', display: 'inline-block' }}>
                             ● {inv.status || 'Paid'}
                           </span>
@@ -2035,6 +2064,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 const currentClean = (cleanPlanSlug || '').toLowerCase().replace(/\s*plan$/i, '').trim();
                 const isCurrentPlan = planClean === currentClean;
 
+                const getPlanRank = (pSlug) => {
+                  const s = String(pSlug || '').toLowerCase();
+                  if (s.includes('basic')) return 1;
+                  if (s.includes('standard')) return 2;
+                  if (s.includes('premium')) return 3;
+                  return 2;
+                };
+
+                const planRank = getPlanRank(planClean);
+                const currentRank = getPlanRank(currentClean);
+                const isDowngrade = planRank < currentRank;
+
                 const planCycle = selectedPlanCycles[plan.id] || 'monthly';
                 const isAnnual = planCycle === 'annual';
                 const activePrice = isAnnual ? (plan.annualPrice || 9999) : (plan.monthlyPrice || 999);
@@ -2205,6 +2246,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           </svg>
                           {isProcessingUpgrade ? 'Processing...' : `⚡ Renew Plan (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
+                      ) : isDowngrade ? (
+                        <button
+                          type="button"
+                          disabled={true}
+                          title="Plan downgrades are not allowed during renewal. Only plan upgrades or renewing your current tier are permitted."
+                          style={{
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            background: '#f1f5f9',
+                            color: '#94a3b8',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'not-allowed',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          🔒 Downgrade Not Allowed
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -2233,7 +2297,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
                           </svg>
-                          {isProcessingUpgrade ? 'Processing...' : `Switch to ${plan.name} (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
+                          {isProcessingUpgrade ? 'Processing...' : `Upgrade to ${plan.name} (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
                       )}
                     </div>

@@ -287,10 +287,10 @@ export default function BranchSearchDropdown() {
                 </div>
                 <div className="branch-option-info">
                   <div className="branch-option-title-row">
-                    <span className="branch-option-name">{mainBranchName} (Main Branch)</span>
+                    <span className="branch-option-name">{mainBranchName}</span>
                     <span className="branch-badge-total">{branches.length} TOTAL</span>
                   </div>
-                  <span className="branch-option-subtext">Main Branch • Aggregated data across all active outlets</span>
+                  <span className="branch-option-subtext">Aggregated data across all active outlets</span>
                 </div>
                 <div className="branch-option-action">
                   {(selectedBranchId === null || selectedBranchId === 'ALL') && <CheckIcon size={15} color="var(--primary)" />}

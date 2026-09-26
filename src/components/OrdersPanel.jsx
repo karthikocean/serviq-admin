@@ -1252,10 +1252,19 @@ export default function OrdersPanel({
                   ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
                   : null;
                 const currentBranchObj = headerBranchObj 
-                  || allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId))
-                  || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))
-                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
-                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
+                  || (modalSelectedBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))) : null);
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
+                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                  effectiveVal = '';
+                }
+
+                const branchOptions = [
+                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...allBranchesList.map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                  }))
+                ];
 
                 return (
                   <div>
@@ -1263,12 +1272,7 @@ export default function OrdersPanel({
                       value={effectiveVal}
                       onChange={handleModalBranchChange}
                       isDisabled={isLocked}
-                      options={allBranchesList.length === 0 ? [
-                        { value: '', label: 'Main Branch' }
-                      ] : allBranchesList.map(b => ({
-                        value: b._id || b.id,
-                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
-                      }))}
+                      options={branchOptions}
                       placeholder="Select Branch..."
                     />
                     {isLocked && (
