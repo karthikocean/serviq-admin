@@ -390,18 +390,26 @@ export default function MenuPanel({
 
                   {/* 7. Type */}
                   <td style={{ padding: '12px 10px', textAlign: 'center' }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      textTransform: 'uppercase',
-                      background: item.veg ? '#e6f4ea' : '#fce8e6',
-                      color: item.veg ? '#16a34a' : '#ea4335'
-                    }}>
-                      {item.veg ? 'VEG' : 'NON-VEG'}
-                    </span>
+                    {(() => {
+                      const foodType = item.foodType || (item.egg ? 'Egg' : (item.veg ? 'Veg' : 'Non-Veg'));
+                      const isVeg = foodType === 'Veg';
+                      const isEgg = foodType === 'Egg';
+
+                      return (
+                        <span style={{
+                          display: 'inline-flex',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          textTransform: 'uppercase',
+                          background: isVeg ? '#e6f4ea' : (isEgg ? '#fef3c7' : '#fce8e6'),
+                          color: isVeg ? '#16a34a' : (isEgg ? '#d97706' : '#ea4335')
+                        }}>
+                          {isVeg ? 'VEG' : (isEgg ? 'EGG' : 'NON-VEG')}
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   {/* 8. Status */}

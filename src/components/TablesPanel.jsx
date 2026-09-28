@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
+import TableApi from '../api/Table.js';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -53,12 +54,10 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
-const QrIcon = ({ size = 16, color = 'currentColor' }) => (
+const PowerIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-    <rect x="3" y="3" width="7" height="7" />
-    <rect x="14" y="3" width="7" height="7" />
-    <rect x="14" y="14" width="7" height="7" />
-    <rect x="3" y="14" width="7" height="7" />
+    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+    <line x1="12" y1="2" x2="12" y2="12" />
   </svg>
 );
 
@@ -102,10 +101,10 @@ export default function TablesPanel({
   deleteQrCode
 }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied'
+  const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
   const [viewingQrTable, setViewingQrTable] = useState(null);
-  const [showBatchPrintModal, setShowBatchPrintModal] = useState(false);
+  const [localQrStatus, setLocalQrStatus] = useState({});
 
   const displayTables = tables;
 
@@ -127,6 +126,67 @@ export default function TablesPanel({
     return null;
   };
 
+  const getIsQrActive = (table) => {
+    if (!table) return true;
+    const tableKey = table._id || table.id;
+    if (localQrStatus[tableKey] !== undefined) {
+      return localQrStatus[tableKey];
+    }
+    return table.isQrActive !== false && table.qrStatus !== 'Inactive' && table.qrActive !== false;
+  };
+
+  const toggleQrActive = async (table) => {
+    if (!table) return;
+    const tableId = table._id || table.id;
+    const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.id || table._id;
+    const currentActive = getIsQrActive(table);
+    const nextActive = !currentActive;
+
+    setLocalQrStatus(prev => ({
+      ...prev,
+      [tableId]: nextActive
+    }));
+
+    ShowNotifications.showAlertNotification(
+      `QR Code for Table ${tableIdStr} is now ${nextActive ? 'ACTIVE' : 'DEACTIVATED'}`,
+      true
+    );
+
+    if (viewingQrTable && (viewingQrTable.tableKey === tableId || viewingQrTable.tableId === tableIdStr)) {
+      setViewingQrTable(prev => prev ? { ...prev, isQrActive: nextActive } : null);
+    }
+
+    try {
+      if (updateDiningTable) {
+        updateDiningTable(activeRestaurant?.id || table.restaurantId, tableId, {
+          isQrActive: nextActive,
+          qrStatus: nextActive ? 'Active' : 'Inactive'
+        });
+      }
+      if (TableApi && TableApi.updateTable) {
+        await TableApi.updateTable(tableId, {
+          isQrActive: nextActive,
+          qrStatus: nextActive ? 'Active' : 'Inactive'
+        });
+      }
+    } catch (e) {
+      console.error("Error toggling QR active state:", e);
+    }
+  };
+
+  const getStatusBadgeProps = (statusStr) => {
+    const s = String(statusStr || 'Free').toLowerCase();
+    if (s === 'occupied') {
+      return { text: 'Occupied', bg: '#fce8e6', color: '#dc2626' };
+    } else if (s === 'reserved') {
+      return { text: 'Reserved', bg: '#dbeafe', color: '#2563eb' };
+    } else if (s.includes('maint') || s.includes('unavail')) {
+      return { text: 'Maintenance / Unavailable', bg: '#fef3c7', color: '#d97706' };
+    } else {
+      return { text: 'Free', bg: '#e6f4ea', color: '#16a34a' };
+    }
+  };
+
   // Filtered tables based on search and status
   const filteredTables = displayTables.filter(t => {
     const q = searchTerm.toLowerCase().trim();
@@ -135,11 +195,13 @@ export default function TablesPanel({
     const section = String(t.section || '').toLowerCase();
     const matchesSearch = !q || tableIdStr.includes(q) || waiter.includes(q) || section.includes(q);
 
-    const statusLower = String(t.status || '').toLowerCase();
+    const statusLower = String(t.status || 'free').toLowerCase();
     const matchesStatus =
       statusFilter === 'All' ? true :
-        statusFilter === 'Free' ? (statusLower === 'free' || statusLower === 'available') :
-          statusFilter === 'Occupied' ? (statusLower === 'occupied') : true;
+      statusFilter === 'Free' ? (statusLower === 'free' || statusLower === 'available') :
+      statusFilter === 'Occupied' ? (statusLower === 'occupied') :
+      statusFilter === 'Reserved' ? (statusLower === 'reserved') :
+      statusFilter === 'Maintenance' ? (statusLower.includes('maint') || statusLower.includes('unavail')) : true;
 
     return matchesSearch && matchesStatus;
   });
@@ -199,6 +261,84 @@ export default function TablesPanel({
     }
   };
 
+  const handlePrintSingleQr = (qrTableData) => {
+    if (!qrTableData) return;
+    const tableIdStr = qrTableData.tableId || qrTableData.tableNumber || qrTableData.id;
+    const qrUrl = qrTableData.qrUrl || getCustomerScanUrl(qrTableData);
+    const restaurantName = activeRestaurant?.name || 'SERVIQ DINING';
+    const seatsText = qrTableData.seatsText || `${qrTableData.seatingCapacity ?? qrTableData.seats ?? 4} seats`;
+    const sectionText = qrTableData.section || 'Main Dining';
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <title>QR Standee - Table ${tableIdStr}</title>
+          <style>
+            body { font-family: 'Inter', system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 90vh; margin: 0; background: #fff; color: #0f172a; }
+            .card {
+              background: #ffffff;
+              border: 2px solid #0f172a;
+              border-radius: 16px;
+              padding: 24px 20px;
+              text-align: center;
+              width: 280px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            }
+            @media print {
+              body { min-height: auto; }
+              @page { size: auto; margin: 10mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div style="font-size: 11px; font-weight: 800; color: #ff5a1f; letter-spacing: 1px; text-transform: uppercase;">
+              ${restaurantName}
+            </div>
+            <div style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 4px 0 14px 0;">
+              TABLE ${tableIdStr}
+            </div>
+            <div style="border: 1.5px dashed #cbd5e1; border-radius: 12px; padding: 12px; display: inline-block; margin-bottom: 12px;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUrl)}" style="width: 170px; height: 170px; display: block;" />
+            </div>
+            <div style="font-size: 13px; font-weight: 700; color: #0f172a;">
+              Scan to View Menu & Place Order
+            </div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+              ${seatsText} • ${sectionText}
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(() => {
+                window.focus();
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      if (document.body.contains(iframe)) {
+        document.body.removeChild(iframe);
+      }
+    }, 15000);
+  };
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -219,15 +359,10 @@ export default function TablesPanel({
   }, [searchTerm, statusFilter]);
 
   const totalCount = displayTables.length;
-  const occupiedCount = displayTables.filter(t => t.status?.toLowerCase() === 'occupied').length;
-  const freeCount = displayTables.filter(t => t.status?.toLowerCase() === 'free' || t.status?.toLowerCase() === 'available').length;
-  const qrCount = displayTables.filter(t => t.assignedQrId || t.qrUrl).length;
-  const qrPercentage = totalCount > 0 ? Math.round((qrCount / totalCount) * 100) : 0;
-
-  const handleCopyQrLink = (url) => {
-    navigator.clipboard.writeText(url);
-    ShowNotifications.showAlertNotification("Table QR Link copied to clipboard!", true);
-  };
+  const freeCount = displayTables.filter(t => (t.status || 'free').toLowerCase() === 'free' || (t.status || '').toLowerCase() === 'available').length;
+  const occupiedCount = displayTables.filter(t => (t.status || '').toLowerCase() === 'occupied').length;
+  const reservedCount = displayTables.filter(t => (t.status || '').toLowerCase() === 'reserved').length;
+  const maintenanceCount = displayTables.filter(t => (t.status || '').toLowerCase().includes('maint') || (t.status || '').toLowerCase().includes('unavail')).length;
 
   const handleBatchPrint = () => {
     const iframe = document.createElement('iframe');
@@ -309,7 +444,6 @@ export default function TablesPanel({
     `);
     doc.close();
 
-    // Clean up the iframe after a reasonable time for the print dialog to open and close
     setTimeout(() => {
       if (document.body.contains(iframe)) {
         document.body.removeChild(iframe);
@@ -334,7 +468,6 @@ export default function TablesPanel({
           <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Table Management
           </h2>
-
         </div>
 
         {/* Header Action Buttons */}
@@ -394,32 +527,39 @@ export default function TablesPanel({
       </div>
 
       {/* 2. STATS KPI CARDS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '22px' }}>
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '22px' }}>
+        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>TOTAL TABLES</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
             {totalCount}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>AVAILABLE (FREE)</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
             {freeCount}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.4px' }}>OCCUPIED</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#dc2626', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
             {occupiedCount}
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 20px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>QR CODES ACTIVE</div>
-          <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
-            {qrCount}
+        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#2563eb', textTransform: 'uppercase', letterSpacing: '0.4px' }}>RESERVED</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#2563eb', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
+            {reservedCount}
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.4px' }}>MAINTENANCE / UNAVAILABLE</div>
+          <div style={{ fontSize: '24px', fontWeight: 900, color: '#d97706', marginTop: '4px', fontFamily: "'Outfit', sans-serif" }}>
+            {maintenanceCount}
           </div>
         </div>
       </div>
@@ -453,7 +593,7 @@ export default function TablesPanel({
           <SearchIcon size={15} color="#64748b" />
           <input
             type="text"
-            placeholder="Search by table , waiter, section..."
+            placeholder="Search by table, waiter, section..."
             value={searchTerm}
             onKeyDown={e => {
               if (e.key === ' ' && !e.currentTarget.value) {
@@ -485,11 +625,13 @@ export default function TablesPanel({
         </div>
 
         {/* Status Filter Tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[
             { id: 'All', label: `All Tables (${totalCount})` },
             { id: 'Free', label: `Free (${freeCount})` },
-            { id: 'Occupied', label: `Occupied (${occupiedCount})` }
+            { id: 'Occupied', label: `Occupied (${occupiedCount})` },
+            { id: 'Reserved', label: `Reserved (${reservedCount})` },
+            { id: 'Maintenance', label: `Maintenance / Unavailable (${maintenanceCount})` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -523,32 +665,28 @@ export default function TablesPanel({
         width: '100%'
       }}>
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE & SECTION</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE NO</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SECTION / AREA</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>SEATING CAPACITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSIGNED WAITER</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DEFAULT WAITER</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
                 <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>QR CODE</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>KEY</th>
               </tr>
             </thead>
             <tbody>
               {filteredTables.length > 0 ? (
                 paginatedTables.map((table, index) => {
-                  const isFree = table.status?.toLowerCase() === 'free' || table.status?.toLowerCase() === 'available';
-                  const statusText = isFree ? 'FREE' : 'OCCUPIED';
-
-                  const accentColor = isFree ? '#22c55e' : '#ef4444';
-                  const bgBadgeColor = isFree ? '#e6f4ea' : '#fce8e6';
-                  const textBadgeColor = isFree ? '#16a34a' : '#dc2626';
-
                   const tableIdStr = table.tableNumber || table.tableNum || table.tableNo || table.name || (table.id && String(table.id).startsWith('T-') ? table.id : null) || table.id || `T-${String(page * limit + index + 1).padStart(2, '0')}`;
                   const waiterName = getWaiterName(table);
                   const qrUrl = getCustomerScanUrl(table);
                   const qrImgSrc = qrUrl ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrUrl)}` : '';
+                  const isQrActive = getIsQrActive(table);
+                  const statusProps = getStatusBadgeProps(table.status);
 
                   return (
                     <tr
@@ -565,35 +703,34 @@ export default function TablesPanel({
                         {page * limit + index + 1}
                       </td>
 
-                      {/* 1. Table ID & Section */}
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* TABLE NO */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <div style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '10px',
-                            background: bgBadgeColor,
-                            color: textBadgeColor,
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            background: statusProps.bg,
+                            color: statusProps.color,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             flexShrink: 0
                           }}>
-                            <TableIcon size={18} color={textBadgeColor} />
+                            <TableIcon size={16} color={statusProps.color} />
                           </div>
-
-                          <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                              {tableIdStr}
-                            </span>
-                            <span style={{ fontSize: '12px', fontWeight: 500, color: '#64748b' }}>
-                              {table.section || 'Main Dining'}
-                            </span>
-                          </div>
+                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                            {tableIdStr}
+                          </span>
                         </div>
                       </td>
 
-                      {/* 2. Seating Capacity */}
+                      {/* SECTION / AREA */}
+                      <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                        {table.section || 'Main Dining'}
+                      </td>
+
+                      {/* SEATING CAPACITY */}
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                         <div style={{
                           display: 'inline-flex',
@@ -608,7 +745,7 @@ export default function TablesPanel({
                         </div>
                       </td>
 
-                      {/* 3. Assigned Waiter */}
+                      {/* DEFAULT WAITER */}
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {waiterName ? (
@@ -626,7 +763,7 @@ export default function TablesPanel({
                         </div>
                       </td>
 
-                      {/* 4. Status Badge */}
+                      {/* STATUS */}
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                         <span style={{
                           display: 'inline-flex',
@@ -636,68 +773,80 @@ export default function TablesPanel({
                           borderRadius: '20px',
                           fontSize: '11px',
                           fontWeight: 800,
-                          backgroundColor: bgBadgeColor,
-                          color: textBadgeColor,
+                          backgroundColor: statusProps.bg,
+                          color: statusProps.color,
                           whiteSpace: 'nowrap'
                         }}>
                           <span style={{
                             width: '6px',
                             height: '6px',
                             borderRadius: '50%',
-                            backgroundColor: textBadgeColor,
+                            backgroundColor: statusProps.color,
                             display: 'inline-block'
                           }}></span>
-                          {statusText}
+                          {statusProps.text}
                         </span>
                       </td>
 
-                      {/* 5. QR Code */}
+                      {/* QR CODE */}
                       <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        {table.qrUrl || table.assignedQrId ? (
-                          <div
-                            onClick={() => setViewingQrTable({ tableId: tableIdStr, qrUrl, qrImgSrc })}
-                            style={{
-                              width: '36px',
-                              height: '36px',
-                              background: '#ffffff',
-                              borderRadius: '8px',
-                              border: '1.5px solid #e2e8f0',
-                              padding: '2px',
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s ease',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.borderColor = '#ff5a1f';
-                              e.currentTarget.style.transform = 'scale(1.08)';
-                              e.currentTarget.style.boxShadow = '0 4px 8px rgba(255,90,31,0.15)';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.borderColor = '#e2e8f0';
-                              e.currentTarget.style.transform = 'scale(1)';
-                              e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.04)';
-                            }}
-                            title="Click to preview & print QR code"
-                          >
-                            <img
-                              src={qrImgSrc}
-                              alt={`QR ${tableIdStr}`}
-                              style={{ width: '28px', height: '28px', display: 'block', borderRadius: '4px' }}
-                            />
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>
-                            No QR
-                          </span>
-                        )}
+                        <div
+                          onClick={() => setViewingQrTable({
+                            tableId: tableIdStr,
+                            tableKey: table._id || table.id,
+                            qrUrl,
+                            qrImgSrc,
+                            isQrActive,
+                            tableObj: table
+                          })}
+                          style={{
+                            width: '40px',
+                            height: '40px',
+                            background: '#ffffff',
+                            borderRadius: '8px',
+                            border: isQrActive ? '1.5px solid #e2e8f0' : '1.5px solid #fecaca',
+                            padding: '2px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s ease',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.04)',
+                            position: 'relative',
+                            opacity: isQrActive ? 1 : 0.65
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = '#ff5a1f';
+                            e.currentTarget.style.transform = 'scale(1.08)';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = isQrActive ? '#e2e8f0' : '#fecaca';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }}
+                          title={`Click to view QR & print/change status (Currently ${isQrActive ? 'Active' : 'Inactive'})`}
+                        >
+                          <img
+                            src={qrImgSrc}
+                            alt={`QR ${tableIdStr}`}
+                            style={{ width: '32px', height: '32px', display: 'block', borderRadius: '4px' }}
+                          />
+                          <span style={{
+                            position: 'absolute',
+                            top: '-3px',
+                            right: '-3px',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            backgroundColor: isQrActive ? '#22c55e' : '#ef4444',
+                            border: '2px solid #ffffff'
+                          }}></span>
+                        </div>
                       </td>
 
-                      {/* 6. Actions */}
+                      {/* KEY (ICON STYLE ACTIONS) */}
                       <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                          {/* Action 1: Edit Icon */}
                           <button
                             type="button"
                             onClick={() => {
@@ -709,9 +858,10 @@ export default function TablesPanel({
                               border: '1px solid #cbd5e1',
                               color: '#475569',
                               cursor: 'pointer',
-                              padding: '6px',
-                              borderRadius: '6px',
-                              display: 'flex',
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.15s'
@@ -728,9 +878,32 @@ export default function TablesPanel({
                             }}
                             title="Edit Table"
                           >
-                            <PencilIcon size={14} />
+                            <PencilIcon size={15} />
                           </button>
 
+                          {/* Action 2: Active / Deactive QR Icon */}
+                          <button
+                            type="button"
+                            onClick={() => toggleQrActive(table)}
+                            style={{
+                              background: isQrActive ? '#e6f4ea' : '#fef2f2',
+                              border: isQrActive ? '1px solid #bbf7d0' : '1px solid #fecaca',
+                              color: isQrActive ? '#16a34a' : '#dc2626',
+                              cursor: 'pointer',
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            title={isQrActive ? 'Deactivate QR Code' : 'Activate QR Code'}
+                          >
+                            <PowerIcon size={15} color={isQrActive ? '#16a34a' : '#dc2626'} />
+                          </button>
+
+                          {/* Action 3: Delete Icon */}
                           <button
                             type="button"
                             onClick={() => setTableToDelete(table)}
@@ -739,9 +912,10 @@ export default function TablesPanel({
                               border: '1px solid #fecaca',
                               color: '#dc2626',
                               cursor: 'pointer',
-                              padding: '6px',
-                              borderRadius: '6px',
-                              display: 'flex',
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               transition: 'all 0.15s'
@@ -758,7 +932,7 @@ export default function TablesPanel({
                             }}
                             title="Delete Table"
                           >
-                            <TrashIcon size={14} />
+                            <TrashIcon size={15} />
                           </button>
                         </div>
                       </td>
@@ -767,7 +941,7 @@ export default function TablesPanel({
                 })
               ) : (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                     No dining tables match your current filter "{searchTerm}".
                   </td>
                 </tr>
@@ -865,9 +1039,57 @@ export default function TablesPanel({
           isOpen={!!viewingQrTable}
           onClose={() => setViewingQrTable(null)}
           title={`Table QR Code: ${viewingQrTable.tableId}`}
-          maxWidth="420px"
+          maxWidth="440px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', paddingTop: '8px' }}>
+
+            {/* Active & Inactive Status header inside QR modal */}
+            <div style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#f8fafc',
+              padding: '10px 16px',
+              borderRadius: '10px',
+              border: '1px solid #e2e8f0'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>QR Status:</span>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  padding: '3px 10px',
+                  borderRadius: '12px',
+                  backgroundColor: viewingQrTable.isQrActive ? '#e6f4ea' : '#fef2f2',
+                  color: viewingQrTable.isQrActive ? '#16a34a' : '#dc2626',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: viewingQrTable.isQrActive ? '#16a34a' : '#dc2626' }}></span>
+                  {viewingQrTable.isQrActive ? 'ACTIVE' : 'DEACTIVATED'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => toggleQrActive(viewingQrTable.tableObj)}
+                style={{
+                  background: viewingQrTable.isQrActive ? '#fef2f2' : '#e6f4ea',
+                  border: viewingQrTable.isQrActive ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                  color: viewingQrTable.isQrActive ? '#dc2626' : '#16a34a',
+                  fontWeight: 700,
+                  fontSize: '12px',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+              >
+                {viewingQrTable.isQrActive ? 'Deactivate QR' : 'Activate QR'}
+              </button>
+            </div>
 
             {/* Standee QR Box preview */}
             <div style={{
@@ -878,7 +1100,8 @@ export default function TablesPanel({
               textAlign: 'center',
               width: '100%',
               boxSizing: 'border-box',
-              boxShadow: '0 8px 30px rgba(0,0,0,0.06)'
+              boxShadow: '0 8px 30px rgba(0,0,0,0.06)',
+              opacity: viewingQrTable.isQrActive ? 1 : 0.6
             }}>
               <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', letterSpacing: '1px', textTransform: 'uppercase' }}>
                 {activeRestaurant?.name || 'SERVIQ DINING'}
@@ -893,13 +1116,30 @@ export default function TablesPanel({
                 borderRadius: '12px',
                 padding: '16px',
                 display: 'inline-block',
-                margin: '0 auto 14px auto'
+                margin: '0 auto 14px auto',
+                position: 'relative'
               }}>
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(viewingQrTable.qrUrl)}`}
                   alt="QR Standee"
                   style={{ width: '180px', height: '180px', display: 'block' }}
                 />
+                {!viewingQrTable.isQrActive && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'rgba(255, 255, 255, 0.85)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 800,
+                    color: '#dc2626',
+                    fontSize: '14px',
+                    borderRadius: '12px'
+                  }}>
+                    DEACTIVATED
+                  </div>
+                )}
               </div>
 
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
@@ -907,31 +1147,56 @@ export default function TablesPanel({
               </div>
             </div>
 
-            {/* Modal Actions */}
-            <div style={{ width: '100%' }}>
+            {/* Modal Actions: PRINT OPTION LEFT OF DOWNLOAD BUTTON */}
+            <div style={{ width: '100%', display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => handlePrintSingleQr(viewingQrTable)}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #0f172a',
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  fontWeight: 800,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxSizing: 'border-box',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <PrintIcon size={15} color="#ffffff" /> Print QR
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleDownloadQrPng(viewingQrTable.tableId, viewingQrTable.qrUrl)}
                 style={{
-                  width: '100%',
-                  padding: '12px 20px',
+                  flex: 1,
+                  padding: '12px 16px',
                   borderRadius: '10px',
                   border: 'none',
                   background: 'var(--primary, #ff5a1f)',
                   color: '#ffffff',
                   fontWeight: 800,
-                  fontSize: '14px',
+                  fontSize: '13px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
+                  gap: '6px',
                   boxSizing: 'border-box',
                   boxShadow: '0 4px 14px rgba(255, 90, 31, 0.25)',
                   transition: 'all 0.15s ease'
                 }}
               >
-                <DownloadIcon size={16} color="#ffffff" /> Download PNG
+                <DownloadIcon size={15} color="#ffffff" /> Download PNG
               </button>
             </div>
 

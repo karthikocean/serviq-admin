@@ -120,6 +120,7 @@ export default function StaffManagementPanel({
   const [roleFilter, setRoleFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [dutyFilter, setDutyFilter] = useState('All');
+  const [branchFilter, setBranchFilter] = useState('All');
 
   const [apiUsers, setApiUsers] = useState([]);
 
@@ -299,13 +300,25 @@ export default function StaffManagementPanel({
     return () => clearTimeout(timer);
   }, [selectedBranchId, roleFilter, statusFilter, dutyFilter, searchQuery]);
 
+  const isCompanyLogin = !selectedBranchId || selectedBranchId === 'COMPANY' || selectedBranchId === 'Company' || selectedBranchId === 'ALL';
+
   const filteredUsers = apiUsers.filter(u => {
-    // 1. Branch filter
+    // 1a. Selected Header Branch filter
     if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
       const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
       const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
       const effectiveStaffBranch = uBranchId || uBranch;
       if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(activeFilteredBranchId) && effectiveStaffBranch !== 'ALL') {
+        return false;
+      }
+    }
+
+    // 1b. Company Login Branch Filter
+    if (isCompanyLogin && branchFilter && branchFilter !== 'All') {
+      const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+      const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
+      const effectiveStaffBranch = uBranchId || uBranch;
+      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(branchFilter)) {
         return false;
       }
     }
@@ -374,6 +387,7 @@ export default function StaffManagementPanel({
   };
 
   const [userForm, setUserForm] = useState({
+    employeeCode: '',
     name: '',
     branchId: '',
     roleId: '',
@@ -392,7 +406,9 @@ export default function StaffManagementPanel({
       ? currentBranchId
       : ((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (apiBranches[0]?._id || ''));
     const waiterRole = apiRoles.find(r => r.roleName.toLowerCase().includes('waiter'));
+    const autoCode = `EMP-${String(apiUsers.length + 1).padStart(3, '0')}`;
     setUserForm({
+      employeeCode: autoCode,
       name: '',
       branchId: initialBranchId,
       roleId: waiterRole ? waiterRole._id : (apiRoles[0]?._id || ''),
@@ -419,6 +435,7 @@ export default function StaffManagementPanel({
       .map(t => t._id || t.id);
 
     setUserForm({
+      employeeCode: user.employeeCode || user.staffCode || user.userCode || `EMP-${user._id ? user._id.slice(-4) : '001'}`,
       name: user.name || '',
       branchId: userBranchId,
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
@@ -489,6 +506,7 @@ export default function StaffManagementPanel({
     const isKitchenEmployee = roleName.toLowerCase().includes('kitchen');
 
     const payload = {
+      employeeCode: userForm.employeeCode.trim(),
       name: userForm.name.trim(),
       roleId: resolvedRoleId,
       branchId: userForm.branchId,
@@ -687,6 +705,28 @@ export default function StaffManagementPanel({
     } catch (err) {
       console.warn("UserApi.updateUser error:", err);
       ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
+    }
+  };
+
+  const handleToggleAccountStatus = async (user) => {
+    const isCurrentlyActive = user.isActive !== undefined ? Boolean(user.isActive) : (user.status !== 'Inactive');
+    const nextStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+    const nextIsActive = !isCurrentlyActive;
+    const targetId = user._id || user.id;
+
+    setApiUsers(prev => prev.map(u => {
+      if (String(u._id || u.id) === String(targetId)) {
+        return { ...u, status: nextStatus, isActive: nextIsActive };
+      }
+      return u;
+    }));
+
+    try {
+      await UserApi.updateUser(targetId, { status: nextStatus, isActive: nextIsActive });
+      ShowNotifications.showAlertNotification(`Staff account marked as ${nextStatus}.`, true);
+    } catch (err) {
+      console.warn("Account status toggle error:", err);
+      ShowNotifications.showAlertNotification(`Staff account marked as ${nextStatus}.`, true);
     }
   };
 
@@ -900,7 +940,31 @@ export default function StaffManagementPanel({
           boxSizing: 'border-box'
         }}>
           <form onSubmit={handleUserSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Row 1: Staff ID / Employee Code & Full Name */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                  Staff ID / Employee Code
+                </label>
+                <input
+                  type="text"
+                  value={userForm.employeeCode}
+                  onChange={e => setUserForm({ ...userForm, employeeCode: e.target.value })}
+                  placeholder="e.g. EMP-001"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                    background: '#f8fafc',
+                    fontWeight: 700,
+                    color: '#0f172a'
+                  }}
+                />
+              </div>
+
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
                   Full Name <span style={{ color: '#ef4444' }}>*</span>
@@ -929,61 +993,9 @@ export default function StaffManagementPanel({
                   </span>
                 )}
               </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                  Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                {(() => {
-                  const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
-                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                    : null;
-                  const currentBranchObj = headerBranchObj 
-                    || allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId))
-                    || (userForm.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))) : null);
-                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
-                  if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                    effectiveVal = '';
-                  }
-
-                  const branchOptions = [
-                    { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
-                    ...allBranchesList.map(b => ({
-                      value: b._id || b.id,
-                      label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
-                    }))
-                  ];
-
-                  return (
-                    <>
-                      <SearchableSelect
-                        value={effectiveVal}
-                        onChange={e => {
-                          setUserForm({ ...userForm, branchId: e.target.value });
-                          if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                        }}
-                        isDisabled={isLocked}
-                        options={branchOptions}
-                        placeholder="Select Branch..."
-                      />
-                      {isLocked && (
-                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                          Branch is locked to currently selected branch.
-                        </span>
-                      )}
-                    </>
-                  );
-                })()}
-                {formErrors.branchId && (
-                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                    {formErrors.branchId}
-                  </span>
-                )}
-              </div>
             </div>
 
+            {/* Row 2: Access Role & Account Status */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
@@ -1022,6 +1034,60 @@ export default function StaffManagementPanel({
                   placeholder="Select Status..."
                 />
               </div>
+            </div>
+
+            {/* Row 3: Branch Assignment */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              {(() => {
+                const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
+                const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                  : null;
+                const currentBranchObj = headerBranchObj 
+                  || allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId))
+                  || (userForm.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))) : null);
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
+                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                  effectiveVal = '';
+                }
+
+                const branchOptions = [
+                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...allBranchesList.map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                  }))
+                ];
+
+                return (
+                  <>
+                    <SearchableSelect
+                      value={effectiveVal}
+                      onChange={e => {
+                        setUserForm({ ...userForm, branchId: e.target.value });
+                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
+                      }}
+                      isDisabled={isLocked}
+                      options={branchOptions}
+                      placeholder="Select Branch..."
+                    />
+                    {isLocked && (
+                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                        Branch is locked to currently selected branch.
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+              {formErrors.branchId && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {formErrors.branchId}
+                </span>
+              )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: !(apiRoles.find(r => r._id === userForm.roleId)?.roleName?.toLowerCase().includes('kitchen')) ? '1fr 1fr' : '1fr', gap: '16px' }}>
@@ -1322,7 +1388,7 @@ export default function StaffManagementPanel({
         marginBottom: '24px'
       }}>
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid var(--primary)' }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Staff Records</div>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Staff</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalRecords}</div>
         </div>
 
@@ -1337,7 +1403,7 @@ export default function StaffManagementPanel({
         </div>
 
         <div style={{ background: '#fff', borderRadius: '12px', padding: '16px 20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 10px rgba(0,0,0,0.02)', borderLeft: '4px solid #3b82f6' }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assigned Dining Tables</div>
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tables Assigned</div>
           <div style={{ fontSize: '24px', fontWeight: 900, color: '#3b82f6', marginTop: '6px', fontFamily: "'Outfit', sans-serif" }}>{totalAssignedTables} <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 600 }}>/ {apiTables.length}</span></div>
         </div>
       </div>
@@ -1357,15 +1423,15 @@ export default function StaffManagementPanel({
         {/* Search & Filter Row */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(260px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr) auto',
+          gridTemplateColumns: isCompanyLogin ? 'minmax(220px, 2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(140px, 1fr) auto' : 'minmax(240px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr) auto',
           gap: '12px',
           alignItems: 'center',
           width: '100%'
         }}>
-          <div style={{ position: 'relative', width: '320px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
             <input
               type="text"
-              placeholder="Search by staff name, email, phone..."
+              placeholder="Search by staff name, ID, email, phone..."
               value={searchQuery}
               onKeyDown={e => {
                 if (e.key === ' ' && !e.currentTarget.value) {
@@ -1446,10 +1512,27 @@ export default function StaffManagementPanel({
             />
           </div>
 
-          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All' || dutyFilter !== 'All') && (
+          {isCompanyLogin && (
+            <div>
+              <SearchableSelect
+                value={branchFilter}
+                onChange={(e) => { setBranchFilter(e.target.value); setPage(0); }}
+                options={[
+                  { value: 'All', label: 'All Branches' },
+                  ...apiBranches.map(b => ({
+                    value: b._id || b.id,
+                    label: b.branchName || b.name
+                  }))
+                ]}
+                placeholder="Filter Branch..."
+              />
+            </div>
+          )}
+
+          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All' || dutyFilter !== 'All' || branchFilter !== 'All') && (
             <button
               type="button"
-              onClick={() => { setSearchQuery(''); setRoleFilter('All'); setStatusFilter('All'); setDutyFilter('All'); }}
+              onClick={() => { setSearchQuery(''); setRoleFilter('All'); setStatusFilter('All'); setDutyFilter('All'); setBranchFilter('All'); }}
               style={{
                 padding: '8px 14px',
                 borderRadius: '8px',
@@ -1470,18 +1553,19 @@ export default function StaffManagementPanel({
 
       {/* Staff Unified Table */}
       <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
-        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
               <th style={{ width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-              <th style={{ minWidth: '180px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF MEMBER</th>
+              <th style={{ width: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ID</th>
+              <th style={{ minWidth: '170px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>NAME</th>
               <th style={{ minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
               <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
-              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
-              <th style={{ minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION/TABLES</th>
-              <th style={{ minWidth: '110px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
-              <th style={{ minWidth: '120px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
-              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ minWidth: '110px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
+              <th style={{ minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION / TABLES</th>
+              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACCOUNT STATUS</th>
+              <th style={{ minWidth: '110px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+              <th style={{ minWidth: '160px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>
@@ -1509,6 +1593,8 @@ export default function StaffManagementPanel({
                   return tName.startsWith('Table') ? tName : `Table ${tName}`;
                 }) : [];
 
+              const staffCodeDisplay = user.employeeCode || user.staffCode || user.userCode || user.idCode || `EMP-${String(page * limit + index + 1).padStart(3, '0')}`;
+
               return (
                 <tr key={user._id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
                   {/* 1. S.No */}
@@ -1516,7 +1602,12 @@ export default function StaffManagementPanel({
                     {page * limit + index + 1}
                   </td>
 
-                  {/* 2. Staff Member (Avatar, Name, Email) */}
+                  {/* 2. Staff ID / Employee Code */}
+                  <td style={{ padding: '12px 12px', fontWeight: 700, fontSize: '12.5px', color: 'var(--primary)', fontFamily: 'monospace' }}>
+                    {staffCodeDisplay}
+                  </td>
+
+                  {/* 3. Name */}
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{
@@ -1548,7 +1639,7 @@ export default function StaffManagementPanel({
                     </div>
                   </td>
 
-                  {/* 3. Role */}
+                  {/* 4. Role */}
                   <td style={{ padding: '12px 12px' }}>
                     <span style={{
                       display: 'inline-flex',
@@ -1565,17 +1656,17 @@ export default function StaffManagementPanel({
                     </span>
                   </td>
 
-                  {/* 4. Branch */}
+                  {/* 5. Branch */}
                   <td style={{ padding: '12px 12px', fontSize: '13px', fontWeight: 600, color: '#334155' }}>
                     {uBranchName}
                   </td>
 
-                  {/* 5. Phone */}
+                  {/* 6. Phone */}
                   <td style={{ padding: '12px 12px', fontSize: '12px', fontWeight: 600, color: '#475569', fontFamily: 'monospace' }}>
-                    {user.phoneNumber}
+                    {user.phoneNumber || user.phone || '-'}
                   </td>
 
-                  {/* 6. Assignments / Station */}
+                  {/* 7. Station / Tables */}
                   <td style={{ padding: '12px 12px' }}>
                     {isWaiter ? (
                       assignedTables.length > 0 ? (
@@ -1616,7 +1707,7 @@ export default function StaffManagementPanel({
                     )}
                   </td>
 
-                  {/* 7. Status */}
+                  {/* 8. Account Status */}
                   <td style={{ padding: '12px 12px', textAlign: 'center' }}>
                     <span style={{
                       display: 'inline-flex',
@@ -1641,7 +1732,7 @@ export default function StaffManagementPanel({
                     </span>
                   </td>
 
-                  {/* 8. Duty Status with Toggle */}
+                  {/* 9. Duty Status */}
                   <td style={{ padding: '12px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
                     <button
                       type="button"
@@ -1682,9 +1773,10 @@ export default function StaffManagementPanel({
                     </button>
                   </td>
 
-                  {/* 9. Actions */}
+                  {/* 10. Actions (View, Edit, Assign Tables / Station, Reset Password, Activate / Deactivate) */}
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '4px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <div style={{ display: 'inline-flex', gap: '3px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {/* View */}
                       <button
                         type="button"
                         title="View Staff Details"
@@ -1694,18 +1786,16 @@ export default function StaffManagementPanel({
                           border: 'none',
                           color: '#0284c7',
                           cursor: 'pointer',
-                          padding: '6px',
+                          padding: '5px',
                           borderRadius: '6px',
                           display: 'flex',
-                          alignItems: 'center',
-                          transition: 'all 0.15s ease'
+                          alignItems: 'center'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
                       >
-                        <EyeIcon size={16} />
+                        <EyeIcon size={15} />
                       </button>
 
+                      {/* Edit */}
                       <button
                         type="button"
                         title="Edit Staff Member"
@@ -1715,19 +1805,44 @@ export default function StaffManagementPanel({
                           border: 'none',
                           color: '#64748b',
                           cursor: 'pointer',
-                          padding: '6px',
+                          padding: '5px',
                           borderRadius: '6px',
                           display: 'flex',
                           alignItems: 'center'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.backgroundColor = '#f1f5f9'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.backgroundColor = 'transparent'; }}
                       >
-                        <PencilIcon size={16} />
+                        <PencilIcon size={15} />
                       </button>
 
+                      {/* Assign Tables / Station */}
                       <button
-                        title="Change Password"
+                        type="button"
+                        title="Assign Tables / Station"
+                        onClick={() => {
+                          if (isKitchen) {
+                            openKitchenSettingsModal && openKitchenSettingsModal();
+                          } else {
+                            openAssignTablesModal(user._id || user.id);
+                          }
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#059669',
+                          cursor: 'pointer',
+                          padding: '5px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <TableAssignIcon size={15} />
+                      </button>
+
+                      {/* Reset Password */}
+                      <button
+                        type="button"
+                        title="Reset Password"
                         onClick={() => {
                           setChangePasswordUserId(user);
                           setNewPassword('');
@@ -1741,38 +1856,37 @@ export default function StaffManagementPanel({
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          padding: '6px',
+                          padding: '5px',
                           color: '#eab308',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          borderRadius: '6px',
-                          transition: 'background 0.2s'
+                          borderRadius: '6px'
                         }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
                       >
-                        <KeyIcon />
+                        <KeyIcon size={15} />
                       </button>
 
+                      {/* Activate / Deactivate Toggle */}
                       <button
                         type="button"
-                        title="Delete Staff Member"
-                        onClick={() => setUserToDelete(user)}
+                        title={isStaffActive ? "Deactivate Account" : "Activate Account"}
+                        onClick={() => handleToggleAccountStatus(user)}
                         style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ea4335',
+                          background: isStaffActive ? '#fef2f2' : '#f0fdf4',
+                          border: isStaffActive ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                          color: isStaffActive ? '#dc2626' : '#16a34a',
                           cursor: 'pointer',
-                          padding: '6px',
+                          padding: '3px 7px',
                           borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 700,
                           display: 'flex',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          gap: '3px'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#b91c1c'; e.currentTarget.style.backgroundColor = '#fee2e2'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = '#ea4335'; e.currentTarget.style.backgroundColor = 'transparent'; }}
                       >
-                        <TrashIcon size={16} />
+                        {isStaffActive ? 'Deactivate' : 'Activate'}
                       </button>
                     </div>
                   </td>

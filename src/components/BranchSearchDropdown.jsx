@@ -68,6 +68,19 @@ const LockIcon = ({ size = 12, color = '#94a3b8' }) => (
   </svg>
 );
 
+const BuildingIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+    <path d="M9 22v-4h6v4"></path>
+    <line x1="8" y1="6" x2="10" y2="6"></line>
+    <line x1="14" y1="6" x2="16" y2="6"></line>
+    <line x1="8" y1="10" x2="10" y2="10"></line>
+    <line x1="14" y1="10" x2="16" y2="10"></line>
+    <line x1="8" y1="14" x2="10" y2="14"></line>
+    <line x1="14" y1="14" x2="16" y2="14"></line>
+  </svg>
+);
+
 export default function BranchSearchDropdown() {
   const { activeRestaurant, currentUser, selectedBranchId, setSelectedBranchId, fetchBranches: contextFetchBranches } = useAppState();
   const [isOpen, setIsOpen] = useState(false);
@@ -152,12 +165,14 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Main Branch';
+  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Spice Route Restaurant';
 
-  const selectedBranch = branches.find(b => 
-    String(b.id || b._id) === String(selectedBranchId) || 
-    String(b.branchCode) === String(selectedBranchId)
-  );
+  const selectedBranch = selectedBranchId === 'COMPANY'
+    ? { branchName: 'Company', name: 'Company' }
+    : branches.find(b => 
+        String(b.id || b._id) === String(selectedBranchId) || 
+        String(b.branchCode) === String(selectedBranchId)
+      );
 
   const filteredBranches = branches.filter(b => {
     const query = searchQuery.toLowerCase().trim();
@@ -207,7 +222,11 @@ export default function BranchSearchDropdown() {
             justifyContent: 'center',
             color: isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')
           }}>
-            <StoreFrontIcon size={15} color={isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')} />
+            {selectedBranchId === 'COMPANY' ? (
+              <BuildingIcon size={15} color="var(--primary)" />
+            ) : (
+              <StoreFrontIcon size={15} color={isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')} />
+            )}
           </div>
           <div className="branch-search-trigger-text">
             <span className="branch-search-label">
@@ -272,7 +291,32 @@ export default function BranchSearchDropdown() {
 
           {/* OPTIONS LIST */}
           <div className="branch-search-options-list">
-            {/* MAIN BRANCH / HQ OPTION */}
+            {/* 1. COMPANY SCOPE OPTION (ABOVE SPICE ROUTE RESTAURANT) */}
+            {(!searchQuery || 
+              'company'.includes(searchQuery.toLowerCase()) || 
+              'corporate'.includes(searchQuery.toLowerCase())
+            ) && (
+              <div
+                className={`branch-search-option ${selectedBranchId === 'COMPANY' ? 'selected' : ''}`}
+                onClick={() => handleSelectBranch('COMPANY')}
+              >
+                <div className="branch-option-left-icon">
+                  <BuildingIcon size={16} color={selectedBranchId === 'COMPANY' ? 'var(--primary)' : '#64748b'} />
+                </div>
+                <div className="branch-option-info">
+                  <div className="branch-option-title-row">
+                    <span className="branch-option-name">Company</span>
+                    <span className="branch-badge-total" style={{ background: '#f1f5f9', color: '#475569' }}>COMPANY HQ</span>
+                  </div>
+                  <span className="branch-option-subtext">Enterprise Company Overview Scope</span>
+                </div>
+                <div className="branch-option-action">
+                  {selectedBranchId === 'COMPANY' && <CheckIcon size={15} color="var(--primary)" />}
+                </div>
+              </div>
+            )}
+
+            {/* 2. SPICE ROUTE RESTAURANT (MAIN BRANCH / HQ OPTION) */}
             {(!searchQuery || 
               'all branches'.includes(searchQuery.toLowerCase()) || 
               'main branch'.includes(searchQuery.toLowerCase()) || 

@@ -1321,34 +1321,67 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           </div>
         </div>
 
-        {/* Filter Tabs & Search Bar */}
+        {/* Filter Tabs & Search Bar Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-            {[
-              { id: 'all', label: `All History (${invoices.length})` },
-              { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
-              { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setHistoryFilter(tab.id)}
-                style={{
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '7px',
-                  background: historyFilter === tab.id ? '#ffffff' : 'transparent',
-                  color: historyFilter === tab.id ? '#0f172a' : '#64748b',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: historyFilter === tab.id ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: `All History (${invoices.length})` },
+                { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
+                { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setHistoryFilter(tab.id)}
+                  style={{
+                    border: 'none',
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    background: historyFilter === tab.id ? '#ffffff' : 'transparent',
+                    color: historyFilter === tab.id ? '#0f172a' : '#64748b',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: historyFilter === tab.id ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* RENEW / UPGRADE PLAN BUTTON (PLACED IN GREEN BOX LOCATION) */}
+            <button
+              type="button"
+              onClick={() => setIsUpgradeModalOpen(true)}
+              style={{
+                background: 'var(--primary-light, #fff7ed)',
+                border: '1.5px solid var(--primary, #ff5a1f)',
+                color: 'var(--primary, #ff5a1f)',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(255, 90, 31, 0.12)'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--primary)';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--primary-light, #fff7ed)';
+                e.currentTarget.style.color = 'var(--primary, #ff5a1f)';
+              }}
+            >
+              ⚡ Renew / Upgrade Plan
+            </button>
           </div>
 
           <div style={{ position: 'relative', width: '320px', minWidth: '240px' }}>
@@ -1516,7 +1549,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             }}
                           >
                             <ReceiptIcon size={14} />
-                            <span>View Receipt</span>
+                            <span>Receipt</span>
                           </button>
                         </td>
                       </tr>

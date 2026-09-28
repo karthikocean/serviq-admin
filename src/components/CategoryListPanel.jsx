@@ -3,9 +3,11 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
+import UploadApi from '../api/Upload.js';
 import { useAppState } from '../config/AppContext';
 import SearchableSelect from './SearchableSelect.jsx';
 import { isBranchMatch } from '../helper/BranchHelper.js';
+import { cleanRelativeImagePath, getImageUrl } from '../helper/ImageHelper.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -28,8 +30,6 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
     <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
   </svg>
 );
-
-
 
 export default function CategoryListPanel({
   categories = [],
@@ -124,10 +124,6 @@ export default function CategoryListPanel({
     }
   }, [totalPages, page]);
 
-  React.useEffect(() => {
-    setPage(0);
-  }, [selectedBranchId]);
-
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
@@ -169,16 +165,23 @@ export default function CategoryListPanel({
   const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+
+  // Form states as requested by Category specs: Category Name*, Category Image*, Description (Optional), Display Order*, Status*
   const [formName, setFormName] = useState('');
+  const [formImage, setFormImage] = useState('');
   const [formDesc, setFormDesc] = useState('');
+  const [formDisplayOrder, setFormDisplayOrder] = useState(1);
   const [formStatus, setFormStatus] = useState('AVAILABLE');
   const [formBranchId, setFormBranchId] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
   const handleOpenAdd = () => {
     setEditingItem(null);
     setFormName('');
+    setFormImage('');
     setFormDesc('');
+    setFormDisplayOrder(allCategories.length + 1);
     setFormStatus('AVAILABLE');
     const defaultBranch = (selectedBranchId && selectedBranchId !== 'ALL')
       ? selectedBranchId
@@ -191,7 +194,9 @@ export default function CategoryListPanel({
   const handleOpenEdit = (item) => {
     setEditingItem(item);
     setFormName(item.name || '');
+    setFormImage(item.image || '');
     setFormDesc(item.description || '');
+    setFormDisplayOrder(item.displayOrder || item.order || 1);
     setFormStatus(item.status || 'AVAILABLE');
     const itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
     setFormBranchId(itemBranch || '');
@@ -210,6 +215,15 @@ export default function CategoryListPanel({
       errors.name = 'Category Name must be at least 2 characters.';
     }
 
+    if (!formImage) {
+      errors.image = 'Category Image is required.';
+    }
+
+    const orderNum = parseInt(formDisplayOrder);
+    if (!formDisplayOrder || isNaN(orderNum) || orderNum < 1) {
+      errors.displayOrder = 'Please enter a valid Display Order (at least 1).';
+    }
+
     if (isRestaurantOwner && branches.length > 0 && !formBranchId) {
       errors.branchId = 'Branch selection is required.';
     }
@@ -223,7 +237,10 @@ export default function CategoryListPanel({
     const finalBranch = formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
     const payload = {
       name: formName.trim(),
+      image: cleanRelativeImagePath(formImage),
       description: formDesc.trim(),
+      displayOrder: orderNum,
+      order: orderNum,
       status: formStatus || 'AVAILABLE'
     };
     if (finalBranch && finalBranch !== 'ALL') {
@@ -336,49 +353,152 @@ export default function CategoryListPanel({
 
         <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
           <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Category Image Uploader */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Category Name <span style={{ color: '#ef4444' }}>*</span>
+                Category Image <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                value={formName}
-                onChange={e => {
-                  const val = e.target.value;
-                  const cleaned = val.replace(/[0-9]/g, '');
-                  setFormName(cleaned);
-                  if (val !== cleaned) {
-                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
-                  } else if (formErrors.name) {
-                    setFormErrors({ ...formErrors, name: '' });
-                  }
-                }}
-                onKeyDown={e => {
-                  if (/[0-9]/.test(e.key)) {
-                    e.preventDefault();
-                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
-                  }
-                }}
-                placeholder="e.g. Starters, Main Course, Beverages..."
+              <div
+                onClick={() => document.getElementById('category-image-input').click()}
                 style={{
                   width: '100%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  color: '#0f172a',
-                  outline: 'none',
-                  boxSizing: 'border-box'
+                  height: '140px',
+                  border: formErrors.image ? '1.5px solid #ef4444' : '2px dashed #cbd5e1',
+                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  transition: 'all 0.2s'
                 }}
-              />
-              {formErrors.name && (
+                onMouseEnter={e => { if (!formErrors.image) { e.currentTarget.style.borderColor = '#ff5a1f'; e.currentTarget.style.background = '#fff7ed'; } }}
+                onMouseLeave={e => { if (!formErrors.image) { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; } }}
+              >
+                <input
+                  id="category-image-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      setIsUploadingImage(true);
+                      const res = await UploadApi.uploadImage(file, "category", "image");
+                      setIsUploadingImage(false);
+                      if (res?.status) {
+                        const finalPath = res.path || res.data?.path || cleanRelativeImagePath(res.url);
+                        if (finalPath) {
+                          setFormImage(finalPath);
+                          if (formErrors.image) setFormErrors({ ...formErrors, image: '' });
+                        }
+                      }
+                    }
+                  }}
+                  style={{ display: 'none' }}
+                />
+                {isUploadingImage ? (
+                  <div style={{ fontWeight: 600, color: '#ff5a1f', fontSize: '13px' }}>Uploading...</div>
+                ) : formImage ? (
+                  <>
+                    <img src={getImageUrl(formImage)} alt="Category" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', padding: '4px', textAlign: 'center', color: '#fff', fontSize: '11px', fontWeight: 600 }}>
+                      Click to Change Category Image
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Upload Category Image</div>
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>PNG, JPG or WEBP accepted</div>
+                  </div>
+                )}
+              </div>
+              {formErrors.image && (
                 <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.name}
+                  {formErrors.image}
                 </span>
               )}
             </div>
 
-            {/* Branch Assignment Field */}
+            {/* Category Name & Display Order */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                  Category Name <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const cleaned = val.replace(/[0-9]/g, '');
+                    setFormName(cleaned);
+                    if (val !== cleaned) {
+                      setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                    } else if (formErrors.name) {
+                      setFormErrors({ ...formErrors, name: '' });
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if (/[0-9]/.test(e.key)) {
+                      e.preventDefault();
+                      setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                    }
+                  }}
+                  placeholder="e.g. Starters, Main Course, Beverages..."
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.name ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    color: '#0f172a',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.name && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.name}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
+                  Display Order <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formDisplayOrder}
+                  onChange={e => {
+                    setFormDisplayOrder(e.target.value);
+                    if (formErrors.displayOrder) setFormErrors({ ...formErrors, displayOrder: '' });
+                  }}
+                  placeholder="1"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: formErrors.displayOrder ? '1.5px solid #ef4444' : '1px solid #e2e8f0',
+                    fontSize: '14px',
+                    color: '#0f172a',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                {formErrors.displayOrder && (
+                  <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {formErrors.displayOrder}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Branch Assignment */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
                 Branch Assignment {isRestaurantOwner && branches.length > 0 && <span style={{ color: '#ef4444' }}>*</span>}
@@ -431,12 +551,13 @@ export default function CategoryListPanel({
               })()}
             </div>
 
+            {/* Description (Optional) */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Description
+                Description (Optional)
               </label>
               <textarea
-                rows="4"
+                rows="3"
                 value={formDesc}
                 onChange={e => setFormDesc(e.target.value)}
                 placeholder="e.g. Appetizers and quick bites"
@@ -454,16 +575,17 @@ export default function CategoryListPanel({
               />
             </div>
 
+            {/* Status * */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Status
+                Status <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <SearchableSelect
                 value={formStatus}
                 onChange={e => setFormStatus(e.target.value)}
                 options={[
-                  { value: 'AVAILABLE', label: 'Available' },
-                  { value: 'UNAVAILABLE', label: 'Unavailable' }
+                  { value: 'AVAILABLE', label: 'Available (Active)' },
+                  { value: 'UNAVAILABLE', label: 'Unavailable (Inactive)' }
                 ]}
                 placeholder="Select Status..."
               />
@@ -506,7 +628,7 @@ export default function CategoryListPanel({
 
   return (
     <section className="panel-view active" style={{ padding: '0 24px 24px 24px' }}>
-      {/* Top Header Row matching Reference Image */}
+      {/* Top Header Row */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -520,7 +642,6 @@ export default function CategoryListPanel({
           <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
             Menu Categories
           </h2>
-
         </div>
 
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -586,22 +707,28 @@ export default function CategoryListPanel({
         overflow: 'hidden'
       }}>
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
+                  IMAGE
+                </th>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   CATEGORY NAME
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>
+                  DISPLAY ORDER
+                </th>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   DESCRIPTION
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '110px' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -609,13 +736,13 @@ export default function CategoryListPanel({
             <tbody>
               {paginatedCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+                  <td colSpan={7} style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
                     No categories found. Click <strong>Add Category</strong> to create one.
                   </td>
                 </tr>
               ) : (
                 paginatedCategories.map((item, index) => {
-                  const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE';
+                  const isAvailable = item.status?.toUpperCase() !== 'UNAVAILABLE' && item.status?.toUpperCase() !== 'INACTIVE';
                   return (
                     <tr
                       key={item._id || index}
@@ -627,22 +754,44 @@ export default function CategoryListPanel({
                       onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
                     >
                     {/* S.NO */}
-                    <td style={{ padding: '16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', width: '5%' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
                       {page * limit + index + 1}
                     </td>
 
+                    {/* IMAGE */}
+                    <td style={{ padding: '14px 16px' }}>
+                      {item.image ? (
+                        <img
+                          src={getImageUrl(item.image)}
+                          alt={item.name}
+                          style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover', display: 'block', border: '1px solid #e2e8f0' }}
+                        />
+                      ) : (
+                        <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#64748b', fontWeight: 700 }}>
+                          No Image
+                        </div>
+                      )}
+                    </td>
+
                     {/* CATEGORY NAME */}
-                    <td style={{ padding: '16px 20px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', fontSize: '14px', fontWeight: '700', color: '#0f172a' }}>
                       {item.name}
                     </td>
 
+                    {/* DISPLAY ORDER */}
+                    <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: '700', color: '#0f172a', textAlign: 'center' }}>
+                      <span style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                        #{item.displayOrder || item.order || (index + 1)}
+                      </span>
+                    </td>
+
                     {/* DESCRIPTION */}
-                    <td style={{ padding: '16px 20px', fontSize: '14px', color: '#64748b', fontWeight: '400' }}>
+                    <td style={{ padding: '14px 16px', fontSize: '13px', color: '#64748b', fontWeight: '400' }}>
                       {item.description || 'No description'}
                     </td>
 
                     {/* STATUS */}
-                    <td style={{ padding: '16px 20px' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
                       <span style={{
                         display: 'inline-block',
                         padding: '4px 12px',
@@ -658,7 +807,7 @@ export default function CategoryListPanel({
                     </td>
 
                     {/* ACTIONS */}
-                    <td style={{ padding: '16px 20px', textAlign: 'right' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button
                           type="button"
@@ -800,87 +949,65 @@ export default function CategoryListPanel({
           title="Category Details"
           maxWidth="440px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <div>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Category Name</span>
-              <h3 style={{ margin: '2px 0 0 0', fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                {viewingCategory.name}
-              </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
+            {viewingCategory.image && (
+              <div style={{ width: '100%', height: '140px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                <img src={getImageUrl(viewingCategory.image)} alt={viewingCategory.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Category Name</span>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>{viewingCategory.name}</span>
             </div>
-
-            <div>
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Description</span>
-              <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
-                {viewingCategory.description || 'No description provided.'}
-              </p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Display Order</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>#{viewingCategory.displayOrder || viewingCategory.order || 1}</span>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>Status:</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
               <span style={{
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '11px',
-                fontWeight: '700',
+                padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800,
                 backgroundColor: viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? '#e6f4ea' : '#fef2f2',
                 color: viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? '#16a34a' : '#dc2626'
               }}>
                 {viewingCategory.status?.toUpperCase() !== 'UNAVAILABLE' ? 'AVAILABLE' : 'UNAVAILABLE'}
               </span>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setViewingCategory(null)}
-                style={{ padding: '8px 18px' }}
-              >
-                Close
-              </button>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Description</span>
+              <div style={{ fontSize: '13px', color: '#334155', background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                {viewingCategory.description || 'No description provided.'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setViewingCategory(null)} style={{ padding: '8px 20px' }}>Close</button>
             </div>
           </div>
         </Modal>
       )}
 
-      {/* Delete Category Confirmation Modal Popup */}
+      {/* Delete Category Modal */}
       {categoryToDelete && (
         <Modal
           isOpen={!!categoryToDelete}
-          onClose={() => !isDeleting && setCategoryToDelete(null)}
+          onClose={() => setCategoryToDelete(null)}
           title="Confirm Category Deletion"
-          maxWidth="440px"
+          maxWidth="400px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>?
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b' }}>
+              Are you sure you want to delete category <strong>"{categoryToDelete.name}"</strong>?
             </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setCategoryToDelete(null)}
-                disabled={isDeleting}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setCategoryToDelete(null)} disabled={isDeleting}>Cancel</button>
+              <button type="button" className="btn btn-black" onClick={handleConfirmDelete} disabled={isDeleting} style={{ background: '#dc2626', borderColor: '#dc2626', color: '#fff' }}>
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
         </Modal>
       )}
+
     </section>
   );
 }

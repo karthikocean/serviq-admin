@@ -230,7 +230,9 @@ export default function MenuManagement() {
       category: categories.length > 0 ? categories[0]._id : '',
       image: '',
       coverImage: '',
+      foodType: 'Veg',
       veg: true,
+      egg: false,
       available: true,
       bestseller: false,
       branchId: selectedBranchId || (activeRestaurant.branches?.length > 0 ? activeRestaurant.branches[0]._id : '')
@@ -240,17 +242,19 @@ export default function MenuManagement() {
   };
 
   const openEditMenuModal = (item) => {
-
+    const detectedType = item.foodType || (item.egg ? 'Egg' : (item.veg ? 'Veg' : 'Non-Veg'));
     setMenuForm({
       _id: item._id || item.id,
       name: item.name,
-      desc: item.desc || '',
+      desc: item.desc || item.description || '',
       price: item.price,
       gst: item.gst !== undefined ? item.gst : 5,
       category: item.category?._id || item.category || '',
       image: item.image || '',
       coverImage: item.coverImage || '',
-      veg: item.veg !== undefined ? item.veg : true,
+      foodType: detectedType,
+      veg: detectedType === 'Veg',
+      egg: detectedType === 'Egg',
       available: item.available !== undefined ? item.available : true,
       bestseller: item.bestseller !== undefined ? item.bestseller : false,
       branchId: item.branchId || selectedBranchId
@@ -276,6 +280,10 @@ export default function MenuManagement() {
 
   const validate = () => {
     const errors = {};
+    if (!menuForm.image) {
+      errors.image = 'Item Image is required.';
+    }
+
     if (!menuForm.name || !menuForm.name.trim()) {
       errors.name = 'Item Name is required.';
     }
@@ -287,6 +295,10 @@ export default function MenuManagement() {
 
     if (!menuForm.category) {
       errors.category = 'Please select a category.';
+    }
+
+    if (!menuForm.foodType) {
+      errors.foodType = 'Food Type selection is required.';
     }
 
     setFormErrors(errors);
@@ -305,8 +317,10 @@ export default function MenuManagement() {
       category: menuForm.category,
       image: cleanRelativeImagePath(menuForm.image),
       coverImage: cleanRelativeImagePath(menuForm.coverImage),
+      foodType: menuForm.foodType || 'Veg',
+      veg: menuForm.foodType === 'Veg',
+      egg: menuForm.foodType === 'Egg',
       available: menuForm.available,
-      veg: menuForm.veg,
       bestseller: menuForm.bestseller,
       branchId: menuForm.branchId
     };
@@ -450,13 +464,15 @@ export default function MenuManagement() {
 
                   {/* Left: Item Square Image */}
                   <div style={{ flexShrink: 0 }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Item Image</label>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                      Item Image <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
                     <div
                       onClick={() => document.getElementById('menu-item-image-file').click()}
                       style={{
                         width: '160px',
                         height: '160px',
-                        border: '2px dashed #cbd5e1',
+                        border: formErrors.image ? '1.5px solid #ef4444' : '2px dashed #cbd5e1',
                         borderRadius: '16px',
                         background: '#f8fafc',
                         cursor: 'pointer',
@@ -468,8 +484,8 @@ export default function MenuManagement() {
                         position: 'relative',
                         transition: 'all 0.2s',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#fff7ed'; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseEnter={e => { if (!formErrors.image) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#fff7ed'; } }}
+                      onMouseLeave={e => { if (!formErrors.image) { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#f8fafc'; } }}
                     >
                       <input
                         id="menu-item-image-file"
@@ -483,7 +499,10 @@ export default function MenuManagement() {
                             setIsUploadingImage(false);
                             if (res?.status) {
                               const finalPath = res.path || res.data?.path || cleanRelativeImagePath(res.url);
-                              if (finalPath) setMenuForm({ ...menuForm, image: finalPath });
+                              if (finalPath) {
+                                setMenuForm({ ...menuForm, image: finalPath });
+                                if (formErrors.image) setFormErrors({ ...formErrors, image: '' });
+                              }
                             }
                           }
                         }}
@@ -505,6 +524,11 @@ export default function MenuManagement() {
                         </div>
                       )}
                     </div>
+                    {formErrors.image && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.image}
+                      </span>
+                    )}
                   </div>
 
                   {/* Right: Name & Description */}
@@ -745,51 +769,88 @@ export default function MenuManagement() {
                 {/* Dietary Type, Availability, Bestseller */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px', marginTop: '16px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid var(--border)' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Food Dietary Type</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                      Food Type <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         type="button"
-                        onClick={() => setMenuForm({ ...menuForm, veg: true })}
+                        onClick={() => {
+                          setMenuForm({ ...menuForm, foodType: 'Veg', veg: true, egg: false });
+                          if (formErrors.foodType) setFormErrors({ ...formErrors, foodType: '' });
+                        }}
                         style={{
                           flex: 1,
-                          padding: '8px 10px',
+                          padding: '8px 6px',
                           borderRadius: '8px',
-                          border: menuForm.veg ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
-                          background: menuForm.veg ? '#dcfce7' : '#ffffff',
-                          color: menuForm.veg ? '#166534' : '#64748b',
-                          fontSize: '12px',
+                          border: menuForm.foodType === 'Veg' ? '1.5px solid #16a34a' : '1px solid #cbd5e1',
+                          background: menuForm.foodType === 'Veg' ? '#dcfce7' : '#ffffff',
+                          color: menuForm.foodType === 'Veg' ? '#166534' : '#64748b',
+                          fontSize: '11px',
                           fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '5px'
+                          gap: '4px'
                         }}
                       >
                         🟢 Veg
                       </button>
                       <button
                         type="button"
-                        onClick={() => setMenuForm({ ...menuForm, veg: false })}
+                        onClick={() => {
+                          setMenuForm({ ...menuForm, foodType: 'Non-Veg', veg: false, egg: false });
+                          if (formErrors.foodType) setFormErrors({ ...formErrors, foodType: '' });
+                        }}
                         style={{
                           flex: 1,
-                          padding: '8px 10px',
+                          padding: '8px 6px',
                           borderRadius: '8px',
-                          border: !menuForm.veg ? '1.5px solid #ea4335' : '1px solid #cbd5e1',
-                          background: !menuForm.veg ? '#fee2e2' : '#ffffff',
-                          color: !menuForm.veg ? '#991b1b' : '#64748b',
-                          fontSize: '12px',
+                          border: menuForm.foodType === 'Non-Veg' ? '1.5px solid #ea4335' : '1px solid #cbd5e1',
+                          background: menuForm.foodType === 'Non-Veg' ? '#fee2e2' : '#ffffff',
+                          color: menuForm.foodType === 'Non-Veg' ? '#991b1b' : '#64748b',
+                          fontSize: '11px',
                           fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '5px'
+                          gap: '4px'
                         }}
                       >
                         🔴 Non-Veg
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuForm({ ...menuForm, foodType: 'Egg', veg: false, egg: true });
+                          if (formErrors.foodType) setFormErrors({ ...formErrors, foodType: '' });
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 6px',
+                          borderRadius: '8px',
+                          border: menuForm.foodType === 'Egg' ? '1.5px solid #d97706' : '1px solid #cbd5e1',
+                          background: menuForm.foodType === 'Egg' ? '#fef3c7' : '#ffffff',
+                          color: menuForm.foodType === 'Egg' ? '#92400e' : '#64748b',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        🟡 Egg
+                      </button>
                     </div>
+                    {formErrors.foodType && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.foodType}
+                      </span>
+                    )}
                   </div>
 
                   <div>
