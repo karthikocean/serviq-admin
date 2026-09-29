@@ -233,3 +233,98 @@
   }
 }
 
+/* Professional Billing Tables Layout System */
+.billing-table-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  margin-top: 20px;
+}
+
+.billing-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.billing-table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.billing-table-responsive::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.billing-table-responsive::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.billing-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-family: inherit;
+}
+
+.billing-table thead tr {
+  background-color: #000000;
+  height: 48px;
+}
+
+.billing-table th {
+  padding: 12px 14px;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-bottom: 3px solid #ff5a1f;
+  box-sizing: border-box;
+}
+
+.billing-table tbody tr {
+  height: 52px;
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.billing-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.billing-table tbody tr:hover td.sticky-actions-cell {
+  background-color: #f8fafc !important;
+}
+
+.billing-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+  box-sizing: border-box;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+
+.sticky-actions-header {
+  position: sticky;
+  right: 0;
+  z-index: 10;
+  background-color: #000000;
+  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.15);
+}
+
+.sticky-actions-cell {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  background-color: #ffffff;
+  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.04);
+}
+

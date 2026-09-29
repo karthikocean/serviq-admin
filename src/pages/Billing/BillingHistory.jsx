@@ -14,6 +14,9 @@ export default function BillingHistory() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('All');
+  const [selectedTable, setSelectedTable] = useState('All');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [selectedStaff, setSelectedStaff] = useState('All');
 
   // Pagination States
   const [page, setPage] = useState(0);
@@ -34,17 +37,20 @@ export default function BillingHistory() {
   // Reset page to 0 if filters change
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, dateRange, customStartDate, customEndDate, selectedBranchId, selectedPayment]);
+  }, [searchTerm, dateRange, customStartDate, customEndDate, selectedBranchId, selectedPayment, selectedTable, customerFilter, selectedStaff]);
 
   // Safe mapping function for any invoice / order / bill record
   const mapItemToInvoice = (item, index = 0) => {
     const rawId = item.invoiceId || item.invoiceNo || item.invoiceNumber || item.billNumber || item.billNo || item._id || item.id || `INV-${String(index + 1).padStart(4, '0')}`;
     const displayInvoiceId = String(rawId).startsWith('INV-') ? String(rawId) : (String(rawId).length === 24 ? `INV-${String(rawId).slice(-6).toUpperCase()}` : `INV-${rawId}`);
 
+    const rawBillNo = item.billNo || item.billNumber || item.invoiceNo || displayInvoiceId;
+
     const rawOrderId = item.orderRefId || item.orderNumber || item.orderId || (item.order?._id || item.order?.orderId || item.order?.orderNumber) || item._id || item.id || 'N/A';
     const displayOrderId = String(rawOrderId).startsWith('#ORD-') ? String(rawOrderId) : (String(rawOrderId).startsWith('ORD-') ? `#${rawOrderId}` : (String(rawOrderId).length === 24 ? `#ORD-${String(rawOrderId).slice(-6).toUpperCase()}` : `#ORD-${rawOrderId}`));
 
-    const tableNum = item.tableNumber || item.tableNo || item.table || (typeof item.tableId === 'object' ? (item.tableId?.tableNumber || item.tableId?.tableNo) : item.tableId) || '01';
+    const rawTableNum = item.tableNumber || item.tableNo || item.table || (typeof item.tableId === 'object' ? (item.tableId?.tableNumber || item.tableId?.tableNo) : item.tableId) || '01';
+    const cleanTable = String(rawTableNum).replace(/^Table\s*/i, '').trim();
 
     const rawDate = item.createdAt || item.date || item.createdDate || item.timestamp || item.updatedAt || new Date().toISOString();
     const dateStr = formatDateDMY(rawDate);
@@ -55,9 +61,13 @@ export default function BillingHistory() {
     const rawMethod = String(item.paymentMethod || item.paymentMode || item.method || item.mode || item.payment?.method || item.payment?.mode || item.paymentType || 'UPI');
     const paymentMethod = rawMethod.toLowerCase() === 'upi' ? 'UPI' : (rawMethod.toLowerCase() === 'cash' ? 'Cash' : (rawMethod.toLowerCase() === 'card' ? 'Card' : (rawMethod.charAt(0).toUpperCase() + rawMethod.slice(1))));
 
-    const staffName = item.staffName || item.waiterName || item.waiter || item.staff || (typeof item.waiterId === 'object' ? (item.waiterId?.name || item.waiterId?.staffName) : item.waiterId) || item.server || 'Admin';
+    const staffName = item.staffName || item.waiterName || item.waiter || item.staff || (typeof item.waiterId === 'object' ? (item.waiterId?.name || item.waiterId?.staffName) : item.waiterId) || item.server || item.billedBy || 'Admin';
+
+    const customerName = item.customerName || item.customer?.name || item.clientName || item.guestName || (typeof item.customer === 'string' ? item.customer : '') || (item.order?.customerName || item.order?.customer?.name) || '';
+    const customerPhone = item.customerPhone || item.customerMobile || item.phone || item.customer?.phone || item.customer?.mobile || (item.order?.customerPhone || item.order?.phone) || '';
 
     const status = item.paymentStatus || item.billingStatus || item.status || 'Paid';
+    const orderType = item.orderType || item.type || item.order?.orderType || 'Dine-In';
 
     const itemsList = Array.isArray(item.items) ? item.items : (Array.isArray(item.orderItems) ? item.orderItems : []);
     const subtotal = Number(item.subtotal ?? item.subTotal ?? item.itemTotal ?? totalAmount);
@@ -67,8 +77,10 @@ export default function BillingHistory() {
 
     return {
       id: displayInvoiceId,
+      billNo: rawBillNo,
       orderId: displayOrderId,
-      table: String(tableNum).replace('Table ', '').trim(),
+      orderType,
+      table: cleanTable,
       branchId: item.branchId || item.branch || (typeof item.branchId === 'object' ? item.branchId?._id : selectedBranchId) || 'main',
       date: dateStr,
       time: timeStr,
@@ -76,6 +88,8 @@ export default function BillingHistory() {
       amount: totalAmount,
       paymentMethod,
       staff: staffName,
+      customerName,
+      customerPhone,
       status: (String(status).toLowerCase() === 'paid' || String(status).toLowerCase() === 'completed') ? 'Paid' : 'Unpaid',
       items: itemsList,
       subtotal,
@@ -166,7 +180,50 @@ export default function BillingHistory() {
     setIsLoading(false);
   };
 
-  // Filter raw history by search, date range, branch, and payment method
+  // Derive unique Table options
+  const tableOptions = useMemo(() => {
+    const set = new Set();
+    rawHistory.forEach(it => {
+      if (it.table) set.add(String(it.table).replace(/^Table\s*/i, '').trim());
+    });
+    if (Array.isArray(activeRestaurant?.tables)) {
+      activeRestaurant.tables.forEach(t => {
+        const tNum = t.tableNumber || t.tableNo || t.name;
+        if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
+      });
+    }
+    const sorted = Array.from(set).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+    return [
+      { value: 'All', label: 'All Tables' },
+      ...sorted.map(t => ({ value: t, label: `Table ${t}` }))
+    ];
+  }, [rawHistory, activeRestaurant]);
+
+  // Derive unique Cashier / Staff options
+  const staffOptions = useMemo(() => {
+    const set = new Set();
+    rawHistory.forEach(it => {
+      if (it.staff) set.add(String(it.staff).trim());
+    });
+    if (Array.isArray(activeRestaurant?.staff)) {
+      activeRestaurant.staff.forEach(s => {
+        const sName = s.name || s.staffName || s.fullName;
+        if (sName) set.add(String(sName).trim());
+      });
+    }
+    const sorted = Array.from(set).filter(Boolean).sort();
+    return [
+      { value: 'All', label: 'All Cashier / Staff' },
+      ...sorted.map(s => ({ value: s, label: s }))
+    ];
+  }, [rawHistory, activeRestaurant]);
+
+  // Filter raw history by search, date range, branch, payment method, dining table, customer, and cashier/staff
   const filteredHistory = useMemo(() => {
     return rawHistory.filter(item => {
       // 1. Branch Filter
@@ -183,20 +240,48 @@ export default function BillingHistory() {
         }
       }
 
-      // 3. Search Filter
-      if (searchTerm && searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const matchesId = (item.id || '').toLowerCase().includes(q);
-        const matchesOrder = (item.orderId || '').toLowerCase().includes(q);
-        const matchesTable = `table ${item.table}`.toLowerCase().includes(q) || (item.table || '').toLowerCase().includes(q);
-        const matchesStaff = (item.staff || '').toLowerCase().includes(q);
-        const matchesAmount = String(item.amount || '').includes(q);
-        if (!matchesId && !matchesOrder && !matchesTable && !matchesStaff && !matchesAmount) {
+      // 3. Dining Table Filter
+      if (selectedTable && selectedTable !== 'All') {
+        const itemTable = String(item.table || '').replace(/^Table\s*/i, '').trim().toLowerCase();
+        const targetTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
+        if (itemTable !== targetTable) {
           return false;
         }
       }
 
-      // 4. Date Range Filter
+      // 4. Cashier / Staff Filter
+      if (selectedStaff && selectedStaff !== 'All') {
+        if (String(item.staff || '').trim().toLowerCase() !== String(selectedStaff).trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 5. Customer Filter
+      if (customerFilter && customerFilter.trim()) {
+        const cq = customerFilter.toLowerCase().trim();
+        const matchesName = (item.customerName || '').toLowerCase().includes(cq);
+        const matchesPhone = (item.customerPhone || '').toLowerCase().includes(cq);
+        if (!matchesName && !matchesPhone) {
+          return false;
+        }
+      }
+
+      // 6. Search Filter
+      if (searchTerm && searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const matchesId = (item.id || '').toLowerCase().includes(q);
+        const matchesBill = (item.billNo || '').toLowerCase().includes(q);
+        const matchesOrder = (item.orderId || '').toLowerCase().includes(q);
+        const matchesTable = `table ${item.table}`.toLowerCase().includes(q) || (item.table || '').toLowerCase().includes(q);
+        const matchesStaff = (item.staff || '').toLowerCase().includes(q);
+        const matchesCust = (item.customerName || '').toLowerCase().includes(q) || (item.customerPhone || '').toLowerCase().includes(q);
+        const matchesAmount = String(item.amount || '').includes(q);
+        if (!matchesId && !matchesBill && !matchesOrder && !matchesTable && !matchesStaff && !matchesCust && !matchesAmount) {
+          return false;
+        }
+      }
+
+      // 7. Date Range Filter
       if (dateRange && dateRange !== 'All') {
         const itemDate = new Date(item.rawDate);
         const now = new Date();
@@ -230,7 +315,7 @@ export default function BillingHistory() {
 
       return true;
     });
-  }, [rawHistory, selectedBranchId, selectedPayment, searchTerm, dateRange, customStartDate, customEndDate]);
+  }, [rawHistory, selectedBranchId, selectedPayment, selectedTable, selectedStaff, customerFilter, searchTerm, dateRange, customStartDate, customEndDate]);
 
   // Compute pagination and current page slice
   const paginatedHistory = useMemo(() => {
@@ -272,11 +357,20 @@ export default function BillingHistory() {
       selectedBranchId={selectedBranchId}
       selectedPayment={selectedPayment}
       setSelectedPayment={setSelectedPayment}
+      selectedTable={selectedTable}
+      setSelectedTable={setSelectedTable}
+      tableOptions={tableOptions}
+      customerFilter={customerFilter}
+      setCustomerFilter={setCustomerFilter}
+      selectedStaff={selectedStaff}
+      setSelectedStaff={setSelectedStaff}
+      staffOptions={staffOptions}
       page={page}
       setPage={setPage}
       limit={limit}
       totalItems={filteredHistory.length}
       summary={summary}
+      activeRestaurant={activeRestaurant}
     />
   );
 }

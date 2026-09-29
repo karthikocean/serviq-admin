@@ -47,7 +47,11 @@ export default function Billing() {
               tableId: t.tableId || t._id || t.id,
               order_id: mongoOrderId,
               rawOrderId: mongoOrderId,
-              orderIds: allOrderIds
+              orderIds: allOrderIds,
+              customerName: t.customerName || t.customer?.name || t.clientName || '',
+              customerPhone: t.customerPhone || t.customerMobile || t.phone || '',
+              staff: t.staff || t.waiterName || t.waiter || t.server || t.billedBy || 'Admin',
+              orderType: t.orderType || t.type || 'Dine-In'
             };
           });
         }
@@ -100,7 +104,12 @@ export default function Billing() {
               total: tot,
               status: isPaid ? 'Paid' : 'Unpaid',
               items: items,
-              orderIds: [o._id || o.id].filter(Boolean)
+              orderIds: [o._id || o.id].filter(Boolean),
+              customerName: o.customerName || o.customer?.name || o.clientName || '',
+              customerPhone: o.customerPhone || o.customerMobile || o.phone || '',
+              staff: o.waiterName || o.waiter?.name || o.staff || o.server || o.cashier || 'Admin',
+              orderType: o.orderType || o.type || 'Dine-In',
+              createdAt: o.createdAt || o.date
             });
           } else {
             const existing = tableMap.get(tKey);
@@ -109,6 +118,10 @@ export default function Billing() {
             existing.items.push(...items);
             if (o._id || o.id) existing.orderIds.push(o._id || o.id);
             if (!isPaid) existing.status = 'Unpaid';
+            if (!existing.customerName && (o.customerName || o.customer?.name)) {
+              existing.customerName = o.customerName || o.customer?.name;
+              existing.customerPhone = o.customerPhone || o.customerMobile || o.phone || '';
+            }
           }
         });
 
