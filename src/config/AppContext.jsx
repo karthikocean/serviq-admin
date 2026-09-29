@@ -2596,6 +2596,8 @@ export const AppProvider = ({ children }) => {
 
       const newPurchase = {
         id: nextPurId,
+        purchaseNo: purchaseData.purchaseNo || `PU-${String((rest.inventoryPurchases?.length || 0) + 1).padStart(3, '0')}`,
+        purchaseType: purchaseData.purchaseType || 'Material Purchase',
         itemId: purchaseData.itemId || (finalInventory[0]?.id),
         itemName: targetItemName || purchaseData.itemName,
         category: purchaseData.category || 'General',

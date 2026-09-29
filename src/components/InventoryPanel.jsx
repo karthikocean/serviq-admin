@@ -1,295 +1,42 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
-import InventoryApi from '../api/Inventory';
-import InventoryCategoryApi from '../api/InventoryCategory';
-import BranchApi from '../api/Branch';
-import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
-import { formatDateTimeDMY } from '../helper/DateHelper.js';
 
-// SVG Icons
-const BoxIcon = ({ size = 16, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-    <line x1="12" y1="22.08" x2="12" y2="12"></line>
-  </svg>
-);
+// Modular Inventory Sub-Components
+import CompanyInventoryItems from './inventory/CompanyInventoryItems';
+import CompanyCentralStock from './inventory/CompanyCentralStock';
+import CompanyPurchases from './inventory/CompanyPurchases';
+import CompanyBranchRequests from './inventory/CompanyBranchRequests';
+import CompanyTransactions from './inventory/CompanyTransactions';
+import CompanyVendors from './inventory/CompanyVendors';
 
-const PlusIcon = ({ size = 15, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="5" x2="12" y2="19"></line>
-    <line x1="5" y1="12" x2="19" y2="12"></line>
-  </svg>
-);
+import BranchMyStock from './inventory/BranchMyStock';
+import BranchStockRequest from './inventory/BranchStockRequest';
+import BranchTransfer from './inventory/BranchTransfer';
+import BranchDirectPurchase from './inventory/BranchDirectPurchase';
+import BranchStockReceipt from './inventory/BranchStockReceipt';
+import BranchTransactions from './inventory/BranchTransactions';
 
-const SearchIcon = ({ size = 15, color = '#64748b' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="11" cy="11" r="8"></circle>
-    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-  </svg>
-);
+import { BoxIcon } from './inventory/InventoryCommon';
 
-const PencilIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path>
-    <path d="m15 5 4 4"></path>
-  </svg>
-);
-
-const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 6h18"></path>
-    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-  </svg>
-);
-
-const EyeIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-    <circle cx="12" cy="12" r="3" />
-  </svg>
-);
-
-const CheckCircleIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-    <polyline points="22 4 12 14.01 9 11.01"></polyline>
-  </svg>
-);
-
-const XCircleIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"></circle>
-    <line x1="15" y1="9" x2="9" y2="15"></line>
-    <line x1="9" y1="9" x2="15" y2="15"></line>
-  </svg>
-);
-
-const TruckIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="3" width="15" height="13"></rect>
-    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-    <circle cx="5.5" cy="18.5" r="2.5"></circle>
-    <circle cx="18.5" cy="18.5" r="2.5"></circle>
-  </svg>
-);
-
-const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-    <polyline points="7 10 12 15 17 10"></polyline>
-    <line x1="12" y1="15" x2="12" y2="3"></line>
-  </svg>
-);
-
-const BuildingIcon = ({ size = 16, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-    <path d="M9 22v-4h6v4"></path>
-    <line x1="8" y1="6" x2="10" y2="6"></line>
-    <line x1="14" y1="6" x2="16" y2="6"></line>
-  </svg>
-);
-
-const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
-  </svg>
-);
-
-// Uniform filter field styling for all filters across inventory
-const filterInputStyle = {
-  width: '100%',
-  height: '38px',
-  padding: '0 12px',
-  borderRadius: '8px',
-  border: '1px solid #cbd5e1',
-  fontSize: '12.5px',
-  background: '#ffffff',
-  outline: 'none',
-  boxSizing: 'border-box',
-  color: '#0f172a'
-};
-
-// Reusable clean pagination component for inventory lists
-const PaginationBar = ({ currentPage, totalItems, pageSize = 10, onPageChange }) => {
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const startItem = totalItems === 0 ? 0 : currentPage * pageSize + 1;
-  const endItem = Math.min((currentPage + 1) * pageSize, totalItems);
-
-  if (totalItems === 0) return null;
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '8px 14px',
-      borderTop: '1px solid #e2e8f0',
-      background: '#f8fafc',
-      fontSize: '12px',
-      color: '#64748b',
-      flexWrap: 'wrap',
-      gap: '8px'
-    }}>
-      <div>
-        Showing <strong style={{ color: '#0f172a' }}>{startItem}</strong> to <strong style={{ color: '#0f172a' }}>{endItem}</strong> of <strong style={{ color: '#0f172a' }}>{totalItems}</strong> entries
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        <button
-          type="button"
-          disabled={currentPage === 0}
-          onClick={() => onPageChange(currentPage - 1)}
-          style={{
-            padding: '4px 10px',
-            borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            background: currentPage === 0 ? '#f1f5f9' : '#ffffff',
-            color: currentPage === 0 ? '#94a3b8' : '#0f172a',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            cursor: currentPage === 0 ? 'not-allowed' : 'pointer'
-          }}
-        >
-          Previous
-        </button>
-        {Array.from({ length: totalPages }, (_, i) => i)
-          .filter(pIndex => {
-            if (totalPages <= 7) return true;
-            if (pIndex === 0 || pIndex === totalPages - 1) return true;
-            return Math.abs(pIndex - currentPage) <= 1;
-          })
-          .map((pIndex, idx, arr) => {
-            const prev = arr[idx - 1];
-            const showEllipsis = prev !== undefined && pIndex - prev > 1;
-            return (
-              <React.Fragment key={pIndex}>
-                {showEllipsis && <span style={{ padding: '0 4px', color: '#94a3b8' }}>...</span>}
-                <button
-                  type="button"
-                  onClick={() => onPageChange(pIndex)}
-                  style={{
-                    minWidth: '26px',
-                    height: '26px',
-                    borderRadius: '6px',
-                    border: currentPage === pIndex ? '1px solid #ff5a1f' : '1px solid #cbd5e1',
-                    background: currentPage === pIndex ? '#ff5a1f' : '#ffffff',
-                    color: currentPage === pIndex ? '#ffffff' : '#0f172a',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 4px'
-                  }}
-                >
-                  {pIndex + 1}
-                </button>
-              </React.Fragment>
-            );
-          })}
-        <button
-          type="button"
-          disabled={currentPage >= totalPages - 1}
-          onClick={() => onPageChange(currentPage + 1)}
-          style={{
-            padding: '4px 10px',
-            borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            background: currentPage >= totalPages - 1 ? '#f1f5f9' : '#ffffff',
-            color: currentPage >= totalPages - 1 ? '#94a3b8' : '#0f172a',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
-          }}
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Initial Mock Datasets
-const INITIAL_INVENTORY_ITEMS = [
-  { id: 'INV-001', name: 'Basmati Rice', category: 'Grains', unit: 'kg', minStock: 50, centralStock: 250, branchStock: 35, status: 'Active' },
-  { id: 'INV-002', name: 'Refined Oil', category: 'Oils', unit: 'Ltr', minStock: 30, centralStock: 120, branchStock: 15, status: 'Active' },
-  { id: 'INV-003', name: 'Garam Masala', category: 'Spices', unit: 'kg', minStock: 10, centralStock: 45, branchStock: 8, status: 'Active' },
-  { id: 'INV-004', name: 'Chicken Breast', category: 'Meat', unit: 'kg', minStock: 25, centralStock: 0, branchStock: 0, status: 'Active' },
-  { id: 'INV-005', name: 'Fresh Milk', category: 'Dairy', unit: 'Ltr', minStock: 40, centralStock: 80, branchStock: 42, status: 'Active' },
-  { id: 'INV-006', name: 'Paneer (Cottage Cheese)', category: 'Dairy', unit: 'kg', minStock: 15, centralStock: 30, branchStock: 5, status: 'Active' },
-];
-
-const INITIAL_PURCHASES = [
-  { id: 'PUR-101', purchaseNo: 'PO-2026-001', supplier: 'Metro Cash & Carry', date: '2026-09-26', invoiceNo: 'INV-8891', item: 'Basmati Rice', quantity: 200, unit: 'kg', rate: 90, total: 18000, remarks: 'Bulk Monthly Purchase', status: 'Completed' },
-  { id: 'PUR-102', purchaseNo: 'PO-2026-002', supplier: 'Fortune Oils Ltd', date: '2026-09-27', invoiceNo: 'INV-4421', item: 'Refined Oil', quantity: 100, unit: 'Ltr', rate: 140, total: 14000, remarks: 'Cooking Oil Stock', status: 'Completed' },
-];
-
-const INITIAL_BRANCH_REQUESTS = [
-  { id: 'REQ-501', requestNo: 'BR-REQ-001', branch: 'Serviq Chennai Branch', date: '2026-09-28', item: 'Basmati Rice', reqQty: 50, appQty: 50, distQty: 0, unit: 'kg', status: 'Pending', remarks: 'Weekend Demand Spike' },
-  { id: 'REQ-502', requestNo: 'BR-REQ-002', branch: 'Serviq Madurai Branch', date: '2026-09-27', item: 'Refined Oil', reqQty: 25, appQty: 25, distQty: 25, unit: 'Ltr', status: 'Completed', remarks: 'Regular Weekly Restock' },
-];
-
-const INITIAL_DISTRIBUTIONS = [
-  { id: 'DIST-201', distNo: 'DIST-2026-001', requestNo: 'BR-REQ-002', branch: 'Serviq Madurai Branch', item: 'Refined Oil', distQty: 25, date: '2026-09-27', status: 'Dispatched', remarks: 'Sent via Express Logistics' }
-];
-
-const INITIAL_TRANSFERS = [
-  { id: 'TRF-301', transferNo: 'TRF-2026-001', fromBranch: 'Serviq Chennai Branch', toBranch: 'Serviq Madurai Branch', date: '2026-09-28', item: 'Fresh Milk', quantity: 10, unit: 'Ltr', status: 'Pending', remarks: 'Inter-branch emergency transfer' }
-];
-
-const INITIAL_RECEIPTS = [
-  { id: 'REC-401', receiptNo: 'REC-2026-001', refNo: 'DIST-2026-001', source: 'Central Warehouse', item: 'Refined Oil', sentQty: 25, recQty: 25, date: '2026-09-27', status: 'Received', remarks: 'Verified & Verified Goods' }
-];
-
-const INITIAL_TRANSACTIONS = [
-  { id: 'TXN-901', txnNo: 'TXN-2026-001', date: '2026-09-26 10:30 AM', type: 'Purchase', item: 'Basmati Rice', quantity: 200, unit: 'kg', source: 'Supplier: Metro', destination: 'Central Stock', refNo: 'PO-2026-001', status: 'Completed' },
-  { id: 'TXN-902', txnNo: 'TXN-2026-002', date: '2026-09-27 02:15 PM', type: 'Distribution', item: 'Refined Oil', quantity: 25, unit: 'Ltr', source: 'Central Warehouse', destination: 'Serviq Madurai Branch', refNo: 'DIST-2026-001', status: 'Dispatched' }
-];
-
-// Metric Computation helper (top-level pure function)
-const getStockStatus = (cur, min) => {
-  if (cur <= 0) return { label: 'Out of Stock', bg: '#fef2f2', color: '#dc2626' };
-  if (cur <= min) return { label: 'Low Stock', bg: '#fef3c7', color: '#d97706' };
-  return { label: 'In Stock', bg: '#e6f4ea', color: '#16a34a' };
-};
+// Initial Datasets (Empty - Fetched dynamically from database API)
+const INITIAL_INVENTORY_ITEMS = [];
+const INITIAL_PURCHASES = [];
+const INITIAL_BRANCH_REQUESTS = [];
+const INITIAL_DISTRIBUTIONS = [];
+const INITIAL_TRANSFERS = [];
+const INITIAL_RECEIPTS = [];
+const INITIAL_TRANSACTIONS = [];
 
 export default function InventoryPanel() {
-  const { currentUser, activeRestaurant, selectedBranchId } = useAppState();
-
-  // Scope State: ONLY 'COMPANY' selected in header gets Company HQ View.
-  // All other selections (Spice Route Restaurant, individual outlets) get Branch Login View.
-  const isCompanySelected = selectedBranchId === 'COMPANY' || selectedBranchId === 'Company';
-  const scope = isCompanySelected ? 'COMPANY' : 'BRANCH';
-
+  const { selectedBranchId } = useAppState();
   const location = useLocation();
 
-  // Sub-Module Active Tab State
-  // Company tabs: 'items' | 'central-stock' | 'purchases' | 'branch-requests' | 'distribution' | 'transactions'
-  // Branch tabs:  'my-stock' | 'stock-request' | 'branch-transfer' | 'direct-purchase' | 'stock-receipt' | 'transactions'
-  const [companyTab, setCompanyTab] = useState('items');
-  const [branchTab, setBranchTab] = useState('my-stock');
+  const isCompanySelected = !selectedBranchId || selectedBranchId === 'COMPANY' || selectedBranchId === 'Company' || selectedBranchId === 'ALL' || selectedBranchId === 'All';
+  const scope = isCompanySelected ? 'COMPANY' : 'BRANCH';
 
-  // Sync tab with URL search parameter (?tab=...)
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const tabParam = searchParams.get('tab');
-    if (tabParam) {
-      if (['items', 'central-stock', 'purchases', 'branch-requests', 'distribution', 'stock-distribution', 'transactions'].includes(tabParam)) {
-        setCompanyTab(tabParam === 'stock-distribution' ? 'distribution' : tabParam);
-      }
-      if (['my-stock', 'stock-request', 'branch-transfer', 'direct-purchase', 'stock-receipt', 'transactions'].includes(tabParam)) {
-        setBranchTab(tabParam);
-      }
-    }
-  }, [location.search]);
-
-  // Datasets State
+  // Shared Datasets
   const [items, setItems] = useState(INITIAL_INVENTORY_ITEMS);
   const [purchases, setPurchases] = useState(INITIAL_PURCHASES);
   const [branchRequests, setBranchRequests] = useState(INITIAL_BRANCH_REQUESTS);
@@ -298,372 +45,208 @@ export default function InventoryPanel() {
   const [receipts, setReceipts] = useState(INITIAL_RECEIPTS);
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
 
-  // Common Filter / Search States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [itemFilter, setItemFilter] = useState('All');
-  const [supplierFilter, setSupplierFilter] = useState('All');
-  const [branchFilter, setBranchFilter] = useState('All');
-  const [txnTypeFilter, setTxnTypeFilter] = useState('All');
-  
-  // Purchases Filters & Details View State
-  const [purchaseSupplierFilter, setPurchaseSupplierFilter] = useState('All');
-  const [purchaseStartDateFilter, setPurchaseStartDateFilter] = useState('');
-  const [purchaseEndDateFilter, setPurchaseEndDateFilter] = useState('');
-  const [purchaseItemFilter, setPurchaseItemFilter] = useState('All');
-  const [isPurchaseDetailModalOpen, setIsPurchaseDetailModalOpen] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState(null);
+  // Active Path matching
+  const currentPath = location.pathname;
 
-  // Stock Distribution Detail State
-  const [isDistDetailModalOpen, setIsDistDetailModalOpen] = useState(false);
-  const [selectedDistribution, setSelectedDistribution] = useState(null);
+  // Valid route lists per scope
+  const companyRoutes = [
+    '/inventory/items',
+    '/inventory/central-stock',
+    '/inventory/purchases',
+    '/inventory/branch-requests',
+    '/inventory/transactions',
+    '/inventory/vendors'
+  ];
 
-  // Transaction Detail State
-  const [isTxnDetailModalOpen, setIsTxnDetailModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const branchRoutes = [
+    '/inventory/my-stock',
+    '/inventory/stock-request',
+    '/inventory/branch-transfer',
+    '/inventory/direct-purchase',
+    '/inventory/stock-receipt',
+    '/inventory/transactions'
+  ];
 
-  // Transaction Filters State
-  const [txnStartDateFilter, setTxnStartDateFilter] = useState('');
-  const [txnEndDateFilter, setTxnEndDateFilter] = useState('');
-  const [txnItemFilter, setTxnItemFilter] = useState('All');
-  const [txnBranchFilter, setTxnBranchFilter] = useState('All');
-  const [txnStatusFilter, setTxnStatusFilter] = useState('All');
-
-  // Central Stock Filters State
-  const [stockSearchTerm, setStockSearchTerm] = useState('');
-  const [stockCategoryFilter, setStockCategoryFilter] = useState('All');
-  const [stockStatusFilter, setStockStatusFilter] = useState('All');
-
-  // Stock Distribution Filters State
-  const [distBranchFilter, setDistBranchFilter] = useState('All');
-  const [distItemFilter, setDistItemFilter] = useState('All');
-  const [distStatusFilter, setDistStatusFilter] = useState('All');
-
-  // Branch Requests Filters State
-  const [reqBranchFilter, setReqBranchFilter] = useState('All');
-  const [reqStatusFilter, setReqStatusFilter] = useState('All');
-  const [reqStartDateFilter, setReqStartDateFilter] = useState('');
-  const [reqEndDateFilter, setReqEndDateFilter] = useState('');
-
-  const [page, setPage] = useState(0);
-  const limit = 10;
-
-  // Page Style Form / Detail Views State for Company Login
-  // null | 'ADD_ITEM' | 'EDIT_ITEM' | 'ADD_PURCHASE' | 'VIEW_PURCHASE' | 'VIEW_REQUEST' | 'DISTRIBUTE_FORM' | 'VIEW_DISTRIBUTION' | 'VIEW_TRANSACTION'
-  const [companyActiveView, setCompanyActiveView] = useState(null);
-
-  // Pagination states for Company Tables
-  const PAGE_SIZE = 10;
-  const [itemsPage, setItemsPage] = useState(0);
-  const [stockPage, setStockPage] = useState(0);
-  const [purchasesPage, setPurchasesPage] = useState(0);
-  const [requestsPage, setRequestsPage] = useState(0);
-  const [distPage, setDistPage] = useState(0);
-  const [txnPage, setTxnPage] = useState(0);
-
-  // Reset company active view on tab or route change
-  useEffect(() => {
-    setCompanyActiveView(null);
-  }, [location.search, companyTab]);
-
-  // Reset pagination on filter change
-  useEffect(() => {
-    setPage(0);
-    setItemsPage(0);
-    setStockPage(0);
-    setPurchasesPage(0);
-    setRequestsPage(0);
-    setDistPage(0);
-    setTxnPage(0);
-  }, [searchTerm, categoryFilter, statusFilter, itemFilter, supplierFilter, branchFilter, txnTypeFilter, purchaseSupplierFilter, purchaseStartDateFilter, purchaseEndDateFilter, purchaseItemFilter, reqBranchFilter, reqStatusFilter, reqStartDateFilter, reqEndDateFilter, txnStartDateFilter, txnEndDateFilter, txnItemFilter, txnBranchFilter, txnStatusFilter, stockSearchTerm, stockCategoryFilter, stockStatusFilter, distBranchFilter, distItemFilter, distStatusFilter, companyTab, branchTab, scope]);
-
-  // Filtered Items Memo (Items tab)
-  const filteredItems = useMemo(() => {
-    return items.filter(i => {
-      const matchesSearch = !searchTerm.trim() || i.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === 'All' || i.category === categoryFilter;
-      return matchesSearch && matchesCategory;
-    });
-  }, [items, searchTerm, categoryFilter]);
-
-  // Filtered Central Stock Memo (Central Stock tab)
-  const filteredCentralStock = useMemo(() => {
-    return items.filter(item => {
-      const matchSearch = !stockSearchTerm.trim() || item.name.toLowerCase().includes(stockSearchTerm.toLowerCase());
-      const matchCat = stockCategoryFilter === 'All' || item.category === stockCategoryFilter;
-      const statusProps = getStockStatus(item.centralStock, item.minStock);
-      const matchStatus = stockStatusFilter === 'All' || statusProps.label.toLowerCase() === stockStatusFilter.toLowerCase();
-      return matchSearch && matchCat && matchStatus;
-    });
-  }, [items, stockSearchTerm, stockCategoryFilter, stockStatusFilter]);
-
-  // Filtered Stock Distributions Memo (Distribution tab)
-  const filteredDistributions = useMemo(() => {
-    return distributions.filter(d => {
-      const matchSearch = !searchTerm.trim() ||
-        d.distNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.requestNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.branch.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.item.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchBranch = distBranchFilter === 'All' || d.branch === distBranchFilter;
-      const matchItem = distItemFilter === 'All' || d.item === distItemFilter;
-      const matchStatus = distStatusFilter === 'All' || d.status === distStatusFilter;
-      return matchSearch && matchBranch && matchItem && matchStatus;
-    });
-  }, [distributions, searchTerm, distBranchFilter, distItemFilter, distStatusFilter]);
-
-  // Filtered Purchases Memo
-  const filteredPurchases = useMemo(() => {
-    return purchases.filter(p => {
-      const matchesSearch = !searchTerm.trim() ||
-        p.purchaseNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.item.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.invoiceNo && p.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchesSupplier = purchaseSupplierFilter === 'All' || p.supplier === purchaseSupplierFilter;
-      const matchesItem = purchaseItemFilter === 'All' || p.item === purchaseItemFilter;
-
-      let matchesDate = true;
-      if (purchaseStartDateFilter) {
-        matchesDate = matchesDate && p.date >= purchaseStartDateFilter;
-      }
-      if (purchaseEndDateFilter) {
-        matchesDate = matchesDate && p.date <= purchaseEndDateFilter;
-      }
-
-      return matchesSearch && matchesSupplier && matchesItem && matchesDate;
-    });
-  }, [purchases, searchTerm, purchaseSupplierFilter, purchaseItemFilter, purchaseStartDateFilter, purchaseEndDateFilter]);
-
-  // Filtered Branch Requests Memo
-  const filteredBranchRequests = useMemo(() => {
-    return branchRequests.filter(r => {
-      const matchesSearch = !searchTerm.trim() ||
-        r.requestNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.branch.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.item.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesBranch = reqBranchFilter === 'All' || r.branch === reqBranchFilter;
-      const matchesStatus = reqStatusFilter === 'All' || r.status === reqStatusFilter;
-
-      let matchesDate = true;
-      if (reqStartDateFilter) {
-        matchesDate = matchesDate && r.date >= reqStartDateFilter;
-      }
-      if (reqEndDateFilter) {
-        matchesDate = matchesDate && r.date <= reqEndDateFilter;
-      }
-
-      return matchesSearch && matchesBranch && matchesStatus && matchesDate;
-    });
-  }, [branchRequests, searchTerm, reqBranchFilter, reqStatusFilter, reqStartDateFilter, reqEndDateFilter]);
-
-  // Filtered Transactions Memo
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const matchesSearch = !searchTerm.trim() ||
-        t.txnNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.item.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (t.refNo && t.refNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (t.source && t.source.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (t.destination && t.destination.toLowerCase().includes(searchTerm.toLowerCase()));
-
-      const matchesType = txnTypeFilter === 'All' || t.type === txnTypeFilter;
-      const matchesItem = txnItemFilter === 'All' || t.item === txnItemFilter;
-      const matchesBranch = txnBranchFilter === 'All' ||
-        (t.source && t.source.toLowerCase().includes(txnBranchFilter.toLowerCase())) ||
-        (t.destination && t.destination.toLowerCase().includes(txnBranchFilter.toLowerCase()));
-      const matchesStatus = txnStatusFilter === 'All' || (t.status || 'Completed') === txnStatusFilter;
-
-      let matchesDate = true;
-      if (txnStartDateFilter) {
-        const dateStr = t.date ? t.date.split(' ')[0] : '';
-        matchesDate = matchesDate && dateStr >= txnStartDateFilter;
-      }
-      if (txnEndDateFilter) {
-        const dateStr = t.date ? t.date.split(' ')[0] : '';
-        matchesDate = matchesDate && dateStr <= txnEndDateFilter;
-      }
-
-      return matchesSearch && matchesType && matchesItem && matchesBranch && matchesStatus && matchesDate;
-    });
-  }, [transactions, searchTerm, txnTypeFilter, txnItemFilter, txnBranchFilter, txnStatusFilter, txnStartDateFilter, txnEndDateFilter]);
+  // Auto-redirect if route is invalid for current active scope
+  if (scope === 'COMPANY') {
+    if (!companyRoutes.includes(currentPath)) {
+      return <Navigate to="/inventory/items" replace />;
+    }
+  } else {
+    if (!branchRoutes.includes(currentPath)) {
+      return <Navigate to="/inventory/my-stock" replace />;
+    }
+  }
 
   // -------------------------------------------------------------
-  // MODALS & FORMS STATES WITH INLINE VALIDATION
+  // HANDLERS FOR COMPANY ACTIONS
   // -------------------------------------------------------------
-  const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [itemForm, setItemForm] = useState({ name: '', category: 'Grains', unit: 'kg', minStock: '', status: 'Active' });
-  const [itemErrors, setItemErrors] = useState({});
-
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  const [purchaseForm, setPurchaseForm] = useState({ supplier: '', purchaseDate: new Date().toISOString().split('T')[0], invoiceNo: '', item: 'Basmati Rice', quantity: '', unit: 'kg', rate: '', remarks: '' });
-  const [purchaseErrors, setPurchaseErrors] = useState({});
-
-  const handlePurchaseItemChange = (itemName) => {
-    const matchedItem = items.find(i => i.name === itemName);
-    setPurchaseForm(prev => ({
-      ...prev,
-      item: itemName,
-      unit: matchedItem ? matchedItem.unit : (prev.unit || 'kg')
-    }));
-  };
-
-  const [isStockRequestModalOpen, setIsStockRequestModalOpen] = useState(false);
-  const [stockReqForm, setStockReqForm] = useState({ item: 'Basmati Rice', reqQty: '', unit: 'kg', remarks: '' });
-  const [stockReqErrors, setStockReqErrors] = useState({});
-
-  const [isRequestDetailModalOpen, setIsRequestDetailModalOpen] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-
-  const [isDistributeModalOpen, setIsDistributeModalOpen] = useState(false);
-  const [distributeForm, setDistributeForm] = useState({ requestNo: '', branch: '', item: '', requestedQty: 0, approvedQty: 0, distributedQty: '', distDate: new Date().toISOString().split('T')[0], remarks: '' });
-  const [distributeErrors, setDistributeErrors] = useState({});
-
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [transferForm, setTransferForm] = useState({ fromBranch: 'Serviq Chennai Branch', toBranch: 'Serviq Madurai Branch', item: 'Fresh Milk', quantity: '', unit: 'Ltr', remarks: '' });
-  const [transferErrors, setTransferErrors] = useState({});
-
-  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
-  const [receiptForm, setReceiptForm] = useState({ refNo: '', source: 'Central Warehouse', item: 'Refined Oil', sentQty: 25, receivedQty: '', recDate: new Date().toISOString().split('T')[0], remarks: '' });
-  const [receiptErrors, setReceiptErrors] = useState({});
-
-  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, type: '', id: null, title: '', message: '' });
-
-  // -------------------------------------------------------------
-  // INLINE FORM VALIDATION & ACTIONS
-  // -------------------------------------------------------------
-  const validateItemForm = () => {
-    const errors = {};
-    if (!itemForm.name.trim()) errors.name = 'Item Name is required';
-    if (!itemForm.category.trim()) errors.category = 'Category is required';
-    if (!itemForm.unit.trim()) errors.unit = 'Unit is required';
-    if (itemForm.minStock === '' || Number(itemForm.minStock) < 0) errors.minStock = 'Valid Minimum Stock Level is required';
-    setItemErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSaveItem = () => {
-    if (!validateItemForm()) return;
+  const handleSaveCompanyItem = (formData, editingItem) => {
     if (editingItem) {
-      setItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...itemForm, minStock: Number(itemForm.minStock) } : i));
+      setItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...formData, minStock: Number(formData.minStock) } : i));
       ShowNotifications.showAlertNotification('Inventory item updated successfully!', true);
     } else {
       const newItem = {
         id: `INV-${String(items.length + 1).padStart(3, '0')}`,
-        name: itemForm.name,
-        category: itemForm.category,
-        unit: itemForm.unit,
-        minStock: Number(itemForm.minStock),
+        name: formData.name,
+        category: formData.category,
+        unit: formData.unit,
+        minStock: Number(formData.minStock),
         centralStock: 100,
         branchStock: 20,
-        status: itemForm.status
+        status: formData.status || 'Active'
       };
       setItems(prev => [newItem, ...prev]);
       ShowNotifications.showAlertNotification('New inventory item added successfully!', true);
     }
-    setIsAddItemModalOpen(false);
-    setCompanyActiveView(null);
-    setEditingItem(null);
-    setItemForm({ name: '', category: 'Grains', unit: 'kg', minStock: '', status: 'Active' });
   };
 
-  const validatePurchaseForm = () => {
-    const errors = {};
-    if (!purchaseForm.supplier.trim()) errors.supplier = 'Supplier name is required';
-    if (!purchaseForm.purchaseDate) errors.purchaseDate = 'Purchase Date is required';
-    if (!purchaseForm.item) errors.item = 'Please select an item';
-    if (!purchaseForm.quantity || Number(purchaseForm.quantity) <= 0) errors.quantity = 'Quantity must be greater than 0';
-    if (!purchaseForm.unit.trim()) errors.unit = 'Unit is required';
-    if (!purchaseForm.rate || Number(purchaseForm.rate) <= 0) errors.rate = 'Purchase Rate must be greater than 0';
-    setPurchaseErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleDeleteCompanyItem = (item) => {
+    setItems(prev => prev.filter(i => i.id !== item.id));
+    ShowNotifications.showAlertNotification(`Item ${item.name} deleted!`, true);
   };
 
-  const handleSavePurchase = () => {
-    if (!validatePurchaseForm()) return;
-    const qty = Number(purchaseForm.quantity);
-    const rate = Number(purchaseForm.rate);
+  const handleUpdateCentralStock = (itemId, newQty, reason) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, centralStock: newQty } : i));
+
+    const matched = items.find(i => i.id === itemId);
+    const newTxn = {
+      id: `TXN-${Date.now().toString().slice(-4)}`,
+      txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
+      date: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      type: 'Adjustment',
+      item: matched ? matched.name : 'Stock Item',
+      quantity: newQty,
+      unit: matched ? matched.unit : 'kg',
+      source: 'Central Audit',
+      destination: 'Central Stock',
+      refNo: `AUDIT-${Date.now().toString().slice(-4)}`,
+      status: 'Completed'
+    };
+    setTransactions(prev => [newTxn, ...prev]);
+
+    ShowNotifications.showAlertNotification(`Central stock updated to ${newQty}! (${reason})`, true);
+  };
+
+  const handleSaveCompanyPurchase = (formData) => {
+    const qty = Number(formData.quantity);
+    const rate = Number(formData.rate);
     const total = qty * rate;
-    const poNo = `PO-${new Date().getFullYear()}-${String(purchases.length + 1).padStart(3, '0')}`;
-    
+    const count = purchases.length + 1;
+    const poNo = `PU-${String(count).padStart(3, '0')}`;
+
     const newPO = {
       id: `PUR-${Date.now().toString().slice(-4)}`,
       purchaseNo: poNo,
-      supplier: purchaseForm.supplier,
-      date: purchaseForm.purchaseDate,
-      invoiceNo: purchaseForm.invoiceNo || 'INV-DIRECT',
-      item: purchaseForm.item,
+      purchaseType: formData.purchaseType || 'Material Purchase',
+      supplier: formData.supplier,
+      date: formData.purchaseDate,
+      invoiceNo: formData.invoiceNo || `INV-${Date.now().toString().slice(-4)}`,
+      item: formData.item,
       quantity: qty,
-      unit: purchaseForm.unit || 'kg',
+      unit: formData.unit || 'kg',
       rate: rate,
       total: total,
-      remarks: purchaseForm.remarks,
+      remarks: formData.remarks,
       status: 'Completed'
     };
 
     setPurchases(prev => [newPO, ...prev]);
-    
-    // Auto update Central / Branch stock
-    setItems(prev => prev.map(i => {
-      if (i.name === purchaseForm.item) {
-        return {
-          ...i,
-          centralStock: scope === 'COMPANY' ? i.centralStock + qty : i.centralStock,
-          branchStock: scope === 'BRANCH' ? i.branchStock + qty : i.branchStock
-        };
-      }
-      return i;
-    }));
+    setItems(prev => prev.map(i => i.name === formData.item ? { ...i, centralStock: i.centralStock + qty } : i));
 
-    // Log Transaction
     const newTxn = {
       id: `TXN-${Date.now().toString().slice(-4)}`,
       txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
-      date: `${purchaseForm.purchaseDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      date: `${formData.purchaseDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       type: 'Purchase',
-      item: purchaseForm.item,
+      item: formData.item,
       quantity: qty,
-      unit: purchaseForm.unit || 'kg',
-      source: `Supplier: ${purchaseForm.supplier}`,
-      destination: scope === 'COMPANY' ? 'Central Stock' : 'Branch Stock',
+      unit: formData.unit || 'kg',
+      source: `Supplier: ${formData.supplier}`,
+      destination: 'Central Stock',
       refNo: poNo,
       status: 'Completed'
     };
     setTransactions(prev => [newTxn, ...prev]);
 
-    ShowNotifications.showAlertNotification(`Purchase ${poNo} recorded & stock updated!`, true);
-    setIsPurchaseModalOpen(false);
-    setCompanyActiveView(null);
-    setPurchaseForm({ supplier: '', purchaseDate: new Date().toISOString().split('T')[0], invoiceNo: '', item: 'Basmati Rice', quantity: '', unit: 'kg', rate: '', remarks: '' });
+    ShowNotifications.showAlertNotification(`Purchase ${poNo} (${formData.purchaseType || 'Material Purchase'}) recorded successfully!`, true);
   };
 
-  const validateStockReqForm = () => {
-    const errors = {};
-    if (!stockReqForm.item) errors.item = 'Please select an item';
-    if (!stockReqForm.reqQty || Number(stockReqForm.reqQty) <= 0) errors.reqQty = 'Required Quantity must be greater than 0';
-    setStockReqErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleDeleteCompanyPurchase = (purchase) => {
+    setPurchases(prev => prev.filter(p => p.id !== purchase.id));
+    ShowNotifications.showAlertNotification(`Purchase ${purchase.purchaseNo} deleted.`, true);
   };
 
-  const handleSaveStockRequest = () => {
-    if (!validateStockReqForm()) return;
+  const handleApproveRequest = (req) => {
+    setBranchRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
+    ShowNotifications.showAlertNotification(`Branch Request ${req.requestNo} APPROVED!`, true);
+  };
+
+  const handleRejectRequest = (req) => {
+    setBranchRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Rejected' } : r));
+    ShowNotifications.showAlertNotification(`Branch Request ${req.requestNo} REJECTED.`, false);
+  };
+
+  const handleDistributeRequest = (distForm, selectedReq) => {
+    const distNo = `DIST-${new Date().getFullYear()}-${String(distributions.length + 1).padStart(3, '0')}`;
+    const qty = Number(distForm.distributedQty);
+
+    const newDist = {
+      id: `DIST-${Date.now().toString().slice(-4)}`,
+      distNo: distNo,
+      requestNo: distForm.requestNo,
+      branch: distForm.branch,
+      item: distForm.item,
+      distQty: qty,
+      date: distForm.distDate,
+      status: 'Dispatched',
+      remarks: distForm.remarks
+    };
+
+    setDistributions(prev => [newDist, ...prev]);
+    setBranchRequests(prev => prev.map(r => r.requestNo === distForm.requestNo ? { ...r, distQty: qty, status: 'Dispatched' } : r));
+    setItems(prev => prev.map(i => i.name === distForm.item ? { ...i, centralStock: Math.max(0, i.centralStock - qty) } : i));
+
+    const newTxn = {
+      id: `TXN-${Date.now().toString().slice(-4)}`,
+      txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
+      date: `${distForm.distDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      type: 'Distribution',
+      item: distForm.item,
+      quantity: qty,
+      unit: selectedReq ? selectedReq.unit || 'kg' : 'kg',
+      source: 'Central Stock',
+      destination: distForm.branch,
+      refNo: distNo,
+      status: 'Dispatched'
+    };
+    setTransactions(prev => [newTxn, ...prev]);
+
+    ShowNotifications.showAlertNotification(`Stock Distribution ${distNo} DISPATCHED to ${distForm.branch}!`, true);
+  };
+
+  // -------------------------------------------------------------
+  // HANDLERS FOR BRANCH ACTIONS
+  // -------------------------------------------------------------
+  const handleUpdateBranchStock = (itemId, newQty) => {
+    setItems(prev => prev.map(i => i.id === itemId ? { ...i, branchStock: newQty } : i));
+    ShowNotifications.showAlertNotification(`Branch stock updated to ${newQty}!`, true);
+  };
+
+  const handleSaveStockRequest = (formData) => {
     const reqNo = `BR-REQ-${String(branchRequests.length + 1).padStart(3, '0')}`;
     const newReq = {
       id: `REQ-${Date.now().toString().slice(-4)}`,
       requestNo: reqNo,
       branch: 'Serviq Chennai Branch',
       date: new Date().toISOString().split('T')[0],
-      item: stockReqForm.item,
-      reqQty: Number(stockReqForm.reqQty),
-      appQty: Number(stockReqForm.reqQty),
+      item: formData.item,
+      reqQty: Number(formData.reqQty),
+      appQty: Number(formData.reqQty),
       distQty: 0,
-      unit: stockReqForm.unit || 'kg',
+      unit: formData.unit || 'kg',
       status: 'Pending',
-      remarks: stockReqForm.remarks || 'Branch stock replenishment'
+      remarks: formData.remarks || 'Branch stock replenishment'
     };
 
     setBranchRequests(prev => [newReq, ...prev]);
@@ -673,9 +256,9 @@ export default function InventoryPanel() {
       txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
       date: `${new Date().toISOString().split('T')[0]} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       type: 'Stock Request',
-      item: stockReqForm.item,
-      quantity: Number(stockReqForm.reqQty),
-      unit: stockReqForm.unit || 'kg',
+      item: formData.item,
+      quantity: Number(formData.reqQty),
+      unit: formData.unit || 'kg',
       source: 'Serviq Chennai Branch',
       destination: 'Central Warehouse',
       refNo: reqNo,
@@ -684,3628 +267,256 @@ export default function InventoryPanel() {
     setTransactions(prev => [newTxn, ...prev]);
 
     ShowNotifications.showAlertNotification(`Stock Request ${reqNo} submitted to Central HQ!`, true);
-    setIsStockRequestModalOpen(false);
-    setStockReqForm({ item: 'Basmati Rice', reqQty: '', unit: 'kg', remarks: '' });
   };
 
-  const handleApproveRequest = (req) => {
-    setBranchRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
-    ShowNotifications.showAlertNotification(`Branch Request ${req.requestNo} APPROVED!`, true);
-    setIsRequestDetailModalOpen(false);
-    setCompanyActiveView(null);
-  };
-
-  const handleRejectRequest = (req) => {
-    setConfirmDelete({
-      isOpen: true,
-      type: 'REJECT_REQ',
-      id: req.id,
-      title: 'Reject Branch Request',
-      message: `Are you sure you want to REJECT request ${req.requestNo}? This action will notify the branch.`
-    });
-  };
-
-  const validateDistributeForm = () => {
-    const errors = {};
-    const app = Number(distributeForm.approvedQty);
-    const dist = Number(distributeForm.distributedQty);
-    const req = Number(distributeForm.requestedQty);
-
-    if (!distributeForm.requestNo || !distributeForm.requestNo.trim()) errors.requestNo = 'Request Number is required';
-    if (!distributeForm.branch || !distributeForm.branch.trim()) errors.branch = 'Branch is required';
-    if (!distributeForm.item || !distributeForm.item.trim()) errors.item = 'Item is required';
-    if (distributeForm.approvedQty === '' || app <= 0) errors.approvedQty = 'Approved Quantity must be greater than 0';
-    if (distributeForm.distributedQty === '' || dist <= 0) errors.distributedQty = 'Distributed Quantity must be greater than 0';
-    if (dist > app) errors.distributedQty = `Distributed Quantity (${dist}) cannot exceed Approved Quantity (${app})`;
-    if (app > req) errors.approvedQty = `Approved Quantity (${app}) cannot exceed Requested Quantity (${req})`;
-    if (!distributeForm.distDate) errors.distDate = 'Distribution Date is required';
-    setDistributeErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSaveDistribution = () => {
-    if (!validateDistributeForm()) return;
-    const distNo = `DIST-${new Date().getFullYear()}-${String(distributions.length + 1).padStart(3, '0')}`;
-    const qty = Number(distributeForm.distributedQty);
-
-    const newDist = {
-      id: `DIST-${Date.now().toString().slice(-4)}`,
-      distNo: distNo,
-      requestNo: distributeForm.requestNo,
-      branch: distributeForm.branch,
-      item: distributeForm.item,
-      distQty: qty,
-      date: distributeForm.distDate,
-      status: 'Dispatched',
-      remarks: distributeForm.remarks
-    };
-
-    setDistributions(prev => [newDist, ...prev]);
-
-    // Update Request status to Dispatched/Completed
-    setBranchRequests(prev => prev.map(r => r.requestNo === distributeForm.requestNo ? { ...r, distQty: qty, status: 'Dispatched' } : r));
-
-    // Deduct stock from Central Stock
-    setItems(prev => prev.map(i => i.name === distributeForm.item ? { ...i, centralStock: Math.max(0, i.centralStock - qty) } : i));
-
-    // Log Transaction
-    const newTxn = {
-      id: `TXN-${Date.now().toString().slice(-4)}`,
-      txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
-      date: `${distributeForm.distDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-      type: 'Distribution',
-      item: distributeForm.item,
-      quantity: qty,
-      unit: 'kg',
-      source: 'Central Stock',
-      destination: distributeForm.branch,
-      refNo: distNo,
-      status: 'Dispatched'
-    };
-    setTransactions(prev => [newTxn, ...prev]);
-
-    ShowNotifications.showAlertNotification(`Stock Distribution ${distNo} DISPATCHED to ${distributeForm.branch}!`, true);
-    setIsDistributeModalOpen(false);
-    setCompanyActiveView(null);
-  };
-
-  const validateTransferForm = () => {
-    const errors = {};
-    if (transferForm.fromBranch === transferForm.toBranch) errors.toBranch = 'Source and Destination branches must be different';
-    if (!transferForm.quantity || Number(transferForm.quantity) <= 0) errors.quantity = 'Transfer quantity must be greater than 0';
-    setTransferErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSaveTransfer = () => {
-    if (!validateTransferForm()) return;
+  const handleSaveTransfer = (formData) => {
     const trfNo = `TRF-${new Date().getFullYear()}-${String(transfers.length + 1).padStart(3, '0')}`;
-    const qty = Number(transferForm.quantity);
+    const qty = Number(formData.quantity);
 
     const newTrf = {
       id: `TRF-${Date.now().toString().slice(-4)}`,
       transferNo: trfNo,
-      fromBranch: transferForm.fromBranch,
-      toBranch: transferForm.toBranch,
+      fromBranch: formData.fromBranch,
+      toBranch: formData.toBranch,
       date: new Date().toISOString().split('T')[0],
-      item: transferForm.item,
+      item: formData.item,
       quantity: qty,
-      unit: transferForm.unit || 'kg',
+      unit: formData.unit || 'kg',
       status: 'Pending',
-      remarks: transferForm.remarks || 'Branch transfer request'
+      remarks: formData.remarks || 'Inter-branch transfer'
     };
 
     setTransfers(prev => [newTrf, ...prev]);
-
-    ShowNotifications.showAlertNotification(`Inter-Branch Transfer ${trfNo} initiated!`, true);
-    setIsTransferModalOpen(false);
+    ShowNotifications.showAlertNotification(`Transfer Request ${trfNo} submitted!`, true);
   };
 
-  const validateReceiptForm = () => {
-    const errors = {};
-    const sent = Number(receiptForm.sentQty);
-    const rec = Number(receiptForm.receivedQty);
-    if (!receiptForm.receivedQty || rec < 0) errors.receivedQty = 'Received Quantity is required';
-    if (rec > sent) errors.receivedQty = `Received Quantity (${rec}) cannot exceed Sent Quantity (${sent})`;
-    setReceiptErrors(errors);
-    return Object.keys(errors).length === 0;
+  const handleSaveDirectPurchase = (formData) => {
+    const qty = Number(formData.quantity);
+    const rate = Number(formData.rate);
+    const total = qty * rate;
+    const count = purchases.length + 1;
+    const poNo = `PU-${String(count).padStart(3, '0')}`;
+
+    const newPO = {
+      id: `PUR-${Date.now().toString().slice(-4)}`,
+      purchaseNo: poNo,
+      purchaseType: formData.purchaseType || 'Vendor Direct Purchase',
+      supplier: formData.supplier,
+      date: formData.purchaseDate,
+      invoiceNo: formData.invoiceNo || `BILL-${Date.now().toString().slice(-4)}`,
+      item: formData.item,
+      quantity: qty,
+      unit: formData.unit || 'kg',
+      rate: rate,
+      total: total,
+      remarks: formData.remarks,
+      status: 'Completed'
+    };
+
+    setPurchases(prev => [newPO, ...prev]);
+    setItems(prev => prev.map(i => i.name === formData.item ? { ...i, branchStock: i.branchStock + qty } : i));
+
+    const newTxn = {
+      id: `TXN-${Date.now().toString().slice(-4)}`,
+      txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
+      date: `${formData.purchaseDate} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      type: 'Direct Purchase',
+      item: formData.item,
+      quantity: qty,
+      unit: formData.unit || 'kg',
+      source: `Vendor: ${formData.supplier}`,
+      destination: 'Branch Stock',
+      refNo: poNo,
+      status: 'Completed'
+    };
+    setTransactions(prev => [newTxn, ...prev]);
+
+    ShowNotifications.showAlertNotification(`Direct Vendor Purchase ${poNo} saved & branch stock updated (+${qty})!`, true);
   };
 
-  const handleSaveReceipt = () => {
-    if (!validateReceiptForm()) return;
+  const handleSaveReceipt = (formData) => {
     const recNo = `REC-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(3, '0')}`;
-    const recQty = Number(receiptForm.receivedQty);
+    const recQty = Number(formData.receivedQty);
 
     const newRec = {
       id: `REC-${Date.now().toString().slice(-4)}`,
       receiptNo: recNo,
-      refNo: receiptForm.refNo,
-      source: receiptForm.source,
-      item: receiptForm.item,
-      sentQty: receiptForm.sentQty,
+      reqTrfNo: formData.reqTrfNo,
+      source: formData.source,
+      item: formData.item,
+      sentQty: formData.sentQty || recQty,
       recQty: recQty,
-      date: receiptForm.recDate,
+      date: formData.receivedDate,
       status: 'Received',
-      remarks: receiptForm.remarks || 'Inspected and verified'
+      remarks: formData.remarks || 'Inspected and verified'
     };
 
     setReceipts(prev => [newRec, ...prev]);
+    setItems(prev => prev.map(i => i.name === formData.item ? { ...i, branchStock: i.branchStock + recQty } : i));
+    setBranchRequests(prev => prev.map(r => r.requestNo === formData.reqTrfNo ? { ...r, status: 'Completed' } : r));
 
-    // Add stock to Branch Stock
-    setItems(prev => prev.map(i => i.name === receiptForm.item ? { ...i, branchStock: i.branchStock + recQty } : i));
-
-    // Update status in requests/distributions
-    setBranchRequests(prev => prev.map(r => r.requestNo === receiptForm.refNo ? { ...r, status: 'Completed' } : r));
-
-    ShowNotifications.showAlertNotification(`Stock Receipt ${recNo} CONFIRMED! Branch stock added (+${recQty}).`, true);
-    setIsReceiptModalOpen(false);
+    ShowNotifications.showAlertNotification(`Stock Receipt ${recNo} confirmed! Branch stock added (+${recQty}).`, true);
   };
 
-  const handleConfirmDeleteAction = () => {
-    if (confirmDelete.type === 'DELETE_ITEM') {
-      setItems(prev => prev.filter(i => i.id !== confirmDelete.id));
-      ShowNotifications.showAlertNotification('Inventory item deleted!', true);
-    } else if (confirmDelete.type === 'REJECT_REQ') {
-      setBranchRequests(prev => prev.map(r => r.id === confirmDelete.id ? { ...r, status: 'Rejected' } : r));
-      ShowNotifications.showAlertNotification('Branch Request REJECTED.', false);
-    } else if (confirmDelete.type === 'DELETE_PURCHASE') {
-      setPurchases(prev => prev.filter(p => p.id !== confirmDelete.id));
-      ShowNotifications.showAlertNotification('Purchase Order deleted successfully!', true);
-    } else if (confirmDelete.type === 'DELETE_DISTRIBUTION') {
-      setDistributions(prev => prev.filter(d => d.id !== confirmDelete.id));
-      ShowNotifications.showAlertNotification('Stock Distribution deleted successfully!', true);
-    } else if (confirmDelete.type === 'DELETE_TRANSACTION') {
-      setTransactions(prev => prev.filter(t => t.id !== confirmDelete.id));
-      ShowNotifications.showAlertNotification('Transaction record deleted successfully!', true);
-    }
-    setCompanyActiveView(null);
-    setConfirmDelete({ isOpen: false, type: '', id: null, title: '', message: '' });
+  const handleDeleteReceipt = (receipt) => {
+    setReceipts(prev => prev.filter(r => r.id !== receipt.id));
+    ShowNotifications.showAlertNotification(`Stock Receipt ${receipt.receiptNo} deleted.`, true);
   };
-
-  // Export handlers
-  const handleExportCSV = (dataList, filename) => {
-    if (!dataList || dataList.length === 0) return;
-    const keys = Object.keys(dataList[0]);
-    const csvContent = "data:text/csv;charset=utf-8," + [keys.join(","), ...dataList.map(row => keys.map(k => `"${row[k]}"`).join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${filename}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    ShowNotifications.showAlertNotification(`Exported ${filename}.csv successfully!`, true);
-  };
-
-  // Metric Computations
-  const totalItemsCount = items.length;
-  const centralTotalStock = items.reduce((acc, i) => acc + (i.centralStock || 0), 0);
-  const branchTotalStock = items.reduce((acc, i) => acc + (i.branchStock || 0), 0);
-  const centralLowStockCount = items.filter(i => i.centralStock > 0 && i.centralStock <= i.minStock).length;
-  const centralOutOfStockCount = items.filter(i => i.centralStock <= 0).length;
-
-  const branchLowStockCount = items.filter(i => i.branchStock > 0 && i.branchStock <= i.minStock).length;
-  const branchOutOfStockCount = items.filter(i => i.branchStock <= 0).length;
 
   return (
     <section className="panel-view active" style={{ padding: scope === 'COMPANY' ? '0 8px 16px 8px' : '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
       
-      {/* 1. TOP MODULE HEADER BAR (Shown when not in Page Form/Detail View) */}
-      {(!companyActiveView || scope !== 'COMPANY') && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '10px',
-          marginBottom: scope === 'COMPANY' ? '8px' : '20px',
-          paddingTop: '2px'
-        }}>
+      {/* 1. TOP MODULE HEADER BAR */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '10px',
+        marginBottom: '20px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            boxShadow: '0 4px 12px rgba(255, 90, 31, 0.25)'
+          }}>
+            <BoxIcon size={20} />
+          </div>
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-              Inventory Management Module
+            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 900, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+              {scope === 'COMPANY' ? 'Central Inventory HQ' : 'Branch Stock Management'}
             </h2>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-              Complete Restaurant SaaS Stock Tracking, Purchases, Requests, Transfers & Audit Log
-            </p>
+            <span style={{ fontSize: '12px', color: '#0b0c0dff' }}>
+              {scope === 'COMPANY'
+                ? 'Central Warehouse, Multi-Branch Requests & Supplier Valuation'
+                : 'Branch Kitchen Ingredients, Restock Requests & Inbound Goods'}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* COMPANY LOGIN MODULE RENDERERS                                            */}
-      {/* ========================================================================= */}
-      {scope === 'COMPANY' && (
+        {/* View Scope Indicator */}
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: scope === 'COMPANY' ? '#eff6ff' : '#f0fdf4',
+          border: scope === 'COMPANY' ? '1px solid #bfdbfe' : '1px solid #bbf7d0',
+          padding: '5px 12px',
+          borderRadius: '20px',
+          fontSize: '12px',
+          fontWeight: 700,
+          color: scope === 'COMPANY' ? '#1d4ed8' : '#15803d'
+        }}>
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: scope === 'COMPANY' ? '#2563eb' : '#16a34a' }}></span>
+          <span>{scope === 'COMPANY' ? 'Company HQ Scope' : 'Active Outlet Scope'}</span>
+        </div>
+      </div>
+
+      {/* 2. MAIN PAGE ROUTE CONTENT */}
+      {scope === 'COMPANY' ? (
         <>
-          {/* ===================================================================== */}
-          {/* COMPANY PAGE STYLE VIEWS (REPLACES POP-UP MODALS)                     */}
-          {/* ===================================================================== */}
-
-          {/* PAGE VIEW 1: ADD / EDIT INVENTORY ITEM */}
-          {(companyActiveView === 'ADD_ITEM' || companyActiveView === 'EDIT_ITEM') && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => { setCompanyActiveView(null); setEditingItem(null); }}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Items List"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      {editingItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
-                    </h2>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Define item metadata, category classifications, and minimum stock threshold.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setCompanyActiveView(null); setEditingItem(null); }}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {/* Form Container Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '720px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                      Item Name <span style={{ color: '#dc2626' }}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={itemForm.name}
-                      onChange={e => { setItemForm({ ...itemForm, name: e.target.value }); setItemErrors({ ...itemErrors, name: null }); }}
-                      placeholder="e.g. Basmati Rice"
-                      style={{ ...filterInputStyle, border: itemErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                    />
-                    {itemErrors.name && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{itemErrors.name}</span>}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Category <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <select
-                        value={itemForm.category}
-                        onChange={e => setItemForm({ ...itemForm, category: e.target.value })}
-                        style={filterInputStyle}
-                      >
-                        <option value="Grains">Grains</option>
-                        <option value="Oils">Oils</option>
-                        <option value="Spices">Spices</option>
-                        <option value="Meat">Meat</option>
-                        <option value="Dairy">Dairy</option>
-                        <option value="Vegetables">Vegetables</option>
-                        <option value="Bakery">Bakery</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Unit of Measurement <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <select
-                        value={itemForm.unit}
-                        onChange={e => setItemForm({ ...itemForm, unit: e.target.value })}
-                        style={filterInputStyle}
-                      >
-                        <option value="kg">kg (Kilogram)</option>
-                        <option value="Ltr">Ltr (Liter)</option>
-                        <option value="pcs">pcs (Pieces)</option>
-                        <option value="pkt">pkt (Packets)</option>
-                        <option value="box">box (Boxes)</option>
-                        <option value="gm">gm (Grams)</option>
-                        <option value="bag">bag (Bags)</option>
-                        <option value="tin">tin (Tins)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Minimum Stock Level <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={itemForm.minStock}
-                        onChange={e => { setItemForm({ ...itemForm, minStock: e.target.value }); setItemErrors({ ...itemErrors, minStock: null }); }}
-                        placeholder="e.g. 50"
-                        style={{ ...filterInputStyle, border: itemErrors.minStock ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {itemErrors.minStock && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{itemErrors.minStock}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Status
-                      </label>
-                      <select
-                        value={itemForm.status}
-                        onChange={e => setItemForm({ ...itemForm, status: e.target.value })}
-                        style={filterInputStyle}
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setCompanyActiveView(null); setEditingItem(null); }}
-                      style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveItem}
-                      style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      {editingItem ? 'Update Item' : 'Save Item'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/items' && (
+            <CompanyInventoryItems
+              items={items}
+              onSaveItem={handleSaveCompanyItem}
+              onDeleteItem={handleDeleteCompanyItem}
+            />
           )}
 
-          {/* PAGE VIEW 2: ADD PURCHASE ORDER */}
-          {companyActiveView === 'ADD_PURCHASE' && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Purchases List"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      Add Purchase Order
-                    </h2>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Record supplier stock procurement, invoice details, and auto-update Central Warehouse stock.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {/* Form Container Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '800px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Supplier Name <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseForm.supplier}
-                        onChange={e => { setPurchaseForm({ ...purchaseForm, supplier: e.target.value }); setPurchaseErrors({ ...purchaseErrors, supplier: null }); }}
-                        placeholder="e.g. Metro Cash & Carry"
-                        style={{ ...filterInputStyle, border: purchaseErrors.supplier ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {purchaseErrors.supplier && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.supplier}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Purchase Date <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={purchaseForm.purchaseDate}
-                        onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })}
-                        style={filterInputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Item <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <select
-                        value={purchaseForm.item}
-                        onChange={e => handlePurchaseItemChange(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        {items.map(i => <option key={i.id} value={i.name}>{i.name} ({i.unit})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Invoice Number
-                      </label>
-                      <input
-                        type="text"
-                        value={purchaseForm.invoiceNo}
-                        onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNo: e.target.value })}
-                        placeholder="e.g. INV-9901"
-                        style={filterInputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Quantity <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={purchaseForm.quantity}
-                        onChange={e => { setPurchaseForm({ ...purchaseForm, quantity: e.target.value }); setPurchaseErrors({ ...purchaseErrors, quantity: null }); }}
-                        placeholder="e.g. 100"
-                        style={{ ...filterInputStyle, border: purchaseErrors.quantity ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {purchaseErrors.quantity && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.quantity}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Unit <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <select
-                        value={purchaseForm.unit}
-                        onChange={e => { setPurchaseForm({ ...purchaseForm, unit: e.target.value }); setPurchaseErrors({ ...purchaseErrors, unit: null }); }}
-                        style={{ ...filterInputStyle, border: purchaseErrors.unit ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      >
-                        <option value="kg">kg (Kilogram)</option>
-                        <option value="Ltr">Ltr (Liter)</option>
-                        <option value="pcs">pcs (Pieces)</option>
-                        <option value="pkt">pkt (Packets)</option>
-                        <option value="box">box (Boxes)</option>
-                        <option value="gm">gm (Grams)</option>
-                        <option value="bag">bag (Bags)</option>
-                        <option value="tin">tin (Tins)</option>
-                      </select>
-                      {purchaseErrors.unit && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.unit}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Purchase Rate (₹) <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={purchaseForm.rate}
-                        onChange={e => { setPurchaseForm({ ...purchaseForm, rate: e.target.value }); setPurchaseErrors({ ...purchaseErrors, rate: null }); }}
-                        placeholder="e.g. 90"
-                        style={{ ...filterInputStyle, border: purchaseErrors.rate ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {purchaseErrors.rate && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.rate}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', display: 'block' }}>Calculated Total Amount:</span>
-                      <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>({purchaseForm.quantity || 0} {purchaseForm.unit || 'units'} × ₹{purchaseForm.rate || 0})</span>
-                    </div>
-                    <span style={{ fontSize: '20px', fontWeight: 900, color: '#ff5a1f', fontFamily: "'Outfit', sans-serif" }}>
-                      ₹{((Number(purchaseForm.quantity) || 0) * (Number(purchaseForm.rate) || 0)).toLocaleString()}
-                    </span>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                      Remarks / Procurement Notes
-                    </label>
-                    <textarea
-                      value={purchaseForm.remarks}
-                      onChange={e => setPurchaseForm({ ...purchaseForm, remarks: e.target.value })}
-                      placeholder="e.g. Bulk Monthly Purchase..."
-                      rows={2}
-                      style={{ ...filterInputStyle, height: 'auto', padding: '8px 12px' }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                    <button
-                      type="button"
-                      onClick={() => setCompanyActiveView(null)}
-                      style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSavePurchase}
-                      style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}
-                    >
-                      Submit Purchase Order
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/central-stock' && (
+            <CompanyCentralStock
+              items={items}
+              onUpdateStock={handleUpdateCentralStock}
+            />
           )}
 
-          {/* PAGE VIEW 3: VIEW PURCHASE ORDER DETAILS */}
-          {companyActiveView === 'VIEW_PURCHASE' && selectedPurchase && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Purchases List"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                        Purchase Order Details
-                      </h2>
-                      <span style={{ fontSize: '12px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', fontFamily: 'monospace' }}>
-                        {selectedPurchase.purchaseNo}
-                      </span>
-                    </div>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Supplier procurement record and transaction verification.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Back to List
-                </button>
-              </div>
-
-              {/* Details Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '720px'
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>SUPPLIER</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#0f172a', fontSize: '13.5px' }}>{selectedPurchase.supplier}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>PURCHASE DATE</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: '#334155', fontSize: '13px' }}>{selectedPurchase.date}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>INVOICE NO.</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: '#334155', fontSize: '13px' }}>{selectedPurchase.invoiceNo || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                    <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '3px' }}>
-                      ● {selectedPurchase.status || 'Completed'}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Item Name:</span>
-                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>{selectedPurchase.item}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Quantity & Unit:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedPurchase.quantity} {selectedPurchase.unit || 'kg'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Purchase Rate:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700 }}>₹{selectedPurchase.rate} / {selectedPurchase.unit || 'kg'}</span>
-                  </div>
-                  <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>Total Amount:</span>
-                    <span style={{ fontSize: '19px', fontWeight: 900, color: '#ff5a1f', fontFamily: "'Outfit', sans-serif" }}>₹{selectedPurchase.total.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {selectedPurchase.remarks && (
-                  <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', color: '#475569', marginBottom: '14px' }}>
-                    <strong>Remarks:</strong> {selectedPurchase.remarks}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmDelete({
-                        isOpen: true,
-                        type: 'DELETE_PURCHASE',
-                        id: selectedPurchase.id,
-                        title: 'Delete Purchase Order',
-                        message: `Are you sure you want to delete purchase order ${selectedPurchase.purchaseNo}?`
-                      });
-                    }}
-                    style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Delete PO
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{ padding: '7px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#0f172a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Back to Purchases
-                  </button>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/purchases' && (
+            <CompanyPurchases
+              purchases={purchases}
+              items={items}
+              onSavePurchase={handleSaveCompanyPurchase}
+              onDeletePurchase={handleDeleteCompanyPurchase}
+            />
           )}
 
-          {/* PAGE VIEW 4: VIEW BRANCH REQUEST DETAILS */}
-          {companyActiveView === 'VIEW_REQUEST' && selectedRequest && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Requests List"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                        Branch Stock Request Details
-                      </h2>
-                      <span style={{ fontSize: '12px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', fontFamily: 'monospace' }}>
-                        {selectedRequest.requestNo}
-                      </span>
-                    </div>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Review branch inventory requirement, approve or dispatch stock replenishment.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Back to List
-                </button>
-              </div>
-
-              {/* Details Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '720px'
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>BRANCH</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#0f172a', fontSize: '13.5px' }}>{selectedRequest.branch}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>REQUEST DATE</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: '#334155', fontSize: '13px' }}>{selectedRequest.date}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>REQUEST NO.</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#ff5a1f', fontFamily: 'monospace' }}>{selectedRequest.requestNo}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                    <span style={{
-                      background: selectedRequest.status === 'Completed' ? '#e6f4ea' : selectedRequest.status === 'Approved' ? '#eff6ff' : selectedRequest.status === 'Dispatched' ? '#f3e8ff' : selectedRequest.status === 'Rejected' ? '#fef2f2' : '#fef3c7',
-                      color: selectedRequest.status === 'Completed' ? '#16a34a' : selectedRequest.status === 'Approved' ? '#2563eb' : selectedRequest.status === 'Dispatched' ? '#8b5cf6' : selectedRequest.status === 'Rejected' ? '#dc2626' : '#d97706',
-                      padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '3px'
-                    }}>
-                      ● {selectedRequest.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Requested Item:</span>
-                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>{selectedRequest.item}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Requested Quantity:</span>
-                    <span style={{ fontSize: '14px', fontWeight: 900, color: '#ff5a1f' }}>{selectedRequest.reqQty} {selectedRequest.unit || 'kg'}</span>
-                  </div>
-                  {selectedRequest.appQty > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>Approved Quantity:</span>
-                      <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#2563eb' }}>{selectedRequest.appQty} {selectedRequest.unit || 'kg'}</span>
-                    </div>
-                  )}
-                  {selectedRequest.distQty > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>Dispatched / Distributed Quantity:</span>
-                      <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#16a34a' }}>{selectedRequest.distQty} {selectedRequest.unit || 'kg'}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', color: '#475569', marginBottom: '14px' }}>
-                  <strong>Remarks / Notes:</strong> {selectedRequest.remarks || 'No remarks provided.'}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  {selectedRequest.status === 'Pending' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleApproveRequest(selectedRequest)}
-                        style={{ padding: '7px 16px', borderRadius: '8px', border: '1px solid #bbf7d0', background: '#e6f4ea', color: '#16a34a', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                      >
-                        <CheckCircleIcon size={14} color="#16a34a" /> Approve Request
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRejectRequest(selectedRequest)}
-                        style={{ padding: '7px 16px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                      >
-                        <XCircleIcon size={14} color="#dc2626" /> Reject Request
-                      </button>
-                    </>
-                  )}
-                  {selectedRequest.status === 'Approved' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDistributeForm({
-                          requestNo: selectedRequest.requestNo,
-                          branch: selectedRequest.branch,
-                          item: selectedRequest.item,
-                          requestedQty: selectedRequest.reqQty,
-                          approvedQty: selectedRequest.appQty || selectedRequest.reqQty,
-                          distributedQty: selectedRequest.appQty || selectedRequest.reqQty,
-                          distDate: new Date().toISOString().split('T')[0],
-                          remarks: ''
-                        });
-                        setDistributeErrors({});
-                        setCompanyActiveView('DISTRIBUTE_FORM');
-                      }}
-                      style={{ padding: '7px 18px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
-                    >
-                      <TruckIcon size={14} color="#ffffff" /> Distribute Stock to Branch
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{ padding: '7px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/branch-requests' && (
+            <CompanyBranchRequests
+              branchRequests={branchRequests}
+              onApprove={handleApproveRequest}
+              onReject={handleRejectRequest}
+              onDistribute={handleDistributeRequest}
+            />
           )}
 
-          {/* PAGE VIEW 5: DISTRIBUTE STOCK FORM */}
-          {companyActiveView === 'DISTRIBUTE_FORM' && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                      Stock Distribution Order
-                    </h2>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Dispatch approved stock from Central Warehouse to destination restaurant outlet.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {/* Form Container Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '800px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Request Number <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={distributeForm.requestNo}
-                        onChange={e => { setDistributeForm({ ...distributeForm, requestNo: e.target.value }); setDistributeErrors({ ...distributeErrors, requestNo: null }); }}
-                        placeholder="e.g. BR-REQ-001"
-                        style={{ ...filterInputStyle, border: distributeErrors.requestNo ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {distributeErrors.requestNo && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.requestNo}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Destination Branch <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={distributeForm.branch}
-                        onChange={e => { setDistributeForm({ ...distributeForm, branch: e.target.value }); setDistributeErrors({ ...distributeErrors, branch: null }); }}
-                        placeholder="e.g. Serviq Chennai Branch"
-                        style={{ ...filterInputStyle, border: distributeErrors.branch ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {distributeErrors.branch && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.branch}</span>}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Item Name <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={distributeForm.item}
-                        onChange={e => { setDistributeForm({ ...distributeForm, item: e.target.value }); setDistributeErrors({ ...distributeErrors, item: null }); }}
-                        placeholder="e.g. Basmati Rice"
-                        style={{ ...filterInputStyle, border: distributeErrors.item ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {distributeErrors.item && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.item}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Requested Quantity
-                      </label>
-                      <input
-                        type="number"
-                        value={distributeForm.requestedQty}
-                        readOnly
-                        style={{ ...filterInputStyle, background: '#f8fafc', fontWeight: 700, color: '#64748b' }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Approved Quantity <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={distributeForm.approvedQty}
-                        onChange={e => { setDistributeForm({ ...distributeForm, approvedQty: e.target.value }); setDistributeErrors({ ...distributeErrors, approvedQty: null }); }}
-                        placeholder="e.g. 50"
-                        style={{ ...filterInputStyle, border: distributeErrors.approvedQty ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {distributeErrors.approvedQty && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.approvedQty}</span>}
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                        Distributed Quantity <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={distributeForm.distributedQty}
-                        onChange={e => { setDistributeForm({ ...distributeForm, distributedQty: e.target.value }); setDistributeErrors({ ...distributeErrors, distributedQty: null }); }}
-                        placeholder="e.g. 50"
-                        style={{ ...filterInputStyle, border: distributeErrors.distributedQty ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                      />
-                      {distributeErrors.distributedQty && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.distributedQty}</span>}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                      Distribution Date <span style={{ color: '#dc2626' }}>*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={distributeForm.distDate}
-                      onChange={e => setDistributeForm({ ...distributeForm, distDate: e.target.value })}
-                      style={{ ...filterInputStyle, border: distributeErrors.distDate ? '1.5px solid #dc2626' : '1px solid #cbd5e1' }}
-                    />
-                    {distributeErrors.distDate && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.distDate}</span>}
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '5px' }}>
-                      Remarks / Dispatch Details
-                    </label>
-                    <textarea
-                      value={distributeForm.remarks}
-                      onChange={e => setDistributeForm({ ...distributeForm, remarks: e.target.value })}
-                      placeholder="e.g. Sent via Express Logistics, tracking details..."
-                      rows={2}
-                      style={{ ...filterInputStyle, height: 'auto', padding: '8px 12px' }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
-                    <button
-                      type="button"
-                      onClick={() => setCompanyActiveView(null)}
-                      style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveDistribution}
-                      style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <TruckIcon size={14} color="#fff" /> Dispatch Distribution
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/transactions' && (
+            <CompanyTransactions
+              transactions={transactions}
+            />
           )}
 
-          {/* PAGE VIEW 6: VIEW STOCK DISTRIBUTION DETAILS */}
-          {companyActiveView === 'VIEW_DISTRIBUTION' && selectedDistribution && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Distributions"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                        Stock Distribution Details
-                      </h2>
-                      <span style={{ fontSize: '12px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontFamily: 'monospace' }}>
-                        {selectedDistribution.distNo}
-                      </span>
-                    </div>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Central warehouse stock transfer and logistics consignment record.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Back to List
-                </button>
-              </div>
-
-              {/* Details Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '720px'
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DISTRIBUTION NO.</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#ff5a1f', fontFamily: 'monospace' }}>{selectedDistribution.distNo}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>REQUEST REF.</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>{selectedDistribution.requestNo}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DESTINATION BRANCH</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#0f172a' }}>{selectedDistribution.branch}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                    <span style={{ background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '3px' }}>
-                      ● {selectedDistribution.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Distributed Item:</span>
-                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>{selectedDistribution.item}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Distributed Quantity:</span>
-                    <span style={{ fontSize: '15px', fontWeight: 900, color: '#16a34a' }}>{selectedDistribution.distQty} units</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Dispatch Date:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedDistribution.date}</span>
-                  </div>
-                </div>
-
-                <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', color: '#475569', marginBottom: '14px' }}>
-                  <strong>Remarks:</strong> {selectedDistribution.remarks || 'Sent via logistics.'}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmDelete({
-                        isOpen: true,
-                        type: 'DELETE_DISTRIBUTION',
-                        id: selectedDistribution.id,
-                        title: 'Delete Stock Distribution',
-                        message: `Are you sure you want to delete distribution log ${selectedDistribution.distNo}?`
-                      });
-                    }}
-                    style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Delete Distribution Log
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{ padding: '7px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#0f172a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Back to Distributions
-                  </button>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/vendors' && (
+            <CompanyVendors />
+          )}
+        </>
+      ) : (
+        <>
+          {currentPath === '/inventory/my-stock' && (
+            <BranchMyStock
+              items={items}
+              onUpdateBranchStock={handleUpdateBranchStock}
+            />
           )}
 
-          {/* PAGE VIEW 7: VIEW TRANSACTION DETAILS */}
-          {companyActiveView === 'VIEW_TRANSACTION' && selectedTransaction && (
-            <div>
-              {/* Top Page Header Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px 18px',
-                marginBottom: '12px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '16px',
-                      fontWeight: 800,
-                      color: '#0f172a'
-                    }}
-                    title="Back to Transactions"
-                  >
-                    ←
-                  </button>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                        Stock Transaction Audit Details
-                      </h2>
-                      <span style={{ fontSize: '12px', fontWeight: 800, padding: '2px 8px', borderRadius: '10px', background: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', fontFamily: 'monospace' }}>
-                        {selectedTransaction.txnNo}
-                      </span>
-                    </div>
-                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Comprehensive inventory ledger audit and stock movements trace.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCompanyActiveView(null)}
-                  style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer', color: '#334155' }}
-                >
-                  Back to List
-                </button>
-              </div>
-
-              {/* Details Card */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '20px 24px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
-                maxWidth: '720px'
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '14px' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TXN NO.</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 800, color: '#ff5a1f', fontFamily: 'monospace' }}>{selectedTransaction.txnNo}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TXN DATE</span>
-                    <p style={{ margin: '3px 0 0 0', fontWeight: 700, color: '#334155', fontSize: '13px' }}>{selectedTransaction.date}</p>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TXN TYPE</span>
-                    <span style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '3px' }}>
-                      {selectedTransaction.type}
-                    </span>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                    <span style={{
-                      background: selectedTransaction.status === 'Completed' ? '#e6f4ea' : selectedTransaction.status === 'Dispatched' ? '#eff6ff' : '#fef3c7',
-                      color: selectedTransaction.status === 'Completed' ? '#16a34a' : selectedTransaction.status === 'Dispatched' ? '#2563eb' : '#d97706',
-                      padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '3px'
-                    }}>
-                      ● {selectedTransaction.status || 'Completed'}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Item:</span>
-                    <span style={{ fontSize: '13.5px', fontWeight: 800, color: '#0f172a' }}>{selectedTransaction.item}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Quantity & Unit:</span>
-                    <span style={{ fontSize: '14px', fontWeight: 900, color: '#16a34a' }}>{selectedTransaction.quantity} {selectedTransaction.unit || 'kg'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Source:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedTransaction.source || '-'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Destination:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedTransaction.destination || '-'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#64748b' }}>Reference Number:</span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace' }}>{selectedTransaction.refNo || '-'}</span>
-                  </div>
-                </div>
-
-                <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12.5px', color: '#475569', marginBottom: '14px' }}>
-                  <strong>Audit Note:</strong> {selectedTransaction.remarks || 'Stock movement recorded automatically by Serviq system.'}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConfirmDelete({
-                        isOpen: true,
-                        type: 'DELETE_TRANSACTION',
-                        id: selectedTransaction.id,
-                        title: 'Delete Transaction Record',
-                        message: `Are you sure you want to delete transaction record ${selectedTransaction.txnNo}?`
-                      });
-                    }}
-                    style={{ padding: '7px 14px', borderRadius: '8px', border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Delete Record
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompanyActiveView(null)}
-                    style={{ padding: '7px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#0f172a', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
-                  >
-                    Back to Transactions
-                  </button>
-                </div>
-              </div>
-            </div>
+          {currentPath === '/inventory/stock-request' && (
+            <BranchStockRequest
+              requests={branchRequests}
+              items={items}
+              onSaveStockRequest={handleSaveStockRequest}
+            />
           )}
 
-          {/* ===================================================================== */}
-          {/* STANDARD COMPANY TABLE VIEWS (When companyActiveView is null)         */}
-          {/* ===================================================================== */}
-          {!companyActiveView && (
-            <>
-              {/* COMPANY MODULE 1: INVENTORY ITEMS */}
-              {companyTab === 'items' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <div style={{ position: 'relative', width: '260px', display: 'flex', alignItems: 'center' }}>
-                        <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', zIndex: 1 }}>
-                          <SearchIcon size={15} color="#94a3b8" />
-                        </span>
-                        <input
-                          type="text"
-                          placeholder="Search by item name..."
-                          value={searchTerm}
-                          onChange={e => setSearchTerm(e.target.value)}
-                          style={{ ...filterInputStyle, paddingLeft: '32px', width: '260px' }}
-                        />
-                      </div>
-                      <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...filterInputStyle, width: '180px' }}>
-                        <option value="All">All Categories</option>
-                        <option value="Grains">Grains</option>
-                        <option value="Oils">Oils</option>
-                        <option value="Spices">Spices</option>
-                        <option value="Meat">Meat</option>
-                        <option value="Dairy">Dairy</option>
-                      </select>
-                    </div>
+          {currentPath === '/inventory/branch-transfer' && (
+            <BranchTransfer
+              transfers={transfers}
+              items={items}
+              onSaveTransfer={handleSaveTransfer}
+            />
+          )}
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button type="button" onClick={() => handleExportCSV(items, 'Inventory_Items')} style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '0 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', height: '38px', boxSizing: 'border-box' }}>
-                        <DownloadIcon size={14} /> Export CSV
-                      </button>
-                      <button type="button" onClick={() => { setEditingItem(null); setItemForm({ name: '', category: 'Grains', unit: 'kg', minStock: '', status: 'Active' }); setItemErrors({}); setCompanyActiveView('ADD_ITEM'); }} style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '0 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', height: '38px', boxSizing: 'border-box' }}>
-                        <PlusIcon size={15} /> Add Inventory Item
-                      </button>
-                    </div>
-                  </div>
+          {currentPath === '/inventory/direct-purchase' && (
+            <BranchDirectPurchase
+              purchases={purchases}
+              items={items}
+              onSaveDirectPurchase={handleSaveDirectPurchase}
+              onDeletePurchase={handleDeleteCompanyPurchase}
+            />
+          )}
 
-                  {/* Items Table */}
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item Name</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Category</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Unit</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Minimum Stock Level</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredItems.slice(itemsPage * PAGE_SIZE, (itemsPage + 1) * PAGE_SIZE).map((item, idx) => (
-                          <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(itemsPage * PAGE_SIZE) + idx + 1}</td>
-                            <td style={{ padding: '8px 12px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
-                            <td style={{ padding: '8px 12px', color: '#475569' }}>{item.category}</td>
-                            <td style={{ padding: '8px 12px', color: '#475569' }}>{item.unit}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{item.minStock} {item.unit}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                              <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                                ● {item.status}
-                              </span>
-                            </td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                <button type="button" onClick={() => { setEditingItem(item); setItemForm({ name: item.name, category: item.category, unit: item.unit, minStock: item.minStock, status: item.status }); setItemErrors({}); setCompanyActiveView('EDIT_ITEM'); }} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Edit Item">
-                                  <PencilIcon size={14} color="#475569" />
-                                </button>
-                                <button type="button" onClick={() => setConfirmDelete({ isOpen: true, type: 'DELETE_ITEM', id: item.id, title: 'Delete Item', message: `Are you sure you want to delete ${item.name}?` })} style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #fecaca', background: '#fef2f2', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} title="Delete Item">
-                                  <TrashIcon size={14} color="#dc2626" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {filteredItems.length === 0 && (
-                          <tr>
-                            <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No inventory items found matching filters.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={itemsPage} totalItems={filteredItems.length} pageSize={PAGE_SIZE} onPageChange={setItemsPage} />
-                  </div>
-                </div>
-              )}
+          {currentPath === '/inventory/stock-receipt' && (
+            <BranchStockReceipt
+              receipts={receipts}
+              distributions={distributions}
+              transfers={transfers}
+              items={items}
+              onSaveReceipt={handleSaveReceipt}
+              onDeleteReceipt={handleDeleteReceipt}
+            />
+          )}
 
-              {/* COMPANY MODULE 2: CENTRAL STOCK */}
-              {companyTab === 'central-stock' && (
-                <div>
-                  {/* Summary Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>TOTAL ITEMS</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#0f172a', marginTop: '2px' }}>{totalItemsCount}</div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a' }}>TOTAL STOCK</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#16a34a', marginTop: '2px' }}>{centralTotalStock} units</div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#d97706' }}>LOW STOCK ITEMS</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#d97706', marginTop: '2px' }}>{centralLowStockCount}</div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#dc2626' }}>OUT OF STOCK</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#dc2626', marginTop: '2px' }}>{centralOutOfStockCount}</div>
-                    </div>
-                  </div>
-
-                  {/* Central Stock Filters Bar: Uniform 38px Grid */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: '10px',
-                    alignItems: 'flex-end',
-                    background: '#f8fafc',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '10px'
-                  }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>SEARCH ITEM</label>
-                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                        <span style={{ position: 'absolute', left: '10px', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
-                          <SearchIcon size={14} color="#94a3b8" />
-                        </span>
-                        <input
-                          type="text"
-                          placeholder="Search central stock..."
-                          value={stockSearchTerm}
-                          onChange={e => setStockSearchTerm(e.target.value)}
-                          style={{ ...filterInputStyle, paddingLeft: '32px' }}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORY</label>
-                      <select
-                        value={stockCategoryFilter}
-                        onChange={e => setStockCategoryFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Categories</option>
-                        <option value="Grains">Grains</option>
-                        <option value="Oils">Oils</option>
-                        <option value="Spices">Spices</option>
-                        <option value="Meat">Meat</option>
-                        <option value="Dairy">Dairy</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>STOCK STATUS</label>
-                      <select
-                        value={stockStatusFilter}
-                        onChange={e => setStockStatusFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Stock Statuses</option>
-                        <option value="In Stock">In Stock</option>
-                        <option value="Low Stock">Low Stock</option>
-                        <option value="Out of Stock">Out of Stock</option>
-                      </select>
-                    </div>
-
-                    {(stockSearchTerm || stockCategoryFilter !== 'All' || stockStatusFilter !== 'All') && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setStockSearchTerm('');
-                            setStockCategoryFilter('All');
-                            setStockStatusFilter('All');
-                          }}
-                          style={{
-                            ...filterInputStyle,
-                            background: '#e2e8f0',
-                            color: '#475569',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none'
-                          }}
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Central Stock Table */}
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item Name</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Category</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Unit</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Current Stock</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Minimum Stock</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Stock Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredCentralStock.slice(stockPage * PAGE_SIZE, (stockPage + 1) * PAGE_SIZE).map((item, idx) => {
-                          const statusProps = getStockStatus(item.centralStock, item.minStock);
-                          return (
-                            <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(stockPage * PAGE_SIZE) + idx + 1}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
-                              <td style={{ padding: '8px 12px', color: '#475569' }}>{item.category}</td>
-                              <td style={{ padding: '8px 12px', color: '#475569' }}>{item.unit}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900, fontSize: '14px', color: statusProps.color }}>
-                                {item.centralStock} {item.unit}
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{item.minStock} {item.unit}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{ background: statusProps.bg, color: statusProps.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                                  ● {statusProps.label}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {filteredCentralStock.length === 0 && (
-                          <tr>
-                            <td colSpan="7" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No items found matching selected stock filters.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={stockPage} totalItems={filteredCentralStock.length} pageSize={PAGE_SIZE} onPageChange={setStockPage} />
-                  </div>
-                </div>
-              )}
-
-              {/* COMPANY MODULE 3: PURCHASES */}
-              {companyTab === 'purchases' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Supplier Purchase Orders Log</h3>
-                    <button type="button" onClick={() => { setPurchaseForm({ supplier: '', purchaseDate: new Date().toISOString().split('T')[0], invoiceNo: '', item: 'Basmati Rice', quantity: '', unit: 'kg', rate: '', remarks: '' }); setPurchaseErrors({}); setCompanyActiveView('ADD_PURCHASE'); }} style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '0 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', height: '38px', boxSizing: 'border-box' }}>
-                      <PlusIcon size={15} /> Add Purchase Order
-                    </button>
-                  </div>
-
-                  {/* PURCHASES FILTERS BAR: Uniform 38px Grid */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                    gap: '10px',
-                    alignItems: 'flex-end',
-                    background: '#f8fafc',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '10px'
-                  }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>SUPPLIER</label>
-                      <select
-                        value={purchaseSupplierFilter}
-                        onChange={e => setPurchaseSupplierFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Suppliers</option>
-                        {Array.from(new Set(purchases.map(p => p.supplier))).map(sup => (
-                          <option key={sup} value={sup}>{sup}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>ITEM</label>
-                      <select
-                        value={purchaseItemFilter}
-                        onChange={e => setPurchaseItemFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Items</option>
-                        {items.map(item => (
-                          <option key={item.id} value={item.name}>{item.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>FROM DATE</label>
-                      <input
-                        type="date"
-                        value={purchaseStartDateFilter}
-                        onChange={e => setPurchaseStartDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>TO DATE</label>
-                      <input
-                        type="date"
-                        value={purchaseEndDateFilter}
-                        onChange={e => setPurchaseEndDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    {(purchaseSupplierFilter !== 'All' || purchaseItemFilter !== 'All' || purchaseStartDateFilter || purchaseEndDateFilter) && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPurchaseSupplierFilter('All');
-                            setPurchaseItemFilter('All');
-                            setPurchaseStartDateFilter('');
-                            setPurchaseEndDateFilter('');
-                          }}
-                          style={{
-                            ...filterInputStyle,
-                            background: '#e2e8f0',
-                            color: '#475569',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none'
-                          }}
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PURCHASES TABLE */}
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Purchase Date</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Purchase No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Supplier</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Quantity</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Unit</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Purchase Rate</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Total Amount</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredPurchases.length === 0 ? (
-                          <tr>
-                            <td colSpan="11" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No purchases found matching selected filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredPurchases.slice(purchasesPage * PAGE_SIZE, (purchasesPage + 1) * PAGE_SIZE).map((p, idx) => (
-                            <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(purchasesPage * PAGE_SIZE) + idx + 1}</td>
-                              <td style={{ padding: '8px 12px' }}>{p.date}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{p.purchaseNo}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{p.supplier}</td>
-                              <td style={{ padding: '8px 12px' }}>{p.item}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{p.quantity}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', color: '#64748b' }}>{p.unit || 'kg'}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right' }}>₹{p.rate}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 900, color: '#0f172a' }}>₹{p.total.toLocaleString()}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                                  ● {p.status || 'Completed'}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setSelectedPurchase(p); setCompanyActiveView('VIEW_PURCHASE'); }}
-                                    title="View Purchase Details"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #bfdbfe',
-                                      background: '#eff6ff',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <EyeIcon size={15} color="#2563eb" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmDelete({ isOpen: true, type: 'DELETE_PURCHASE', id: p.id, title: 'Delete Purchase Order', message: `Are you sure you want to delete purchase order ${p.purchaseNo}?` })}
-                                    title="Delete Purchase Order"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #fecaca',
-                                      background: '#fef2f2',
-                                      color: '#dc2626',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <TrashIcon size={14} color="#dc2626" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={purchasesPage} totalItems={filteredPurchases.length} pageSize={PAGE_SIZE} onPageChange={setPurchasesPage} />
-                  </div>
-                </div>
-              )}
-
-              {/* COMPANY MODULE 4: BRANCH REQUESTS */}
-              {companyTab === 'branch-requests' && (
-                <div>
-                  {/* SUMMARY CARDS: Pending Requests, Approved, Dispatched, Completed */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' }}>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#d97706' }}>PENDING REQUESTS</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#d97706', marginTop: '2px' }}>
-                        {branchRequests.filter(r => r.status === 'Pending').length}
-                      </div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#2563eb' }}>APPROVED</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#2563eb', marginTop: '2px' }}>
-                        {branchRequests.filter(r => r.status === 'Approved').length}
-                      </div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#8b5cf6' }}>DISPATCHED</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#8b5cf6', marginTop: '2px' }}>
-                        {branchRequests.filter(r => r.status === 'Dispatched').length}
-                      </div>
-                    </div>
-                    <div style={{ background: '#fff', padding: '12px 16px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a' }}>COMPLETED</div>
-                      <div style={{ fontSize: '22px', fontWeight: 900, color: '#16a34a', marginTop: '2px' }}>
-                        {branchRequests.filter(r => r.status === 'Completed').length}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* BRANCH REQUESTS FILTERS BAR: Uniform 38px Grid */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                    gap: '10px',
-                    alignItems: 'flex-end',
-                    background: '#f8fafc',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '10px'
-                  }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>BRANCH</label>
-                      <select
-                        value={reqBranchFilter}
-                        onChange={e => setReqBranchFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Branches</option>
-                        {Array.from(new Set(branchRequests.map(r => r.branch))).map(b => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>STATUS</label>
-                      <select
-                        value={reqStatusFilter}
-                        onChange={e => setReqStatusFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Statuses</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Dispatched">Dispatched</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Rejected">Rejected</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>FROM DATE</label>
-                      <input
-                        type="date"
-                        value={reqStartDateFilter}
-                        onChange={e => setReqStartDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>TO DATE</label>
-                      <input
-                        type="date"
-                        value={reqEndDateFilter}
-                        onChange={e => setReqEndDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    {(reqBranchFilter !== 'All' || reqStatusFilter !== 'All' || reqStartDateFilter || reqEndDateFilter) && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReqBranchFilter('All');
-                            setReqStatusFilter('All');
-                            setReqStartDateFilter('');
-                            setReqEndDateFilter('');
-                          }}
-                          style={{
-                            ...filterInputStyle,
-                            background: '#e2e8f0',
-                            color: '#475569',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none'
-                          }}
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* BRANCH REQUESTS TABLE */}
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Request No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Branch</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Request Date</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Requested Qty</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredBranchRequests.length === 0 ? (
-                          <tr>
-                            <td colSpan="8" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No branch requests found matching selected filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredBranchRequests.slice(requestsPage * PAGE_SIZE, (requestsPage + 1) * PAGE_SIZE).map((r, idx) => (
-                            <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(requestsPage * PAGE_SIZE) + idx + 1}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{r.requestNo}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{r.branch}</td>
-                              <td style={{ padding: '8px 12px' }}>{r.date}</td>
-                              <td style={{ padding: '8px 12px' }}>{r.item}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{r.reqQty} {r.unit}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{
-                                  background: r.status === 'Completed' ? '#e6f4ea' : r.status === 'Approved' ? '#eff6ff' : r.status === 'Dispatched' ? '#f3e8ff' : r.status === 'Rejected' ? '#fef2f2' : '#fef3c7',
-                                  color: r.status === 'Completed' ? '#16a34a' : r.status === 'Approved' ? '#2563eb' : r.status === 'Dispatched' ? '#8b5cf6' : r.status === 'Rejected' ? '#dc2626' : '#d97706',
-                                  padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800
-                                }}>
-                                  ● {r.status}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setSelectedRequest(r); setCompanyActiveView('VIEW_REQUEST'); }}
-                                    title="View Request Details"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #bfdbfe',
-                                      background: '#eff6ff',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <EyeIcon size={15} color="#2563eb" />
-                                  </button>
-                                  {r.status === 'Pending' && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleApproveRequest(r)}
-                                        title="Approve Request"
-                                        style={{
-                                          width: '32px',
-                                          height: '32px',
-                                          borderRadius: '6px',
-                                          border: '1px solid #bbf7d0',
-                                          background: '#e6f4ea',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center'
-                                        }}
-                                      >
-                                        <CheckCircleIcon size={15} color="#16a34a" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRejectRequest(r)}
-                                        title="Reject Request"
-                                        style={{
-                                          width: '32px',
-                                          height: '32px',
-                                          borderRadius: '6px',
-                                          border: '1px solid #fecaca',
-                                          background: '#fef2f2',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center'
-                                        }}
-                                      >
-                                        <XCircleIcon size={15} color="#dc2626" />
-                                      </button>
-                                    </>
-                                  )}
-                                  {r.status === 'Approved' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setDistributeForm({
-                                          requestNo: r.requestNo,
-                                          branch: r.branch,
-                                          item: r.item,
-                                          requestedQty: r.reqQty,
-                                          approvedQty: r.appQty || r.reqQty,
-                                          distributedQty: r.appQty || r.reqQty,
-                                          distDate: new Date().toISOString().split('T')[0],
-                                          remarks: ''
-                                        });
-                                        setDistributeErrors({});
-                                        setCompanyActiveView('DISTRIBUTE_FORM');
-                                      }}
-                                      title="Distribute Stock to Branch"
-                                      style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        background: '#0f172a',
-                                        color: '#ffffff',
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                      }}
-                                    >
-                                      <TruckIcon size={15} color="#ffffff" />
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={requestsPage} totalItems={filteredBranchRequests.length} pageSize={PAGE_SIZE} onPageChange={setRequestsPage} />
-                  </div>
-                </div>
-              )}
-
-              {/* COMPANY MODULE 5: STOCK DISTRIBUTION */}
-              {companyTab === 'distribution' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>Central Stock Distribution Log</h3>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDistributeForm({
-                          requestNo: 'BR-REQ-001',
-                          branch: 'Serviq Chennai Branch',
-                          item: 'Basmati Rice',
-                          requestedQty: 50,
-                          approvedQty: 50,
-                          distributedQty: 50,
-                          distDate: new Date().toISOString().split('T')[0],
-                          remarks: ''
-                        });
-                        setDistributeErrors({});
-                        setCompanyActiveView('DISTRIBUTE_FORM');
-                      }}
-                      style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '0 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', height: '38px', boxSizing: 'border-box' }}
-                    >
-                      <PlusIcon size={15} /> Create Stock Distribution
-                    </button>
-                  </div>
-
-                  {/* DISTRIBUTION FILTERS BAR: Uniform 38px Grid */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                    gap: '10px',
-                    alignItems: 'flex-end',
-                    background: '#f8fafc',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '10px'
-                  }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>BRANCH</label>
-                      <select
-                        value={distBranchFilter}
-                        onChange={e => setDistBranchFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Branches</option>
-                        {Array.from(new Set(distributions.map(d => d.branch))).map(b => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>ITEM</label>
-                      <select
-                        value={distItemFilter}
-                        onChange={e => setDistItemFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Items</option>
-                        {Array.from(new Set(distributions.map(d => d.item))).map(it => (
-                          <option key={it} value={it}>{it}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>STATUS</label>
-                      <select
-                        value={distStatusFilter}
-                        onChange={e => setDistStatusFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Statuses</option>
-                        <option value="Dispatched">Dispatched</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="In Transit">In Transit</option>
-                      </select>
-                    </div>
-
-                    {(distBranchFilter !== 'All' || distItemFilter !== 'All' || distStatusFilter !== 'All') && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDistBranchFilter('All');
-                            setDistItemFilter('All');
-                            setDistStatusFilter('All');
-                          }}
-                          style={{
-                            ...filterInputStyle,
-                            background: '#e2e8f0',
-                            color: '#475569',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none'
-                          }}
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Distribution No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Request No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Branch</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Distributed Qty</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Distribution Date</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredDistributions.length === 0 ? (
-                          <tr>
-                            <td colSpan="9" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No stock distribution records found matching filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredDistributions.slice(distPage * PAGE_SIZE, (distPage + 1) * PAGE_SIZE).map((d, idx) => (
-                            <tr key={d.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(distPage * PAGE_SIZE) + idx + 1}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{d.distNo}</td>
-                              <td style={{ padding: '8px 12px' }}>{d.requestNo}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{d.branch}</td>
-                              <td style={{ padding: '8px 12px' }}>{d.item}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800 }}>{d.distQty} units</td>
-                              <td style={{ padding: '8px 12px' }}>{d.date}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{ background: '#eff6ff', color: '#2563eb', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                                  ● {d.status}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setSelectedDistribution(d); setCompanyActiveView('VIEW_DISTRIBUTION'); }}
-                                    title="View Distribution Details"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #bfdbfe',
-                                      background: '#eff6ff',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <EyeIcon size={15} color="#2563eb" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setConfirmDelete({
-                                        isOpen: true,
-                                        type: 'DELETE_DISTRIBUTION',
-                                        id: d.id,
-                                        title: 'Delete Stock Distribution',
-                                        message: `Are you sure you want to delete distribution log ${d.distNo}?`
-                                      });
-                                    }}
-                                    title="Delete Distribution Log"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #fecaca',
-                                      background: '#fef2f2',
-                                      color: '#dc2626',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <TrashIcon size={14} color="#dc2626" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={distPage} totalItems={filteredDistributions.length} pageSize={PAGE_SIZE} onPageChange={setDistPage} />
-                  </div>
-                </div>
-              )}
-
-              {/* COMPANY MODULE 6: TRANSACTIONS LOG */}
-              {companyTab === 'transactions' && (
-                <div>
-                  {/* TRANSACTIONS FILTERS BAR: Uniform 38px Grid */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                    gap: '10px',
-                    alignItems: 'flex-end',
-                    background: '#f8fafc',
-                    padding: '10px 14px',
-                    borderRadius: '10px',
-                    border: '1px solid #e2e8f0',
-                    marginBottom: '10px'
-                  }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>FROM DATE</label>
-                      <input
-                        type="date"
-                        value={txnStartDateFilter}
-                        onChange={e => setTxnStartDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>TO DATE</label>
-                      <input
-                        type="date"
-                        value={txnEndDateFilter}
-                        onChange={e => setTxnEndDateFilter(e.target.value)}
-                        style={filterInputStyle}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>TYPE</label>
-                      <select
-                        value={txnTypeFilter}
-                        onChange={e => setTxnTypeFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Types</option>
-                        <option value="Purchase">Purchase</option>
-                        <option value="Distribution">Distribution</option>
-                        <option value="Transfer">Transfer</option>
-                        <option value="Receipt">Receipt</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>ITEM</label>
-                      <select
-                        value={txnItemFilter}
-                        onChange={e => setTxnItemFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Items</option>
-                        {items.map(item => (
-                          <option key={item.id} value={item.name}>{item.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>BRANCH</label>
-                      <select
-                        value={txnBranchFilter}
-                        onChange={e => setTxnBranchFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Branches</option>
-                        <option value="Serviq Chennai Branch">Serviq Chennai Branch</option>
-                        <option value="Serviq Madurai Branch">Serviq Madurai Branch</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>STATUS</label>
-                      <select
-                        value={txnStatusFilter}
-                        onChange={e => setTxnStatusFilter(e.target.value)}
-                        style={filterInputStyle}
-                      >
-                        <option value="All">All Statuses</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Dispatched">Dispatched</option>
-                        <option value="Pending">Pending</option>
-                        <option value="Rejected">Rejected</option>
-                      </select>
-                    </div>
-
-                    {(txnStartDateFilter || txnEndDateFilter || txnTypeFilter !== 'All' || txnItemFilter !== 'All' || txnBranchFilter !== 'All' || txnStatusFilter !== 'All') && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTxnStartDateFilter('');
-                            setTxnEndDateFilter('');
-                            setTxnTypeFilter('All');
-                            setTxnItemFilter('All');
-                            setTxnBranchFilter('All');
-                            setTxnStatusFilter('All');
-                          }}
-                          style={{
-                            ...filterInputStyle,
-                            background: '#e2e8f0',
-                            color: '#475569',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            border: 'none'
-                          }}
-                        >
-                          Clear Filters
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* TRANSACTIONS TABLE */}
-                  <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                      <thead>
-                        <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Transaction Date</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Transaction No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Transaction Type</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Quantity</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Unit</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Source</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Destination</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Reference No.</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'center' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredTransactions.length === 0 ? (
-                          <tr>
-                            <td colSpan="12" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                              No transaction logs found matching selected filters.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredTransactions.slice(txnPage * PAGE_SIZE, (txnPage + 1) * PAGE_SIZE).map((t, idx) => (
-                            <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{(txnPage * PAGE_SIZE) + idx + 1}</td>
-                              <td style={{ padding: '8px 12px', color: '#64748b', fontSize: '12px' }}>{t.date}</td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{t.txnNo}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                                  {t.type}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 12px', fontWeight: 700 }}>{t.item}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800 }}>{t.quantity}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center', color: '#64748b' }}>{t.unit || 'kg'}</td>
-                              <td style={{ padding: '8px 12px' }}>{t.source || '-'}</td>
-                              <td style={{ padding: '8px 12px' }}>{t.destination || '-'}</td>
-                              <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{t.refNo || '-'}</td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <span style={{
-                                  background: t.status === 'Completed' ? '#e6f4ea' : t.status === 'Dispatched' ? '#eff6ff' : '#fef3c7',
-                                  color: t.status === 'Completed' ? '#16a34a' : t.status === 'Dispatched' ? '#2563eb' : '#d97706',
-                                  padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800
-                                }}>
-                                  ● {t.status || 'Completed'}
-                                </span>
-                              </td>
-                              <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => { setSelectedTransaction(t); setCompanyActiveView('VIEW_TRANSACTION'); }}
-                                    title="View Transaction Details"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #bfdbfe',
-                                      background: '#eff6ff',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <EyeIcon size={15} color="#2563eb" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setConfirmDelete({
-                                        isOpen: true,
-                                        type: 'DELETE_TRANSACTION',
-                                        id: t.id,
-                                        title: 'Delete Transaction Record',
-                                        message: `Are you sure you want to delete transaction record ${t.txnNo}?`
-                                      });
-                                    }}
-                                    title="Delete Transaction Record"
-                                    style={{
-                                      width: '32px',
-                                      height: '32px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #fecaca',
-                                      background: '#fef2f2',
-                                      color: '#dc2626',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    <TrashIcon size={14} color="#dc2626" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                    <PaginationBar currentPage={txnPage} totalItems={filteredTransactions.length} pageSize={PAGE_SIZE} onPageChange={setTxnPage} />
-                  </div>
-                </div>
-              )}
-            </>
+          {currentPath === '/inventory/transactions' && (
+            <BranchTransactions
+              transactions={transactions}
+            />
           )}
         </>
       )}
-
-      {/* ========================================================================= */}
-      {/* BRANCH LOGIN MODULE RENDERERS                                             */}
-      {/* ========================================================================= */}
-      {scope === 'BRANCH' && (
-        <>
-          {/* BRANCH MODULE 1: MY STOCK */}
-          {branchTab === 'my-stock' && (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px' }}>
-                <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>TOTAL ITEMS</div>
-                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#0f172a', marginTop: '4px' }}>{totalItemsCount}</div>
-                </div>
-                <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#16a34a' }}>AVAILABLE STOCK</div>
-                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#16a34a', marginTop: '4px' }}>{branchTotalStock} units</div>
-                </div>
-                <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#d97706' }}>LOW STOCK</div>
-                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#d97706', marginTop: '4px' }}>{branchLowStockCount}</div>
-                </div>
-                <div style={{ background: '#fff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#dc2626' }}>OUT OF STOCK</div>
-                  <div style={{ fontSize: '24px', fontWeight: 900, color: '#dc2626', marginTop: '4px' }}>{branchOutOfStockCount}</div>
-                </div>
-              </div>
-
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item Name</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Category</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Unit</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Current Stock</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Minimum Stock</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Stock Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item, idx) => {
-                      const statusProps = getStockStatus(item.branchStock, item.minStock);
-                      return (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
-                          <td style={{ padding: '8px 12px', color: '#475569' }}>{item.category}</td>
-                          <td style={{ padding: '8px 12px', color: '#475569' }}>{item.unit}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900, fontSize: '14px', color: statusProps.color }}>
-                            {item.branchStock} {item.unit}
-                          </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{item.minStock} {item.unit}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <span style={{ background: statusProps.bg, color: statusProps.color, padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                              ● {statusProps.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* BRANCH MODULE 2: STOCK REQUEST */}
-          {branchTab === 'stock-request' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>Stock Replenishment Requests to Central HQ</h3>
-                <button type="button" onClick={() => { setStockReqForm({ item: 'Basmati Rice', reqQty: '', unit: 'kg', remarks: '' }); setStockReqErrors({}); setIsStockRequestModalOpen(true); }} style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PlusIcon size={15} /> New Stock Request
-                </button>
-              </div>
-
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Request No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Request Date</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Requested Quantity</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Unit</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {branchRequests.map((r, idx) => (
-                      <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{r.requestNo}</td>
-                        <td style={{ padding: '8px 12px' }}>{r.date}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{r.item}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800 }}>{r.reqQty}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>{r.unit}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                          <span style={{
-                            background: r.status === 'Completed' ? '#e6f4ea' : r.status === 'Approved' ? '#eff6ff' : '#fef3c7',
-                            color: r.status === 'Completed' ? '#16a34a' : r.status === 'Approved' ? '#2563eb' : '#d97706',
-                            padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800
-                          }}>
-                            ● {r.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* BRANCH MODULE 3: BRANCH TRANSFER */}
-          {branchTab === 'branch-transfer' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>Inter-Branch Stock Transfers</h3>
-                <button type="button" onClick={() => { setTransferForm({ fromBranch: 'Serviq Chennai Branch', toBranch: 'Serviq Madurai Branch', item: 'Fresh Milk', quantity: '', unit: 'Ltr', remarks: '' }); setTransferErrors({}); setIsTransferModalOpen(true); }} style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PlusIcon size={15} /> Transfer Request
-                </button>
-              </div>
-
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Transfer No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>From Branch</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>To Branch</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Quantity</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transfers.map((t, idx) => (
-                      <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{t.transferNo}</td>
-                        <td style={{ padding: '8px 12px' }}>{t.fromBranch}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{t.toBranch}</td>
-                        <td style={{ padding: '8px 12px' }}>{t.item}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800 }}>{t.quantity} {t.unit}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                          <span style={{ background: '#fef3c7', color: '#d97706', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                            ● {t.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* BRANCH MODULE 4: DIRECT PURCHASE */}
-          {branchTab === 'direct-purchase' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>Direct Local Supplier Purchases</h3>
-                <button type="button" onClick={() => { setPurchaseForm({ supplier: '', purchaseDate: new Date().toISOString().split('T')[0], invoiceNo: '', item: 'Basmati Rice', quantity: '', unit: 'kg', rate: '', remarks: '' }); setPurchaseErrors({}); setIsPurchaseModalOpen(true); }} style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PlusIcon size={15} /> Add Direct Purchase
-                </button>
-              </div>
-
-              {/* DIRECT PURCHASES FILTERS BAR */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px',
-                background: '#f8fafc',
-                padding: '12px 16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                marginBottom: '16px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>SUPPLIER</label>
-                  <select
-                    value={purchaseSupplierFilter}
-                    onChange={e => setPurchaseSupplierFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Suppliers</option>
-                    {Array.from(new Set(purchases.map(p => p.supplier))).map(sup => (
-                      <option key={sup} value={sup}>{sup}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>ITEM</label>
-                  <select
-                    value={purchaseItemFilter}
-                    onChange={e => setPurchaseItemFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Items</option>
-                    {items.map(item => (
-                      <option key={item.id} value={item.name}>{item.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>FROM DATE</label>
-                  <input
-                    type="date"
-                    value={purchaseStartDateFilter}
-                    onChange={e => setPurchaseStartDateFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>TO DATE</label>
-                  <input
-                    type="date"
-                    value={purchaseEndDateFilter}
-                    onChange={e => setPurchaseEndDateFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  />
-                </div>
-
-                {(purchaseSupplierFilter !== 'All' || purchaseItemFilter !== 'All' || purchaseStartDateFilter || purchaseEndDateFilter) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPurchaseSupplierFilter('All');
-                      setPurchaseItemFilter('All');
-                      setPurchaseStartDateFilter('');
-                      setPurchaseEndDateFilter('');
-                    }}
-                    style={{
-                      marginTop: '18px',
-                      background: '#e2e8f0',
-                      color: '#475569',
-                      border: 'none',
-                      padding: '7px 12px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-
-              {/* DIRECT PURCHASES TABLE */}
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Purchase Date</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Purchase No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Supplier</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Quantity</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Unit</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Purchase Rate</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Total Amount</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredPurchases.length === 0 ? (
-                      <tr>
-                        <td colSpan="11" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                          No direct purchases found matching selected filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredPurchases.map((p, idx) => (
-                        <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                          <td style={{ padding: '8px 12px' }}>{p.date}</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{p.purchaseNo}</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{p.supplier}</td>
-                          <td style={{ padding: '8px 12px' }}>{p.item}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>{p.quantity}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: '#64748b' }}>{p.unit || 'kg'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>₹{p.rate}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 900, color: '#0f172a' }}>₹{p.total.toLocaleString()}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                              ● {p.status || 'Completed'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                              <button type="button" onClick={() => { setSelectedPurchase(p); setIsPurchaseDetailModalOpen(true); }} title="View Purchase Details" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '5px 9px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <EyeIcon size={13} /> View
-                              </button>
-                              <button type="button" onClick={() => setConfirmDelete({ isOpen: true, type: 'DELETE_PURCHASE', id: p.id, title: 'Delete Purchase Order', message: `Are you sure you want to delete purchase order ${p.purchaseNo}?` })} title="Delete Purchase Order" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '5px 9px', borderRadius: '6px', fontSize: '11.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <TrashIcon size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* BRANCH MODULE 5: STOCK RECEIPT */}
-          {branchTab === 'stock-receipt' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>Goods Stock Receipts</h3>
-                <button type="button" onClick={() => { setReceiptForm({ refNo: 'DIST-2026-001', source: 'Central Warehouse', item: 'Refined Oil', sentQty: 25, receivedQty: '', recDate: new Date().toISOString().split('T')[0], remarks: '' }); setReceiptErrors({}); setIsReceiptModalOpen(true); }} style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <PlusIcon size={15} /> Record Stock Receipt
-                </button>
-              </div>
-
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Receipt No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Ref No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Source</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Sent Qty</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Received Qty</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {receipts.map((rc, idx) => (
-                      <tr key={rc.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{rc.receiptNo}</td>
-                        <td style={{ padding: '8px 12px' }}>{rc.refNo}</td>
-                        <td style={{ padding: '8px 12px' }}>{rc.source}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 700 }}>{rc.item}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>{rc.sentQty}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 900, color: '#16a34a' }}>{rc.recQty}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                          <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800 }}>
-                            ● {rc.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* BRANCH MODULE 6: TRANSACTIONS */}
-          {branchTab === 'transactions' && (
-            <div>
-              {/* TRANSACTIONS FILTERS BAR */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '12px',
-                background: '#f8fafc',
-                padding: '12px 16px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0',
-                marginBottom: '16px'
-              }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>FROM DATE</label>
-                  <input
-                    type="date"
-                    value={txnStartDateFilter}
-                    onChange={e => setTxnStartDateFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>TO DATE</label>
-                  <input
-                    type="date"
-                    value={txnEndDateFilter}
-                    onChange={e => setTxnEndDateFilter(e.target.value)}
-                    style={{ padding: '6px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>TRANSACTION TYPE</label>
-                  <select
-                    value={txnTypeFilter}
-                    onChange={e => setTxnTypeFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Types</option>
-                    <option value="Purchase">Purchase</option>
-                    <option value="Distribution">Distribution</option>
-                    <option value="Transfer">Transfer</option>
-                    <option value="Receipt">Receipt</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>ITEM</label>
-                  <select
-                    value={txnItemFilter}
-                    onChange={e => setTxnItemFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Items</option>
-                    {items.map(item => (
-                      <option key={item.id} value={item.name}>{item.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>BRANCH</label>
-                  <select
-                    value={txnBranchFilter}
-                    onChange={e => setTxnBranchFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Branches</option>
-                    <option value="Serviq Chennai Branch">Serviq Chennai Branch</option>
-                    <option value="Serviq Madurai Branch">Serviq Madurai Branch</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>STATUS</label>
-                  <select
-                    value={txnStatusFilter}
-                    onChange={e => setTxnStatusFilter(e.target.value)}
-                    style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', outline: 'none' }}
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Dispatched">Dispatched</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
-                </div>
-
-                {(txnStartDateFilter || txnEndDateFilter || txnTypeFilter !== 'All' || txnItemFilter !== 'All' || txnBranchFilter !== 'All' || txnStatusFilter !== 'All') && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTxnStartDateFilter('');
-                      setTxnEndDateFilter('');
-                      setTxnTypeFilter('All');
-                      setTxnItemFilter('All');
-                      setTxnBranchFilter('All');
-                      setTxnStatusFilter('All');
-                    }}
-                    style={{
-                      marginTop: '18px',
-                      background: '#e2e8f0',
-                      color: '#475569',
-                      border: 'none',
-                      padding: '7px 12px',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
-
-              <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                  <thead>
-                    <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', width: '60px' }}>S.No</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Transaction Date</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Transaction No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Transaction Type</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Item</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Quantity</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Unit</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Source</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Destination</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left' }}>Reference No.</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Status</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'center' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTransactions.length === 0 ? (
-                      <tr>
-                        <td colSpan="12" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                          No transaction logs found matching selected filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredTransactions.map((t, idx) => (
-                        <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{idx + 1}</td>
-                          <td style={{ padding: '8px 12px', color: '#64748b', fontSize: '12px' }}>{t.date}</td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--primary)', fontFamily: 'monospace' }}>{t.txnNo}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <span style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 800 }}>
-                              {t.type}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{t.item}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 800 }}>{t.quantity}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center', color: '#64748b' }}>{t.unit || 'kg'}</td>
-                          <td style={{ padding: '8px 12px' }}>{t.source || '-'}</td>
-                          <td style={{ padding: '8px 12px' }}>{t.destination || '-'}</td>
-                          <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{t.refNo || '-'}</td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <span style={{
-                              background: t.status === 'Completed' ? '#e6f4ea' : t.status === 'Dispatched' ? '#eff6ff' : '#fef3c7',
-                              color: t.status === 'Completed' ? '#16a34a' : t.status === 'Dispatched' ? '#2563eb' : '#d97706',
-                              padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800
-                            }}>
-                              ● {t.status || 'Completed'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                              <button
-                                type="button"
-                                onClick={() => { setSelectedTransaction(t); setIsTxnDetailModalOpen(true); }}
-                                title="View Transaction Details"
-                                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#0f172a', padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <EyeIcon size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setConfirmDelete({
-                                    isOpen: true,
-                                    type: 'DELETE_TRANSACTION',
-                                    id: t.id,
-                                    title: 'Delete Transaction Record',
-                                    message: `Are you sure you want to delete transaction record ${t.txnNo}?`
-                                  });
-                                }}
-                                title="Delete Transaction Record"
-                                style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '5px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              >
-                                <TrashIcon size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ========================================================================= */}
-      {/* FORM MODALS WITH INLINE RED ERROR MESSAGES BELOW FIELDS                   */}
-      {/* ========================================================================= */}
-
-      {/* 1. ADD / EDIT INVENTORY ITEM MODAL */}
-      {scope !== 'COMPANY' && isAddItemModalOpen && (
-        <Modal isOpen={isAddItemModalOpen} onClose={() => setIsAddItemModalOpen(false)} title={editingItem ? "Edit Inventory Item" : "Add Inventory Item"} maxWidth="480px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Item Name *</label>
-              <input type="text" value={itemForm.name} onChange={e => { setItemForm({ ...itemForm, name: e.target.value }); setItemErrors({ ...itemErrors, name: null }); }} placeholder="e.g. Basmati Rice" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: itemErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
-              {itemErrors.name && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{itemErrors.name}</span>}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Category *</label>
-                <select value={itemForm.category} onChange={e => setItemForm({ ...itemForm, category: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                  <option value="Grains">Grains</option>
-                  <option value="Oils">Oils</option>
-                  <option value="Spices">Spices</option>
-                  <option value="Meat">Meat</option>
-                  <option value="Dairy">Dairy</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Unit *</label>
-                <select value={itemForm.unit} onChange={e => setItemForm({ ...itemForm, unit: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                  <option value="kg">kg (Kilogram)</option>
-                  <option value="Ltr">Ltr (Liter)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="pkt">pkt (Packets)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Minimum Stock Level *</label>
-              <input type="number" value={itemForm.minStock} onChange={e => { setItemForm({ ...itemForm, minStock: e.target.value }); setItemErrors({ ...itemErrors, minStock: null }); }} placeholder="e.g. 50" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: itemErrors.minStock ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px', outline: 'none' }} />
-              {itemErrors.minStock && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{itemErrors.minStock}</span>}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-              <button type="button" onClick={() => setIsAddItemModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={handleSaveItem} style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Save Item</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 2. ADD PURCHASE MODAL (WITH AUTO CALCULATED TOTAL AMOUNT & UNIT SELECTOR) */}
-      {scope !== 'COMPANY' && isPurchaseModalOpen && (
-        <Modal isOpen={isPurchaseModalOpen} onClose={() => setIsPurchaseModalOpen(false)} title="Add Purchase Order" maxWidth="540px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Supplier Name *</label>
-                <input type="text" value={purchaseForm.supplier} onChange={e => { setPurchaseForm({ ...purchaseForm, supplier: e.target.value }); setPurchaseErrors({ ...purchaseErrors, supplier: null }); }} placeholder="e.g. Metro Cash & Carry" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: purchaseErrors.supplier ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {purchaseErrors.supplier && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.supplier}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Purchase Date *</label>
-                <input type="date" value={purchaseForm.purchaseDate} onChange={e => setPurchaseForm({ ...purchaseForm, purchaseDate: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Item *</label>
-                <select value={purchaseForm.item} onChange={e => handlePurchaseItemChange(e.target.value)} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                  {items.map(i => <option key={i.id} value={i.name}>{i.name} ({i.unit})</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Invoice Number</label>
-                <input type="text" value={purchaseForm.invoiceNo} onChange={e => setPurchaseForm({ ...purchaseForm, invoiceNo: e.target.value })} placeholder="e.g. INV-9901" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Quantity *</label>
-                <input type="number" value={purchaseForm.quantity} onChange={e => { setPurchaseForm({ ...purchaseForm, quantity: e.target.value }); setPurchaseErrors({ ...purchaseErrors, quantity: null }); }} placeholder="e.g. 100" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: purchaseErrors.quantity ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {purchaseErrors.quantity && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.quantity}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Unit *</label>
-                <select value={purchaseForm.unit} onChange={e => { setPurchaseForm({ ...purchaseForm, unit: e.target.value }); setPurchaseErrors({ ...purchaseErrors, unit: null }); }} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: purchaseErrors.unit ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }}>
-                  <option value="kg">kg (Kilogram)</option>
-                  <option value="Ltr">Ltr (Liter)</option>
-                  <option value="pcs">pcs (Pieces)</option>
-                  <option value="pkt">pkt (Packets)</option>
-                  <option value="box">box (Boxes)</option>
-                  <option value="gm">gm (Grams)</option>
-                  <option value="bag">bag (Bags)</option>
-                  <option value="tin">tin (Tins)</option>
-                </select>
-                {purchaseErrors.unit && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.unit}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Purchase Rate (₹) *</label>
-                <input type="number" value={purchaseForm.rate} onChange={e => { setPurchaseForm({ ...purchaseForm, rate: e.target.value }); setPurchaseErrors({ ...purchaseErrors, rate: null }); }} placeholder="e.g. 90" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: purchaseErrors.rate ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {purchaseErrors.rate && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{purchaseErrors.rate}</span>}
-              </div>
-            </div>
-
-            {/* Auto Calculated Total Display */}
-            <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>Calculated Total Amount:</span>
-              <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)', fontFamily: "'Outfit', sans-serif" }}>
-                ₹{((Number(purchaseForm.quantity) || 0) * (Number(purchaseForm.rate) || 0)).toLocaleString()}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button type="button" onClick={() => setIsPurchaseModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={handleSavePurchase} style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Submit Purchase</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* VIEW PURCHASE DETAILS MODAL */}
-      {scope !== 'COMPANY' && isPurchaseDetailModalOpen && selectedPurchase && (
-        <Modal isOpen={isPurchaseDetailModalOpen} onClose={() => setIsPurchaseDetailModalOpen(false)} title={`Purchase Order Details (${selectedPurchase.purchaseNo})`} maxWidth="480px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>SUPPLIER</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 800, color: '#0f172a' }}>{selectedPurchase.supplier}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>PURCHASE DATE</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 700, color: '#334155' }}>{selectedPurchase.date}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>INVOICE NO.</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 700, color: '#334155' }}>{selectedPurchase.invoiceNo || 'N/A'}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>STATUS</span>
-                <p style={{ margin: '2px 0 0 0' }}>
-                  <span style={{ background: '#e6f4ea', color: '#16a34a', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800 }}>
-                    ● {selectedPurchase.status || 'Completed'}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>Item:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedPurchase.item}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Quantity & Unit:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedPurchase.quantity} {selectedPurchase.unit || 'kg'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Purchase Rate:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700 }}>₹{selectedPurchase.rate} / {selectedPurchase.unit || 'kg'}</span>
-              </div>
-              <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '8px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>Total Amount:</span>
-                <span style={{ fontSize: '18px', fontWeight: 900, color: 'var(--primary)' }}>₹{selectedPurchase.total.toLocaleString()}</span>
-              </div>
-            </div>
-
-            {selectedPurchase.remarks && (
-              <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
-                <strong>Remarks:</strong> {selectedPurchase.remarks}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-              <button type="button" onClick={() => setIsPurchaseDetailModalOpen(false)} style={{ padding: '8px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 3. STOCK REQUEST MODAL */}
-      {scope !== 'COMPANY' && isStockRequestModalOpen && (
-        <Modal isOpen={isStockRequestModalOpen} onClose={() => setIsStockRequestModalOpen(false)} title="New Stock Request to Central HQ" maxWidth="460px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Item *</label>
-              <select value={stockReqForm.item} onChange={e => setStockReqForm({ ...stockReqForm, item: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                {items.map(i => <option key={i.id} value={i.name}>{i.name} ({i.unit})</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Required Quantity *</label>
-              <input type="number" value={stockReqForm.reqQty} onChange={e => setStockReqForm({ ...stockReqForm, reqQty: e.target.value })} placeholder="e.g. 50" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: stockReqErrors.reqQty ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-              {stockReqErrors.reqQty && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{stockReqErrors.reqQty}</span>}
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Reason / Remarks</label>
-              <textarea value={stockReqForm.remarks} onChange={e => setStockReqForm({ ...stockReqForm, remarks: e.target.value })} placeholder="Reason for replenishment..." rows={3} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button type="button" onClick={() => setIsStockRequestModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={handleSaveStockRequest} style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Submit Request</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 4. BRANCH REQUEST DETAILS MODAL */}
-      {scope !== 'COMPANY' && isRequestDetailModalOpen && selectedRequest && (
-        <Modal isOpen={isRequestDetailModalOpen} onClose={() => setIsRequestDetailModalOpen(false)} title={`Request Details (${selectedRequest.requestNo})`} maxWidth="500px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>REQUEST NO.</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>{selectedRequest.requestNo}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>BRANCH</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 800, color: '#0f172a' }}>{selectedRequest.branch}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>REQUEST DATE</span>
-                <p style={{ margin: '2px 0 0 0', fontWeight: 700, color: '#334155' }}>{selectedRequest.date}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b' }}>STATUS</span>
-                <p style={{ margin: '2px 0 0 0' }}>
-                  <span style={{
-                    background: selectedRequest.status === 'Completed' ? '#e6f4ea' : selectedRequest.status === 'Approved' ? '#eff6ff' : selectedRequest.status === 'Dispatched' ? '#f3e8ff' : selectedRequest.status === 'Rejected' ? '#fef2f2' : '#fef3c7',
-                    color: selectedRequest.status === 'Completed' ? '#16a34a' : selectedRequest.status === 'Approved' ? '#2563eb' : selectedRequest.status === 'Dispatched' ? '#8b5cf6' : selectedRequest.status === 'Rejected' ? '#dc2626' : '#d97706',
-                    padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 800
-                  }}>
-                    ● {selectedRequest.status}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Item Name:</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>{selectedRequest.item}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Requested Quantity:</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--primary)' }}>{selectedRequest.reqQty}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>Unit:</span>
-                <span style={{ fontSize: '13px', fontWeight: 700 }}>{selectedRequest.unit || 'kg'}</span>
-              </div>
-            </div>
-
-            <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
-              <strong>Remarks:</strong> {selectedRequest.remarks || 'No remarks specified.'}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
-              {selectedRequest.status === 'Pending' && (
-                <>
-                  <button type="button" onClick={() => handleApproveRequest(selectedRequest)} style={{ background: '#e6f4ea', border: '1px solid #bbf7d0', color: '#16a34a', padding: '8px 14px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                    Approve
-                  </button>
-                  <button type="button" onClick={() => handleRejectRequest(selectedRequest)} style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '8px 14px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                    Reject
-                  </button>
-                </>
-              )}
-              {selectedRequest.status === 'Approved' && (
-                <button type="button" onClick={() => { setIsRequestDetailModalOpen(false); setDistributeForm({ requestNo: selectedRequest.requestNo, branch: selectedRequest.branch, item: selectedRequest.item, requestedQty: selectedRequest.reqQty, approvedQty: selectedRequest.appQty || selectedRequest.reqQty, distributedQty: selectedRequest.appQty || selectedRequest.reqQty, distDate: new Date().toISOString().split('T')[0], remarks: '' }); setDistributeErrors({}); setIsDistributeModalOpen(true); }} style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <TruckIcon size={14} /> Distribute Stock
-                </button>
-              )}
-              <button type="button" onClick={() => setIsRequestDetailModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 5. STOCK DISTRIBUTION FORM MODAL */}
-      {scope !== 'COMPANY' && isDistributeModalOpen && (
-        <Modal isOpen={isDistributeModalOpen} onClose={() => setIsDistributeModalOpen(false)} title="Stock Distribution Order" maxWidth="520px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Request No. *</label>
-                <input type="text" value={distributeForm.requestNo} onChange={e => { setDistributeForm({ ...distributeForm, requestNo: e.target.value }); setDistributeErrors({ ...distributeErrors, requestNo: null }); }} placeholder="e.g. BR-REQ-001" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.requestNo ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {distributeErrors.requestNo && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.requestNo}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Branch *</label>
-                <input type="text" value={distributeForm.branch} onChange={e => { setDistributeForm({ ...distributeForm, branch: e.target.value }); setDistributeErrors({ ...distributeErrors, branch: null }); }} placeholder="e.g. Serviq Chennai Branch" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.branch ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {distributeErrors.branch && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.branch}</span>}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Item *</label>
-                <input type="text" value={distributeForm.item} onChange={e => { setDistributeForm({ ...distributeForm, item: e.target.value }); setDistributeErrors({ ...distributeErrors, item: null }); }} placeholder="e.g. Basmati Rice" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.item ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {distributeErrors.item && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.item}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Requested Quantity</label>
-                <input type="number" value={distributeForm.requestedQty} readOnly style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', fontSize: '13px', fontWeight: 700, color: '#64748b' }} />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Approved Quantity *</label>
-                <input type="number" value={distributeForm.approvedQty} onChange={e => { setDistributeForm({ ...distributeForm, approvedQty: e.target.value }); setDistributeErrors({ ...distributeErrors, approvedQty: null }); }} placeholder="e.g. 50" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.approvedQty ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {distributeErrors.approvedQty && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.approvedQty}</span>}
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Distributed Quantity *</label>
-                <input type="number" value={distributeForm.distributedQty} onChange={e => { setDistributeForm({ ...distributeForm, distributedQty: e.target.value }); setDistributeErrors({ ...distributeErrors, distributedQty: null }); }} placeholder="e.g. 50" style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.distributedQty ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-                {distributeErrors.distributedQty && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.distributedQty}</span>}
-              </div>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Distribution Date *</label>
-              <input type="date" value={distributeForm.distDate} onChange={e => setDistributeForm({ ...distributeForm, distDate: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: distributeErrors.distDate ? '1.5px solid #dc2626' : '1px solid #cbd5e1', fontSize: '13px' }} />
-              {distributeErrors.distDate && <span style={{ color: '#dc2626', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'block' }}>{distributeErrors.distDate}</span>}
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Remarks</label>
-              <textarea value={distributeForm.remarks} onChange={e => setDistributeForm({ ...distributeForm, remarks: e.target.value })} placeholder="Distribution notes or tracking details..." rows={3} style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }} />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button type="button" onClick={() => setIsDistributeModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={handleSaveDistribution} style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Dispatch Distribution</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* STOCK DISTRIBUTION DETAIL MODAL */}
-      {scope !== 'COMPANY' && isDistDetailModalOpen && selectedDistribution && (
-        <Modal isOpen={isDistDetailModalOpen} onClose={() => setIsDistDetailModalOpen(false)} title={`Stock Distribution Details - ${selectedDistribution.distNo}`} maxWidth="500px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DISTRIBUTION NO.</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>{selectedDistribution.distNo}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>REQUEST NO.</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>{selectedDistribution.requestNo}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>BRANCH</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedDistribution.branch}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DISTRIBUTION DATE</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedDistribution.date}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>ITEM</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedDistribution.item}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DISTRIBUTED QUANTITY</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#16a34a' }}>{selectedDistribution.distQty} units</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                <span style={{ background: '#eff6ff', color: '#2563eb', padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '2px' }}>
-                  ● {selectedDistribution.status}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
-              <strong>Remarks:</strong> {selectedDistribution.remarks || 'No remarks specified.'}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-              <button type="button" onClick={() => setIsDistDetailModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* TRANSACTION DETAIL MODAL */}
-      {scope !== 'COMPANY' && isTxnDetailModalOpen && selectedTransaction && (
-        <Modal isOpen={isTxnDetailModalOpen} onClose={() => setIsTxnDetailModalOpen(false)} title={`Transaction Details - ${selectedTransaction.txnNo}`} maxWidth="500px">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', paddingTop: '10px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TRANSACTION NO.</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--primary)', fontFamily: 'monospace' }}>{selectedTransaction.txnNo}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TRANSACTION DATE</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedTransaction.date}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>TRANSACTION TYPE</span>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>{selectedTransaction.type}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>REFERENCE NO.</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>{selectedTransaction.refNo || '-'}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>ITEM</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedTransaction.item}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>QUANTITY & UNIT</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#16a34a' }}>{selectedTransaction.quantity} {selectedTransaction.unit || 'kg'}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>SOURCE</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedTransaction.source || '-'}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>DESTINATION</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{selectedTransaction.destination || '-'}</span>
-              </div>
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', display: 'block' }}>STATUS</span>
-                <span style={{
-                  background: selectedTransaction.status === 'Completed' ? '#e6f4ea' : selectedTransaction.status === 'Dispatched' ? '#eff6ff' : '#fef3c7',
-                  color: selectedTransaction.status === 'Completed' ? '#16a34a' : selectedTransaction.status === 'Dispatched' ? '#2563eb' : '#d97706',
-                  padding: '3px 9px', borderRadius: '12px', fontSize: '11px', fontWeight: 800, display: 'inline-block', marginTop: '2px'
-                }}>
-                  ● {selectedTransaction.status || 'Completed'}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ background: '#f1f5f9', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#475569' }}>
-              <strong>Remarks:</strong> {selectedTransaction.remarks || 'Transaction logged automatically by system.'}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
-              <button type="button" onClick={() => setIsTxnDetailModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer' }}>
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* 6. CONFIRMATION MODAL FOR DELETE / REJECT */}
-      {confirmDelete.isOpen && (
-        <Modal isOpen={confirmDelete.isOpen} onClose={() => setConfirmDelete({ isOpen: false, type: '', id: null, title: '', message: '' })} title={confirmDelete.title} maxWidth="400px">
-          <div style={{ paddingTop: '10px' }}>
-            <p style={{ margin: '0 0 16px 0', fontSize: '13.5px', color: '#334155', lineHeight: 1.5 }}>
-              {confirmDelete.message}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" onClick={() => setConfirmDelete({ isOpen: false, type: '', id: null, title: '', message: '' })} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-              <button type="button" onClick={handleConfirmDeleteAction} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: '#dc2626', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}>Confirm</button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
     </section>
   );
 }
