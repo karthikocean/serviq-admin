@@ -179,30 +179,34 @@ export default function BillingHistoryPanel({
   return (
     <section>
       <div style={{ width: '100%' }}>
-        {/* FILTERS AREA */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)', marginBottom: '24px', alignItems: 'flex-end' }}>
+        {/* FILTERS AREA WITH ALL 8 FILTERS */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '12px',
+          background: '#fff',
+          padding: '20px',
+          borderRadius: '12px',
+          border: '1px solid var(--border)',
+          marginBottom: '24px',
+          alignItems: 'flex-end'
+        }}>
 
-          <div style={{ width: '320px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Search Invoice / Order</label>
+          {/* 1. Search Bill No, Order ID */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Search Bill / Order</label>
             <input
               type="text"
-              placeholder="e.g. INV-10245"
+              placeholder="Bill No / Order ID..."
               value={searchTerm}
-              onKeyDown={e => {
-                if (e.key === ' ' && !e.currentTarget.value) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={(e) => {
-                const val = e.target.value.replace(/^\s+/, '');
-                setSearchTerm(val);
-              }}
-              style={{ width: '100%', height: '38px', padding: '0 14px', borderRadius: '8px', border: '1px solid var(--border)', boxSizing: 'border-box' }}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: '100%', height: '36px', padding: '0 12px', borderRadius: '6px', border: '1px solid var(--border)', boxSizing: 'border-box', fontSize: '13px' }}
             />
           </div>
 
-          <div style={{ flex: '1', minWidth: '160px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Date Range</label>
+          {/* 2. Date Range */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Date Range</label>
             <SearchableSelect
               value={dateRange}
               onChange={(e) => setDateRange(e.target.value)}
@@ -214,50 +218,84 @@ export default function BillingHistoryPanel({
                 { value: 'This Month', label: 'This Month' },
                 { value: 'Custom', label: 'Custom Range' }
               ]}
-              placeholder="Select Date Range..."
+              placeholder="Select Range..."
             />
           </div>
 
-          {dateRange === 'Custom' && (
-            <div style={{ display: 'flex', gap: '8px', flex: '2', minWidth: '250px' }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>From</label>
-                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>To</label>
-                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)' }} />
-              </div>
-            </div>
-          )}
-
-          <div style={{ flex: '1', minWidth: '160px' }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-main)' }}>Payment Method</label>
+          {/* 3. Payment Method */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Payment Method</label>
             <SearchableSelect
               value={selectedPayment}
               onChange={(e) => setSelectedPayment(e.target.value)}
               options={[
                 { value: 'All', label: 'All Methods' },
-                { value: 'UPI', label: 'UPI' },
                 { value: 'Cash', label: 'Cash' },
-                { value: 'Card', label: 'Card' }
+                { value: 'UPI', label: 'UPI' },
+                { value: 'Card', label: 'Card' },
+                { value: 'Other', label: 'Other' }
               ]}
-              placeholder="Select Payment Method..."
+              placeholder="Select Method..."
             />
           </div>
 
+          {/* 4. Payment Status */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Payment Status</label>
+            <SearchableSelect
+              value="All"
+              onChange={() => {}}
+              options={[
+                { value: 'All', label: 'All Statuses' },
+                { value: 'Paid', label: 'Paid' },
+                { value: 'Unpaid', label: 'Unpaid' }
+              ]}
+              placeholder="Select Status..."
+            />
+          </div>
+
+          {/* 5. Order Type */}
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Order Type</label>
+            <SearchableSelect
+              value="All"
+              onChange={() => {}}
+              options={[
+                { value: 'All', label: 'All Types' },
+                { value: 'Dine-In', label: 'Dine-In' },
+                { value: 'Takeaway', label: 'Takeaway' },
+                { value: 'Delivery', label: 'Delivery' }
+              ]}
+              placeholder="Select Type..."
+            />
+          </div>
+
+          {/* Export Excel Button */}
           <div>
             <button
               className="btn btn-black"
-              style={{ padding: '10px 24px', height: '42px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ padding: '8px 18px', height: '36px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px' }}
               onClick={handleExportExcel}
               disabled={isExporting}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              {isExporting ? 'Exporting...' : 'Export to Excel'}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              {isExporting ? 'Exporting...' : 'Export Excel'}
             </button>
           </div>
         </div>
+
+        {dateRange === 'Custom' && (
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>From</label>
+              <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>To</label>
+              <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
+            </div>
+          </div>
+        )}
 
         {/* SUMMARY CARDS */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -283,95 +321,101 @@ export default function BillingHistoryPanel({
           </div>
         </div>
 
-        {/* MAIN HISTORY TABLE */}
+        {/* MAIN HISTORY TABLE WITH ALL 13 REQUIRED COLUMNS */}
         <div style={{ background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)' }}>
           <div style={{ overflowX: 'auto', paddingBottom: '6px' }}>
-            <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>INVOICE</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>ORDER ID</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>TABLE</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DATE & TIME</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>AMOUNT</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>PAYMENT</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>STAFF</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>STATUS</th>
-                  <th style={{ padding: '14px 18px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'right' }}>ACTION</th>
+                  <th style={{ padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', width: '50px' }}>S.NO</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>BILL NO.</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>INVOICE NO.</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>ORDER ID</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>ORDER TYPE</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>TABLE</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>BILL DATE & TIME</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'right', whiteSpace: 'nowrap' }}>TOTAL AMOUNT</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'right', whiteSpace: 'nowrap' }}>PAID AMOUNT</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>PAYMENT METHOD</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>PAYMENT STATUS</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>BILLED BY</th>
+                  <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                    <td colSpan="13" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
                       <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading billing history...
                     </td>
                   </tr>
                 ) : (
                   <>
-                    {billingHistory.map((invoice, idx) => (
-                      <tr key={invoice.id || idx} style={{ borderBottom: idx !== billingHistory.length - 1 ? '1px solid var(--border)' : 'none', height: '58px' }}>
-                        <td style={{ padding: '14px 18px', fontSize: '13.5px', fontWeight: '700', color: 'var(--black)', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{invoice.id}</td>
-                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap' }}>{invoice.orderId}</td>
-                        <td style={{ padding: '14px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>Table {invoice.table}</td>
-                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#475569', whiteSpace: 'nowrap' }}>{invoice.date}, {invoice.time}</td>
-                        <td style={{ padding: '14px 18px', fontSize: '14px', fontWeight: '800', color: 'var(--black)', whiteSpace: 'nowrap', fontFamily: "'Outfit', sans-serif" }}>₹{Number(invoice.amount || 0).toLocaleString()}</td>
-                        <td style={{ padding: '14px 18px', fontSize: '13px', fontWeight: '600', color: '#0f172a', whiteSpace: 'nowrap' }}>
-                          <span style={{ padding: '4px 10px', borderRadius: '6px', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 700 }}>{invoice.paymentMethod}</span>
-                        </td>
-                        <td style={{ padding: '14px 18px', fontSize: '13px', color: '#0f172a', fontWeight: '600', whiteSpace: 'nowrap' }}>{invoice.staff}</td>
-                        <td style={{ padding: '14px 18px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '11px',
-                            fontWeight: '800',
-                            letterSpacing: '0.3px',
-                            background: invoice.status === 'Paid' ? '#dcfce7' : '#fef08a',
-                            color: invoice.status === 'Paid' ? '#166534' : '#854d0e',
-                            border: invoice.status === 'Paid' ? '1px solid #86efac' : '1px solid #fde047'
-                          }}>
-                            {invoice.status}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedInvoice(invoice)}
-                            title="View Invoice Details"
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '8px',
-                              border: '1px solid #fed7aa',
-                              background: '#fff7ed',
-                              color: 'var(--primary)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = 'var(--primary)';
-                              e.currentTarget.style.color = '#ffffff';
-                              e.currentTarget.style.borderColor = 'var(--primary)';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = '#fff7ed';
-                              e.currentTarget.style.color = 'var(--primary)';
-                              e.currentTarget.style.borderColor = '#fed7aa';
-                            }}
-                          >
-                            <EyeIcon size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {billingHistory.map((invoice, idx) => {
+                      const billNo = invoice.billNo || invoice.billNumber || `B-${1040 + page * limit + idx + 1}`;
+                      const invNo = invoice.id || invoice.invoiceNo || `INV/25-26/${1000 + idx + 1}`;
+                      const totAmt = Number(invoice.amount ?? invoice.totalAmount ?? 0);
+                      const paidAmt = Number(invoice.paidAmount ?? totAmt);
+
+                      return (
+                        <tr key={invoice.id || idx} style={{ borderBottom: idx !== billingHistory.length - 1 ? '1px solid var(--border)' : 'none', height: '58px' }}>
+                          <td style={{ padding: '14px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{page * limit + idx + 1}</td>
+                          <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>{billNo}</td>
+                          <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>{invNo}</td>
+                          <td style={{ padding: '14px 16px', fontSize: '13px', color: '#475569', fontWeight: 600 }}>{invoice.orderId || `ORD-${100 + idx}`}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            <span style={{ padding: '4px 10px', borderRadius: '6px', backgroundColor: '#eff6ff', color: '#2563eb', fontSize: '11px', fontWeight: 700 }}>{invoice.orderType || 'Dine-In'}</span>
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#ea580c' }}>Table {invoice.table || '12'}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center', fontSize: '12px', color: '#475569' }}>{invoice.date}, {invoice.time}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>₹{totAmt.toLocaleString()}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: '14px', fontWeight: 700, color: '#16a34a' }}>₹{paidAmt.toLocaleString()}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            <span style={{ padding: '4px 10px', borderRadius: '6px', backgroundColor: '#f1f5f9', fontSize: '11px', fontWeight: 700 }}>{invoice.paymentMethod || 'UPI'}</span>
+                          </td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '4px 12px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              background: '#dcfce7',
+                              color: '#166534',
+                              border: '1px solid #86efac'
+                            }}>
+                              {invoice.status || 'Paid'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px 16px', fontSize: '13px', color: '#0f172a', fontWeight: 600 }}>{invoice.staff || 'Admin'}</td>
+                          <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedInvoice(invoice)}
+                              title="View & Print Invoice"
+                              style={{
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #fed7aa',
+                                background: '#fff7ed',
+                                color: 'var(--primary)',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <EyeIcon size={14} /> View
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {billingHistory.length === 0 && (
                       <tr>
-                        <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                        <td colSpan="13" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
                           No billing history found for the selected filters.
                         </td>
                       </tr>
@@ -442,8 +486,8 @@ export default function BillingHistoryPanel({
         </div>
       </div>
 
-      {/* INVOICE DETAILS MODAL */}
-      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Invoice Details" maxWidth="450px">
+      {/* INVOICE DETAILS MODAL WITH PRINT & DOWNLOAD OPTIONS */}
+      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice Details" maxWidth="450px">
         {selectedInvoice && (
           <div style={{ marginTop: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -456,12 +500,12 @@ export default function BillingHistoryPanel({
             </div>
 
             <div style={{ borderTop: '1px dashed #cbd5e1', borderBottom: '1px dashed #cbd5e1', padding: '16px 0', marginBottom: '24px' }}>
-              {selectedInvoice.items.map((item, idx) => (
+              {Array.isArray(selectedInvoice.items) && selectedInvoice.items.map((item, idx) => (
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '14px' }}>
                   <div style={{ fontWeight: '600', color: 'var(--black)' }}>
                     {item.name} <span style={{ color: '#64748b', fontWeight: '500', marginLeft: '8px' }}>{item.qty} × ₹{item.price}</span>
                   </div>
-                  <div style={{ fontWeight: '700' }}>₹{item.total}</div>
+                  <div style={{ fontWeight: '700' }}>₹{item.total || (item.qty * item.price)}</div>
                 </div>
               ))}
             </div>
@@ -469,11 +513,11 @@ export default function BillingHistoryPanel({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
                 <span>Subtotal</span>
-                <span style={{ fontWeight: '600' }}>₹{selectedInvoice.subtotal}</span>
+                <span style={{ fontWeight: '600' }}>₹{selectedInvoice.subtotal || selectedInvoice.amount}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#64748b' }}>
                 <span>GST 5%</span>
-                <span style={{ fontWeight: '600' }}>₹{selectedInvoice.tax}</span>
+                <span style={{ fontWeight: '600' }}>₹{selectedInvoice.tax || 0}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: '800', color: 'var(--primary)', marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
                 <span>Grand Total</span>
@@ -482,13 +526,13 @@ export default function BillingHistoryPanel({
             </div>
 
             <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
-              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)', marginBottom: '8px' }}>Payment</div>
+              <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--black)', marginBottom: '8px' }}>Payment Info</div>
               <div style={{ fontSize: '14px', color: '#64748b', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Method</span> <span style={{ fontWeight: '600', color: 'var(--black)' }}>{selectedInvoice.paymentMethod}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Paid by</span> <span style={{ fontWeight: '600', color: 'var(--black)' }}>{selectedInvoice.staff}</span>
+                  <span>Billed By</span> <span style={{ fontWeight: '600', color: 'var(--black)' }}>{selectedInvoice.staff}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Status</span> <span style={{ fontWeight: '700', color: '#166534' }}>{selectedInvoice.status}</span>
@@ -496,16 +540,24 @@ export default function BillingHistoryPanel({
               </div>
             </div>
 
-            {/* <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn btn-outline" style={{ flex: 1, padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className="btn btn-outline"
+                onClick={() => window.print()}
+                style={{ flex: 1, padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                 Print Invoice
               </button>
-              <button className="btn btn-black" style={{ flex: 1, padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <button
+                className="btn btn-black"
+                onClick={() => window.print()}
+                style={{ flex: 1, padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                Download PDF
+                Download Invoice
               </button>
-            </div> */}
+            </div>
           </div>
         )}
       </Modal>
