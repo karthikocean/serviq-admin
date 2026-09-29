@@ -134,8 +134,13 @@ export default function OrdersPanel({
   const [appendSelectedCategory, setAppendSelectedCategory] = useState('All');
 
   // New order form states
+  const [newOrderType, setNewOrderType] = useState('Dine-In'); // Dine-In, Takeaway, Delivery
   const [newOrderTable, setNewOrderTable] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerMobile, setCustomerMobile] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
   const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
+  const [newOrderSource, setNewOrderSource] = useState('Admin / POS'); // Admin / POS, Customer Website, Waiter App, Online / Delivery Partner
   const [newOrderNotes, setNewOrderNotes] = useState('');
   const [newOrderStatus, setNewOrderStatus] = useState('new');
   const [newOrderItems, setNewOrderItems] = useState([]);
@@ -143,6 +148,19 @@ export default function OrdersPanel({
   const [customItemPrice, setCustomItemPrice] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedMenuItemInput, setSelectedMenuItemInput] = useState('');
+  const [itemQuantityInput, setItemQuantityInput] = useState(1);
+  const [itemNotesInput, setItemNotesInput] = useState('');
+  const [itemAddonsInput, setItemAddonsInput] = useState('');
+
+  // Filter states for Order List Table
+  const [orderTypeFilter, setOrderTypeFilter] = useState('All');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('All');
+  const [selectedTableFilter, setSelectedTableFilter] = useState('All');
+  const [searchOrderId, setSearchOrderId] = useState('');
+  const [dateRangeFilter, setDateRangeFilter] = useState('All');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   const [apiCategories, setApiCategories] = useState([]);
   const [apiMenuItems, setApiMenuItems] = useState([]);
@@ -387,6 +405,184 @@ export default function OrdersPanel({
     }
 
     return 'Unassigned';
+  };
+
+  // Helper for Printing KOT (Kitchen Order Ticket)
+  const handlePrintKOT = (ord) => {
+    if (!ord) return;
+    const popup = window.open('', '_blank', 'width=420,height=600');
+    if (!popup) {
+      ShowNotifications.showAlertNotification('Popup blocker enabled. Please allow popups to print KOT.', false);
+      return;
+    }
+
+    const rawId = ord.orderId || ord.id || (ord._id ? String(ord._id).slice(-5).toUpperCase() : '1042');
+    const orderIdStr = String(rawId).startsWith('ORD-') ? String(rawId) : (String(rawId).startsWith('#ORD-') ? String(rawId).replace('#', '') : `ORD-${rawId}`);
+    const kotNoStr = `KOT-${String(rawId).replace(/[^0-9]/g, '') || '1042'}`;
+    const tableStr = ord.orderType === 'Delivery' ? 'Delivery' : (ord.orderType === 'Takeaway' ? 'Takeaway' : (ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo || ord.tableId.name) : ord.tableId) || '12'));
+    const dateStr = ord.createdAt ? formatDateDMY(ord.createdAt) : new Date().toLocaleDateString('en-GB');
+    const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const waiterStr = getResolvedWaiterName(ord);
+
+    const items = Array.isArray(ord.items) ? ord.items : [];
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>KOT - ${kotNoStr}</title>
+        <style>
+          body { font-family: 'Courier New', Courier, monospace; width: 280px; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+          .title { font-size: 16px; font-weight: bold; margin: 0; }
+          .subtitle { font-size: 12px; font-weight: bold; margin-top: 2px; }
+          .info { margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+          th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; padding: 4px 0; }
+          td { padding: 4px 0; font-size: 11px; vertical-align: top; }
+          .notes { font-size: 10px; font-style: italic; color: #333; margin-top: 2px; }
+          .footer { text-align: center; border-top: 1px dashed #000; margin-top: 12px; padding-top: 8px; font-size: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ RESTAURANT'}</div>
+          <div class="subtitle">KITCHEN ORDER TICKET (KOT)</div>
+        </div>
+        <div class="info">
+          <div class="info-row"><span><strong>KOT No:</strong> ${kotNoStr}</span><span><strong>Order ID:</strong> #${orderIdStr}</span></div>
+          <div class="info-row"><span><strong>Table:</strong> ${tableStr}</span><span><strong>Type:</strong> ${ord.orderType || 'Dine-In'}</span></div>
+          <div class="info-row"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div>
+          <div class="info-row"><span><strong>Waiter:</strong> ${waiterStr}</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 55%;">Item</th>
+              <th style="width: 15%; text-align: center;">Qty</th>
+              <th style="width: 30%; text-align: right;">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(it => `
+              <tr>
+                <td><strong>${it.name || 'Item'}</strong>${it.addOns ? `<div class="notes">+ ${it.addOns}</div>` : ''}</td>
+                <td style="text-align: center;"><strong>${it.qty || it.quantity || 1}</strong></td>
+                <td style="text-align: right; font-size: 10px;">${it.notes || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ${ord.notes ? `<div style="margin-top: 8px; font-size: 11px; border-top: 1px dotted #000; padding-top: 4px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
+        <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+
+    popup.document.write(html);
+    popup.document.close();
+  };
+
+  // Helper for Printing Bill (Before Payment)
+  const handlePrintBill = (ord) => {
+    if (!ord) return;
+    const popup = window.open('', '_blank', 'width=450,height=650');
+    if (!popup) {
+      ShowNotifications.showAlertNotification('Popup blocker enabled. Please allow popups to print Bill.', false);
+      return;
+    }
+
+    const rawId = ord.orderId || ord.id || (ord._id ? String(ord._id).slice(-5).toUpperCase() : '1042');
+    const billNoStr = ord.billNo || `B-${String(rawId).replace(/[^0-9]/g, '') || '1042'}`;
+    const tableStr = ord.orderType === 'Delivery' ? 'Delivery' : (ord.orderType === 'Takeaway' ? 'Takeaway' : (ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo || ord.tableId.name) : ord.tableId) || '12'));
+    const dateStr = ord.createdAt ? formatDateDMY(ord.createdAt) : new Date().toLocaleDateString('en-GB');
+    const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+
+    const items = Array.isArray(ord.items) ? ord.items : [];
+    const subtotal = items.reduce((sum, it) => sum + (Number(it.price || it.rate || 0) * Number(it.qty || it.quantity || 1)), 0);
+    const cgst = parseFloat((subtotal * 0.025).toFixed(2));
+    const sgst = parseFloat((subtotal * 0.025).toFixed(2));
+    const total = parseFloat((subtotal + cgst + sgst).toFixed(2));
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Bill - ${billNoStr}</title>
+        <style>
+          body { font-family: 'Courier New', Courier, monospace; width: 320px; margin: 0 auto; padding: 12px; color: #000; font-size: 12px; }
+          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+          .title { font-size: 16px; font-weight: bold; margin: 0; }
+          .subtitle { font-size: 11px; margin-top: 2px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 8px; }
+          th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; padding: 4px 0; }
+          td { padding: 4px 0; font-size: 11px; }
+          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+          .flex-between { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+          .total-row { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; margin-top: 4px; }
+          .footer { text-align: center; margin-top: 16px; font-size: 11px; font-style: italic; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ Restaurant'}</div>
+          <div class="subtitle">${activeRestaurant?.address || 'Address'}</div>
+          <div class="subtitle">GST No: ${activeRestaurant?.gstNo || 'GSTIN12345678'}</div>
+        </div>
+        <div class="info-row">
+          <span>Table No: ${tableStr}</span>
+          <span>Bill No: ${billNoStr}</span>
+        </div>
+        <div class="info-row">
+          <span>Date: ${dateStr}</span>
+          <span>Time: ${timeStr}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50%;">Item</th>
+              <th style="width: 15%; text-align: center;">Qty</th>
+              <th style="width: 15%; text-align: right;">Rate</th>
+              <th style="width: 20%; text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(it => {
+              const q = Number(it.qty || it.quantity || 1);
+              const r = Number(it.price || it.rate || 0);
+              const amt = q * r;
+              return `
+                <tr>
+                  <td>${it.name || 'Item'}</td>
+                  <td style="text-align: center;">${q}</td>
+                  <td style="text-align: right;">${r.toFixed(0)}</td>
+                  <td style="text-align: right;">${amt.toFixed(2)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="flex-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+        <div class="flex-between"><span>CGST @2.5%</span><span>${cgst.toFixed(2)}</span></div>
+        <div class="flex-between"><span>SGST @2.5%</span><span>${sgst.toFixed(2)}</span></div>
+        <div class="divider"></div>
+        <div class="total-row"><span>Total Payable</span><span>₹${total.toFixed(2)}</span></div>
+        <div class="footer">Thank you, visit again!</div>
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+
+    popup.document.write(html);
+    popup.document.close();
   };
 
   // Extract menu items from activeRestaurant
@@ -659,12 +855,21 @@ export default function OrdersPanel({
     setModalSelectedBranchId(targetBranchId);
     await fetchModalDataForBranch((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : 'ALL');
 
+    setNewOrderType('Dine-In');
+    setCustomerName('');
+    setCustomerMobile('');
+    setDeliveryAddress('');
+    setNewOrderSource('Admin / POS');
     setNewOrderWaiter('Unassigned');
     setNewOrderNotes('');
     setNewOrderStatus('new');
     setNewOrderItems([]);
     setSearchQuery('');
     setSelectedCategory('All');
+    setSelectedMenuItemInput('');
+    setItemQuantityInput(1);
+    setItemNotesInput('');
+    setItemAddonsInput('');
     setIsCreateOrderModalOpen(true);
   };
 
@@ -678,14 +883,75 @@ export default function OrdersPanel({
 
   const handleAddItemToOrder = (item) => {
     console.log("Adding item to cart:", item); // Debugging log to see if _id exists
-    const existingIndex = newOrderItems.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase());
+    const existingIndex = newOrderItems.findIndex(i => i.name.toLowerCase() === item.name.toLowerCase() && !i.notes && !i.addOns);
     if (existingIndex > -1) {
       const updated = [...newOrderItems];
       updated[existingIndex].qty += 1;
       setNewOrderItems(updated);
     } else {
-      setNewOrderItems([...newOrderItems, { ...item, qty: 1, price: Number(item.price) || 100 }]);
+      setNewOrderItems([...newOrderItems, {
+        _id: item._id || item.id || "",
+        id: item.id || item._id || "",
+        name: item.name,
+        category: item.category || 'General',
+        qty: 1,
+        price: Number(item.price) || 100,
+        notes: '',
+        addOns: ''
+      }]);
     }
+  };
+
+  const handleAddItemFromForm = () => {
+    if (!selectedMenuItemInput) {
+      ShowNotifications.showAlertNotification("Please select a Menu Item.", false);
+      return;
+    }
+    const foundItem = displayMenuItems.find(i => String(i._id || i.id || i.name) === String(selectedMenuItemInput)) ||
+      filteredMenuItems.find(i => String(i._id || i.id || i.name) === String(selectedMenuItemInput));
+    
+    if (!foundItem) {
+      ShowNotifications.showAlertNotification("Selected menu item not found.", false);
+      return;
+    }
+
+    const qty = Math.max(1, parseInt(itemQuantityInput, 10) || 1);
+    const notes = (itemNotesInput || '').trim();
+    const addOns = (itemAddonsInput || '').trim();
+
+    // Check if item with same name, notes and add-ons already exists
+    const existingIndex = newOrderItems.findIndex(i =>
+      i.name.toLowerCase() === foundItem.name.toLowerCase() &&
+      (i.notes || '').toLowerCase() === notes.toLowerCase() &&
+      (i.addOns || '').toLowerCase() === addOns.toLowerCase()
+    );
+
+    if (existingIndex > -1) {
+      const updated = [...newOrderItems];
+      updated[existingIndex].qty += qty;
+      setNewOrderItems(updated);
+    } else {
+      setNewOrderItems([
+        ...newOrderItems,
+        {
+          _id: foundItem._id || foundItem.id || "",
+          id: foundItem.id || foundItem._id || "",
+          name: foundItem.name,
+          category: foundItem.category || 'General',
+          price: Number(foundItem.price) || 0,
+          qty: qty,
+          notes: notes,
+          addOns: addOns
+        }
+      ]);
+    }
+
+    // Reset item selection inputs for next item
+    setSelectedMenuItemInput('');
+    setItemQuantityInput(1);
+    setItemNotesInput('');
+    setItemAddonsInput('');
+    ShowNotifications.showAlertNotification(`Added ${qty}x ${foundItem.name} to order`, true);
   };
 
   const handleAddCustomItem = () => {
@@ -845,33 +1111,64 @@ export default function OrdersPanel({
       return;
     }
 
-    // Check if selected table is occupied before sending
-    const activeOrdOnSelectedTable = getActiveOrderForTable(newOrderTable, apiTables);
-    if (activeOrdOnSelectedTable) {
-      ShowNotifications.showAlertNotification(`Table ${newOrderTable} already has an active order. Switching to Add Items mode...`, false);
-      const itemsToCarry = [...newOrderItems];
-      setIsCreateOrderModalOpen(false);
-      handleOpenAppendModal(activeOrdOnSelectedTable, itemsToCarry);
+    if (newOrderType === 'Dine-In' && !newOrderTable) {
+      ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
       return;
+    }
+
+    if (newOrderType === 'Delivery') {
+      if (!customerName.trim()) {
+        ShowNotifications.showAlertNotification("Customer Name is required for Delivery.", false);
+        return;
+      }
+      if (!customerMobile.trim()) {
+        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
+        return;
+      }
+    }
+
+    // Check if selected table is occupied before sending (for Dine-In)
+    if (newOrderType === 'Dine-In') {
+      const activeOrdOnSelectedTable = getActiveOrderForTable(newOrderTable, apiTables);
+      if (activeOrdOnSelectedTable) {
+        ShowNotifications.showAlertNotification(`Table ${newOrderTable} already has an active order. Switching to Add Items mode...`, false);
+        const itemsToCarry = [...newOrderItems];
+        setIsCreateOrderModalOpen(false);
+        handleOpenAppendModal(activeOrdOnSelectedTable, itemsToCarry);
+        return;
+      }
     }
 
     const subtotal = newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0);
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     const total = parseFloat((subtotal + tax).toFixed(2));
 
-    const table = apiTables.find(t => String(t.tableNumber || t.tableNo) === String(newOrderTable));
+    const table = newOrderType === 'Dine-In' ? apiTables.find(t => String(t.tableNumber || t.tableNo) === String(newOrderTable)) : null;
     const waiter = staff.find(w => w.name === newOrderWaiter);
 
     const payload = {
+      orderType: newOrderType,
       tableId: table ? table._id : undefined,
+      table: newOrderType === 'Dine-In' ? (newOrderTable || '01') : (newOrderType === 'Takeaway' ? 'Takeaway' : 'Delivery'),
+      customerName: newOrderType === 'Delivery' ? (customerName.trim() || undefined) : undefined,
+      customerMobile: newOrderType === 'Delivery' ? (customerMobile.trim() || undefined) : undefined,
+      deliveryAddress: newOrderType === 'Delivery' ? (deliveryAddress.trim() || undefined) : undefined,
+      orderSource: newOrderSource,
       waiterId: waiter ? waiter._id : undefined,
+      waiter: newOrderWaiter,
       notes: newOrderNotes,
       status: newOrderStatus,
       items: newOrderItems.map(item => ({
-        menuId: item._id || item.id || "", // Fallback required for validation if custom item
+        menuId: item._id || item.id || "",
         name: item.name,
         qty: item.qty,
         price: item.price,
+        addOns: item.addOns || "",
+        notes: item.notes || "",
         status: newOrderStatus
       })),
       subtotal,
@@ -880,11 +1177,9 @@ export default function OrdersPanel({
       branchId: modalSelectedBranchId || getFallbackBranchId()
     };
 
-    // If table is missing from API, just fallback to dummy local addOrder (for preview mode without db)
-    if (!payload.tableId) {
-      ShowNotifications.showAlertNotification("Table not found in active database, saving to local state only.", false);
-      setIsCreateOrderModalOpen(false);
-      if (refreshOrders) refreshOrders();
+    // Table check: only applicable if Dine-In and no table identifier provided
+    if (newOrderType === 'Dine-In' && !payload.table && !payload.tableId) {
+      ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
       return;
     }
 
@@ -1068,7 +1363,7 @@ export default function OrdersPanel({
 
   let filteredOrders = [...sourceOrders];
 
-  // Apply Status Filter Tab ('All', 'New', 'Preparing', 'Ready', 'Served')
+  // 1. Apply Status Filter ('All', 'New', 'Preparing', 'Ready', 'Served', 'Completed', 'Cancelled')
   if (orderFilter && orderFilter.toLowerCase() !== 'all') {
     filteredOrders = filteredOrders.filter(ord => {
       const s = (ord.status || 'new').toLowerCase();
@@ -1076,7 +1371,34 @@ export default function OrdersPanel({
     });
   }
 
-  // Resolve active selected waiter filter
+  // 2. Apply Order Type Filter ('All', 'Dine-In', 'Takeaway', 'Delivery')
+  if (orderTypeFilter && orderTypeFilter.toLowerCase() !== 'all') {
+    filteredOrders = filteredOrders.filter(ord => {
+      const t = (ord.orderType || 'Dine-In').toLowerCase();
+      return t === orderTypeFilter.toLowerCase();
+    });
+  }
+
+  // 3. Apply Payment Status Filter ('All', 'Unpaid', 'Paid')
+  if (paymentStatusFilter && paymentStatusFilter.toLowerCase() !== 'all') {
+    filteredOrders = filteredOrders.filter(ord => {
+      const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true;
+      if (paymentStatusFilter.toLowerCase() === 'paid') return isPaid;
+      if (paymentStatusFilter.toLowerCase() === 'unpaid') return !isPaid;
+      return true;
+    });
+  }
+
+  // 4. Apply Dining Table Filter
+  if (selectedTableFilter && selectedTableFilter !== 'All') {
+    filteredOrders = filteredOrders.filter(ord => {
+      const tbl = String(ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo) : ord.tableId) || '').replace(/^Table\s*/i, '').trim();
+      const selTbl = String(selectedTableFilter).replace(/^Table\s*/i, '').trim();
+      return tbl === selTbl;
+    });
+  }
+
+  // 5. Resolve active selected waiter filter & apply Waiter Filter
   const currentSelectedWaiterId = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
     ? (selectedWaiterFilter.id || selectedWaiterFilter.name || 'All Waiters')
     : (selectedWaiterFilter || 'All Waiters');
@@ -1084,7 +1406,6 @@ export default function OrdersPanel({
     ? (selectedWaiterFilter.name || selectedWaiterFilter.id || 'All Waiters')
     : (selectedWaiterFilter || 'All Waiters');
 
-  // Apply Waiter Filter
   if (currentSelectedWaiterId && currentSelectedWaiterId !== 'All Waiters' && currentSelectedWaiterId !== 'All') {
     filteredOrders = filteredOrders.filter(ord => {
       const resolvedName = getResolvedWaiterName(ord);
@@ -1092,6 +1413,54 @@ export default function OrdersPanel({
         return !resolvedName || resolvedName === 'Unassigned' || resolvedName === 'None' || resolvedName === '-';
       }
       return resolvedName.toLowerCase() === (currentSelectedWaiterName || '').toLowerCase();
+    });
+  }
+
+  // 6. Apply Search Order ID / Customer / Table
+  if (searchOrderId && searchOrderId.trim()) {
+    const q = searchOrderId.toLowerCase().trim();
+    filteredOrders = filteredOrders.filter(ord => {
+      const rawId = String(ord.orderId || ord.id || ord._id || '').toLowerCase();
+      const cName = String(ord.customerName || ord.customer?.name || '').toLowerCase();
+      const cPhone = String(ord.customerMobile || ord.customerPhone || ord.customer?.mobile || '').toLowerCase();
+      const tbl = String(ord.table || '').toLowerCase();
+      return rawId.includes(q) || cName.includes(q) || cPhone.includes(q) || tbl.includes(q);
+    });
+  }
+
+  // 7. Apply Date Range Filter
+  if (dateRangeFilter && dateRangeFilter !== 'All') {
+    const now = new Date();
+    filteredOrders = filteredOrders.filter(ord => {
+      const ordDate = ord.createdAt ? new Date(ord.createdAt) : null;
+      if (!ordDate || isNaN(ordDate.getTime())) return true;
+
+      if (dateRangeFilter === 'Today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const d = new Date(ordDate.getFullYear(), ordDate.getMonth(), ordDate.getDate());
+        return d.getTime() === today.getTime();
+      } else if (dateRangeFilter === 'Yesterday') {
+        const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const d = new Date(ordDate.getFullYear(), ordDate.getMonth(), ordDate.getDate());
+        return d.getTime() === yest.getTime();
+      } else if (dateRangeFilter === 'This Week') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return ordDate >= sevenDaysAgo;
+      } else if (dateRangeFilter === 'This Month') {
+        return ordDate.getMonth() === now.getMonth() && ordDate.getFullYear() === now.getFullYear();
+      } else if (dateRangeFilter === 'Custom') {
+        if (customStartDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (ordDate < start) return false;
+        }
+        if (customEndDate) {
+          const end = new Date(customEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (ordDate > end) return false;
+        }
+      }
+      return true;
     });
   }
 
@@ -1197,6 +1566,7 @@ export default function OrdersPanel({
   if (isCreateOrderModalOpen) {
     return (
       <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box' }}>
+        {/* Top Header Card */}
         <div style={{
           background: '#ffffff',
           borderRadius: '16px',
@@ -1225,177 +1595,229 @@ export default function OrdersPanel({
                 fontSize: '18px',
                 fontWeight: 800,
                 color: '#0f172a',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.15s ease'
               }}
+              title="Back to Orders List"
             >
               ←
             </button>
             <div>
-              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
-                Place New Order
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                  Create Order
+                </h2>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  padding: '3px 10px',
+                  borderRadius: '20px',
+                  background: '#fff7ed',
+                  color: '#ea580c',
+                  border: '1px solid #fed7aa'
+                }}>
+                  {newOrderType}
+                </span>
+              </div>
+              <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                Set up order details, pick menu items with custom notes & add-ons, and place order.
+              </p>
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setIsCreateOrderModalOpen(false)}
+              style={{ padding: '8px 18px', fontSize: '13px', fontWeight: 700 }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', borderRadius: '16px', padding: '32px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', width: '100%', boxSizing: 'border-box' }}>
-          <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Branch Assignment Field */}
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Branch <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              {(() => {
-                const allBranchesList = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
-                const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
-                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                  : null;
-                const currentBranchObj = headerBranchObj 
-                  || (modalSelectedBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))) : null);
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
-                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                  effectiveVal = '';
-                }
+        <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-                const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
-                  ...allBranchesList.map(b => ({
-                    value: b._id || b.id,
-                    label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
-                  }))
-                ];
-
-                return (
-                  <div>
-                    <SearchableSelect
-                      value={effectiveVal}
-                      onChange={handleModalBranchChange}
-                      isDisabled={isLocked}
-                      options={branchOptions}
-                      placeholder="Select Branch..."
-                    />
-                    {isLocked && (
-                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to currently selected branch.
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+          {/* SECTION 1: ORDER INFORMATION */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '24px 28px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '18px' }}>📋</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                    Order Information
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Order Type, Table / Customer information, Assigned Waiter, and Order Source
+                  </p>
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569' }}>
+                Step 1 of 2
+              </span>
             </div>
 
-            {/* Row 1: Table & Waiter Assignment */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Dining Table <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <SearchableSelect
-                  value={newOrderTable}
-                  onChange={e => setNewOrderTable(e.target.value)}
-                  options={apiTables.length > 0 ? (
-                    apiTables.map(t => {
-                      const tVal = t.tableNumber || t.tableNo || t.name;
-                      const occupied = isTableOccupied(tVal, apiTables);
-                      return {
-                        value: tVal,
-                        label: `${t.name ? t.name : `Table ${tVal}`} ${occupied ? '— Occupied (Has Active Order)' : '— Available'}`
-                      };
-                    })
-                  ) : (
-                    displayTables.map(tNo => {
-                      const occupied = isTableOccupied(tNo);
-                      return {
-                        value: tNo,
-                        label: `Table ${tNo} ${occupied ? '— Occupied (Has Active Order)' : '— Available'}`
-                      };
-                    })
-                  )}
-                  placeholder="Select Dining Table..."
-                />
-
-                {/* OCCUPIED WARNING & ACTION PROMPT */}
-                {(() => {
-                  const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
-                  if (!activeOrd) return null;
+            {/* Order Type * ( Dine-In, Takeaway, Delivery ) */}
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
+                Order Type <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                {[
+                  { id: 'Dine-In', label: 'Dine-In', icon: '🍽️', desc: 'Table seating & dining' },
+                  { id: 'Takeaway', label: 'Takeaway', icon: '🛍️', desc: 'Self pickup parcel' },
+                  { id: 'Delivery', label: 'Delivery', icon: '🛵', desc: 'Direct doorstep delivery' }
+                ].map(type => {
+                  const isSelected = newOrderType === type.id;
                   return (
-                    <div style={{
-                      marginTop: '10px',
-                      padding: '12px 16px',
-                      background: '#fff7ed',
-                      border: '1.5px solid #fed7aa',
-                      borderRadius: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px'
-                    }}>
-                      <div style={{ fontSize: '12px', color: '#c2410c', fontWeight: 700 }}>
-                        ⚠️ Table {newOrderTable} currently has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setNewOrderType(type.id)}
+                      style={{
+                        padding: '12px 16px',
+                        borderRadius: '12px',
+                        border: isSelected ? '2px solid #ff5a1f' : '1px solid #e2e8f0',
+                        background: isSelected ? '#fff7ed' : '#ffffff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        gap: '4px',
+                        textAlign: 'left',
+                        transition: 'all 0.15s ease',
+                        boxShadow: isSelected ? '0 4px 12px rgba(255, 90, 31, 0.15)' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '18px' }}>{type.icon}</span>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: isSelected ? '#ff5a1f' : '#0f172a' }}>
+                          {type.label}
+                        </span>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
-                            handleOpenAppendModal(activeOrd, itemsToCarry);
-                          }}
-                          style={{
-                            background: '#ea580c',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '7px 14px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 6px rgba(234, 88, 12, 0.25)'
-                          }}
-                        >
-                          <PlusIcon size={13} color="#ffffff" /> Add Items to Table {newOrderTable}'s Order
-                        </button>
-                        {(() => {
-                          const activeIsPaid = (activeOrd.billingStatus || activeOrd.paymentStatus || '').toLowerCase() === 'paid' ||
-                            activeOrd.isPaid === true ||
-                            (activeOrd.payment && (activeOrd.payment.status === 'paid' || activeOrd.payment.paymentStatus === 'paid'));
-                          return (
-                            <button
-                              type="button"
-                              disabled={activeIsPaid}
-                              onClick={() => {
-                                if (activeIsPaid) return;
-                                setIsCreateOrderModalOpen(false);
-                                handleOpenEditOrder(activeOrd);
-                              }}
-                              style={{
-                                background: activeIsPaid ? '#f1f5f9' : '#ffffff',
-                                color: activeIsPaid ? '#94a3b8' : '#ea580c',
-                                border: activeIsPaid ? '1px solid #e2e8f0' : '1px solid #fed7aa',
-                                padding: '7px 14px',
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: 700,
-                                cursor: activeIsPaid ? 'not-allowed' : 'pointer',
-                                opacity: activeIsPaid ? 0.6 : 1
-                              }}
-                              title={activeIsPaid ? "Paid orders cannot be edited" : "Edit Existing Order"}
-                            >
-                              ✏️ Edit Existing Order
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
+                      <span style={{ fontSize: '11px', color: isSelected ? '#ea580c' : '#64748b' }}>
+                        {type.desc}
+                      </span>
+                    </button>
                   );
-                })()}
+                })}
               </div>
+            </div>
 
+            {/* Core Details Grid: Dining Table (only for Dine-In), Assigned Waiter, Order Source, Branch */}
+            <div style={{ display: 'grid', gridTemplateColumns: newOrderType === 'Dine-In' ? '1fr 1fr 1fr' : '1fr 1fr', gap: '16px' }}>
+
+              {/* Dining Table * (Show ONLY for Dine-In) */}
+              {newOrderType === 'Dine-In' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                    Dining Table <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <SearchableSelect
+                    value={newOrderTable}
+                    onChange={e => setNewOrderTable(e.target.value)}
+                    options={apiTables.length > 0 ? (
+                      apiTables.map(t => {
+                        const tVal = t.tableNumber || t.tableNo || t.name;
+                        const occupied = isTableOccupied(tVal, apiTables);
+                        return {
+                          value: tVal,
+                          label: `${t.name ? t.name : `Table ${tVal}`} ${occupied ? '— Occupied (Active Order)' : '— Available'}`
+                        };
+                      })
+                    ) : (
+                      displayTables.map(tNo => {
+                        const occupied = isTableOccupied(tNo);
+                        return {
+                          value: tNo,
+                          label: `Table ${tNo} ${occupied ? '— Occupied (Active Order)' : '— Available'}`
+                        };
+                      })
+                    )}
+                    placeholder="Select Dining Table..."
+                  />
+
+                  {/* OCCUPIED WARNING & ACTION PROMPT */}
+                  {(() => {
+                    const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
+                    if (!activeOrd) return null;
+                    return (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '10px 12px',
+                        background: '#fff7ed',
+                        border: '1.5px solid #fed7aa',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#c2410c', fontWeight: 700 }}>
+                          ⚠️ Table {newOrderTable} currently has an active order (#{activeOrd.orderId || activeOrd.id || (activeOrd._id ? String(activeOrd._id).slice(-6).toUpperCase() : '1')})
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
+                              handleOpenAppendModal(activeOrd, itemsToCarry);
+                            }}
+                            style={{
+                              background: '#ea580c',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <PlusIcon size={12} color="#ffffff" /> Add Items to Order
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCreateOrderModalOpen(false);
+                              handleOpenEditOrder(activeOrd);
+                            }}
+                            style={{
+                              background: '#ffffff',
+                              color: '#ea580c',
+                              border: '1px solid #fed7aa',
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ✏️ Edit Order
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Assigned Waiter */}
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Assign Waiter (Optional)
+                  Assigned Waiter
                 </label>
                 <SearchableSelect
                   value={newOrderWaiter}
@@ -1407,75 +1829,246 @@ export default function OrdersPanel({
                   placeholder="Select Waiter..."
                 />
               </div>
-            </div>
 
-            {/* Row 2: Status & Special Notes */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Order Source * */}
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Initial Status
+                  Order Source <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <SearchableSelect
-                  value={newOrderStatus}
-                  onChange={e => setNewOrderStatus(e.target.value)}
+                  value={newOrderSource}
+                  onChange={e => setNewOrderSource(e.target.value)}
                   options={[
-                    { value: 'new', label: 'New (Pending)' },
-                    { value: 'preparing', label: 'Preparing' },
-                    { value: 'ready', label: 'Ready' },
-                    { value: 'served', label: 'Served' }
+                    { value: 'Admin / POS', label: 'Admin / POS' },
+                    { value: 'Customer Website', label: 'Customer Website' },
+                    { value: 'Waiter App', label: 'Waiter App' },
+                    { value: 'Online / Delivery Partner', label: 'Online / Delivery Partner' }
                   ]}
-                  placeholder="Select Status..."
+                  placeholder="Select Order Source..."
                 />
+              </div>
+            </div>
+
+            {/* Customer Details: Rendered ONLY when Order Type is Delivery */}
+            {newOrderType === 'Delivery' && (
+              <div style={{
+                background: '#eff6ff',
+                border: '1.5px solid #bfdbfe',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '16px' }}>🛵</span>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#1e40af' }}>
+                    Delivery Details (Required for Delivery)
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
+                      Customer Name <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      placeholder="Enter customer full name..."
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #93c5fd',
+                        fontSize: '13px',
+                        outline: 'none',
+                        background: '#ffffff',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
+                      Customer Mobile Number <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={customerMobile}
+                      onChange={e => setCustomerMobile(e.target.value.replace(/[^0-9+]/g, ''))}
+                      placeholder="e.g. +91 9876543210"
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #93c5fd',
+                        fontSize: '13px',
+                        outline: 'none',
+                        background: '#ffffff',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
+                    Delivery Address <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={2}
+                    value={deliveryAddress}
+                    onChange={e => setDeliveryAddress(e.target.value)}
+                    placeholder="Enter full delivery address with door number, street, landmark, and pincode..."
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #93c5fd',
+                      fontSize: '13px',
+                      outline: 'none',
+                      background: '#ffffff',
+                      boxSizing: 'border-box',
+                      fontFamily: 'inherit',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Additional Info: Branch & Kitchen Notes */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Branch
+                </label>
+                {(() => {
+                  const allBranchesList = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
+                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
+                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
+                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
+                    : null;
+                  const currentBranchObj = headerBranchObj 
+                    || (modalSelectedBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))) : null);
+                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
+                  if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                    effectiveVal = '';
+                  }
+
+                  const branchOptions = [
+                    { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                    ...allBranchesList.map(b => ({
+                      value: b._id || b.id,
+                      label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                    }))
+                  ];
+
+                  return (
+                    <div>
+                      <SearchableSelect
+                        value={effectiveVal}
+                        onChange={handleModalBranchChange}
+                        isDisabled={isLocked}
+                        options={branchOptions}
+                        placeholder="Select Branch..."
+                      />
+                      {isLocked && (
+                        <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                          Branch is locked to currently selected branch.
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Kitchen Notes
+                  General Order / Kitchen Notes
                 </label>
                 <input
                   type="text"
                   value={newOrderNotes}
                   onChange={e => setNewOrderNotes(e.target.value)}
-                  placeholder="e.g. Less spicy, extra sauce"
+                  placeholder="e.g. VIP Guest, Priority Order"
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 14px',
                     borderRadius: '8px',
                     border: '1px solid #cbd5e1',
-                    fontSize: '14px',
+                    fontSize: '13px',
                     outline: 'none',
                     boxSizing: 'border-box'
                   }}
                 />
               </div>
             </div>
+          </div>
 
-            {/* Menu Item Picker */}
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
-                Select Menu Items <span style={{ color: '#ef4444' }}>*</span>
-              </label>
+          {/* SECTION 2: MENU / ITEM SELECTION */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '24px 28px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '18px' }}>🍲</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                    Menu / Item Selection
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Select category, search or pick dish, specify quantity, notes & add-ons, then click "+ Add Item to Order"
+                  </p>
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 10px', borderRadius: '20px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569' }}>
+                Step 2 of 2
+              </span>
+            </div>
 
-              {/* Search & Category Filter */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
+            {/* Row 1: Category, Search Item, Menu Item * */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 2fr', gap: '14px' }}>
+              {/* Category */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Category
+                </label>
+                <SearchableSelect
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  options={displayCategories.map(c => ({
+                    value: c,
+                    label: c === 'All' ? 'All Categories' : c
+                  }))}
+                  placeholder="Filter Category..."
+                />
+              </div>
+
+              {/* Search Item */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Search Item
+                </label>
+                <div style={{ position: 'relative' }}>
                   <input
                     type="text"
                     value={searchQuery}
-                    onKeyDown={e => {
-                      if (e.key === ' ' && !e.currentTarget.value) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onChange={e => {
-                      const val = e.target.value.replace(/^\s+/, '');
-                      setSearchQuery(val);
-                    }}
-                    placeholder="Search dishes..."
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search dishes by name..."
                     style={{
                       width: '100%',
                       height: '38px',
-                      padding: '0 14px',
+                      padding: '0 12px 0 32px',
                       borderRadius: '8px',
                       border: '1px solid #cbd5e1',
                       fontSize: '13px',
@@ -1483,98 +2076,447 @@ export default function OrdersPanel({
                       boxSizing: 'border-box'
                     }}
                   />
-                </div>
-                <div style={{ minWidth: '160px' }}>
-                  <SearchableSelect
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    options={displayCategories.map(c => ({
-                      value: c,
-                      label: c === 'All' ? 'All Categories' : c
-                    }))}
-                    placeholder="Category..."
-                  />
+                  <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '14px', pointerEvents: 'none' }}>
+                    🔍
+                  </span>
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#94a3b8',
+                        cursor: 'pointer',
+                        fontSize: '13px'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Items Grid */}
-              <div style={{
-                maxHeight: '220px',
-                overflowY: 'auto',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '10px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                gap: '8px',
-                background: '#f8fafc'
-              }}>
-                {filteredMenuItems.map(item => (
-                  <button
-                    key={item.id || item.name}
-                    type="button"
-                    onClick={() => handleAddItemToOrder(item)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      padding: '10px',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.15s'
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#ff5a1f'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(255,90,31,0.15)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{item.name}</div>
-                      <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 700 }}>₹{item.price}</div>
-                    </div>
-                    <span style={{ background: '#fff7ed', color: '#ff5a1f', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 800 }}>+</span>
-                  </button>
-                ))}
+              {/* Menu Item * */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Menu Item <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <SearchableSelect
+                  value={selectedMenuItemInput}
+                  onChange={e => setSelectedMenuItemInput(e.target.value)}
+                  options={filteredMenuItems.map(item => ({
+                    value: item._id || item.id || item.name,
+                    label: `${item.name} — ₹${Number(item.price || 0).toFixed(2)}`
+                  }))}
+                  placeholder="Select Menu Item..."
+                />
               </div>
             </div>
 
-            {/* Selected Items Cart */}
-            {newOrderItems.length > 0 && (
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px', background: '#ffffff' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>Order Summary</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
-                  {newOrderItems.map((item, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: '6px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.name}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <button type="button" onClick={() => handleUpdateItemQty(idx, -1)} style={{ width: '24px', height: '24px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 800 }}>-</button>
-                          <span style={{ fontSize: '13px', fontWeight: 700, minWidth: '16px', textAlign: 'center' }}>{item.qty}</span>
-                          <button type="button" onClick={() => handleUpdateItemQty(idx, 1)} style={{ width: '24px', height: '24px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontWeight: 800 }}>+</button>
-                        </div>
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', minWidth: '60px', textAlign: 'right' }}>₹{(item.price * item.qty).toFixed(2)}</span>
-                        <button type="button" onClick={() => handleRemoveItemFromOrder(idx)} style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px' }}>✕</button>
-                      </div>
-                    </div>
-                  ))}
+            {/* Row 2: Quantity *, Item Notes, Add ons, + Add Item button */}
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 1.5fr 1.5fr auto', gap: '14px', alignItems: 'flex-end' }}>
+              {/* Quantity * */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Quantity <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', height: '38px', background: '#ffffff', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => setItemQuantityInput(prev => Math.max(1, prev - 1))}
+                    style={{ width: '36px', height: '100%', border: 'none', background: '#f8fafc', color: '#0f172a', fontWeight: 800, fontSize: '16px', cursor: 'pointer' }}
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={itemQuantityInput}
+                    onChange={e => setItemQuantityInput(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    style={{ width: '100%', border: 'none', textAlign: 'center', fontSize: '14px', fontWeight: 800, color: '#0f172a', outline: 'none', MozAppearance: 'textfield' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setItemQuantityInput(prev => prev + 1)}
+                    style={{ width: '36px', height: '100%', border: 'none', background: '#f8fafc', color: '#0f172a', fontWeight: 800, fontSize: '16px', cursor: 'pointer' }}
+                  >
+                    +
+                  </button>
                 </div>
+              </div>
 
-                {/* Subtotal & Tax */}
-                <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '12px', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: '#64748b' }}>Estimated Total (incl. {taxRate}% tax):</span>
-                  <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>₹{calculateNewOrderTotal()}</span>
+              {/* Item Notes */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Item Notes
+                </label>
+                <input
+                  type="text"
+                  value={itemNotesInput}
+                  onChange={e => setItemNotesInput(e.target.value)}
+                  placeholder="Example: Less spicy, No onion, "
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Add-ons */}
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Add-ons
+                </label>
+                <input
+                  type="text"
+                  value={itemAddonsInput}
+                  onChange={e => setItemAddonsInput(e.target.value)}
+                  placeholder="e.g. Extra cheese, Mayo dip"
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* + Add Item Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={handleAddItemFromForm}
+                  style={{
+                    background: '#ff5a1f',
+                    color: '#ffffff',
+                    border: 'none',
+                    height: '38px',
+                    padding: '0 20px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#ea580c'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
+                >
+                  <PlusIcon size={14} color="#ffffff" /> Add Item to Order
+                </button>
+              </div>
+            </div>
+
+            {/* Quick-Select Dishes Grid */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+                  Quick Pick from {selectedCategory === 'All' ? 'All Dishes' : selectedCategory} ({filteredMenuItems.length} items)
+                </span>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  Click card to pick into form • Click '+' to add directly
+                </span>
+              </div>
+              <div style={{
+                maxHeight: '160px',
+                overflowY: 'auto',
+                border: '1px solid #f1f5f9',
+                borderRadius: '10px',
+                padding: '8px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))',
+                gap: '8px',
+                background: '#f8fafc'
+              }}>
+                {filteredMenuItems.slice(0, 30).map(item => {
+                  const itemVal = item._id || item.id || item.name;
+                  const isCurrentPick = selectedMenuItemInput === itemVal;
+                  return (
+                    <div
+                      key={itemVal}
+                      onClick={() => setSelectedMenuItemInput(itemVal)}
+                      style={{
+                        background: isCurrentPick ? '#fff7ed' : '#ffffff',
+                        border: isCurrentPick ? '1.5px solid #ff5a1f' : '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '8px 10px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                    >
+                      <div style={{ overflow: 'hidden' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: isCurrentPick ? '#ea580c' : '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {item.name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700 }}>
+                          ₹{Number(item.price || 0).toFixed(2)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddItemToOrder(item);
+                        }}
+                        title="Quick add 1 qty"
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          background: '#ff5a1f',
+                          color: '#ffffff',
+                          fontWeight: 800,
+                          fontSize: '13px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* SECTION 3: SELECTED ITEMS TABLE */}
+          {/* Columns: S.No, Item, Quantity, Unit Price, Add-ons, Item Notes, Item Total, Actions */}
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '24px 28px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '18px' }}>🛒</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                    Selected Items
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Review chosen dishes, adjust quantities, verify add-ons and special notes
+                  </p>
+                </div>
+              </div>
+              <span style={{
+                fontSize: '12px',
+                fontWeight: 800,
+                padding: '4px 12px',
+                borderRadius: '20px',
+                background: newOrderItems.length > 0 ? '#fff7ed' : '#f1f5f9',
+                border: newOrderItems.length > 0 ? '1px solid #fed7aa' : '1px solid #e2e8f0',
+                color: newOrderItems.length > 0 ? '#ff5a1f' : '#64748b'
+              }}>
+                {newOrderItems.reduce((acc, it) => acc + (it.qty || 1), 0)} Items Added
+              </span>
+            </div>
+
+            {newOrderItems.length === 0 ? (
+              <div style={{
+                padding: '36px 20px',
+                textAlign: 'center',
+                background: '#f8fafc',
+                borderRadius: '12px',
+                border: '1.5px dashed #cbd5e1'
+              }}>
+                <div style={{ fontSize: '32px', marginBottom: '8px' }}>🍲</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                  No items added to this order yet
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Select a Category & Menu Item above, set Quantity, Item Notes and Add-ons, then click <strong>"+ Add Item to Order"</strong>.
+                </div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0' }}>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', width: '50px', textAlign: 'center', verticalAlign: 'middle' }}>S.No</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', textAlign: 'left', verticalAlign: 'middle' }}>Item</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', width: '130px', textAlign: 'center', verticalAlign: 'middle' }}>Quantity</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', width: '100px', textAlign: 'right', verticalAlign: 'middle' }}>Unit Price</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', minWidth: '130px', textAlign: 'left', verticalAlign: 'middle' }}>Add-ons</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', minWidth: '140px', textAlign: 'left', verticalAlign: 'middle' }}>Item Notes</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', width: '110px', textAlign: 'right', verticalAlign: 'middle' }}>Item Total</th>
+                      <th style={{ padding: '12px 14px', fontWeight: 800, color: '#475569', width: '70px', textAlign: 'center', verticalAlign: 'middle' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {newOrderItems.map((item, idx) => (
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: idx < newOrderItems.length - 1 ? '1px solid #f1f5f9' : 'none',
+                          background: idx % 2 === 0 ? '#ffffff' : '#fcfcfd'
+                        }}
+                      >
+                        <td style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 700, color: '#64748b', verticalAlign: 'middle' }}>
+                          {idx + 1}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>
+                          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '13px' }}>
+                            {item.name}
+                          </div>
+                          {item.category && (
+                            <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', display: 'inline-block', marginTop: '2px' }}>
+                              {item.category}
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#ffffff', overflow: 'hidden' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateItemQty(idx, -1)}
+                              style={{ width: '26px', height: '26px', border: 'none', background: '#f8fafc', cursor: 'pointer', fontWeight: 800, fontSize: '14px', color: '#0f172a' }}
+                            >
+                              -
+                            </button>
+                            <span style={{ minWidth: '28px', textAlign: 'center', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>
+                              {item.qty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateItemQty(idx, 1)}
+                              style={{ width: '26px', height: '26px', border: 'none', background: '#f8fafc', cursor: 'pointer', fontWeight: 800, fontSize: '14px', color: '#0f172a' }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#475569', verticalAlign: 'middle' }}>
+                          ₹{Number(item.price || 0).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>
+                          {item.addOns ? (
+                            <span style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, display: 'inline-block' }}>
+                              {item.addOns}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'left', verticalAlign: 'middle' }}>
+                          {item.notes ? (
+                            <span style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#c2410c', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, display: 'inline-block' }}>
+                              📝 {item.notes}
+                            </span>
+                          ) : (
+                            <span style={{ color: '#94a3b8' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', verticalAlign: 'middle' }}>
+                          ₹{(Number(item.price || 0) * Number(item.qty || 1)).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItemFromOrder(idx)}
+                            title="Remove item"
+                            style={{
+                              border: 'none',
+                              background: '#fef2f2',
+                              color: '#ef4444',
+                              width: '30px',
+                              height: '30px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#ffffff'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}
+                          >
+                            <TrashIcon size={14} color="currentColor" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Financial Totals Calculation */}
+            {newOrderItems.length > 0 && (
+              <div style={{
+                background: '#f8fafc',
+                borderRadius: '12px',
+                padding: '16px 20px',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '16px',
+                marginTop: '8px'
+              }}>
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Subtotal</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div style={{ width: '1px', height: '24px', background: '#cbd5e1' }} />
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>GST ({taxRate}%)</span>
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{(newOrderItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) * (taxRate / 100)).toFixed(2)}
+                    </span>
+                  </div>
+                  <div style={{ width: '1px', height: '24px', background: '#cbd5e1' }} />
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#ea580c', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Total Payable</span>
+                    <span style={{ fontSize: '20px', fontWeight: 900, color: '#ff5a1f' }}>
+                      ₹{calculateNewOrderTotal()}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' }}>
+            {/* Form Actions (Cancel, Place Order) */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid #f1f5f9', paddingTop: '18px', marginTop: '6px' }}>
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={() => setIsCreateOrderModalOpen(false)}
-                style={{ padding: '10px 24px' }}
+                style={{ padding: '11px 24px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
               >
                 Cancel
               </button>
@@ -1584,19 +2526,26 @@ export default function OrdersPanel({
                   background: '#ff5a1f',
                   color: '#ffffff',
                   border: 'none',
-                  padding: '10px 26px',
+                  padding: '11px 32px',
                   borderRadius: '8px',
-                  fontWeight: 700,
+                  fontWeight: 800,
                   fontSize: '14px',
                   cursor: 'pointer',
-                  boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 3px 12px rgba(255, 90, 31, 0.3)',
+                  transition: 'all 0.15s ease'
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#ea580c'}
+                onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
               >
-                Place Order
+                <span>Place Order</span>
+                <span>→</span>
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       </section>
     );
   }
@@ -2104,163 +3053,21 @@ export default function OrdersPanel({
         overflow: 'visible'
       }}>
 
-        {/* TOP HEADER ROW */}
+        {/* FILTER BAR ROW WITH ALL 7 FILTERS */}
         <div style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
+          flexDirection: 'column',
           gap: '16px',
-          marginBottom: '20px'
+          marginBottom: '24px',
+          background: '#f8fafc',
+          padding: '20px',
+          borderRadius: '12px',
+          border: '1px solid #e2e8f0'
         }}>
-          <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
               Orders list
             </h2>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-
-            {/* Waiter Dropdown Filter */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setIsWaiterDropdownOpen(!isWaiterDropdownOpen)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  padding: '8px 14px',
-                  backgroundColor: '#ffffff',
-                  border: isWaiterDropdownOpen ? '1.5px solid #ff5a1f' : '1px solid #cbd5e1',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  color: '#0f172a',
-                  cursor: 'pointer',
-                  boxShadow: isWaiterDropdownOpen ? '0 0 0 2px rgba(255, 90, 31, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                <UserIcon size={14} color="#64748b" />
-                <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentSelectedWaiterName}
-                </span>
-                <span style={{
-                  fontSize: '10px',
-                  color: '#64748b',
-                  marginLeft: '4px',
-                  display: 'inline-block',
-                  transform: isWaiterDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.15s ease'
-                }}>▼</span>
-              </button>
-
-              {isWaiterDropdownOpen && (
-                <>
-                  <div
-                    style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 999 }}
-                    onClick={() => setIsWaiterDropdownOpen(false)}
-                  />
-                  <div
-                    className="waiter-dropdown-list"
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 6px)',
-                      right: 0,
-                      minWidth: '220px',
-                      width: 'max-content',
-                      maxWidth: '280px',
-                      maxHeight: '240px',
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '10px',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                      zIndex: 1050,
-                      padding: '6px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '3px',
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: '#ff5a1f #f1f5f9'
-                    }}>
-                    {[{ id: 'All Waiters', name: 'All Waiters' }, { id: 'unassigned', name: 'Unassigned (Optional)' }, ...allWaiters].map((w, idx) => {
-                      const isSelected = currentSelectedWaiterId === w.id || currentSelectedWaiterName === w.name;
-                      return (
-                        <div
-                          key={w.id || idx}
-                          onClick={() => {
-                            if (setSelectedWaiterFilter) {
-                              setSelectedWaiterFilter(w);
-                            }
-                            setIsWaiterDropdownOpen(false);
-                          }}
-                          style={{
-                            padding: '8px 12px',
-                            fontSize: '13px',
-                            lineHeight: '1.4',
-                            fontWeight: isSelected ? 700 : 500,
-                            borderRadius: '6px',
-                            backgroundColor: isSelected ? '#ff5a1f' : 'transparent',
-                            color: isSelected ? '#ffffff' : '#0f172a',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            flexShrink: 0,
-                            minHeight: '34px',
-                            boxSizing: 'border-box',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
-                          }}
-                          onMouseLeave={(e) => {
-                            if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          {w.name}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Status Filter Tabs (Matching Screenshot) */}
-            <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
-              {['All', 'New', 'Preparing', 'Ready', 'Served'].map(tab => {
-                const isActive = (orderFilter || 'All').toLowerCase() === tab.toLowerCase();
-
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setOrderFilter && setOrderFilter(tab)}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      backgroundColor: isActive ? '#ff5a1f' : 'transparent',
-                      color: isActive ? '#ffffff' : '#475569',
-                      fontSize: '12px',
-                      fontWeight: isActive ? 700 : 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {tab}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* + Order Button */}
             <button
               type="button"
               onClick={handleOpenCreateOrderModal}
@@ -2268,7 +3075,7 @@ export default function OrdersPanel({
                 background: '#ff5a1f',
                 color: '#ffffff',
                 border: 'none',
-                padding: '8px 18px',
+                padding: '9px 20px',
                 borderRadius: '8px',
                 fontSize: '13px',
                 fontWeight: 700,
@@ -2285,44 +3092,195 @@ export default function OrdersPanel({
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              <span> Order</span>
+              <span>+ Create Order</span>
             </button>
           </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px', alignItems: 'flex-end' }}>
+            {/* 1. Search Order ID / Customer / Table */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Search Order ID</label>
+              <input
+                type="text"
+                placeholder="Order ID / Customer / Table..."
+                value={searchOrderId}
+                onChange={e => setSearchOrderId(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '36px',
+                  padding: '0 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* 2. Order Status Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Order Status</label>
+              <SearchableSelect
+                value={orderFilter || 'All'}
+                onChange={e => setOrderFilter && setOrderFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Statuses' },
+                  { value: 'new', label: 'New' },
+                  { value: 'preparing', label: 'Preparing' },
+                  { value: 'ready', label: 'Ready' },
+                  { value: 'served', label: 'Served' },
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'cancelled', label: 'Cancelled' }
+                ]}
+                placeholder="Select Status..."
+              />
+            </div>
+
+            {/* 3. Order Type Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Order Type</label>
+              <SearchableSelect
+                value={orderTypeFilter}
+                onChange={e => setOrderTypeFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Types' },
+                  { value: 'Dine-In', label: 'Dine-In' },
+                  { value: 'Takeaway', label: 'Takeaway' },
+                  { value: 'Delivery', label: 'Delivery' }
+                ]}
+                placeholder="Select Type..."
+              />
+            </div>
+
+            {/* 4. Dining Table Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Dining Table</label>
+              <SearchableSelect
+                value={selectedTableFilter}
+                onChange={e => setSelectedTableFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Tables' },
+                  ...(apiTables.length > 0
+                    ? apiTables.map(t => ({
+                        value: t.tableNumber || t.tableNo || t.name,
+                        label: `Table ${t.tableNumber || t.tableNo || t.name}`
+                      }))
+                    : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
+                ]}
+                placeholder="Select Table..."
+              />
+            </div>
+
+            {/* 5. Assigned Waiter Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Assigned Waiter</label>
+              <SearchableSelect
+                value={currentSelectedWaiterName}
+                onChange={e => {
+                  const val = e.target.value;
+                  const found = allWaiters.find(w => w.name === val) || { id: val, name: val };
+                  if (setSelectedWaiterFilter) setSelectedWaiterFilter(val === 'All Waiters' ? 'All Waiters' : found);
+                }}
+                options={[
+                  { value: 'All Waiters', label: 'All Waiters' },
+                  { value: 'Unassigned', label: 'Unassigned' },
+                  ...allWaiters.map(w => ({ value: w.name, label: w.name }))
+                ]}
+                placeholder="Select Waiter..."
+              />
+            </div>
+
+            {/* 6. Payment Status Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Payment Status</label>
+              <SearchableSelect
+                value={paymentStatusFilter}
+                onChange={e => setPaymentStatusFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Payment' },
+                  { value: 'Unpaid', label: 'Unpaid' },
+                  { value: 'Paid', label: 'Paid' }
+                ]}
+                placeholder="Select Payment..."
+              />
+            </div>
+
+            {/* 7. Date Range Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase' }}>Date Range</label>
+              <SearchableSelect
+                value={dateRangeFilter}
+                onChange={e => setDateRangeFilter(e.target.value)}
+                options={[
+                  { value: 'All', label: 'All Time' },
+                  { value: 'Today', label: 'Today' },
+                  { value: 'Yesterday', label: 'Yesterday' },
+                  { value: 'This Week', label: 'This Week' },
+                  { value: 'This Month', label: 'This Month' },
+                  { value: 'Custom', label: 'Custom' }
+                ]}
+                placeholder="Select Range..."
+              />
+            </div>
+          </div>
+
+          {dateRangeFilter === 'Custom' && (
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>Start Date</label>
+                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>End Date</label>
+                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ORDERS TABLE */}
+        {/* ORDERS TABLE WITH ALL 13 REQUIRED COLUMNS */}
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', minWidth: '1450px', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <table style={{ width: '100%', minWidth: '1580px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '140px', position: 'sticky', left: 0, zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'center', width: '50px', verticalAlign: 'middle' }}>
+                  S.NO
+                </th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'left', minWidth: '130px', verticalAlign: 'middle' }}>
                   ORDER ID
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '130px', position: 'sticky', left: '140px', zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px', verticalAlign: 'middle' }}>
+                  ORDER TYPE
+                </th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px', verticalAlign: 'middle' }}>
                   TABLE
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '160px' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '160px', verticalAlign: 'middle' }}>
+                  CUSTOMER
+                </th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '130px', verticalAlign: 'middle' }}>
                   ITEMS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px' }}>
-                  DATE
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px', verticalAlign: 'middle' }}>
+                  ORDER DATE
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '130px' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '130px', verticalAlign: 'middle' }}>
                   TIME / ELAPSED
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '180px' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '160px', verticalAlign: 'middle' }}>
                   ASSIGNED WAITER
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '110px' }}>
-                  PAYMENT
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '110px', verticalAlign: 'middle' }}>
+                  AMOUNT
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap', minWidth: '110px' }}>
-                  TOTAL
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px', verticalAlign: 'middle' }}>
+                  PAYMENT STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px' }}>
-                  STATUS
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', minWidth: '120px', verticalAlign: 'middle' }}>
+                  ORDER STATUS
                 </th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '240px', minWidth: '240px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap', width: '220px', minWidth: '220px', verticalAlign: 'middle' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -2357,8 +3315,11 @@ export default function OrdersPanel({
 
                 const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
                 const status = (ord.status || 'new').toLowerCase();
+                const orderTypeVal = ord.orderType || 'Dine-In';
                 const waiterName = getResolvedWaiterName(ord);
-                const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '01';
+                const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || (orderTypeVal === 'Dine-In' ? '01' : '-');
+                const custName = ord.customerName || ord.customer?.name || (orderTypeVal === 'Delivery' ? 'Delivery Customer' : '-');
+                const custPhone = ord.customerMobile || ord.customerPhone || ord.customer?.mobile || '';
 
                 let displayId = ord.orderId || ord.id || String(index);
                 if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
@@ -2384,42 +3345,72 @@ export default function OrdersPanel({
                     onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
-                    {/* 1. ORDER ID */}
-                    <td style={{ padding: '16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', position: 'sticky', left: 0, zIndex: 5, backgroundColor: '#ffffff' }}>
+                    {/* 1. S.NO */}
+                    <td style={{ padding: '14px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b', verticalAlign: 'middle' }}>
+                      {page * limit + index + 1}
+                    </td>
+
+                    {/* 2. ORDER ID */}
+                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap', textAlign: 'left', verticalAlign: 'middle' }}>
                       #ORD-{displayId}
                     </td>
 
-                    {/* 2. TABLE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', left: '140px', zIndex: 5, backgroundColor: '#ffffff' }}>
+                    {/* 3. ORDER TYPE */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <span style={{
                         display: 'inline-block',
-                        backgroundColor: '#fff7ed',
-                        color: '#ea580c',
                         padding: '4px 10px',
                         borderRadius: '6px',
-                        fontSize: '12px',
-                        fontWeight: 700
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        backgroundColor: orderTypeVal === 'Dine-In' ? '#eff6ff' : (orderTypeVal === 'Delivery' ? '#fdf4ff' : '#fff7ed'),
+                        color: orderTypeVal === 'Dine-In' ? '#2563eb' : (orderTypeVal === 'Delivery' ? '#c026d3' : '#ea580c')
                       }}>
-                        Table {tableName}
+                        {orderTypeVal}
                       </span>
                     </td>
 
-                    {/* 3. ITEMS */}
-                    <td style={{ padding: '16px', fontSize: '13px', maxWidth: '300px' }}>
+                    {/* 4. TABLE */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                      {orderTypeVal === 'Dine-In' ? (
+                        <span style={{
+                          display: 'inline-block',
+                          backgroundColor: '#fff7ed',
+                          color: '#ea580c',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 700
+                        }}>
+                          Table {tableName}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
+                      )}
+                    </td>
+
+                    {/* 5. CUSTOMER */}
+                    <td style={{ padding: '14px 16px', fontSize: '13px', textAlign: 'left', verticalAlign: 'middle' }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a' }}>{custName}</div>
+                      {custPhone && <div style={{ fontSize: '11px', color: '#64748b' }}>{custPhone}</div>}
+                    </td>
+
+                    {/* 6. ITEMS */}
+                    <td style={{ padding: '14px 16px', fontSize: '13px', maxWidth: '240px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <div style={{ fontWeight: 600, color: '#0f172a', lineHeight: 1.4 }}>
                         {itemSummary}
                       </div>
                     </td>
 
-                    {/* NEW DATE COLUMN */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {/* 7. ORDER DATE */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
                         {formattedDate}
                       </div>
                     </td>
 
-                    {/* 4. TIME / ELAPSED */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {/* 8. ORDER TIME / ELAPSED */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
                         {timeStr}
                       </div>
@@ -2428,8 +3419,8 @@ export default function OrdersPanel({
                       </div>
                     </td>
 
-                    {/* 5. ASSIGNED WAITER */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {/* 9. ASSIGNED WAITER */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                         {waiterName && waiterName !== 'Unassigned' && waiterName !== '-' ? (
                           <>
@@ -2446,8 +3437,13 @@ export default function OrdersPanel({
                       </div>
                     </td>
 
-                    {/* 6. PAYMENT */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {/* 10. AMOUNT */}
+                    <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '14px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                      ₹{parseFloat(ord.total || 0).toFixed(2)}
+                    </td>
+
+                    {/* 11. PAYMENT STATUS */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       <span style={{
                         display: 'inline-block',
                         padding: '4px 10px',
@@ -2461,13 +3457,8 @@ export default function OrdersPanel({
                       </span>
                     </td>
 
-                    {/* 7. TOTAL */}
-                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '14px', whiteSpace: 'nowrap' }}>
-                      ₹{parseFloat(ord.total || 0).toFixed(2)}
-                    </td>
-
-                    {/* 8. STATUS BADGE */}
-                    <td style={{ padding: '16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {/* 12. ORDER STATUS */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                       {status === 'preparing' && (
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }}>
                           Preparing
@@ -2488,6 +3479,11 @@ export default function OrdersPanel({
                           Ready
                         </span>
                       )}
+                      {status === 'cancelled' && (
+                        <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                          Cancelled
+                        </span>
+                      )}
                       {status === 'new' && (
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '12px', fontSize: '11px', fontWeight: 700, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
                           New
@@ -2495,238 +3491,180 @@ export default function OrdersPanel({
                       )}
                     </td>
 
-                    {/* 9. ACTION BUTTONS (ALWAYS ALIGNED) */}
-                    <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap', position: 'sticky', right: 0, zIndex: 5, backgroundColor: '#ffffff', width: '240px', minWidth: '240px', boxSizing: 'border-box' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    {/* 13. ACTIONS: View(Print Bill), Edit, Send to Kitchen, Print KOT, Cancel (Icon Only) */}
+                    <td style={{ padding: '12px 14px', textAlign: 'center', whiteSpace: 'nowrap', width: '220px', minWidth: '220px', boxSizing: 'border-box', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'nowrap' }}>
 
-                        {/* 1. Eye (View) Icon */}
+                        {/* View (Print Bill) */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            setViewingOrder(ord);
+                            handlePrintBill(ord);
                           }}
                           style={{
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            color: '#334155',
-                            cursor: 'pointer',
-                            padding: 0,
                             width: '32px',
                             height: '32px',
-                            minWidth: '32px',
-                            maxWidth: '32px',
-                            borderRadius: '6px',
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            flexShrink: 0,
+                            padding: 0,
                             boxSizing: 'border-box',
-                            transition: 'all 0.15s'
+                            transition: 'all 0.15s ease'
                           }}
-                          onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#334155'; }}
-                          title="View Order Details"
+                          title="View & Print Bill"
                         >
-                          <EyeIcon size={14} />
+                          <EyeIcon size={16} color="#2563eb" />
                         </button>
 
-                        {/* 2. Edit Icon */}
+                        {/* Edit */}
                         <button
                           type="button"
                           disabled={isPaid}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (!isPaid) {
-                              handleOpenEditOrder(ord);
-                            }
+                            if (!isPaid) handleOpenEditOrder(ord);
                           }}
                           style={{
-                            background: isPaid ? '#f8fafc' : '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            color: isPaid ? '#94a3b8' : '#334155',
-                            cursor: isPaid ? 'not-allowed' : 'pointer',
-                            padding: 0,
                             width: '32px',
                             height: '32px',
-                            minWidth: '32px',
-                            maxWidth: '32px',
-                            borderRadius: '6px',
+                            background: isPaid ? '#f8fafc' : '#ffffff',
+                            border: isPaid ? '1px solid #e2e8f0' : '1px solid #cbd5e1',
+                            color: isPaid ? '#94a3b8' : '#334155',
+                            cursor: isPaid ? 'not-allowed' : 'pointer',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            flexShrink: 0,
+                            padding: 0,
                             boxSizing: 'border-box',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => {
-                            if (!isPaid) {
-                              e.currentTarget.style.background = '#f1f5f9';
-                              e.currentTarget.style.color = '#0f172a';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            if (!isPaid) {
-                              e.currentTarget.style.background = '#ffffff';
-                              e.currentTarget.style.color = '#334155';
-                            }
+                            transition: 'all 0.15s ease'
                           }}
                           title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
                         >
-                          <PencilIcon size={14} color={isPaid ? "#94a3b8" : "currentColor"} />
+                          <PencilIcon size={14} color={isPaid ? "#94a3b8" : "#334155"} />
                         </button>
 
-                        {/* 3. Delete / Trash Icon */}
+                        {/* Send to Kitchen */}
                         {(() => {
-                          const isDeleteDisabled = isPaid || ['ready', 'served', 'completed'].includes(status);
-                          const deleteTitle = isPaid
-                            ? "Paid orders cannot be deleted"
-                            : ['ready', 'served', 'completed'].includes(status)
-                              ? `Cannot delete ${status} order`
-                              : "Delete Order";
+                          const isKitchenDisabled = status === 'completed' || status === 'cancelled';
+                          const kitchenTitle = status === 'completed'
+                            ? "Completed orders cannot be sent to kitchen"
+                            : status === 'cancelled'
+                            ? "Cancelled orders cannot be sent to kitchen"
+                            : status === 'new'
+                            ? "Send order to Kitchen"
+                            : `Update Kitchen status (${status})`;
 
                           return (
                             <button
                               type="button"
-                              disabled={isDeleteDisabled}
+                              disabled={isKitchenDisabled}
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                if (!isDeleteDisabled) {
-                                  setOrderToDelete(ord);
+                                if (!isKitchenDisabled) {
+                                  handleOrderStatusUpdate(ord._id || ord.id, ord.status || 'new', ord.branchId);
                                 }
                               }}
                               style={{
-                                background: isDeleteDisabled ? '#f8fafc' : '#ffffff',
-                                border: isDeleteDisabled ? '1px solid #cbd5e1' : '1px solid #fecaca',
-                                color: isDeleteDisabled ? '#94a3b8' : '#ef4444',
-                                cursor: isDeleteDisabled ? 'not-allowed' : 'pointer',
-                                padding: 0,
                                 width: '32px',
                                 height: '32px',
-                                minWidth: '32px',
-                                maxWidth: '32px',
-                                borderRadius: '6px',
+                                background: isKitchenDisabled ? '#f8fafc' : '#fff7ed',
+                                border: isKitchenDisabled ? '1px solid #e2e8f0' : '1px solid #fed7aa',
+                                color: isKitchenDisabled ? '#94a3b8' : '#ea580c',
+                                cursor: isKitchenDisabled ? 'not-allowed' : 'pointer',
+                                borderRadius: '8px',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                flexShrink: 0,
+                                padding: 0,
                                 boxSizing: 'border-box',
-                                transition: 'all 0.15s'
+                                transition: 'all 0.15s ease'
                               }}
-                              onMouseEnter={e => {
-                                if (!isDeleteDisabled) {
-                                  e.currentTarget.style.background = '#fef2f2';
-                                  e.currentTarget.style.borderColor = '#f87171';
-                                }
-                              }}
-                              onMouseLeave={e => {
-                                if (!isDeleteDisabled) {
-                                  e.currentTarget.style.background = '#ffffff';
-                                  e.currentTarget.style.borderColor = '#fecaca';
-                                }
-                              }}
-                              title={deleteTitle}
+                              title={kitchenTitle}
                             >
-                              <TrashIcon size={14} color={isDeleteDisabled ? "#94a3b8" : "currentColor"} />
+                              <PlayIcon size={13} color={isKitchenDisabled ? "#94a3b8" : "#ea580c"} />
                             </button>
                           );
                         })()}
 
-                        {/* 4. Status Action Trigger / Badge */}
-                        {status === 'completed' ? (
-                          <span style={{
-                            fontSize: '11px',
-                            color: '#15803d',
-                            backgroundColor: '#dcfce7',
+                        {/* Print KOT */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handlePrintKOT(ord);
+                          }}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            background: '#f0fdf4',
                             border: '1px solid #bbf7d0',
-                            padding: '0 6px',
-                            borderRadius: '6px',
-                            fontWeight: 700,
+                            color: '#16a34a',
+                            cursor: 'pointer',
+                            borderRadius: '8px',
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '4px',
-                            width: '96px',
-                            minWidth: '96px',
-                            maxWidth: '96px',
-                            height: '32px',
+                            padding: 0,
                             boxSizing: 'border-box',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            <CheckIcon size={12} /> Completed
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (status === 'served' && ord.billingStatus !== 'paid') {
-                                ShowNotifications.showAlertNotification("Order must be paid before completing.", false);
-                                return;
-                              }
-                              handleOrderStatusUpdate(ord._id || ord.id, status, ord.branchId);
-                            }}
-                            style={{
-                              padding: '0 6px',
-                              borderRadius: '6px',
-                              border:
-                                status === 'new' ? '1px solid #ff5a1f' :
-                                  status === 'preparing' ? '1px solid #16a34a' :
-                                  status === 'ready' ? '1px solid #16a34a' :
-                                  '1px solid #16a34a',
-                              background:
-                                status === 'new' ? '#fff7ed' :
-                                  status === 'preparing' ? '#f0fdf4' :
-                                  status === 'ready' ? '#f0fdf4' :
-                                  (status === 'served' && ord.billingStatus !== 'paid') ? '#f1f5f9' : '#f0fdf4',
-                              color:
-                                status === 'new' ? '#ff5a1f' :
-                                  status === 'preparing' ? '#16a34a' :
-                                  status === 'ready' ? '#16a34a' :
-                                  (status === 'served' && ord.billingStatus !== 'paid') ? '#94a3b8' : '#16a34a',
-                              cursor: (status === 'served' && ord.billingStatus !== 'paid') ? 'not-allowed' : 'pointer',
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '4px',
-                              width: '96px',
-                              minWidth: '96px',
-                              maxWidth: '96px',
-                              height: '32px',
-                              boxSizing: 'border-box',
-                              textAlign: 'center',
-                              whiteSpace: 'nowrap',
-                              transition: 'all 0.15s'
-                            }}
-                            title={status === 'served' && ord.billingStatus !== 'paid' ? "Payment required to complete order" : ""}
-                          >
-                            {status === 'new' && (
-                              <>
-                                <PlayIcon size={11} /> Start
-                              </>
-                            )}
-                            {status === 'preparing' && (
-                              <>
-                                <BellIcon size={11} /> Ready
-                              </>
-                            )}
-                            {status === 'ready' && (
-                              <>
-                                <CheckIcon size={11} /> Serve
-                              </>
-                            )}
-                            {status === 'served' && (
-                              <>
-                                <CheckIcon size={11} /> Complete
-                              </>
-                            )}
-                          </button>
-                        )}
+                            transition: 'all 0.15s ease'
+                          }}
+                          title="Print Kitchen Order Ticket (KOT)"
+                        >
+                          <PrintIcon size={14} color="#16a34a" />
+                        </button>
+
+                        {/* Cancel */}
+                        {(() => {
+                          const isCancelDisabled = status === 'completed' || status === 'cancelled' || isPaid;
+                          const cancelTitle = status === 'completed'
+                            ? "Completed orders cannot be cancelled"
+                            : status === 'cancelled'
+                            ? "Order is already cancelled"
+                            : isPaid
+                            ? "Paid orders cannot be cancelled"
+                            : "Cancel Order";
+
+                          return (
+                            <button
+                              type="button"
+                              disabled={isCancelDisabled}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (!isCancelDisabled) setOrderToDelete(ord);
+                              }}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                background: isCancelDisabled ? '#f8fafc' : '#fef2f2',
+                                border: isCancelDisabled ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                                color: isCancelDisabled ? '#94a3b8' : '#dc2626',
+                                cursor: isCancelDisabled ? 'not-allowed' : 'pointer',
+                                borderRadius: '8px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                boxSizing: 'border-box',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title={cancelTitle}
+                            >
+                              <TrashIcon size={14} color={isCancelDisabled ? "#94a3b8" : "#dc2626"} />
+                            </button>
+                          );
+                        })()}
 
                       </div>
                     </td>
@@ -2736,7 +3674,7 @@ export default function OrdersPanel({
 
               {paginatedOrders.length === 0 && (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
+                  <td colSpan="13" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
                     No orders found matching the filter "{orderFilter}".
                   </td>
                 </tr>
@@ -3079,133 +4017,260 @@ export default function OrdersPanel({
           isOpen={isCreateOrderModalOpen}
           onClose={() => setIsCreateOrderModalOpen(false)}
           title="Place New Order"
-          maxWidth="560px"
+          maxWidth="750px"
         >
           <form onSubmit={handleCreateOrderSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
 
-            {/* Branch Selection Field */}
+            {/* 1. Order Type Selection */}
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                Branch <span style={{ color: '#ef4444' }}>*</span>
+                Order Type <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              {canChooseBranchInOrder ? (
-                <SearchableSelect
-                  value={modalSelectedBranchId || ''}
-                  onChange={handleModalBranchChange}
-                  options={(apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || [])).map(b => ({
-                    value: b._id || b.id,
-                    label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
-                  }))}
-                  placeholder="Select Branch..."
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={(() => {
-                    const branchSource = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
-                    const bObj = branchSource.find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
-                      || branchSource[0];
-                    return bObj ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Branch';
-                  })()}
-                  readOnly
-                  disabled
-                  style={{
-                    width: '100%',
-                    padding: '9px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#64748b',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'not-allowed',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              )}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {['Dine-In', 'Takeaway', 'Delivery'].map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setNewOrderType(type)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: newOrderType === type ? '2px solid #ff5a1f' : '1px solid #cbd5e1',
+                      background: newOrderType === type ? '#fff7ed' : '#ffffff',
+                      color: newOrderType === type ? '#ff5a1f' : '#334155',
+                      fontWeight: 800,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {type === 'Dine-In' ? '🍽️ Dine-In' : (type === 'Takeaway' ? '🛍️ Takeaway' : '🛵 Delivery')}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Row 1: Table & Waiter Assignment */}
+            {/* Branch & Order Source */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Dining Table <span style={{ color: '#ef4444' }}>*</span>
+                  Branch <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <SearchableSelect
-                  value={newOrderTable}
-                  onChange={e => setNewOrderTable(e.target.value)}
-                  options={displayTables.map(tNo => {
-                    const occupied = isTableOccupied(tNo);
-                    return {
-                      value: tNo,
-                      label: `Table ${tNo} ${occupied ? '— Occupied (Active Order)' : '— Available'}`
-                    };
-                  })}
-                  placeholder="Select Dining Table..."
-                />
-
-                {/* OCCUPIED WARNING & ACTION PROMPT */}
-                {(() => {
-                  const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
-                  if (!activeOrd) return null;
-                  return (
-                    <div style={{
-                      marginTop: '8px',
-                      padding: '10px 12px',
-                      background: '#fff7ed',
-                      border: '1px solid #fed7aa',
+                {canChooseBranchInOrder ? (
+                  <SearchableSelect
+                    value={modalSelectedBranchId || ''}
+                    onChange={handleModalBranchChange}
+                    options={(apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || [])).map(b => ({
+                      value: b._id || b.id,
+                      label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                    }))}
+                    placeholder="Select Branch..."
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={(() => {
+                      const branchSource = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
+                      const bObj = branchSource.find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
+                        || branchSource[0];
+                      return bObj ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Branch';
+                    })()}
+                    readOnly
+                    disabled
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
                       borderRadius: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px'
-                    }}>
-                      <div style={{ fontSize: '11px', color: '#c2410c', fontWeight: 700 }}>
-                        ⚠️ Table {newOrderTable} has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
-                            setIsCreateOrderModalOpen(false);
-                            handleOpenAppendModal(activeOrd, itemsToCarry);
-                          }}
-                          style={{
-                            background: '#ea580c',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '5px 10px',
-                            borderRadius: '5px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ➕ Add Items to Order
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
+                      border: '1px solid #cbd5e1',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#64748b',
+                      backgroundColor: '#f8fafc',
+                      cursor: 'not-allowed',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                )}
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Assigned Waiter <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>(Optional)</span>
+                  Order Source <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <SearchableSelect
-                  value={newOrderWaiter}
-                  onChange={e => setNewOrderWaiter(e.target.value)}
+                  value={newOrderSource}
+                  onChange={e => setNewOrderSource(e.target.value)}
                   options={[
-                    { value: 'Unassigned', label: '-- None (Unassigned) --' },
-                    ...modalWaiters.map(w => ({ value: w, label: w }))
+                    { value: 'Admin / POS', label: 'Admin / POS' },
+                    { value: 'Customer Website', label: 'Customer Website' },
+                    { value: 'Waiter App', label: 'Waiter App' },
+                    { value: 'Online / Delivery Partner', label: 'Online / Delivery Partner' }
                   ]}
-                  placeholder="Select Waiter..."
+                  placeholder="Select Order Source..."
                 />
               </div>
             </div>
 
-            {/* Row 2: Initial Status & Order Notes */}
+            {/* Conditional Fields Based on Order Type */}
+            {newOrderType === 'Dine-In' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                    Dining Table <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <SearchableSelect
+                    value={newOrderTable}
+                    onChange={e => setNewOrderTable(e.target.value)}
+                    options={displayTables.map(tNo => {
+                      const occupied = isTableOccupied(tNo);
+                      return {
+                        value: tNo,
+                        label: `Table ${tNo} ${occupied ? '— Occupied (Active Order)' : '— Available'}`
+                      };
+                    })}
+                    placeholder="Select Dining Table..."
+                  />
+
+                  {/* OCCUPIED WARNING & ACTION PROMPT */}
+                  {(() => {
+                    const activeOrd = getActiveOrderForTable(newOrderTable, apiTables);
+                    if (!activeOrd) return null;
+                    return (
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '10px 12px',
+                        background: '#fff7ed',
+                        border: '1px solid #fed7aa',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}>
+                        <div style={{ fontSize: '11px', color: '#c2410c', fontWeight: 700 }}>
+                          ⚠️ Table {newOrderTable} has an active order (#{activeOrd.orderId || activeOrd.id || activeOrd._id})
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
+                              setIsCreateOrderModalOpen(false);
+                              handleOpenAppendModal(activeOrd, itemsToCarry);
+                            }}
+                            style={{
+                              background: '#ea580c',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '5px 10px',
+                              borderRadius: '5px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ➕ Add Items to Order
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                    Assigned Waiter <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>(Optional)</span>
+                  </label>
+                  <SearchableSelect
+                    value={newOrderWaiter}
+                    onChange={e => setNewOrderWaiter(e.target.value)}
+                    options={[
+                      { value: 'Unassigned', label: '-- None (Unassigned) --' },
+                      ...modalWaiters.map(w => ({ value: w, label: w }))
+                    ]}
+                    placeholder="Select Waiter..."
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Delivery Fields (Required for Delivery) */}
+            {newOrderType === 'Delivery' && (
+              <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Delivery Details
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                      Customer Name <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter Customer Name"
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                      Customer Mobile Number <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Enter 10-digit Mobile Number"
+                      value={customerMobile}
+                      onChange={e => setCustomerMobile(e.target.value)}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                    Delivery Address <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter complete delivery address with landmark"
+                    value={deliveryAddress}
+                    onChange={e => setDeliveryAddress(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {newOrderType === 'Takeaway' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                    Customer Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter Customer Name"
+                    value={customerName}
+                    onChange={e => setCustomerName(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
+                    Customer Mobile Number (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter Mobile Number"
+                    value={customerMobile}
+                    onChange={e => setCustomerMobile(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Status & General Kitchen Notes */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
@@ -3225,7 +4290,7 @@ export default function OrdersPanel({
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                  Special Instructions / Kitchen Note
+                  Special Instructions / Order Note
                 </label>
                 <input
                   type="text"
@@ -3386,78 +4451,101 @@ export default function OrdersPanel({
               </div>
             </div>
 
-            {/* Selected Items List */}
-            <div style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  Order Items ({newOrderItems.reduce((sum, it) => sum + (Number(it.qty) || 1), 0)})
+            {/* Selected Items — Table Columns: S.No, Item, Quantity, Unit Price, Add-ons, Item Notes, Item Total, Actions */}
+            <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', padding: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Selected Items ({newOrderItems.reduce((sum, it) => sum + (Number(it.qty) || 1), 0)})
                 </span>
-                <span style={{ fontSize: '11px', color: '#64748b' }}>Qty & Rate</span>
               </div>
 
               {newOrderItems.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '16px', color: '#94a3b8', fontSize: '13px' }}>
-                  No items added yet. Click dishes above to add.
+                <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px', background: '#f8fafc', borderRadius: '8px' }}>
+                  No items added yet. Search or select menu items above to add.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
-                  {newOrderItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        background: '#ffffff',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        border: '1px solid #e2e8f0'
-                      }}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{item.name}</span>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>₹{item.price} each</span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {/* Qty Stepper */}
-                        <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItemQty(idx, -1)}
-                            style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
-                          >
-                            -
-                          </button>
-                          <span style={{ width: '28px', textAlign: 'center', fontSize: '12px', fontWeight: 700 }}>
-                            {item.qty}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItemQty(idx, 1)}
-                            style={{ width: '26px', height: '26px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '13px', color: '#0f172a' }}
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        {/* Amount */}
-                        <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', minWidth: '60px', textAlign: 'right' }}>
-                          ₹{((item.price || 0) * (item.qty || 1)).toFixed(2)}
-                        </span>
-
-                        {/* Remove */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItemFromOrder(idx)}
-                          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '13px', padding: '2px 4px' }}
-                          title="Remove item"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ overflowX: 'auto', maxHeight: '220px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '650px' }}>
+                    <thead>
+                      <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '2px solid #ff5a1f' }}>
+                        <th style={{ padding: '8px 10px', textAlign: 'center', width: '45px', color: '#ffffff' }}>S.No</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff' }}>Item</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'center', width: '90px', color: '#ffffff' }}>Quantity</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right', width: '80px', color: '#ffffff' }}>Unit Price</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'left', width: '110px', color: '#ffffff' }}>Add-ons</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'left', width: '110px', color: '#ffffff' }}>Item Notes</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right', width: '85px', color: '#ffffff' }}>Item Total</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'center', width: '55px', color: '#ffffff' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {newOrderItems.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 700, color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '8px 10px', fontWeight: 700, color: '#0f172a' }}>{item.name}</td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQty(idx, -1)}
+                                style={{ width: '22px', height: '22px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '12px' }}
+                              >
+                                -
+                              </button>
+                              <span style={{ width: '24px', textAlign: 'center', fontSize: '12px', fontWeight: 700 }}>{item.qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQty(idx, 1)}
+                                style={{ width: '22px', height: '22px', background: '#f1f5f9', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '12px' }}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>₹{item.price}</td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input
+                              type="text"
+                              placeholder="Add-ons..."
+                              value={item.addOns || ''}
+                              onChange={e => {
+                                const updated = [...newOrderItems];
+                                updated[idx].addOns = e.target.value;
+                                setNewOrderItems(updated);
+                              }}
+                              style={{ width: '100%', padding: '4px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', boxSizing: 'border-box' }}
+                            />
+                          </td>
+                          <td style={{ padding: '6px 8px' }}>
+                            <input
+                              type="text"
+                              placeholder="Notes (e.g. Less spicy)"
+                              value={item.notes || ''}
+                              onChange={e => {
+                                const updated = [...newOrderItems];
+                                updated[idx].notes = e.target.value;
+                                setNewOrderItems(updated);
+                              }}
+                              style={{ width: '100%', padding: '4px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', boxSizing: 'border-box' }}
+                            />
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                            ₹{((item.price || 0) * (item.qty || 1)).toFixed(2)}
+                          </td>
+                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemFromOrder(idx)}
+                              style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '14px', padding: '2px 4px' }}
+                              title="Remove item"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
