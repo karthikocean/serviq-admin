@@ -7,6 +7,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY, formatDateTimeDMY } from '../helper/DateHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 // Clean SVG Icons
 const TrendingDownIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -209,17 +210,18 @@ export default function StockReductionPanel() {
   };
 
   // Filter items and logs by selected branch if set
-  const inventory = selectedBranchId
-    ? rawInventory.filter(item => item.branchId === selectedBranchId || item.branchId === 'ALL')
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const inventory = isBranchFiltered
+    ? rawInventory.filter(item => isBranchMatch(item, selectedBranchId, activeRestaurant?.branches || []))
     : rawInventory;
 
   const purchases = livePurchases.length > 0
-    ? livePurchases
-    : (selectedBranchId ? rawPurchases.filter(p => p.branchId === selectedBranchId || p.branchId === 'ALL') : rawPurchases);
+    ? (isBranchFiltered ? livePurchases.filter(p => isBranchMatch(p, selectedBranchId, activeRestaurant?.branches || [])) : livePurchases)
+    : (isBranchFiltered ? rawPurchases.filter(p => isBranchMatch(p, selectedBranchId, activeRestaurant?.branches || [])) : rawPurchases);
 
   const reductions = liveReductions.length > 0
-    ? liveReductions
-    : (selectedBranchId ? rawReductions.filter(r => r.branchId === selectedBranchId || r.branchId === 'ALL') : rawReductions);
+    ? (isBranchFiltered ? liveReductions.filter(r => isBranchMatch(r, selectedBranchId, activeRestaurant?.branches || [])) : liveReductions)
+    : (isBranchFiltered ? rawReductions.filter(r => isBranchMatch(r, selectedBranchId, activeRestaurant?.branches || [])) : rawReductions);
 
 
   // View and Modals state

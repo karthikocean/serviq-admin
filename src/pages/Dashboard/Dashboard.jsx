@@ -24,11 +24,11 @@ export default function Dashboard() {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 10, page: 0 } : { limit: 10, page: 0 };
+      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 1000, page: 0 } : { limit: 1000, page: 0 };
       const [tablesRes, ordersRes, branchesRes, usersRes] = await Promise.allSettled([
         TableApi.getTables(branchParam),
         OrderApi.getOrders(branchParam),
-        BranchApi.getBranches({ limit: 10 }),
+        BranchApi.getBranches({ limit: 100 }),
         UserApi.getUsers(branchParam)
       ]);
 

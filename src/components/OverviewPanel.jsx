@@ -116,6 +116,47 @@ export const isTableOccupied = (table, orderList = []) => {
   return hasActiveOrder;
 };
 
+export const getOccupiedTablesCount = (tablesList = [], ordersList = []) => {
+  if (!Array.isArray(tablesList)) tablesList = [];
+  if (!Array.isArray(ordersList)) ordersList = [];
+
+  const activeOrders = ordersList.filter(o => {
+    if (!o) return false;
+    const ordStatus = String(o.status || '').toLowerCase().trim();
+    const ordBilling = String(o.billingStatus || o.paymentStatus || '').toLowerCase().trim();
+    const isCompleted = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(ordStatus);
+    const isPaidAndDone = ordBilling === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(ordStatus);
+    return !isCompleted && !isPaidAndDone;
+  });
+
+  const matchedOrderKeys = new Set();
+  let occupiedCount = 0;
+
+  tablesList.forEach(t => {
+    if (isTableOccupied(t, activeOrders)) {
+      occupiedCount++;
+      activeOrders.forEach((o, idx) => {
+        if (isTableOccupied(t, [o])) {
+          matchedOrderKeys.add(o._id || o.id || o.orderId || idx);
+        }
+      });
+    }
+  });
+
+  activeOrders.forEach((o, idx) => {
+    const key = o._id || o.id || o.orderId || idx;
+    if (!matchedOrderKeys.has(key)) {
+      const matchesAnyKnownTable = tablesList.some(t => isTableOccupied(t, [o]));
+      if (!matchesAnyKnownTable) {
+        occupiedCount++;
+        matchedOrderKeys.add(key);
+      }
+    }
+  });
+
+  return occupiedCount;
+};
+
 export default function OverviewPanel({
   orders = [],
   tables = [],
@@ -237,7 +278,7 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 10});
+      const res = await TableApi.getTables({ limit: 1000 });
       if (res && res.status && res.response) {
         const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
         if (tList.length > 0) {
@@ -352,48 +393,7 @@ export default function OverviewPanel({
   }, [orderBreakdownData, displayOrders]);
 
   // Accurately computed counts with real-time active order and table status tracking
-  const occupiedTableSet = new Set();
-  (displayTables || []).forEach(t => {
-    if (isTableOccupied(t, displayOrders)) {
-      const tid = String(t._id || t.id || t.tableNumber || t.tableNo || t.name || '').toLowerCase().trim();
-      if (tid) occupiedTableSet.add(tid);
-    }
-  });
-
-  // Track active dining orders that occupy tables
-  const activeDiningOrders = (displayOrders || []).filter(o => {
-    if (!o) return false;
-    const ordStatus = String(o.status || '').toLowerCase().trim();
-    const ordBilling = String(o.billingStatus || o.paymentStatus || '').toLowerCase().trim();
-    const isCompleted = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(ordStatus);
-    const isPaidAndDone = ordBilling === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(ordStatus);
-    return !isCompleted && !isPaidAndDone;
-  });
-
-  activeDiningOrders.forEach(o => {
-    const ordTableObj = typeof o.tableId === 'object' && o.tableId !== null 
-      ? o.tableId 
-      : (typeof o.table === 'object' && o.table !== null ? o.table : null);
-
-    const tId = String(
-      ordTableObj?._id || 
-      ordTableObj?.id || 
-      ordTableObj?.tableNumber || 
-      ordTableObj?.tableNo || 
-      o.tableNumber || 
-      o.tableNo || 
-      (typeof o.table === 'string' ? o.table : '') || 
-      o.tableName || 
-      (typeof o.tableId === 'string' ? o.tableId : '') || 
-      ''
-    ).toLowerCase().trim();
-
-    if (tId) {
-      occupiedTableSet.add(tId);
-    }
-  });
-
-  const localOccupiedCount = occupiedTableSet.size;
+  const localOccupiedCount = getOccupiedTablesCount(displayTables, displayOrders);
 
   const apiOccupiedCount = 
     statsData?.activeTables?.occupied ??
@@ -413,15 +413,20 @@ export default function OverviewPanel({
     liveTablesData?.total ??
     (Array.isArray(liveTablesData?.tables) ? liveTablesData.tables.length : null);
 
-  const occupiedTablesCount = (apiOccupiedCount !== null && apiOccupiedCount !== undefined)
-    ? Math.max(Number(apiOccupiedCount) || 0, localOccupiedCount)
-    : localOccupiedCount;
+  // When a specific branch filter is active, strictly compute counts for that branch to prevent overflow
+  const occupiedTablesCount = isSpecificBranch
+    ? localOccupiedCount
+    : ((apiOccupiedCount !== null && apiOccupiedCount !== undefined)
+        ? Math.max(Number(apiOccupiedCount) || 0, localOccupiedCount)
+        : localOccupiedCount);
 
-  const totalTablesDisplayCount = Math.max(
-    displayTables.length,
-    Number(apiTotalCount) || 0,
-    occupiedTablesCount
-  );
+  const totalTablesDisplayCount = isSpecificBranch
+    ? (displayTables.length || localOccupiedCount)
+    : Math.max(
+        displayTables.length,
+        Number(apiTotalCount) || 0,
+        occupiedTablesCount
+      );
 
   const pendingOrdersCount = displayOrders.filter(o => o.status === 'new').length;
   const completedOrdersCount = displayOrders.filter(o => o.status === 'completed').length;
@@ -499,53 +504,10 @@ export default function OverviewPanel({
     const branchStaff = (allStaff && allStaff.length > 0 ? allStaff : staff).filter(s => isBranchMatch(s, branchTarget, branches));
     const branchRevenue = branchOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
-
-    // Collect all occupied table identifiers accurately
-    const occupiedTableIds = new Set();
-
-    // 1. Direct table status and matches from branchTables
-    branchTables.forEach(t => {
-      if (isTableOccupied(t, branchOrders)) {
-        const idStr = String(t._id || t.id || t.tableNumber || t.tableNo || t.name || '').toLowerCase().trim();
-        if (idStr) occupiedTableIds.add(idStr);
-      }
-    });
-
-    // 2. Active dining orders in this branch also reflect occupied tables
-    const activeBranchOrders = branchOrders.filter(o => {
-      if (!o) return false;
-      const status = String(o.status || '').toLowerCase().trim();
-      const billing = String(o.billingStatus || o.paymentStatus || '').toLowerCase().trim();
-      const isClosed = ['completed', 'delivered', 'cancelled', 'rejected', 'closed'].includes(status);
-      const isPaidAndDone = billing === 'paid' && ['completed', 'ready', 'delivered', 'served'].includes(status);
-      return !isClosed && !isPaidAndDone;
-    });
-
-    activeBranchOrders.forEach(o => {
-      const ordTableObj = typeof o.tableId === 'object' && o.tableId !== null 
-        ? o.tableId 
-        : (typeof o.table === 'object' && o.table !== null ? o.table : null);
-      
-      const tId = String(
-        ordTableObj?._id || 
-        ordTableObj?.id || 
-        ordTableObj?.tableNumber || 
-        ordTableObj?.tableNo || 
-        o.tableNumber || 
-        o.tableNo || 
-        (typeof o.table === 'string' ? o.table : '') || 
-        o.tableName || 
-        (typeof o.tableId === 'string' ? o.tableId : '') || 
-        ''
-      ).toLowerCase().trim();
-
-      if (tId) {
-        occupiedTableIds.add(tId);
-      }
-    });
-
-    const occupied = occupiedTableIds.size;
-    const totalBranchTables = Math.max(branchTables.length || branch.totalTables || 0, occupied);
+    const totalBranchTables = branchTables.length > 0 
+      ? branchTables.length 
+      : (Number(branch.totalTables) || Number(branch.tablesCount) || 0);
+    const occupied = Math.min(getOccupiedTablesCount(branchTables, branchOrders), totalBranchTables || Infinity);
 
     const activeStaff = branchStaff.filter(s => {
       const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();

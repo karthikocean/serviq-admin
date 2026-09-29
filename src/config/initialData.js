@@ -311,28 +311,72 @@ export const getPlanBranchLimit = (planName, defaultLimit = 5) => {
 
 export const isModuleAllowedForPlan = (moduleKey, planSource = 'Standard') => {
   let planStr = '';
+  let features = null;
+
+  let sessionUser = null;
+  try {
+    const raw = sessionStorage.getItem('currentUser');
+    if (raw) sessionUser = JSON.parse(raw);
+  } catch (e) {}
+
   if (typeof planSource === 'string') {
     planStr = planSource;
+    if (sessionUser && sessionUser.plan) {
+      planStr = sessionUser.plan;
+    }
+    if (sessionUser && sessionUser.subscription?.features) {
+      features = sessionUser.subscription.features;
+    }
   } else if (planSource && typeof planSource === 'object') {
-    planStr = planSource.planName || 
-      planSource.plan || 
-      planSource.planId || 
-      planSource.subscription?.planName || 
-      planSource.subscription?.planId || 
-      planSource.subscription?.plan || 
-      '';
+    const candidates = [
+      planSource.subscription?.planName,
+      planSource.subscription?.planId,
+      planSource.subscription?.plan,
+      planSource.activePlan?.planName,
+      planSource.planName,
+      planSource.plan,
+      planSource.planId,
+      sessionUser?.subscription?.planName,
+      sessionUser?.plan
+    ];
+    planStr = candidates.find(c => Boolean(c) && typeof c === 'string') || '';
+    features = planSource.features || 
+      planSource.subscription?.features || 
+      planSource.activePlan?.features || 
+      sessionUser?.subscription?.features ||
+      null;
   }
-  const plan = (planStr || 'Standard').toLowerCase();
+
+  const allPlanValues = [
+    typeof planSource === 'object' && planSource ? planSource.plan : null,
+    typeof planSource === 'object' && planSource ? planSource.planName : null,
+    typeof planSource === 'object' && planSource ? planSource.planId : null,
+    typeof planSource === 'object' && planSource ? planSource.subscription?.plan : null,
+    typeof planSource === 'object' && planSource ? planSource.subscription?.planName : null,
+    typeof planSource === 'object' && planSource ? planSource.subscription?.planId : null,
+    typeof planSource === 'object' && planSource ? planSource.activePlan?.planName : null,
+    sessionUser?.plan,
+    sessionUser?.subscription?.planName,
+    planStr
+  ].map(v => (v || '').toString().toLowerCase());
+
+  const isPremiumOrEnterprise = allPlanValues.some(v => v.includes('premium') || v.includes('enterprise'));
+  const isBasic = allPlanValues.some(v => v.includes('basic'));
   const key = (moduleKey || '').toLowerCase().replace(/[-_]/g, '');
 
-  // Inventory Management: Available ONLY in Premium or Enterprise plans
+  // Inventory Management: Strictly available ONLY in Premium or Enterprise plans
   if (key.includes('inventory') || key.includes('stock')) {
-    return plan.includes('premium') || plan.includes('enterprise');
+    return isPremiumOrEnterprise;
   }
 
   // Staff / Waiter / Kitchen: Available in Standard, Premium, and Enterprise (Disabled on Basic)
   if (key.includes('staff') || key.includes('waiter') || key.includes('kitchen')) {
-    return !plan.includes('basic');
+    if (features && typeof features === 'object') {
+      if (features['waiter-list'] === true || features['kitchen-list'] === true || features['staff'] === true) {
+        return true;
+      }
+    }
+    return !isBasic;
   }
 
   // Core administrative modules (Dashboard, Tables, Menu, Orders, Billing, Reports, Branches, Plans, Settings)

@@ -479,10 +479,19 @@ export default function TableFormPage() {
                   ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
                   : null;
                 const currentBranchObj = headerBranchObj 
-                  || allBranchesList.find(b => String(b._id || b.id) === String(form.branchId))
-                  || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))
-                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
-                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (form.branchId || '');
+                  || (form.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(form.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))) : null);
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (form.branchId || '');
+                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                  effectiveVal = '';
+                }
+
+                const branchOptions = [
+                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...allBranchesList.map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
+                  }))
+                ];
 
                 return (
                   <div>
@@ -490,12 +499,7 @@ export default function TableFormPage() {
                       value={effectiveVal}
                       onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
                       isDisabled={isLocked}
-                      options={allBranchesList.length === 0 ? [
-                        { value: '', label: 'Main Branch' }
-                      ] : allBranchesList.map(b => ({
-                        value: b._id || b.id,
-                        label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
-                      }))}
+                      options={branchOptions}
                       placeholder="Select Branch..."
                     />
                     {isLocked && (
@@ -598,8 +602,8 @@ export default function TableFormPage() {
             </div>
           </div>
 
-          {/* Row 3: Assign Waiter & (Occupancy Status if edit) */}
-          <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr 1fr' : '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+          {/* Row 3: Assign Waiter & (Status if edit) */}
+          <div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr 1fr' : '1fr', gap: '20px', marginBottom: '24px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
                 Assign Waiter (Optional)
@@ -612,41 +616,22 @@ export default function TableFormPage() {
               />
             </div>
 
-            {isEdit ? (
+            {isEdit && (
               <div>
                 <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-                  Occupancy Status
+                  Table Status
                 </label>
                 <SearchableSelect
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                   options={[
-                    { value: 'Free', label: 'Free (Available)' },
-                    { value: 'Occupied', label: 'Occupied' }
+                    { value: 'Free', label: 'Free' },
+                    { value: 'Occupied', label: 'Occupied' },
+                    { value: 'Reserved', label: 'Reserved' },
+                    { value: 'Maintenance / Unavailable', label: 'Maintenance / Unavailable' }
                   ]}
                   placeholder="Select Status..."
                 />
-              </div>
-            ) : (
-              <div>
-                <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#64748b', marginBottom: '8px' }}>
-                  Initial Table Status
-                </label>
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#16a34a',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }}></span>
-                  Free (Ready for Guests)
-                </div>
               </div>
             )}
           </div>

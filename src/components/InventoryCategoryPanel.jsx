@@ -275,6 +275,8 @@ export default function InventoryCategoryPanel() {
     const errors = {};
     if (!formName.trim()) {
       errors.name = 'Category Name is required.';
+    } else if (/\d/.test(formName)) {
+      errors.name = 'Numbers are not allowed in Category Name.';
     } else if (formName.trim().length < 2) {
       errors.name = 'Category Name must be at least 2 characters.';
     }
@@ -415,8 +417,20 @@ export default function InventoryCategoryPanel() {
                 type="text"
                 value={formName}
                 onChange={e => {
-                  setFormName(e.target.value);
-                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                  const val = e.target.value;
+                  const cleaned = val.replace(/[0-9]/g, '');
+                  setFormName(cleaned);
+                  if (val !== cleaned) {
+                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                  } else if (formErrors.name) {
+                    setFormErrors({ ...formErrors, name: '' });
+                  }
+                }}
+                onKeyDown={e => {
+                  if (/[0-9]/.test(e.key)) {
+                    e.preventDefault();
+                    setFormErrors({ ...formErrors, name: 'Numbers are not allowed in Category Name.' });
+                  }
                 }}
                 placeholder="e.g. Dairy, Spices, Grains, Vegetables..."
                 disabled={isSubmitting}
@@ -449,10 +463,19 @@ export default function InventoryCategoryPanel() {
                   ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
                   : null;
                 const currentBranchObj = headerBranchObj 
-                  || allBranchesList.find(b => String(b._id || b.id) === String(formBranchId))
-                  || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))
-                  || (allBranchesList.length > 0 ? allBranchesList[0] : null);
-                const effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
+                  || (formBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(formBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))) : null);
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
+                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
+                  effectiveVal = '';
+                }
+
+                const branchOptions = [
+                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...allBranchesList.map(b => ({
+                    value: b._id || b.id,
+                    label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                  }))
+                ];
 
                 return (
                   <div>
@@ -463,12 +486,7 @@ export default function InventoryCategoryPanel() {
                         if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
                       }}
                       isDisabled={isSubmitting || isLocked}
-                      options={allBranchesList.length === 0 ? [
-                        { value: '', label: 'Main Branch' }
-                      ] : allBranchesList.map(b => ({
-                        value: b._id || b.id,
-                        label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
-                      }))}
+                      options={branchOptions}
                       placeholder="Select Branch..."
                     />
                     {isLocked && (

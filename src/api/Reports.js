@@ -82,6 +82,125 @@ class ReportsApi {
       };
     }
   }
+
+  async getTaxSettlementReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') {
+        cleanParams.branchId = filters.branchId;
+      }
+      if (filters.startDate) cleanParams.startDate = filters.startDate;
+      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') {
+        cleanParams.paymentMethod = filters.paymentMethod;
+      }
+      if (filters.search) cleanParams.search = filters.search;
+      if (filters.page !== undefined) cleanParams.page = filters.page;
+      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/tax-settlement${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async getSalesReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
+      if (filters.startDate) cleanParams.startDate = filters.startDate;
+      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') cleanParams.paymentMethod = filters.paymentMethod;
+      if (filters.search) cleanParams.search = filters.search;
+      if (filters.page !== undefined) cleanParams.page = filters.page;
+      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/sales-revenue${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
+  async getDishPerformanceReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
+      if (filters.startDate) cleanParams.startDate = filters.startDate;
+      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.category && filters.category !== 'ALL' && filters.category !== 'All') cleanParams.category = filters.category;
+      if (filters.search) cleanParams.search = filters.search;
+      if (filters.page !== undefined) cleanParams.page = filters.page;
+      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/dish-performance${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
+  async getOrderAnalyticsReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
+      if (filters.startDate) cleanParams.startDate = filters.startDate;
+      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
+      if (filters.orderStatus && filters.orderStatus !== 'ALL' && filters.orderStatus !== 'All') cleanParams.orderStatus = filters.orderStatus;
+      if (filters.search) cleanParams.search = filters.search;
+      if (filters.page !== undefined) cleanParams.page = filters.page;
+      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/order-analytics${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
+  async getStaffPerformanceReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
+      if (filters.startDate) cleanParams.startDate = filters.startDate;
+      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.search) cleanParams.search = filters.search;
+      if (filters.page !== undefined) cleanParams.page = filters.page;
+      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/staff-performance${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
 }
 
 export default new ReportsApi();

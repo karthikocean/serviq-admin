@@ -104,7 +104,7 @@ export default function SearchableSelect({
 
   // Find currently selected option object
   const selectedOption = useMemo(() => {
-    if (value === undefined || value === null || value === '') {
+    if (value === undefined || value === null) {
       return isMulti ? [] : null;
     }
     if (isMulti) {
@@ -118,8 +118,13 @@ export default function SearchableSelect({
     if (typeof value === 'object' && value !== null && value.value !== undefined) {
       return normalizedOptions.find(opt => String(opt.value) === String(value.value)) || value;
     }
-    const match = normalizedOptions.find(opt => String(opt.value) === String(value));
+    let match = normalizedOptions.find(opt => String(opt.value) === String(value));
+    if (!match && (value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main')) {
+      match = normalizedOptions.find(opt => opt.value === '' || opt.value === 'MAIN' || opt.value === 'ALL');
+    }
     if (match) return match;
+
+    if (value === '' || value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main') return null;
 
     // Guard against showing raw 24-char ObjectId hex string to users
     const strVal = String(value);

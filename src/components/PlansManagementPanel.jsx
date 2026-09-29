@@ -163,23 +163,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [checkoutAutoRenew, setCheckoutAutoRenew] = useState(true);
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
-  // Popup Managed Plans State (Ordered: Premium -> Standard -> Basic to match screenshot)
+  // Popup Managed Plans State (Ordered: Basic -> Standard -> Premium)
   const [plansList, setPlansList] = useState([
     {
-      id: 'plan-premium',
-      name: 'Premium Plan',
+      id: 'plan-basic',
+      name: 'Basic Plan',
       status: 'Active',
-      tagline: 'Advanced operations with integrated Kitchen KDS displays and advanced billing.',
-      monthlyPrice: 4999,
-      annualPrice: 49999,
-      maxBranches: 8,
+      tagline: 'Essential tools for small eateries, QR menu ordering and simple table management.',
+      monthlyPrice: 999,
+      annualPrice: 9999,
+      maxBranches: 3,
       features: [
         { name: 'Menu Management', included: true },
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
-        { name: 'Waiter Management', included: true },
-        { name: 'Kitchen Management', included: true },
-        { name: 'Inventory Management', included: true }
+        { name: 'Waiter Management', included: false },
+        { name: 'Kitchen Management', included: false },
+        { name: 'Inventory Management', included: false }
       ]
     },
     {
@@ -200,20 +200,20 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       ]
     },
     {
-      id: 'plan-basic',
-      name: 'Basic Plan',
+      id: 'plan-premium',
+      name: 'Premium Plan',
       status: 'Active',
-      tagline: 'Essential tools for small eateries, QR menu ordering and simple table management.',
-      monthlyPrice: 999,
-      annualPrice: 9999,
-      maxBranches: 3,
+      tagline: 'Advanced operations with integrated Kitchen KDS displays, advanced billing, and inventory.',
+      monthlyPrice: 4999,
+      annualPrice: 49999,
+      maxBranches: 8,
       features: [
         { name: 'Menu Management', included: true },
         { name: 'Table Management', included: true },
         { name: 'Order Management', included: true },
-        { name: 'Waiter Management', included: false },
-        { name: 'Kitchen Management', included: false },
-        { name: 'Inventory Management', included: false }
+        { name: 'Waiter Management', included: true },
+        { name: 'Kitchen Management', included: true },
+        { name: 'Inventory Management', included: true }
       ]
     }
   ]);
@@ -358,36 +358,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
       if (dashValue && dashValue.status && dashValue.response) {
         const data = dashValue.response?.data?.data || dashValue.response?.data || dashValue.response;
-        try {
-          const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-          if (rawSaved) {
-            const savedPlan = JSON.parse(rawSaved);
-            if (savedPlan && savedPlan.cleanName) {
-              const isAnnual = String(savedPlan.billingCycle).toLowerCase().includes('annual') || String(savedPlan.billingCycle).toLowerCase().includes('year');
-              if (data) {
-                data.activePlan = {
-                  ...(data.activePlan || {}),
-                  planId: savedPlan.planId,
-                  _id: savedPlan.planId,
-                  id: savedPlan.planId,
-                  planName: savedPlan.planName || `${savedPlan.cleanName} Plan`,
-                  name: savedPlan.planName || `${savedPlan.cleanName} Plan`,
-                  cleanName: savedPlan.cleanName,
-                  billingCycle: isAnnual ? 'Annually' : 'Monthly',
-                  price: savedPlan.price || (isAnnual ? savedPlan.annualPrice : savedPlan.monthlyPrice) || data.activePlan?.price,
-                  monthlyPrice: savedPlan.monthlyPrice || data.activePlan?.monthlyPrice,
-                  annualPrice: savedPlan.annualPrice || data.activePlan?.annualPrice,
-                  baseBranchLimit: savedPlan.baseBranchLimit || data.activePlan?.baseBranchLimit,
-                  maxBranches: savedPlan.baseBranchLimit || data.activePlan?.maxBranches,
-                  startDate: savedPlan.startDate || data.activePlan?.startDate,
-                  validity: savedPlan.expiryDate || savedPlan.validity || data.activePlan?.validity,
-                  nextRenewal: savedPlan.nextRenewal || savedPlan.nextBillingDate || data.activePlan?.nextRenewal,
-                  status: 'Active'
-                };
-              }
-            }
-          }
-        } catch (e) {}
         setDashboardData(data);
       }
 
@@ -412,8 +382,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       }
 
       if (fetchedPlans.length > 0) {
-        // Sort descending by monthly price: Premium -> Standard -> Basic
-        fetchedPlans.sort((a, b) => (b.monthlyPrice || 0) - (a.monthlyPrice || 0));
+        // Sort ascending by monthly price: Basic -> Standard -> Premium
+        fetchedPlans.sort((a, b) => (a.monthlyPrice || 0) - (b.monthlyPrice || 0));
         setPlansList(fetchedPlans);
         
         // Sync AVAILABLE_PLANS in memory with live backend values from Super Admin
@@ -512,30 +482,24 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const branchCapacityData = dashboardData?.branchCapacity;
   const extraBranchRateData = dashboardData?.extraBranchRate;
 
-  let savedPlanInfo = null;
-  try {
-    const rawSaved = sessionStorage.getItem('activePlanSelection') || localStorage.getItem('activePlanSelection');
-    if (rawSaved) savedPlanInfo = JSON.parse(rawSaved);
-  } catch (e) {}
-
-  // Active Plan fields - Clean human-readable name guaranteed
+  // Active Plan fields - Clean human-readable name guaranteed from API / profile
   const cleanPlanSlug = resolveHumanPlanName(
-    savedPlanInfo?.cleanName ||
-    savedPlanInfo?.planName ||
-    activeRestaurant?.subscription?.planName ||
-    activeRestaurant?.plan ||
     activePlanData?.cleanName ||
     activePlanData?.planName ||
     activePlanData?.name ||
+    activeRestaurant?.subscription?.planName ||
+    activeRestaurant?.plan ||
+    currentUser?.subscription?.planName ||
+    currentUser?.plan ||
     sub.planName,
     'Standard'
   );
 
-  const candidatePlanId = savedPlanInfo?.planId || 
-                          activeRestaurant?.subscription?.planId || 
-                          activePlanData?.planId || 
+  const candidatePlanId = activePlanData?.planId || 
                           activePlanData?._id || 
-                          activePlanData?.id || 
+                          activePlanData?.id ||
+                          activeRestaurant?.subscription?.planId || 
+                          currentUser?.subscription?.planId ||
                           `plan-${cleanPlanSlug.toLowerCase()}`;
 
   let matchedActivePlan = plansList.find(p => {
@@ -555,32 +519,34 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     matchedActivePlan = AVAILABLE_PLANS.find(p => p.name.toLowerCase().includes(cleanPlanSlug.toLowerCase())) || AVAILABLE_PLANS[1];
   }
 
-  const currentPlanName = `${cleanPlanSlug} Plan`;
+  const currentPlanName = activePlanData?.planName 
+    ? (activePlanData.planName.toLowerCase().includes('plan') ? activePlanData.planName : `${activePlanData.planName} Plan`)
+    : `${cleanPlanSlug} Plan`;
 
-  const currentBillingCycle = (savedPlanInfo?.billingCycle ? (String(savedPlanInfo.billingCycle).toLowerCase().includes('annual') || String(savedPlanInfo.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
+  const currentBillingCycle = (activePlanData?.billingCycle ? (String(activePlanData.billingCycle).toLowerCase().includes('annual') || String(activePlanData.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
     (activeRestaurant?.subscription?.billingCycle ? (String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual') || String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
-    (activePlanData?.billingCycle ? (String(activePlanData.billingCycle).toLowerCase().includes('annual') || String(activePlanData.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly') : null) ||
     (String(sub.billingCycle).toLowerCase().includes('annual') || String(sub.billingCycle).toLowerCase().includes('year') ? 'Annual' : 'Monthly');
     
   const isAnnualCycle = currentBillingCycle.toLowerCase().includes('annual') || currentBillingCycle.toLowerCase().includes('year');
 
-  const currentPlanPrice = isAnnualCycle
-    ? Number(
-        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.annualPrice || (isAnnualCycle ? savedPlanInfo?.price : null))) ??
-        matchedActivePlan?.annualPrice ??
-        matchedActivePlan?.yearlyPrice ??
-        (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
-      )
-    : Number(
-        (savedPlanInfo?.cleanName && savedPlanInfo.cleanName.toLowerCase() === cleanPlanSlug.toLowerCase() && (savedPlanInfo?.monthlyPrice || (!isAnnualCycle ? savedPlanInfo?.price : null))) ??
-        matchedActivePlan?.monthlyPrice ??
-        matchedActivePlan?.basePrice ??
-        matchedActivePlan?.baseValue ??
-        matchedActivePlan?.price ??
-        (cleanPlanSlug.toLowerCase() === 'premium' ? 4999 : cleanPlanSlug.toLowerCase() === 'basic' ? 999 : 1999)
+  const currentPlanPrice = (activePlanData?.price !== undefined && activePlanData?.price !== null)
+    ? Number(activePlanData.price)
+    : (isAnnualCycle
+        ? Number(
+            matchedActivePlan?.annualPrice ??
+            matchedActivePlan?.yearlyPrice ??
+            (matchedActivePlan?.monthlyPrice ? matchedActivePlan.monthlyPrice * 10 : (cleanPlanSlug.toLowerCase() === 'premium' ? 49999 : cleanPlanSlug.toLowerCase() === 'basic' ? 9999 : 19999))
+          )
+        : Number(
+            matchedActivePlan?.monthlyPrice ??
+            matchedActivePlan?.basePrice ??
+            matchedActivePlan?.baseValue ??
+            matchedActivePlan?.price ??
+            (cleanPlanSlug.toLowerCase() === 'premium' ? 4999 : cleanPlanSlug.toLowerCase() === 'basic' ? 999 : 1999)
+          )
       );
 
-  const rawStartDate = savedPlanInfo?.startDate || activeRestaurant?.subscription?.startDate || sub.startDate || activePlanData?.startDate || '2026-09-21';
+  const rawStartDate = activePlanData?.startDate || activeRestaurant?.subscription?.startDate || sub.startDate || '2026-09-21';
   
   // Calculate dynamic expiry date based on startDate and cycle
   const getCalculatedExpiryDate = (startStr, isAnnual) => {
@@ -601,11 +567,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const dynamicCalculatedExpiry = getCalculatedExpiryDate(rawStartDate, isAnnualCycle);
 
-  const rawExpiryDate = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.expiryDate || savedPlanInfo?.validity)) ||
+  const rawExpiryDate = activePlanData?.validity || 
+                        activePlanData?.expiryDate || 
                         (activeRestaurant?.subscription?.billingCycle && ((String(activeRestaurant.subscription.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (activeRestaurant?.subscription?.expiryDate || activeRestaurant?.subscription?.validity)) ||
                         dynamicCalculatedExpiry;
 
-  const rawNextRenewal = (savedPlanInfo?.billingCycle && ((String(savedPlanInfo.billingCycle).toLowerCase().includes('annual')) === isAnnualCycle) && (savedPlanInfo?.nextRenewal || savedPlanInfo?.nextBillingDate)) || rawExpiryDate;
+  const rawNextRenewal = activePlanData?.nextRenewal || 
+                         activePlanData?.nextBillingDate || 
+                         rawExpiryDate;
 
   const startDateFormatted = formatDate(rawStartDate);
   const validityFormatted = formatDate(rawExpiryDate);
@@ -618,61 +587,69 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const activeBranchesCount = branchesList.length;
 
   const planDefinedLimit = Number(
-    savedPlanInfo?.baseBranchLimit ??
-    matchedActivePlan?.maxBranches ??
-    matchedActivePlan?.branchLimit ??
-    matchedActivePlan?.baseBranchLimit ??
-    matchedActivePlan?.branchCapacity ??
-    getPlanBranchLimit(cleanPlanSlug, 5)
-  );
-
-  const baseBranchLimit = Number(
-    savedPlanInfo?.baseBranchLimit ??
-    activeRestaurant?.subscription?.baseBranchLimit ??
-    activeRestaurant?.subscription?.maxBranches ??
-    activeRestaurant?.subscription?.branchLimit ??
-    planDefinedLimit ??
+    branchCapacityData?.base ??
     activePlanData?.baseBranchLimit ??
     activePlanData?.maxBranches ??
     activePlanData?.branchLimit ??
     activePlanData?.branchCapacity ??
+    matchedActivePlan?.maxBranches ??
+    matchedActivePlan?.branchLimit ??
     getPlanBranchLimit(cleanPlanSlug, 5)
   );
 
-  const extraBranchSlots = Number(
-    savedPlanInfo?.extraBranchSlots !== undefined
-      ? savedPlanInfo.extraBranchSlots
-      : (activeRestaurant?.subscription?.extraBranchSlots !== undefined
-          ? activeRestaurant.subscription.extraBranchSlots
-          : (branchCapacityData?.extraSlots !== undefined 
-              ? branchCapacityData.extraSlots 
-              : (branchCapacityData?.addons !== undefined
-                  ? branchCapacityData.addons
-                  : (sub.extraBranchSlots || 0))))
+  const baseBranchLimit = Number(
+    branchCapacityData?.base ??
+    activePlanData?.baseBranchLimit ??
+    activePlanData?.maxBranches ??
+    activePlanData?.branchLimit ??
+    activePlanData?.branchCapacity ??
+    activeRestaurant?.subscription?.baseBranchLimit ??
+    planDefinedLimit
   );
-  const totalAllowedBranches = baseBranchLimit + extraBranchSlots;
 
-  const usedBranchesCount = branchCapacityData?.used !== undefined
-    ? Number(branchCapacityData.used)
-    : (branchCapacityData?.activeBranches !== undefined
-        ? Number(branchCapacityData.activeBranches)
-        : (branchCapacityData?.currentBranches !== undefined
-            ? Number(branchCapacityData.currentBranches)
-            : (branchCapacityData?.branchesCount !== undefined
-                ? Number(branchCapacityData.branchesCount)
-                : activeBranchesCount)));
+  const extraBranchSlots = Number(
+    branchCapacityData?.addons ??
+    branchCapacityData?.extraSlots ??
+    activeRestaurant?.subscription?.extraBranchSlots ??
+    sub.extraBranchSlots ??
+    0
+  );
 
-  const remainingSlots = Math.max(0, totalAllowedBranches - usedBranchesCount);
-  const branchUsagePercent = Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100));
+  const totalAllowedBranches = Number(
+    branchCapacityData?.total ??
+    (baseBranchLimit + extraBranchSlots)
+  );
 
-  const extraBranchUnitPrice = extraBranchRateData?.rate !== undefined ? extraBranchRateData.rate : (matchedActivePlan?.extraBranchPrice || sub.extraBranchPrice || 699);
-  const isAutoRenewActive = savedPlanInfo?.autoRenew !== undefined 
-    ? Boolean(savedPlanInfo.autoRenew) 
+  const usedBranchesCount = Number(
+    branchCapacityData?.used ??
+    branchCapacityData?.activeBranches ??
+    branchCapacityData?.currentBranches ??
+    branchCapacityData?.branchesCount ??
+    activeBranchesCount
+  );
+
+  const remainingSlots = Number(
+    branchCapacityData?.available ??
+    Math.max(0, totalAllowedBranches - usedBranchesCount)
+  );
+
+  const branchUsagePercent = Number(
+    branchCapacityData?.percentUsed ??
+    Math.min(100, Math.round((usedBranchesCount / (totalAllowedBranches || 1)) * 100))
+  );
+
+  const extraBranchUnitPrice = Number(
+    extraBranchRateData?.rate ??
+    matchedActivePlan?.extraBranchPrice ??
+    sub.extraBranchPrice ??
+    699
+  );
+
+  const isAutoRenewActive = extraBranchRateData?.autoRenew !== undefined
+    ? Boolean(extraBranchRateData.autoRenew)
     : (activeRestaurant?.subscription?.autoRenew !== undefined 
         ? Boolean(activeRestaurant.subscription.autoRenew) 
-        : (extraBranchRateData?.autoRenew !== undefined 
-            ? Boolean(extraBranchRateData.autoRenew) 
-            : (sub.autoRenew !== false)));
+        : (sub.autoRenew !== false));
 
   const extraBranchSubtotal = extraSlotsToAdd * extraBranchUnitPrice;
   const extraBranchGst = Math.round(extraBranchSubtotal * 0.18);
@@ -730,22 +707,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   let rawList = [...localPurchases, ...allApiInvoices];
 
   // If lastRechargeData exists and its transaction/date is not in list yet, include it
-  if (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date || lastRechargeData.transactionId)) {
+  if (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.transactionId || lastRechargeData.invoice || lastRechargeData.invoiceId)) {
+    const lastRecInvoiceId = lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId;
     const isAlreadyPresent = rawList.some(inv => 
-      (lastRechargeData.transactionId && (inv.id === lastRechargeData.transactionId || inv.transactionId === lastRechargeData.transactionId || inv.invoiceNumber === lastRechargeData.transactionId)) ||
+      (lastRecInvoiceId && (inv.id === lastRecInvoiceId || inv.transactionId === lastRecInvoiceId || inv.invoiceNumber === lastRecInvoiceId || inv.invoice === lastRecInvoiceId)) ||
       (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount || inv.totalAmount) === Number(lastRechargeData.amount))
     );
 
     if (!isAlreadyPresent) {
       rawList.unshift({
-        id: lastRechargeData.transactionId || lastRechargeData.invoiceId || `INV-SLOT-${Date.now().toString().slice(-6)}`,
-        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'Standard Add-on' : `${currentPlanName}`),
-        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? 'addon' : 'subscription',
-        description: lastRechargeData.description || ((lastRechargeData.amount === 1650 || (branchCapacityData?.addons && branchCapacityData.addons > 0)) ? `Additional Branch Slot x${branchCapacityData?.addons || 2} (Recurring Add-on)` : `${currentPlanName} - Monthly Subscription Renewal`),
-        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.addons || 2,
-        amount: lastRechargeData.amount || 1650,
+        id: lastRecInvoiceId || `INV-RECHARGE-${Date.now().toString().slice(-6)}`,
+        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650) ? 'Standard Add-on' : `${currentPlanName}`),
+        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650) ? 'addon' : 'subscription',
+        description: lastRechargeData.description || ((lastRechargeData.amount === 1650) ? `Additional Branch Slot (Recurring Add-on)` : `${currentPlanName} Subscription Renewal`),
+        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.total || baseBranchLimit,
+        amount: lastRechargeData.amount || 0,
         date: lastRechargeData.date || new Date().toISOString(),
-        paymentMethod: lastRechargeData.paymentMethod || 'Credit Card (•••• 4242)',
+        paymentMethod: lastRechargeData.paymentMethod || 'Online Payment',
         status: lastRechargeData.status || 'Paid'
       });
     }
@@ -765,8 +743,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const addonInvoices = invoices.filter(inv => inv.type === 'addon');
   const subscriptionInvoices = invoices.filter(inv => inv.type !== 'addon');
 
-  const lastRecharge = (lastRechargeData && (lastRechargeData.amount || lastRechargeData.date)) ? {
-    id: lastRechargeData.transactionId || lastRechargeData.invoiceId || invoices[0]?.id || 'PLAN-ACTIVE',
+  const lastRecharge = (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId)) ? {
+    id: lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId || invoices[0]?.id || 'PLAN-ACTIVE',
     planName: lastRechargeData.planName || invoices[0]?.planName || currentPlanName,
     description: lastRechargeData.description || invoices[0]?.description || `${currentPlanName} Subscription Renewal`,
     amount: lastRechargeData.amount !== undefined ? lastRechargeData.amount : (invoices[0]?.amount || currentPlanPrice),
@@ -934,8 +912,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       updatedAt: new Date().toISOString()
     };
     try {
-      sessionStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
-      localStorage.setItem('activePlanSelection', JSON.stringify(planSaveInfo));
+      sessionStorage.removeItem('activePlanSelection');
+      localStorage.removeItem('activePlanSelection');
     } catch (e) {}
 
     if (upgradeSubscriptionPlan && activeRestaurant?.id) {
@@ -1082,14 +1060,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const handleToggleAutoRenew = () => {
     if (typeof toggleSubscriptionAutoRenew === 'function') {
       toggleSubscriptionAutoRenew(activeRestaurant?.id || 'rest-1');
-    } else {
-      const nextAuto = !isAutoRenewActive;
-      try {
-        const raw = sessionStorage.getItem('activePlanSelection');
-        const parsed = raw ? JSON.parse(raw) : {};
-        parsed.autoRenew = nextAuto;
-        sessionStorage.setItem('activePlanSelection', JSON.stringify(parsed));
-      } catch (e) {}
+      sessionStorage.removeItem('activePlanSelection');
+      localStorage.removeItem('activePlanSelection');
     }
     window.dispatchEvent(new Event('plan_updated'));
     ShowNotifications.showAlertNotification(
@@ -1349,34 +1321,67 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           </div>
         </div>
 
-        {/* Filter Tabs & Search Bar */}
+        {/* Filter Tabs & Search Bar Row */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '18px' }}>
-          <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-            {[
-              { id: 'all', label: `All History (${invoices.length})` },
-              { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
-              { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setHistoryFilter(tab.id)}
-                style={{
-                  border: 'none',
-                  padding: '6px 14px',
-                  borderRadius: '7px',
-                  background: historyFilter === tab.id ? '#ffffff' : 'transparent',
-                  color: historyFilter === tab.id ? '#0f172a' : '#64748b',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: historyFilter === tab.id ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: `All History (${invoices.length})` },
+                { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
+                { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setHistoryFilter(tab.id)}
+                  style={{
+                    border: 'none',
+                    padding: '6px 14px',
+                    borderRadius: '7px',
+                    background: historyFilter === tab.id ? '#ffffff' : 'transparent',
+                    color: historyFilter === tab.id ? '#0f172a' : '#64748b',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: historyFilter === tab.id ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* RENEW / UPGRADE PLAN BUTTON (PLACED IN GREEN BOX LOCATION) */}
+            <button
+              type="button"
+              onClick={() => setIsUpgradeModalOpen(true)}
+              style={{
+                background: 'var(--primary-light, #fff7ed)',
+                border: '1.5px solid var(--primary, #ff5a1f)',
+                color: 'var(--primary, #ff5a1f)',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(255, 90, 31, 0.12)'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'var(--primary)';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'var(--primary-light, #fff7ed)';
+                e.currentTarget.style.color = 'var(--primary, #ff5a1f)';
+              }}
+            >
+              ⚡ Renew / Upgrade Plan
+            </button>
           </div>
 
           <div style={{ position: 'relative', width: '320px', minWidth: '240px' }}>
@@ -1413,27 +1418,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         {/* History Table */}
         <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
           <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px' }}>
-            <table style={{ width: '100%', minWidth: '880px', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '150px' }}>Recharge Date</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Invoice #</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '220px' }}>Plan & Recharge Item</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Amount Paid</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Status</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '140px' }}>Action</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Recharge Date</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Invoice #</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '200px' }}>Plan & Recharge Item</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Type</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Payment Method</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '120px' }}>Amount Paid</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '100px' }}>Status</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading || isRefreshing ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
                       <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading recharge history...
                     </td>
                   </tr>
                 ) : filteredInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
                       No recharge records found.
                     </td>
                   </tr>
@@ -1441,6 +1448,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                   filteredInvoices.map((inv, idx) => {
                     const isLatest = idx === 0;
                     const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
+                    const isRenewalItem = inv.type === 'renewal' || (inv.description || '').toLowerCase().includes('renewal');
+
+                    const itemTypeLabel = isAddon ? 'Add-On' : (isRenewalItem ? 'Renewal' : 'Subscription');
+                    const itemTypeBg = isAddon ? '#eff6ff' : (isRenewalItem ? '#fef3c7' : '#f0fdf4');
+                    const itemTypeColor = isAddon ? '#1d4ed8' : (isRenewalItem ? '#b45309' : '#15803d');
+                    const itemTypeBorder = isAddon ? '#bfdbfe' : (isRenewalItem ? '#fde68a' : '#bbf7d0');
 
                     return (
                       <tr key={inv.id} style={{ borderBottom: idx !== filteredInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>
@@ -1452,9 +1465,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                                 Latest
                               </span>
                             )}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                            via {inv.paymentMethod}
                           </div>
                         </td>
 
@@ -1471,12 +1481,36 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           </div>
                         </td>
 
+                        {/* Type Column */}
+                        <td style={{ padding: '14px 14px', textAlign: 'center' }}>
+                          <span style={{
+                            background: itemTypeBg,
+                            color: itemTypeColor,
+                            border: `1px solid ${itemTypeBorder}`,
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            padding: '3px 10px',
+                            borderRadius: '6px',
+                            display: 'inline-block'
+                          }}>
+                            {itemTypeLabel}
+                          </span>
+                        </td>
+
+                        {/* Payment Method Column */}
+                        <td style={{ padding: '14px 14px', color: '#334155', fontWeight: 600, fontSize: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>💳</span>
+                            <span>{inv.paymentMethod || 'Online Payment'}</span>
+                          </div>
+                        </td>
+
                         <td style={{ padding: '14px 18px', fontWeight: 800, color: '#0f172a' }}>
                           <div style={{ fontSize: '14px', color: '#0f172a' }}>₹{inv.amount ? inv.amount.toLocaleString() : '1,999'}</div>
                           <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>incl. GST</div>
                         </td>
 
-                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <td style={{ padding: '14px 14px', textAlign: 'center' }}>
                           <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '11px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', border: '1px solid #bbf7d0', display: 'inline-block' }}>
                             ● {inv.status || 'Paid'}
                           </span>
@@ -1515,7 +1549,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             }}
                           >
                             <ReceiptIcon size={14} />
-                            <span>View Receipt</span>
+                            <span>Receipt</span>
                           </button>
                         </td>
                       </tr>
@@ -2059,11 +2093,21 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             {/* 3 PLAN COMPARISON CARDS */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' }}>
               {plansList.map(plan => {
-                const planClean = plan.name.toLowerCase().replace(/\s*plan$/i, '').trim();
-                const currentClean = cleanPlanSlug.toLowerCase();
-                const isCurrentPlan = currentClean === planClean || 
-                  plan.id === sub.planId || 
-                  (sub.planName && plan.name.toLowerCase().includes(sub.planName.toLowerCase()));
+                const planClean = (plan.name || plan.planName || plan.id || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+                const currentClean = (cleanPlanSlug || '').toLowerCase().replace(/\s*plan$/i, '').trim();
+                const isCurrentPlan = planClean === currentClean;
+
+                const getPlanRank = (pSlug) => {
+                  const s = String(pSlug || '').toLowerCase();
+                  if (s.includes('basic')) return 1;
+                  if (s.includes('standard')) return 2;
+                  if (s.includes('premium')) return 3;
+                  return 2;
+                };
+
+                const planRank = getPlanRank(planClean);
+                const currentRank = getPlanRank(currentClean);
+                const isDowngrade = planRank < currentRank;
 
                 const planCycle = selectedPlanCycles[plan.id] || 'monthly';
                 const isAnnual = planCycle === 'annual';
@@ -2235,6 +2279,29 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           </svg>
                           {isProcessingUpgrade ? 'Processing...' : `⚡ Renew Plan (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
+                      ) : isDowngrade ? (
+                        <button
+                          type="button"
+                          disabled={true}
+                          title="Plan downgrades are not allowed during renewal. Only plan upgrades or renewing your current tier are permitted."
+                          style={{
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '8px',
+                            border: '1px solid #e2e8f0',
+                            background: '#f1f5f9',
+                            color: '#94a3b8',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'not-allowed',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          🔒 Downgrade Not Allowed
+                        </button>
                       ) : (
                         <button
                           type="button"
@@ -2263,7 +2330,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
                           </svg>
-                          {isProcessingUpgrade ? 'Processing...' : `Switch to ${plan.name} (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
+                          {isProcessingUpgrade ? 'Processing...' : `Upgrade to ${plan.name} (₹${activePrice.toLocaleString()}/${isAnnual ? 'yr' : 'mo'})`}
                         </button>
                       )}
                     </div>

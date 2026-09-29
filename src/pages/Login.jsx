@@ -96,6 +96,13 @@ export default function Login() {
 
   useEffect(() => {
     try {
+      const pendingToast = sessionStorage.getItem('deactivatedToast') || sessionStorage.getItem('pendingLogoutToast');
+      if (pendingToast) {
+        ShowNotifications.showAlertNotification(pendingToast, false);
+        sessionStorage.removeItem('deactivatedToast');
+        sessionStorage.removeItem('pendingLogoutToast');
+      }
+
       localStorage.clear();
       const savedEmail = sessionStorage.getItem('rememberedEmail');
       const isRemembered = sessionStorage.getItem('rememberMe') === 'true';
@@ -185,22 +192,32 @@ export default function Login() {
     const isPasswordValid = Boolean(password && password.trim().length >= 4);
 
     if (isEmailEmpty && isPasswordEmpty) {
-      setFormErrors({ email: true, password: true, passwordMsg: 'Please enter your password' });
+      setFormErrors({ email: true, password: true });
+      ShowNotifications.showAlertNotification('Please enter your email address and password.', false);
       return false;
     }
 
-    if (!isEmailValid && !isPasswordValid) {
-      setFormErrors({ email: true, password: true, passwordMsg: isPasswordEmpty ? 'Please enter your password' : 'Password must be at least 4 characters' });
+    if (isEmailEmpty) {
+      setFormErrors({ email: true, password: false });
+      ShowNotifications.showAlertNotification('Please enter your email address.', false);
       return false;
     }
 
     if (!isEmailValid) {
-      setFormErrors({ email: true, password: false, passwordMsg: '' });
+      setFormErrors({ email: true, password: false });
+      ShowNotifications.showAlertNotification('Please enter a valid email address.', false);
+      return false;
+    }
+
+    if (isPasswordEmpty) {
+      setFormErrors({ email: false, password: true });
+      ShowNotifications.showAlertNotification('Please enter your password.', false);
       return false;
     }
 
     if (!isPasswordValid) {
-      setFormErrors({ email: false, password: true, passwordMsg: isPasswordEmpty ? 'Please enter your password' : 'Password must be at least 4 characters' });
+      setFormErrors({ email: false, password: true });
+      ShowNotifications.showAlertNotification('Password must be at least 4 characters.', false);
       return false;
     }
 
@@ -233,36 +250,52 @@ export default function Login() {
       } else {
         const rawErr = String(res?.error || '').toLowerCase();
         const isEmailSyntaxValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+        let errorMsg = '';
         
-        if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('contact support')) {
-          const isRestaurantInactive = rawErr.includes('restaurant');
-          const inactiveMsg = isRestaurantInactive ? 'Restaurant is inactive. Contact support.' : (res?.error || 'Account is inactive. Contact support.');
-          setFormErrors({ email: false, password: true, passwordMsg: inactiveMsg });
+        if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('deactivat') || rawErr.includes('contact support')) {
+          errorMsg = res?.error || 'Your restaurant account has been deactivated. Please contact the Super Admin.';
+          setFormErrors({ email: false, password: true });
         } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted') || rawErr.includes('waiter') || rawErr.includes('kitchen')) {
-          setFormErrors({ email: false, password: true, passwordMsg: res?.error || 'Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to log into the Admin Panel.' });
+          errorMsg = res?.error || 'Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to log into the Admin Panel.';
+          setFormErrors({ email: false, password: true });
         } else if (!isEmailSyntaxValid && (rawErr.includes('invalid email') || rawErr.includes('user not found') || rawErr.includes('user does not exist') || rawErr.includes('no user') || rawErr.includes('not registered'))) {
-          setFormErrors({ email: true, password: false, passwordMsg: '' });
+          errorMsg = 'Invalid email address or user not registered.';
+          setFormErrors({ email: true, password: false });
         } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('mismatch') || rawErr.includes('invalid credential') || rawErr.includes('invalid password')) {
-          setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
+          errorMsg = 'Incorrect password. Please check and try again.';
+          setFormErrors({ email: false, password: true });
         } else {
-          setFormErrors({ email: false, password: true, passwordMsg: res?.error || 'Incorrect email or password. Please check and try again.' });
+          errorMsg = res?.error || 'Incorrect email or password. Please check and try again.';
+          setFormErrors({ email: false, password: true });
+        }
+
+        if (errorMsg) {
+          ShowNotifications.showAlertNotification(errorMsg, false);
         }
       }
     } catch (err) {
       const rawErr = String(err.message || '').toLowerCase();
       const isEmailSyntaxValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-      if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('contact support')) {
-        const isRestaurantInactive = rawErr.includes('restaurant');
-        const inactiveMsg = isRestaurantInactive ? 'Restaurant is inactive. Contact support.' : (err.message || 'Account is inactive. Contact support.');
-        setFormErrors({ email: false, password: true, passwordMsg: inactiveMsg });
+      let errorMsg = '';
+      if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('deactivat') || rawErr.includes('contact support')) {
+        errorMsg = err.message || 'Your restaurant account has been deactivated. Please contact the Super Admin.';
+        setFormErrors({ email: false, password: true });
       } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted')) {
-        setFormErrors({ email: false, password: true, passwordMsg: err.message || 'Access Denied: Staff members are not permitted to log into the Admin Panel.' });
+        errorMsg = err.message || 'Access Denied: Staff members are not permitted to log into the Admin Panel.';
+        setFormErrors({ email: false, password: true });
       } else if (!isEmailSyntaxValid && (rawErr.includes('invalid email') || rawErr.includes('user not found') || rawErr.includes('user does not exist'))) {
-        setFormErrors({ email: true, password: false, passwordMsg: '' });
+        errorMsg = 'Invalid email address or user not registered.';
+        setFormErrors({ email: true, password: false });
       } else if (rawErr.includes('password') || rawErr.includes('incorrect') || rawErr.includes('wrong') || rawErr.includes('invalid')) {
-        setFormErrors({ email: false, password: true, passwordMsg: 'Incorrect password. Please check and try again.' });
+        errorMsg = 'Incorrect password. Please check and try again.';
+        setFormErrors({ email: false, password: true });
       } else {
-        setFormErrors({ email: false, password: true, passwordMsg: err.message || 'Incorrect email or password. Please check and try again.' });
+        errorMsg = err.message || 'Incorrect email or password. Please check and try again.';
+        setFormErrors({ email: false, password: true });
+      }
+
+      if (errorMsg) {
+        ShowNotifications.showAlertNotification(errorMsg, false);
       }
     } finally {
       setIsLoading(false);
@@ -643,11 +676,6 @@ export default function Login() {
                   }}
                 />
               </div>
-              {formErrors.email && (
-                <span style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  Enter a valid email address
-                </span>
-              )}
             </div>
             
             {/* Password Section */}
@@ -724,11 +752,6 @@ export default function Login() {
                   {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
                 </button>
               </div>
-              {formErrors.password && (
-                <span style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {formErrors.passwordMsg || 'Incorrect password. Please try again.'}
-                </span>
-              )}
             </div>
 
             {/* Remember Me & Forgot Password */}
