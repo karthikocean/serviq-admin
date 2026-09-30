@@ -1,6 +1,39 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar } from './InventoryCommon';
+import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+
+// Icons for My Stock Summary Cards
+const PackageIcon = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16.5 9.4 7.55 4.24a1.78 1.78 0 0 0-1.8 0L2.5 6.1a1.8 1.8 0 0 0-.9 1.56v8.68c0 .64.34 1.23.9 1.56l3.25 1.86a1.78 1.78 0 0 0 1.8 0l8.95-5.16a1.8 1.8 0 0 0 .9-1.56V11a1.8 1.8 0 0 0-.9-1.6Z"/>
+    <polyline points="3.29 7 12 12 20.71 7"/>
+    <line x1="12" y1="22" x2="12" y2="12"/>
+  </svg>
+);
+
+const LayersIcon = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+    <polyline points="2 17 12 22 22 17"></polyline>
+    <polyline points="2 12 12 17 22 12"></polyline>
+  </svg>
+);
+
+const AlertTriangleIcon = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+    <line x1="12" y1="9" x2="12" y2="13"></line>
+    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+  </svg>
+);
+
+const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+    <line x1="15" y1="9" x2="9" y2="15"></line>
+    <line x1="9" y1="9" x2="15" y2="15"></line>
+  </svg>
+);
 
 export default function BranchMyStock({ items: initialItems, onUpdateBranchStock }) {
   const [itemsList, setItemsList] = useState(initialItems || []);
@@ -50,14 +83,32 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
     fetchBranchStock();
   }, [fetchBranchStock]);
 
-  const displayItems = itemsList.length > 0 ? itemsList : initialItems;
+  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+
+  // Summary Metrics for Branch My Stock
+  const totalItemsCount = displayItems.length;
+  const availableStockQty = displayItems.reduce((acc, item) => {
+    const val = item.currentStock !== undefined ? item.currentStock : (item.branchStock || 0);
+    return acc + (Number(val) || 0);
+  }, 0);
+  const lowStockCount = displayItems.filter(item => {
+    const stock = Number(item.currentStock !== undefined ? item.currentStock : (item.branchStock || 0));
+    const min = Number(item.minStock || 0);
+    return stock > 0 && stock <= min;
+  }).length;
+  const outOfStockCount = displayItems.filter(item => {
+    const stock = Number(item.currentStock !== undefined ? item.currentStock : (item.branchStock || 0));
+    return stock <= 0;
+  }).length;
 
   const filteredItems = displayItems.filter(item => {
     const matchesSearch = !searchTerm.trim() || item.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
     const matchesItem = itemFilter === 'All' || item.name === itemFilter;
 
-    const statusProps = getStockStatus(item.branchStock, item.minStock);
+    const currentStockVal = item.currentStock !== undefined ? item.currentStock : (item.branchStock || 0);
+    const minStockVal = item.minStock || 0;
+    const statusProps = getStockStatus(currentStockVal, minStockVal);
     const matchesStatus = stockStatusFilter === 'All' || statusProps.label.toLowerCase() === stockStatusFilter.toLowerCase();
 
     return matchesSearch && matchesCategory && matchesItem && matchesStatus;
@@ -184,147 +235,191 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
   }
 
   return (
-    <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-      {/* 3 Filters Bar: I) category, II) Item, III) Stock status */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Search */}
-          <div style={{ position: 'relative', width: '220px' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-              <SearchIcon size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search My Stock..."
-              value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
-              style={{ ...filterInputStyle, paddingLeft: '32px' }}
-            />
+    <div>
+      {/* Summary Cards: 127. Total Items, 128. Available Stock, 129. Low Stock, 130. Out of Stock */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+        <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Items</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{totalItemsCount}</div>
           </div>
-
-          {/* Filter I: Category */}
-          <div style={{ width: '150px' }}>
-            <select
-              value={categoryFilter}
-              onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
-              ))}
-            </select>
+          <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+            <PackageIcon size={22} color="#3b82f6" />
           </div>
+        </div>
 
-          {/* Filter II: Item */}
-          <div style={{ width: '160px' }}>
-            <select
-              value={itemFilter}
-              onChange={e => { setItemFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              <option value="All">All Items</option>
-              {displayItems.map(i => (
-                <option key={i.id || i._id} value={i.name}>{i.name}</option>
-              ))}
-            </select>
+        <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Available Stock</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{availableStockQty}</div>
           </div>
+          <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+            <LayersIcon size={22} color="#16a34a" />
+          </div>
+        </div>
 
-          {/* Filter III: Stock Status */}
-          <div style={{ width: '150px' }}>
-            <select
-              value={stockStatusFilter}
-              onChange={e => { setStockStatusFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              <option value="All">All Stock Status</option>
-              <option value="in stock">In Stock</option>
-              <option value="low stock">Low Stock</option>
-              <option value="out of stock">Out of Stock</option>
-            </select>
+        <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Low Stock</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#d97706', marginTop: '4px' }}>{lowStockCount}</div>
+          </div>
+          <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+            <AlertTriangleIcon size={22} color="#d97706" />
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Out of Stock</div>
+            <div style={{ fontSize: '24px', fontWeight: 800, color: '#dc2626', marginTop: '4px' }}>{outOfStockCount}</div>
+          </div>
+          <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
+            <AlertOctagonIcon size={22} color="#dc2626" />
           </div>
         </div>
       </div>
 
-      {/* Table --> Actions */}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item ID</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item Name</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Category</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Branch Stock</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Min Stock</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedItems.length === 0 ? (
-              <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
-                  No branch stock items found matching filters.
-                </td>
-              </tr>
-            ) : (
-              paginatedItems.map((item, index) => {
-                const statusProps = getStockStatus(item.branchStock, item.minStock);
-                const codeDisplay = item.itemCode && !String(item.itemCode).match(/^[0-9a-fA-F]{24}$/) ? item.itemCode : `INV-${String(index + 1).padStart(3, '0')}`;
-                return (
-                  <tr key={item.id || item._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{codeDisplay}</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
-                    <td style={{ padding: '14px 16px', color: '#475569' }}>{item.category}</td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{item.branchStock} {item.unit}</td>
-                    <td style={{ padding: '14px 16px', color: '#64748b' }}>{item.minStock} {item.unit}</td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        background: statusProps.bg,
-                        color: statusProps.color
-                      }}>
-                        {statusProps.label}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        onClick={() => { setViewingItem(item); setAdjustQty(item.branchStock.toString()); }}
-                        style={{
-                          background: '#f1f5f9',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '6px',
-                          padding: '6px 12px',
-                          color: '#0f172a',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}
-                      >
-                        <EyeIcon size={14} />
-                        <span>View / Adjust</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        {/* Filters Bar: Category, Item, Stock Status */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Search */}
+            <div style={{ position: 'relative', width: '220px' }}>
+              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
+                <SearchIcon size={14} />
+              </span>
+              <input
+                type="text"
+                placeholder="Search My Stock..."
+                value={searchTerm}
+                onKeyDown={preventSpaceInput}
+                onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
+                style={{ ...filterInputStyle, paddingLeft: '32px' }}
+              />
+            </div>
 
-      <PaginationBar
-        currentPage={currentPage}
-        totalItems={filteredItems.length}
-        pageSize={PAGE_SIZE}
-        onPageChange={setCurrentPage}
-      />
+            {/* Filter: Category */}
+            <div style={{ width: '150px' }}>
+              <select
+                value={categoryFilter}
+                onChange={e => { setCategoryFilter(e.target.value); setCurrentPage(0); }}
+                style={filterInputStyle}
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter: Item */}
+            <div style={{ width: '160px' }}>
+              <select
+                value={itemFilter}
+                onChange={e => { setItemFilter(e.target.value); setCurrentPage(0); }}
+                style={filterInputStyle}
+              >
+                <option value="All">All Items</option>
+                {displayItems.map(i => (
+                  <option key={i.id || i._id} value={i.name}>{i.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter: Stock Status */}
+            <div style={{ width: '150px' }}>
+              <select
+                value={stockStatusFilter}
+                onChange={e => { setStockStatusFilter(e.target.value); setCurrentPage(0); }}
+                style={filterInputStyle}
+              >
+                <option value="All">All Stock Status</option>
+                <option value="in stock">In Stock</option>
+                <option value="low stock">Low Stock</option>
+                <option value="out of stock">Out of Stock</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Table: S.No, Item Name, Category, Unit, Current Stock, Minimum Stock, Stock Status, Actions */}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item Name</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Category</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Current Stock</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Minimum Stock</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800 }}>Stock Status</th>
+                <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                    No branch stock items found matching filters.
+                  </td>
+                </tr>
+              ) : (
+                paginatedItems.map((item, index) => {
+                  const currentStockVal = item.currentStock !== undefined ? item.currentStock : (item.branchStock || 0);
+                  const minStockVal = item.minStock || 0;
+                  const statusProps = getStockStatus(currentStockVal, minStockVal);
+                  return (
+                    <tr key={item.id || item._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                        {currentPage * PAGE_SIZE + index + 1}
+                      </td>
+                      <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
+                      <td style={{ padding: '14px 16px', color: '#475569' }}>{item.category}</td>
+                      <td style={{ padding: '14px 16px', color: '#475569' }}>{item.unit}</td>
+                      <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{currentStockVal}</td>
+                      <td style={{ padding: '14px 16px', color: '#64748b' }}>{minStockVal}</td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          background: statusProps.bg,
+                          color: statusProps.color
+                        }}>
+                          {statusProps.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          onClick={() => { setViewingItem(item); setAdjustQty(currentStockVal.toString()); }}
+                          title="View / Adjust Stock"
+                          style={{
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb'
+                          }}
+                        >
+                          <EyeIcon size={15} color="#2563eb" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <PaginationBar
+          currentPage={currentPage}
+          totalItems={filteredItems.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+        />
+      </div>
     </div>
   );
 }

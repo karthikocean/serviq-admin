@@ -10,6 +10,7 @@ import CompanyPurchases from './inventory/CompanyPurchases';
 import CompanyBranchRequests from './inventory/CompanyBranchRequests';
 import CompanyTransactions from './inventory/CompanyTransactions';
 import CompanyVendors from './inventory/CompanyVendors';
+import CompanyStockDistribution from './inventory/CompanyStockDistribution';
 
 import BranchMyStock from './inventory/BranchMyStock';
 import BranchStockRequest from './inventory/BranchStockRequest';
@@ -33,7 +34,7 @@ export default function InventoryPanel() {
   const { selectedBranchId } = useAppState();
   const location = useLocation();
 
-  const isCompanySelected = !selectedBranchId || selectedBranchId === 'COMPANY' || selectedBranchId === 'Company' || selectedBranchId === 'ALL' || selectedBranchId === 'All';
+  const isCompanySelected = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
   const scope = isCompanySelected ? 'COMPANY' : 'BRANCH';
 
   // Shared Datasets
@@ -54,8 +55,9 @@ export default function InventoryPanel() {
     '/inventory/central-stock',
     '/inventory/purchases',
     '/inventory/branch-requests',
-    '/inventory/transactions',
-    '/inventory/vendors'
+    '/inventory/distribution',
+    '/inventory/stock-distribution',
+    '/inventory/transactions'
   ];
 
   const branchRoutes = [
@@ -455,14 +457,16 @@ export default function InventoryPanel() {
             />
           )}
 
+          {(currentPath === '/inventory/distribution' || currentPath === '/inventory/stock-distribution') && (
+            <CompanyStockDistribution
+              distributions={distributions}
+            />
+          )}
+
           {currentPath === '/inventory/transactions' && (
             <CompanyTransactions
               transactions={transactions}
             />
-          )}
-
-          {currentPath === '/inventory/vendors' && (
-            <CompanyVendors />
           )}
         </>
       ) : (

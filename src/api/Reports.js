@@ -142,6 +142,8 @@ class ReportsApi {
       if (filters.startDate) cleanParams.startDate = filters.startDate;
       if (filters.endDate) cleanParams.endDate = filters.endDate;
       if (filters.category && filters.category !== 'ALL' && filters.category !== 'All') cleanParams.category = filters.category;
+      if (filters.dish && filters.dish !== 'ALL' && filters.dish !== 'All') cleanParams.dish = filters.dish;
+      if (filters.foodType && filters.foodType !== 'ALL' && filters.foodType !== 'All') cleanParams.foodType = filters.foodType;
       if (filters.search) cleanParams.search = filters.search;
       if (filters.page !== undefined) cleanParams.page = filters.page;
       if (filters.limit !== undefined) cleanParams.limit = filters.limit;

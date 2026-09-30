@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
 export default function BranchStockRequest({ requests: initialRequests, items: initialItems, onSaveStockRequest }) {
@@ -364,7 +364,8 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
               type="text"
               placeholder="Search stock requests..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -411,10 +412,11 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Request No</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Request No.</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Request Date</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Req Qty</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Requested Quantity</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
               <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
@@ -423,13 +425,16 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
           <tbody>
             {paginatedRequests.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No stock request records found.
                 </td>
               </tr>
             ) : (
-              paginatedRequests.map(r => (
+              paginatedRequests.map((r, index) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                    {currentPage * PAGE_SIZE + index + 1}
+                  </td>
                   <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{r.requestNo}</td>
                   <td style={{ padding: '14px 16px', color: '#64748b' }}>{r.date}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{r.item}</td>
@@ -451,22 +456,15 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
                     <button
                       type="button"
                       onClick={() => { setSelectedReq(r); setViewState('VIEW_DETAIL'); }}
+                      title="View Stock Request Details"
                       style={{
-                        background: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        color: '#0f172a',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px'
+                        ...actionIconBtnStyle,
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        color: '#2563eb'
                       }}
                     >
-                      <EyeIcon size={13} />
-                      <span>View</span>
+                      <EyeIcon size={15} color="#2563eb" />
                     </button>
                   </td>
                 </tr>

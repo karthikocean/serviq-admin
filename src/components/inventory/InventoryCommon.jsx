@@ -84,6 +84,26 @@ export const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
+export const preventSpaceInput = (e) => {
+  if (e.key === ' ' || e.code === 'Space' || e.which === 32) {
+    e.preventDefault();
+  }
+};
+
+// Clean action icon button styles
+export const actionIconBtnStyle = {
+  width: '32px',
+  height: '32px',
+  borderRadius: '8px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  transition: 'all 0.15s ease',
+  border: '1px solid transparent',
+  padding: 0
+};
+
 // Uniform filter input styling for table bars
 export const filterInputStyle = {
   width: '100%',

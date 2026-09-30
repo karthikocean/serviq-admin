@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
 
@@ -409,7 +409,8 @@ export default function CompanyVendors() {
               type="text"
               placeholder="Search code, name, company, phone..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -512,66 +513,45 @@ export default function CompanyVendors() {
                     </button>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
+                    <div style={{ display: 'inline-flex', gap: '6px' }}>
                       <button
                         type="button"
                         onClick={() => { setViewingVendor(v); setViewState('VIEW_PROFILE'); }}
+                        title="View Vendor Profile"
                         style={{
-                          background: '#f1f5f9',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#0f172a',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
+                          ...actionIconBtnStyle,
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#2563eb'
                         }}
                       >
-                        <EyeIcon size={13} />
-                        <span>View</span>
+                        <EyeIcon size={15} color="#2563eb" />
                       </button>
                       <button
                         type="button"
                         onClick={() => openEditVendor(v)}
+                        title="Edit Vendor"
                         style={{
+                          ...actionIconBtnStyle,
                           background: '#eff6ff',
                           border: '1px solid #bfdbfe',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#2563eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
+                          color: '#2563eb'
                         }}
                       >
-                        <PencilIcon size={13} />
-                        <span>Edit</span>
+                        <PencilIcon size={15} color="#2563eb" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(v)}
+                        title="Delete Vendor"
                         style={{
+                          ...actionIconBtnStyle,
                           background: '#fef2f2',
                           border: '1px solid #fecaca',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#dc2626',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
+                          color: '#dc2626'
                         }}
                       >
-                        <TrashIcon size={13} />
-                        <span>Delete</span>
+                        <TrashIcon size={15} color="#dc2626" />
                       </button>
                     </div>
                   </td>

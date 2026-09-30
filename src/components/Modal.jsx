@@ -9,6 +9,21 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
       onClick={(e) => {
         if (e.target === e.currentTarget && onClose) onClose();
       }}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999,
+        padding: '20px',
+        boxSizing: 'border-box'
+      }}
     >
       <div 
         className="modal-card" 
@@ -16,7 +31,8 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
           maxWidth, 
           width: '95%', 
           maxHeight: '90vh', 
-          overflowY: 'auto'
+          overflowY: 'auto',
+          margin: 'auto'
         }}
       >
         <div className="modal-header-flex">

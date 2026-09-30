@@ -60,12 +60,14 @@ export default function App() {
         <Route path="inventory/central-stock" element={<InventoryManagement />} />
         <Route path="inventory/purchases" element={<InventoryManagement />} />
         <Route path="inventory/branch-requests" element={<InventoryManagement />} />
+        <Route path="inventory/distribution" element={<InventoryManagement />} />
+        <Route path="inventory/stock-distribution" element={<InventoryManagement />} />
+        <Route path="inventory/transactions" element={<InventoryManagement />} />
         <Route path="inventory/my-stock" element={<InventoryManagement />} />
         <Route path="inventory/stock-request" element={<InventoryManagement />} />
         <Route path="inventory/branch-transfer" element={<InventoryManagement />} />
         <Route path="inventory/direct-purchase" element={<InventoryManagement />} />
         <Route path="inventory/stock-receipt" element={<InventoryManagement />} />
-        <Route path="inventory/transactions" element={<InventoryManagement />} />
         <Route path="inventory/vendors" element={<InventoryManagement />} />
         <Route path="inventory/categories" element={<InventoryCategoryListPage />} />
         <Route path="inventory/stock-reduction" element={<StockReductionPage />} />

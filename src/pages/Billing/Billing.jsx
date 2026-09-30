@@ -26,7 +26,7 @@ export default function Billing() {
   const fetchBillingData = async () => {
     setIsLoading(true);
 
-    const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all';
+    const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
     const params = isSingleBranch ? { branchId: selectedBranchId } : { branchId: 'ALL' };
 
     let fetchedTables = [];

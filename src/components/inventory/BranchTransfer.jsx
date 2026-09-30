@@ -1,8 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
-export default function BranchTransfer({ transfers, items: initialItems, onSaveTransfer }) {
+const CheckIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"></polyline>
+  </svg>
+);
+
+const XIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
+
+const TruckIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="3" width="15" height="13"></rect>
+    <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+    <circle cx="5.5" cy="18.5" r="2.5"></circle>
+    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+  </svg>
+);
+
+const InboxIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+  </svg>
+);
+
+export default function BranchTransfer({ transfers: initialTransfers, items: initialItems, onSaveTransfer }) {
+  const [transfersList, setTransfersList] = useState(initialTransfers || []);
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
@@ -10,6 +40,12 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
   // View States: null | 'ADD' | 'VIEW_DETAIL'
   const [viewState, setViewState] = useState(null);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
+
+  useEffect(() => {
+    if (initialTransfers && initialTransfers.length > 0) {
+      setTransfersList(initialTransfers);
+    }
+  }, [initialTransfers]);
 
   // Form state
   const [trfForm, setTrfForm] = useState({
@@ -72,12 +108,19 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
     }));
   };
 
-  const filteredTransfers = transfers.filter(t => {
+  const handleUpdateStatus = (id, newStatus) => {
+    setTransfersList(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    if (selectedTransfer && selectedTransfer.id === id) {
+      setSelectedTransfer(prev => ({ ...prev, status: newStatus }));
+    }
+  };
+
+  const filteredTransfers = transfersList.filter(t => {
     return !searchTerm.trim() ||
-      t.transferNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.item.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.fromBranch.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.toBranch.toLowerCase().includes(searchTerm.toLowerCase());
+      (t.transferNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.item || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.fromBranch || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.toBranch || '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const PAGE_SIZE = 10;
@@ -96,7 +139,16 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSaveTransfer(trfForm);
+    const newTrf = {
+      id: `TRF-${Date.now().toString().slice(-4)}`,
+      transferNo: `TRF-2026-${Date.now().toString().slice(-3)}`,
+      date: new Date().toISOString().split('T')[0],
+      ...trfForm,
+      quantity: Number(trfForm.quantity),
+      status: 'Pending'
+    };
+    setTransfersList(prev => [newTrf, ...prev]);
+    if (onSaveTransfer) onSaveTransfer(newTrf);
     setViewState(null);
   };
 
@@ -136,8 +188,8 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
             borderRadius: '12px',
             fontSize: '12px',
             fontWeight: 800,
-            background: selectedTransfer.status === 'Completed' ? '#e6f4ea' : '#fef3c7',
-            color: selectedTransfer.status === 'Completed' ? '#16a34a' : '#d97706'
+            background: selectedTransfer.status === 'Completed' || selectedTransfer.status === 'Received' ? '#e6f4ea' : selectedTransfer.status === 'Rejected' ? '#fee2e2' : '#fef3c7',
+            color: selectedTransfer.status === 'Completed' || selectedTransfer.status === 'Received' ? '#16a34a' : selectedTransfer.status === 'Rejected' ? '#dc2626' : '#d97706'
           }}>
             {selectedTransfer.status || 'Pending'}
           </span>
@@ -146,7 +198,7 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
         <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '28px', width: '100%', boxSizing: 'border-box' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '14px', marginBottom: '24px' }}>
             <div>
-              <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Transfer No</span>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Transfer No.</span>
               <strong style={{ color: '#0f172a', fontSize: '16px' }}>{selectedTransfer.transferNo}</strong>
             </div>
             <div>
@@ -166,7 +218,7 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
               <span style={{ color: '#0f172a', fontWeight: 800 }}>{selectedTransfer.item}</span>
             </div>
             <div>
-              <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Quantity & Unit</span>
+              <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Quantity</span>
               <span style={{ color: '#ff5a1f', fontWeight: 700 }}>{selectedTransfer.quantity} {selectedTransfer.unit}</span>
             </div>
           </div>
@@ -176,6 +228,46 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
             <p style={{ margin: 0, fontSize: '14px', color: '#0f172a', background: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               {selectedTransfer.remarks || 'No remarks provided.'}
             </p>
+          </div>
+
+          {/* Action Buttons: 165. View, 166. Approve, 167. Reject, 168. Dispatch, 169. Receive */}
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #cbd5e1' }}>
+            {selectedTransfer.status === 'Pending' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateStatus(selectedTransfer.id, 'Approved')}
+                  style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateStatus(selectedTransfer.id, 'Rejected')}
+                  style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', padding: '8px 18px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                >
+                  Reject
+                </button>
+              </>
+            )}
+            {selectedTransfer.status === 'Approved' && (
+              <button
+                type="button"
+                onClick={() => handleUpdateStatus(selectedTransfer.id, 'Dispatched')}
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              >
+                Dispatch
+              </button>
+            )}
+            {selectedTransfer.status === 'Dispatched' && (
+              <button
+                type="button"
+                onClick={() => handleUpdateStatus(selectedTransfer.id, 'Received')}
+                style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              >
+                Receive
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -376,7 +468,8 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
             type="text"
             placeholder="Search transfer requests..."
             value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+            onKeyDown={preventSpaceInput}
+            onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
             style={{ ...filterInputStyle, paddingLeft: '32px' }}
           />
         </div>
@@ -408,12 +501,13 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Transfer No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Transfer No.</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>From Branch</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>To Branch</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Qty</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Request Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Quantity</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
               <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
             </tr>
@@ -421,52 +515,113 @@ export default function BranchTransfer({ transfers, items: initialItems, onSaveT
           <tbody>
             {paginatedTransfers.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No branch transfer records found.
                 </td>
               </tr>
             ) : (
-              paginatedTransfers.map(t => (
+              paginatedTransfers.map((t, index) => (
                 <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                    {currentPage * PAGE_SIZE + index + 1}
+                  </td>
                   <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{t.transferNo}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{t.fromBranch}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ff5a1f' }}>{t.toBranch}</td>
+                  <td style={{ padding: '14px 16px', color: '#64748b' }}>{t.date}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{t.item}</td>
                   <td style={{ padding: '14px 16px', color: '#0f172a' }}>{t.quantity} {t.unit}</td>
-                  <td style={{ padding: '14px 16px', color: '#64748b' }}>{t.date}</td>
                   <td style={{ padding: '14px 16px' }}>
                     <span style={{
                       padding: '3px 10px',
                       borderRadius: '12px',
                       fontSize: '11px',
                       fontWeight: 700,
-                      background: t.status === 'Completed' ? '#e6f4ea' : '#fef3c7',
-                      color: t.status === 'Completed' ? '#16a34a' : '#d97706'
+                      background: t.status === 'Completed' || t.status === 'Received' ? '#e6f4ea' : t.status === 'Rejected' ? '#fee2e2' : '#fef3c7',
+                      color: t.status === 'Completed' || t.status === 'Received' ? '#16a34a' : t.status === 'Rejected' ? '#dc2626' : '#d97706'
                     }}>
                       {t.status || 'Pending'}
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedTransfer(t); setViewState('VIEW_DETAIL'); }}
-                      style={{
-                        background: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        color: '#0f172a',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <EyeIcon size={13} />
-                      <span>View</span>
-                    </button>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedTransfer(t); setViewState('VIEW_DETAIL'); }}
+                        title="View Transfer Details"
+                        style={{
+                          ...actionIconBtnStyle,
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#2563eb'
+                        }}
+                      >
+                        <EyeIcon size={15} color="#2563eb" />
+                      </button>
+
+                      {t.status === 'Pending' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateStatus(t.id, 'Approved')}
+                            title="Approve Transfer"
+                            style={{
+                              ...actionIconBtnStyle,
+                              background: '#f0fdf4',
+                              border: '1px solid #86efac',
+                              color: '#16a34a'
+                            }}
+                          >
+                            <CheckIcon size={15} color="#16a34a" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateStatus(t.id, 'Rejected')}
+                            title="Reject Transfer"
+                            style={{
+                              ...actionIconBtnStyle,
+                              background: '#fef2f2',
+                              border: '1px solid #fca5a5',
+                              color: '#dc2626'
+                            }}
+                          >
+                            <XIcon size={15} color="#dc2626" />
+                          </button>
+                        </>
+                      )}
+
+                      {t.status === 'Approved' && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(t.id, 'Dispatched')}
+                          title="Dispatch Transfer"
+                          style={{
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #93c5fd',
+                            color: '#2563eb'
+                          }}
+                        >
+                          <TruckIcon size={15} color="#2563eb" />
+                        </button>
+                      )}
+
+                      {t.status === 'Dispatched' && (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateStatus(t.id, 'Received')}
+                          title="Receive Transfer"
+                          style={{
+                            ...actionIconBtnStyle,
+                            background: '#f0fdf4',
+                            border: '1px solid #86efac',
+                            color: '#16a34a'
+                          }}
+                        >
+                          <InboxIcon size={15} color="#16a34a" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))

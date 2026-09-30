@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, PencilIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, PencilIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
 
@@ -17,6 +17,8 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const [supplierFilter, setSupplierFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
   const [itemFilter, setItemFilter] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
 
   // View States: null | 'ADD_PURCHASE' | 'VIEW_PURCHASE' | 'VENDOR_MODAL'
@@ -173,11 +175,15 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       itm.toLowerCase().includes(searchTerm.toLowerCase()) ||
       inv.toLowerCase().includes(searchTerm.toLowerCase());
 
+    const pDate = p.purchaseDate || p.date || '';
+    const matchesStartDate = !startDate || (pDate >= startDate);
+    const matchesEndDate = !endDate || (pDate <= endDate);
+
     const matchesSupplier = supplierFilter === 'All' || supp === supplierFilter;
     const matchesType = typeFilter === 'All' || pType === typeFilter || pType.includes(typeFilter);
     const matchesItem = itemFilter === 'All' || itm === itemFilter;
 
-    return matchesSearch && matchesSupplier && matchesType && matchesItem;
+    return matchesSearch && matchesSupplier && matchesType && matchesItem && matchesStartDate && matchesEndDate;
   });
 
   const PAGE_SIZE = 10;
@@ -913,37 +919,25 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   // -------------------------------------------------------------
   return (
     <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-      {/* Top Filter and Action Bar */}
+      {/* Top Filter and Action Bar: Supplier, Date Range, Item */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Search Input */}
-          <div style={{ position: 'relative', width: '220px' }}>
+          <div style={{ position: 'relative', width: '200px' }}>
             <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
               <SearchIcon size={14} />
             </span>
             <input
               type="text"
-              placeholder="Search code, vendor..."
+              placeholder="Search code, supplier..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
 
-          {/* Type Filter */}
-          <div style={{ width: '180px' }}>
-            <select
-              value={typeFilter}
-              onChange={e => { setTypeFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              {purchaseTypes.map(pt => (
-                <option key={pt} value={pt}>{pt === 'All' ? 'All Purchase Types' : pt.split(' (')[0]}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Supplier Filter */}
+          {/* Filter 1: Supplier */}
           <div style={{ width: '160px' }}>
             <select
               value={supplierFilter}
@@ -957,8 +951,27 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             </select>
           </div>
 
-          {/* Item Filter */}
-          <div style={{ width: '160px' }}>
+          {/* Filter 2: Date Range */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => { setStartDate(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '135px' }}
+              title="From Date"
+            />
+            <span style={{ color: '#94a3b8', fontSize: '12px' }}>to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => { setEndDate(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '135px' }}
+              title="To Date"
+            />
+          </div>
+
+          {/* Filter 3: Item */}
+          <div style={{ width: '150px' }}>
             <select
               value={itemFilter}
               onChange={e => { setItemFilter(e.target.value); setCurrentPage(0); }}
@@ -1035,61 +1048,54 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
         </div>
       </div>
 
-      {/* Purchases Table */}
+      {/* Purchases — Table */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase No</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Category / Type</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Vendor / Supplier</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800, width: '50px' }}>S.No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase No.</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Supplier</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Qty</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Total (₹)</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Remarks</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Quantity</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase Rate</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Total Amount</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
               <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   Loading purchase records from server...
                 </td>
               </tr>
             ) : paginatedPurchases.length === 0 ? (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   No purchase records found matching criteria.
                 </td>
               </tr>
             ) : (
-              paginatedPurchases.map(p => {
+              paginatedPurchases.map((p, index) => {
                 const purCode = p.purchaseNo || p.id;
-                const typeInfo = getTypeBadgeStyle(p.purchaseType || 'Material Purchase');
                 const suppName = p.supplier || p.supplierName || 'General Supplier';
                 const itemTitle = p.item || p.itemName;
                 const purTotal = p.total ? p.total : (p.totalAmount ? p.totalAmount : (p.quantity || 0) * (p.rate || 0));
 
                 return (
                   <tr key={p.id || p._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                      {currentPage * PAGE_SIZE + index + 1}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                      {p.purchaseDate || p.date}
+                    </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f' }}>
                       {purCode}
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{
-                        background: typeInfo.bg,
-                        color: typeInfo.text,
-                        border: `1px solid ${typeInfo.border}`,
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {typeInfo.label}
-                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
                       {suppName}
@@ -1099,62 +1105,70 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px' }}>
-                      {p.date || p.purchaseDate}
-                    </td>
                     <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>
                       {itemTitle}
                     </td>
+                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 700 }}>
+                      {p.quantity}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        background: '#f1f5f9',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: '#334155'
+                      }}>
+                        {p.unit || 'kg'}
+                      </span>
+                    </td>
                     <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
-                      {p.quantity} {p.unit || 'kg'}
+                      ₹{Number(p.rate || 0).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#16a34a' }}>
                       ₹{Number(purTotal).toLocaleString('en-IN')}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.remarks || p.notes || '—'}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#e6f4ea',
+                        color: '#16a34a',
+                        display: 'inline-block'
+                      }}>
+                        {p.status || 'Received'}
+                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '8px' }}>
                         <button
                           type="button"
                           onClick={() => { setSelectedPurchase(p); setViewState('VIEW_PURCHASE'); }}
+                          title="View Purchase"
                           style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#0f172a',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb'
                           }}
                         >
-                          <EyeIcon size={13} />
-                          <span>View</span>
+                          <EyeIcon size={15} />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(p)}
+                          title="Delete Purchase"
                           style={{
+                            ...actionIconBtnStyle,
                             background: '#fef2f2',
                             border: '1px solid #fecaca',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#dc2626',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            color: '#dc2626'
                           }}
                         >
-                          <TrashIcon size={13} />
-                          <span>Delete</span>
+                          <TrashIcon size={15} />
                         </button>
                       </div>
                     </td>

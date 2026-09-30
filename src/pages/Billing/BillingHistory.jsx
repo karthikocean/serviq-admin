@@ -126,8 +126,9 @@ export default function BillingHistory() {
     }
 
     try {
+      const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
       const filters = {
-        branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        branchId: isSpecificBranch ? selectedBranchId : undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         search: searchTerm ? searchTerm.trim() : undefined,
@@ -227,7 +228,7 @@ export default function BillingHistory() {
   const filteredHistory = useMemo(() => {
     return rawHistory.filter(item => {
       // 1. Branch Filter
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all') {
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company') {
         if (item.branchId && String(item.branchId) !== String(selectedBranchId)) {
           return false;
         }

@@ -209,24 +209,45 @@
 }
 
 /* ==========================================================================
-   ORDERS FILTER GRID – 3 FILTERS PER ROW
+   ORDERS FILTER GRID – TWO-ROW STRUCTURED FILTER LAYOUT
+   Row 1: Search Order ID (larger) + Order Status + Order Type (3 filters)
+   Row 2: Dining Table + Assigned Waiter + Payment Status + Date Range (4 filters)
    ========================================================================== */
-.orders-filter-grid {
+.orders-filter-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.orders-filter-row-top {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px 16px;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 10px 14px;
   align-items: flex-end;
 }
 
-@media (max-width: 960px) {
-  .orders-filter-grid {
+.orders-filter-row-bottom {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px 14px;
+  align-items: flex-end;
+}
+
+@media (max-width: 1024px) {
+  .orders-filter-row-top {
+    grid-template-columns: 1fr 1fr;
+  }
+  .orders-filter-row-bottom {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
-@media (max-width: 600px) {
-  .orders-filter-grid {
+@media (max-width: 640px) {
+  .orders-filter-row-top,
+  .orders-filter-row-bottom {
     grid-template-columns: 1fr;
   }
 }
+
 

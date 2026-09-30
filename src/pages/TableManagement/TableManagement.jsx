@@ -51,7 +51,7 @@ export default function TableManagement() {
       const activeSearch = filters.search !== undefined ? filters.search : searchTerm;
       const activeStatus = filters.status !== undefined ? filters.status : statusFilter;
       const params = {
-        branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
+        branchId: (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : undefined,
         search: activeSearch ? activeSearch.trim() : undefined,
         status: activeStatus !== 'All' ? activeStatus : undefined
       };

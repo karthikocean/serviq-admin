@@ -2004,8 +2004,8 @@ export default function Admin() {
             </li>
           )}
           */}
-          {/* 9. Billing Dropdown */}
-          {selectedBranchId !== 'COMPANY' && isTabAllowed('billing') && (
+          {/* 9. Billing / Billing History */}
+          {isTabAllowed('billing') && (
             <li className={`sidebar-group ${sidebarBillingOpen ? 'open' : ''}`}>
               <div
                 className="sidebar-item dropdown-trigger"

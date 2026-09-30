@@ -245,6 +245,8 @@ export default function OrdersPanel({
   const [editOrderStatus, setEditOrderStatus] = useState('new');
   const [editOrderNotes, setEditOrderNotes] = useState('');
   const [editOrderItems, setEditOrderItems] = useState([]);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [editCustomerMobile, setEditCustomerMobile] = useState('');
   const [editSearchQuery, setEditSearchQuery] = useState('');
   const [editSelectedCategory, setEditSelectedCategory] = useState('All');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -1207,9 +1209,22 @@ export default function OrdersPanel({
         ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
         return;
       }
+      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+      if (digitsOnly.length !== 10) {
+        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+        return;
+      }
       if (!deliveryAddress.trim()) {
         ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
         return;
+      }
+    } else {
+      if (customerMobile.trim()) {
+        const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+        if (digitsOnly.length !== 10) {
+          ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+          return;
+        }
       }
     }
 
@@ -1439,6 +1454,9 @@ export default function OrdersPanel({
     setEditOrderWaiter(waiterVal);
     setEditOrderStatus((ord.status || 'new').toLowerCase());
     setEditOrderNotes(ord.notes || ord.specialInstructions || '');
+    setEditCustomerName(ord.customerName || ord.customer?.name || ord.guestName || '');
+    const rawMobile = ord.customerMobile || ord.customerPhone || ord.phone || ord.customer?.mobile || ord.customer?.phone || '';
+    setEditCustomerMobile(String(rawMobile).replace(/\D/g, '').slice(0, 10));
     setEditOrderItems(
       Array.isArray(ord.items)
         ? ord.items.map(it => ({
@@ -1488,6 +1506,16 @@ export default function OrdersPanel({
       return;
     }
 
+    const cleanPhone = (editCustomerMobile || '').trim().replace(/\D/g, '');
+    if (cleanPhone.length > 0 && cleanPhone.length !== 10) {
+      ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+      return;
+    }
+    if (editingOrder.orderType === 'Delivery' && cleanPhone.length !== 10) {
+      ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits for Delivery.", false);
+      return;
+    }
+
     setIsSavingEdit(true);
     const subtotal = editOrderItems.reduce((acc, item) => acc + ((item.price || 0) * (item.qty || 1)), 0);
     const tax = parseFloat(((subtotal * taxRate) / 100).toFixed(2));
@@ -1506,6 +1534,9 @@ export default function OrdersPanel({
       waiterId: (!editingOrder.orderType || editingOrder.orderType === 'Dine-In') ? waiterId : null,
       notes: editOrderNotes,
       status: editOrderStatus,
+      customerName: editCustomerName ? editCustomerName.trim() : (editingOrder.customerName || ''),
+      customerMobile: cleanPhone || '',
+      customerPhone: cleanPhone || '',
       items: editOrderItems.map(item => ({
         menuId: item._id || item.menuId || item.id || '',
         name: item.name,
@@ -2287,9 +2318,10 @@ export default function OrdersPanel({
                       <input
                         type="tel"
                         required
+                        maxLength={10}
                         value={customerMobile}
-                        onChange={e => setCustomerMobile(e.target.value.replace(/[^0-9+]/g, ''))}
-                        placeholder="e.g. +91 9876543210"
+                        onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        placeholder="Enter 10-digit mobile number"
                         style={{
                           width: '100%',
                           padding: '10px 14px',
@@ -2360,9 +2392,10 @@ export default function OrdersPanel({
                     </label>
                     <input
                       type="tel"
+                      maxLength={10}
                       value={customerMobile}
-                      onChange={e => setCustomerMobile(e.target.value.replace(/[^0-9+]/g, ''))}
-                      placeholder="e.g. +91 9876543210 (optional)"
+                      onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                      placeholder="10-digit mobile number (optional)"
                       style={{
                         width: '100%',
                         padding: '10px 14px',
@@ -3213,6 +3246,52 @@ export default function OrdersPanel({
               </div>
             </div>
 
+            {/* Row 3: Customer Information (10 Digits Validation) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Customer Name {editingOrder.orderType === 'Delivery' && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <input
+                  type="text"
+                  value={editCustomerName}
+                  onChange={e => setEditCustomerName(e.target.value)}
+                  placeholder="Enter Customer Name"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                  Customer Mobile Number (10 digits only) {editingOrder.orderType === 'Delivery' && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  value={editCustomerMobile}
+                  onChange={e => setEditCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Enter 10-digit Mobile Number"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
             {/* Items Management */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>
@@ -3572,21 +3651,24 @@ export default function OrdersPanel({
         overflow: 'visible'
       }}>
 
-        {/* FILTER BAR ROW WITH ALL 7 FILTERS */}
+        {/* COMPACT & PROFESSIONAL ORDERS FILTER BAR */}
         <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-          marginBottom: '24px',
+          marginBottom: '16px',
           background: '#f8fafc',
-          padding: '20px',
+          padding: '14px 18px',
           borderRadius: '12px',
-          border: '1px solid #e2e8f0'
+          border: '1px solid #e2e8f0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#000000', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
-              Orders list
-            </h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0, fontFamily: "'Outfit', sans-serif" }}>
+                Orders list
+              </h2>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, background: '#e2e8f0', padding: '2px 8px', borderRadius: '12px' }}>
+                {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
+              </span>
+            </div>
             <button
               type="button"
               onClick={handleOpenCreateOrderModal}
@@ -3594,7 +3676,7 @@ export default function OrdersPanel({
                 background: '#ff5a1f',
                 color: '#ffffff',
                 border: 'none',
-                padding: '9px 20px',
+                padding: '7px 16px',
                 borderRadius: '8px',
                 fontSize: '13px',
                 fontWeight: 700,
@@ -3602,12 +3684,12 @@ export default function OrdersPanel({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
+                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
                 transition: 'all 0.15s ease'
               }}
               title="Create a new customer order"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
@@ -3615,149 +3697,175 @@ export default function OrdersPanel({
             </button>
           </div>
 
-          <div className="orders-filter-grid">
-            {/* 1. Search Order ID / Customer / Table */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Search Order ID</label>
-              <input
-                type="text"
-                placeholder="Order ID / Customer / Table..."
-                value={searchOrderId}
-                onChange={e => setSearchOrderId(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 14px',
-                  borderRadius: '10px',
-                  border: '1.5px solid #cbd5e1',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  transition: 'border-color 0.15s ease'
-                }}
-                onFocus={e => e.target.style.borderColor = '#ff5a1f'}
-                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-              />
+          <div className="orders-filter-container">
+            {/* ROW 1: 3 FILTERS (Search Order ID slightly large + Order Status + Order Type) */}
+            <div className="orders-filter-row-top">
+              {/* 1. Search Order ID / Customer / Table */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Search Order ID</label>
+                <input
+                  type="text"
+                  placeholder="Order ID / Customer / Table..."
+                  value={searchOrderId}
+                  onKeyDown={e => {
+                    if (e.key === ' ' || e.code === 'Space' || e.which === 32) e.preventDefault();
+                  }}
+                  onChange={e => setSearchOrderId(e.target.value.replace(/\s/g, ''))}
+                  style={{
+                    width: '100%',
+                    height: '36px',
+                    padding: '0 12px',
+                    borderRadius: '7px',
+                    border: '1.5px solid #cbd5e1',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.15s ease',
+                    backgroundColor: '#ffffff'
+                  }}
+                  onFocus={e => e.target.style.borderColor = '#ff5a1f'}
+                  onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                />
+              </div>
+
+              {/* 2. Order Status Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Order Status</label>
+                <SearchableSelect
+                  isCompact
+                  value={orderFilter || 'All'}
+                  onChange={e => setOrderFilter && setOrderFilter(e.target.value)}
+                  options={[
+                    { value: 'All', label: 'All Statuses' },
+                    { value: 'new', label: 'New' },
+                    { value: 'preparing', label: 'Preparing' },
+                    { value: 'ready', label: 'Ready' },
+                    { value: 'served', label: 'Served' },
+                    { value: 'completed', label: 'Completed' },
+                    { value: 'cancelled', label: 'Cancelled' }
+                  ]}
+                  placeholder="Select Status..."
+                />
+              </div>
+
+              {/* 3. Order Type Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Order Type</label>
+                <SearchableSelect
+                  isCompact
+                  value={orderTypeFilter}
+                  onChange={e => setOrderTypeFilter(e.target.value)}
+                  options={[
+                    { value: 'All', label: 'All Types' },
+                    { value: 'Dine-In', label: 'Dine-In' },
+                    { value: 'Takeaway', label: 'Takeaway' },
+                    { value: 'Delivery', label: 'Delivery' }
+                  ]}
+                  placeholder="Select Type..."
+                />
+              </div>
             </div>
 
-            {/* 2. Order Status Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Order Status</label>
-              <SearchableSelect
-                value={orderFilter || 'All'}
-                onChange={e => setOrderFilter && setOrderFilter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Statuses' },
-                  { value: 'new', label: 'New' },
-                  { value: 'preparing', label: 'Preparing' },
-                  { value: 'ready', label: 'Ready' },
-                  { value: 'served', label: 'Served' },
-                  { value: 'completed', label: 'Completed' },
-                  { value: 'cancelled', label: 'Cancelled' }
-                ]}
-                placeholder="Select Status..."
-              />
-            </div>
+            {/* ROW 2: 4 FILTERS (Dining Table + Assigned Waiter + Payment Status + Date Range) */}
+            <div className="orders-filter-row-bottom">
+              {/* 4. Dining Table Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dining Table</label>
+                <SearchableSelect
+                  isCompact
+                  value={selectedTableFilter}
+                  onChange={e => setSelectedTableFilter(e.target.value)}
+                  options={[
+                    { value: 'All', label: 'All Tables' },
+                    ...(apiTables.length > 0
+                      ? apiTables.map(t => ({
+                          value: t.tableNumber || t.tableNo || t.name,
+                          label: `Table ${t.tableNumber || t.tableNo || t.name}`
+                        }))
+                      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
+                  ]}
+                  placeholder="Select Table..."
+                />
+              </div>
 
-            {/* 3. Order Type Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Order Type</label>
-              <SearchableSelect
-                value={orderTypeFilter}
-                onChange={e => setOrderTypeFilter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Types' },
-                  { value: 'Dine-In', label: 'Dine-In' },
-                  { value: 'Takeaway', label: 'Takeaway' },
-                  { value: 'Delivery', label: 'Delivery' }
-                ]}
-                placeholder="Select Type..."
-              />
-            </div>
+              {/* 5. Assigned Waiter Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Assigned Waiter</label>
+                <SearchableSelect
+                  isCompact
+                  value={currentSelectedWaiterName}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const found = allWaiters.find(w => w.name === val) || { id: val, name: val };
+                    if (setSelectedWaiterFilter) setSelectedWaiterFilter(val === 'All Waiters' ? 'All Waiters' : found);
+                  }}
+                  options={[
+                    { value: 'All Waiters', label: 'All Waiters' },
+                    { value: 'Unassigned', label: 'Unassigned' },
+                    ...allWaiters.map(w => ({ value: w.name, label: w.name }))
+                  ]}
+                  placeholder="Select Waiter..."
+                />
+              </div>
 
-            {/* 4. Dining Table Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dining Table</label>
-              <SearchableSelect
-                value={selectedTableFilter}
-                onChange={e => setSelectedTableFilter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Tables' },
-                  ...(apiTables.length > 0
-                    ? apiTables.map(t => ({
-                        value: t.tableNumber || t.tableNo || t.name,
-                        label: `Table ${t.tableNumber || t.tableNo || t.name}`
-                      }))
-                    : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
-                ]}
-                placeholder="Select Table..."
-              />
-            </div>
+              {/* 6. Payment Status Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Payment Status</label>
+                <SearchableSelect
+                  isCompact
+                  value={paymentStatusFilter}
+                  onChange={e => setPaymentStatusFilter(e.target.value)}
+                  options={[
+                    { value: 'All', label: 'All Payment' },
+                    { value: 'Unpaid', label: 'Unpaid' },
+                    { value: 'Paid', label: 'Paid' }
+                  ]}
+                  placeholder="Select Payment..."
+                />
+              </div>
 
-            {/* 5. Assigned Waiter Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Assigned Waiter</label>
-              <SearchableSelect
-                value={currentSelectedWaiterName}
-                onChange={e => {
-                  const val = e.target.value;
-                  const found = allWaiters.find(w => w.name === val) || { id: val, name: val };
-                  if (setSelectedWaiterFilter) setSelectedWaiterFilter(val === 'All Waiters' ? 'All Waiters' : found);
-                }}
-                options={[
-                  { value: 'All Waiters', label: 'All Waiters' },
-                  { value: 'Unassigned', label: 'Unassigned' },
-                  ...allWaiters.map(w => ({ value: w.name, label: w.name }))
-                ]}
-                placeholder="Select Waiter..."
-              />
-            </div>
-
-            {/* 6. Payment Status Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Payment Status</label>
-              <SearchableSelect
-                value={paymentStatusFilter}
-                onChange={e => setPaymentStatusFilter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Payment' },
-                  { value: 'Unpaid', label: 'Unpaid' },
-                  { value: 'Paid', label: 'Paid' }
-                ]}
-                placeholder="Select Payment..."
-              />
-            </div>
-
-            {/* 7. Date Range Filter */}
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Date Range</label>
-              <SearchableSelect
-                value={dateRangeFilter}
-                onChange={e => setDateRangeFilter(e.target.value)}
-                options={[
-                  { value: 'All', label: 'All Time' },
-                  { value: 'Today', label: 'Today' },
-                  { value: 'Yesterday', label: 'Yesterday' },
-                  { value: 'This Week', label: 'This Week' },
-                  { value: 'This Month', label: 'This Month' },
-                  { value: 'Custom', label: 'Custom' }
-                ]}
-                placeholder="Select Range..."
-              />
+              {/* 7. Date Range Filter */}
+              <div>
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Date Range</label>
+                <SearchableSelect
+                  isCompact
+                  value={dateRangeFilter}
+                  onChange={e => setDateRangeFilter(e.target.value)}
+                  options={[
+                    { value: 'All', label: 'All Time' },
+                    { value: 'Today', label: 'Today' },
+                    { value: 'Yesterday', label: 'Yesterday' },
+                    { value: 'This Week', label: 'This Week' },
+                    { value: 'This Month', label: 'This Month' },
+                    { value: 'Custom', label: 'Custom' }
+                  ]}
+                  placeholder="Select Range..."
+                />
+              </div>
             </div>
           </div>
 
           {dateRangeFilter === 'Custom' && (
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #e2e8f0', alignItems: 'center' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>Start Date</label>
-                <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '3px' }}>Start Date</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={e => setCustomStartDate(e.target.value)}
+                  style={{ height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', color: '#0f172a' }}
+                />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>End Date</label>
-                <input type="date" value={customEndDate} onChange={e => setCustomEndDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '3px' }}>End Date</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={e => setCustomEndDate(e.target.value)}
+                  style={{ height: '32px', padding: '0 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', color: '#0f172a' }}
+                />
               </div>
             </div>
           )}
@@ -4001,13 +4109,13 @@ export default function OrdersPanel({
                     <td style={{ textAlign: 'center' }} className="orders-sticky-actions-cell">
                       <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', flexWrap: 'nowrap' }}>
 
-                        {/* View (Print Bill) */}
+                        {/* View Order Details */}
                         <button
                           type="button"
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            handlePrintBill(ord);
+                            setViewingOrder(ord);
                           }}
                           style={{
                             width: '28px',
@@ -4024,7 +4132,7 @@ export default function OrdersPanel({
                             boxSizing: 'border-box',
                             transition: 'all 0.15s ease'
                           }}
-                          title="View & Print Bill"
+                          title="View Order Details"
                         >
                           <EyeIcon size={13} color="#2563eb" />
                         </button>
@@ -4437,25 +4545,11 @@ export default function OrdersPanel({
                 >
                   Close
                 </button>
-                {orderStatus !== 'completed' && orderStatus !== 'cancelled' && (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => {
-                      const ord = viewingOrder;
-                      setViewingOrder(null);
-                      handleOpenAppendModal(ord);
-                    }}
-                    style={{ padding: '8px 18px', borderRadius: '8px', background: '#ea580c', color: '#fff', fontSize: '13px', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <PlusIcon size={14} color="#ffffff" /> Add Items
-                  </button>
-                )}
                 <button
                   type="button"
                   className="btn btn-black"
                   onClick={() => {
-                    window.print();
+                    handlePrintBill(viewingOrder);
                   }}
                   style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', border: 'none', cursor: 'pointer' }}
                 >
@@ -4730,10 +4824,11 @@ export default function OrdersPanel({
                       Customer Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
-                      type="text"
+                      type="tel"
+                      maxLength={10}
                       placeholder="Enter 10-digit Mobile Number"
                       value={customerMobile}
-                      onChange={e => setCustomerMobile(e.target.value)}
+                      onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
                     />
                   </div>
@@ -4772,10 +4867,11 @@ export default function OrdersPanel({
                     Customer Mobile Number (Optional)
                   </label>
                   <input
-                    type="text"
-                    placeholder="Enter Mobile Number"
+                    type="tel"
+                    maxLength={10}
+                    placeholder="Enter 10-digit Mobile Number"
                     value={customerMobile}
-                    onChange={e => setCustomerMobile(e.target.value)}
+                    onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
