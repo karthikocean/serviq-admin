@@ -94,6 +94,9 @@ class ReportsApi {
       if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') {
         cleanParams.paymentMethod = filters.paymentMethod;
       }
+      if (filters.taxType && filters.taxType !== 'ALL' && filters.taxType !== 'All') {
+        cleanParams.taxType = filters.taxType;
+      }
       if (filters.search) cleanParams.search = filters.search;
       if (filters.page !== undefined) cleanParams.page = filters.page;
       if (filters.limit !== undefined) cleanParams.limit = filters.limit;
@@ -188,6 +191,8 @@ class ReportsApi {
       if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
       if (filters.startDate) cleanParams.startDate = filters.startDate;
       if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.staff && filters.staff !== 'ALL' && filters.staff !== 'All') cleanParams.staff = filters.staff;
+      if (filters.role && filters.role !== 'ALL' && filters.role !== 'All') cleanParams.role = filters.role;
       if (filters.search) cleanParams.search = filters.search;
       if (filters.page !== undefined) cleanParams.page = filters.page;
       if (filters.limit !== undefined) cleanParams.limit = filters.limit;

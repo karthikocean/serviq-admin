@@ -295,7 +295,7 @@
 }
 
 .reports-kpi-grid.cards-6 {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, 1fr);
 }
 
 .reports-kpi-grid.cards-5 {
@@ -304,6 +304,12 @@
 
 .reports-kpi-grid.cards-4 {
   grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1350px) {
+  .reports-kpi-grid.cards-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 1200px) {
@@ -460,6 +466,17 @@
 
 .reports-table-container tbody tr:hover {
   background-color: #f1f5f9 !important;
+}
+
+.reports-table-container table tfoot tr {
+  background: #f8fafc;
+  border-top: 2px solid #cbd5e1;
+}
+
+.reports-table-container table tfoot td {
+  padding: 12px 10px;
+  font-size: 12.5px;
+  border-bottom: none;
 }
 
 /* Empty State */

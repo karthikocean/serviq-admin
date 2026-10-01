@@ -106,13 +106,15 @@ export const ticketApi = {
     },
 
     // Add reply to an existing ticket
-    addReply: async (ticketId, replyText, senderName) => {
+    addReply: async (ticketId, replyText, senderName, attachmentUrl = null, extra = {}) => {
         const payload = {
             reply: replyText,
             message: replyText,
             sender: senderName || 'Restaurant Admin',
-            role: 'user',
-            isAdmin: false
+            role: extra.role || 'user',
+            isAdmin: extra.isAdmin !== undefined ? extra.isAdmin : false,
+            ...(attachmentUrl ? { attachment: attachmentUrl, attachmentUrl } : {}),
+            ...extra
         };
 
         try {
@@ -128,7 +130,12 @@ export const ticketApi = {
                 }
             } catch (e2) {
                 try {
-                    const patchRes = await apiClient.patch(`/tickets/${ticketId}`, { reply: replyText, sender: senderName });
+                    const patchRes = await apiClient.patch(`/tickets/${ticketId}`, { 
+                        reply: replyText, 
+                        sender: senderName,
+                        ...(attachmentUrl ? { attachment: attachmentUrl } : {}),
+                        ...extra
+                    });
                     if (patchRes.status === 200 || patchRes.status === 201) {
                         return { status: true, data: patchRes.data };
                     }

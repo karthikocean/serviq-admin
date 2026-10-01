@@ -68,11 +68,14 @@ export default function UserListPanel() {
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isCompanyUser = isAdmin || (!currentUser?.branchId && !currentUser?.activeBranchId);
   const currentBranchId = typeof currentUser?.branchId === 'object' ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : currentUser?.branchId;
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const userBranchId = currentBranchId || currentUser?.activeBranchId || '';
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || String(selectedBranchId).toUpperCase() === 'COMPANY';
   const activeFilteredBranchId = !isAllBranches
     ? selectedBranchId
     : (!isAdmin && currentBranchId ? currentBranchId : null);
@@ -517,16 +520,19 @@ export default function UserListPanel() {
                 </label>
                 {(() => {
                   const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
-                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                    : null;
-                  const currentBranchObj = headerBranchObj 
-                    || (userForm.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))) : null);
-                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
-                  if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                    effectiveVal = '';
+                  const isLocked = isBranchLogin;
+
+                  let currentBranchVal = userForm.branchId;
+                  if (isBranchLogin && userBranchId) {
+                    currentBranchVal = userBranchId;
+                  } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                    currentBranchVal = '';
                   }
+
+                  const currentBranchObj = currentBranchVal
+                    ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                    : null;
+                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                   const branchOptions = [
                     { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -550,7 +556,7 @@ export default function UserListPanel() {
                       />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                          Branch is locked to currently selected branch.
+                          Branch is locked to your assigned branch.
                         </span>
                       )}
                     </>
