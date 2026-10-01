@@ -54,6 +54,7 @@ export default function InventoryPanel() {
     '/inventory/items',
     '/inventory/central-stock',
     '/inventory/purchases',
+    '/inventory/vendors',
     '/inventory/branch-requests',
     '/inventory/distribution',
     '/inventory/stock-distribution',
@@ -446,6 +447,10 @@ export default function InventoryPanel() {
               onSavePurchase={handleSaveCompanyPurchase}
               onDeletePurchase={handleDeleteCompanyPurchase}
             />
+          )}
+
+          {currentPath === '/inventory/vendors' && (
+            <CompanyVendors />
           )}
 
           {currentPath === '/inventory/branch-requests' && (
