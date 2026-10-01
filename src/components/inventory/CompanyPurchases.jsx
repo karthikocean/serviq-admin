@@ -59,14 +59,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Vendors
-      const vendorRes = await InventoryApi.getVendors();
-      if (vendorRes?.status && vendorRes?.response) {
-        const rawVendors = vendorRes.response.data || vendorRes.response || [];
-        if (Array.isArray(rawVendors) && rawVendors.length > 0) {
-          setVendorsList(rawVendors);
-        }
-      }
 
       // 2. Fetch Items
       const itemsRes = await InventoryApi.getItems({ limit: 100 });
@@ -150,7 +142,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   // Auto handle vendor selection
   const handleVendorSelect = (vendorVal) => {
     if (vendorVal === 'ADD_NEW_VENDOR') {
-      navigate('/inventory/vendors');
+      openAddVendor();
       return;
     }
     const matched = vendorsList.find(v => v.name === vendorVal || v._id === vendorVal || v.vendorCode === vendorVal);
@@ -271,9 +263,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     }
   };
 
-  // -------------------------------------------------------------
-  // PURCHASE FORM HANDLERS
-  // -------------------------------------------------------------
+
   const validatePurchase = () => {
     const errors = {};
     if (!purchaseForm.supplier.trim()) errors.supplier = 'Vendor / Supplier Name is required';
@@ -348,208 +338,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: typeStr || 'Purchase' };
   };
 
-  // -------------------------------------------------------------
-  // VENDOR MODAL COMPONENT
-  // -------------------------------------------------------------
-  const renderVendorModal = () => {
-    if (!showVendorModal) return null;
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(15, 23, 42, 0.5)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: '20px'
-      }}>
-        <div style={{
-          background: '#ffffff',
-          borderRadius: '16px',
-          width: '100%',
-          maxWidth: '650px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-          padding: '28px 32px',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-          border: '1px solid #e2e8f0'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: '#0f172a' }}>
-                {editingVendor ? 'Edit Vendor Details' : 'Register New Vendor'}
-              </h3>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>Manage supplier credentials and active status</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowVendorModal(false)}
-              style={{ background: 'none', border: 'none', fontSize: '22px', color: '#64748b', cursor: 'pointer', fontWeight: 700 }}
-            >
-              ×
-            </button>
-          </div>
-
-          {!editingVendor && vendorsList.length > 0 && (
-            <div style={{ marginBottom: '24px', background: '#f8fafc', borderRadius: '10px', padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#475569', display: 'block', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Registered Vendors ({vendorsList.length})
-              </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '100px', overflowY: 'auto' }}>
-                {vendorsList.map(v => (
-                  <div key={v._id || v.vendorCode} style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px 10px', fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 800, color: '#ff5a1f' }}>{v.vendorCode}</span>
-                    <span style={{ fontWeight: 700, color: '#0f172a' }}>{v.name}</span>
-                    <span style={{ fontSize: '10px', background: v.status === 'ACTIVE' ? '#dcfce7' : '#fef2f2', color: v.status === 'ACTIVE' ? '#16a34a' : '#dc2626', padding: '2px 6px', borderRadius: '10px', fontWeight: 800 }}>
-                      {v.status || 'ACTIVE'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => openEditVendor(v)}
-                      style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', padding: 0 }}
-                    >
-                      <PencilIcon size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteVendor(v)}
-                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', padding: 0 }}
-                    >
-                      <TrashIcon size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={handleVendorSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={formLabelStyle}>
-                Vendor ID / Code
-              </label>
-              <input
-                type="text"
-                readOnly
-                value={vendorForm.vendorCode}
-                style={{ ...formInputStyle, background: '#f1f5f9', fontWeight: 800, color: '#ff5a1f' }}
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label style={formLabelStyle}>
-                  Vendor / Contact Name <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Metro Wholesale / Rajan"
-                  value={vendorForm.name}
-                  onChange={e => setVendorForm({ ...vendorForm, name: e.target.value })}
-                  style={{ ...formInputStyle, borderColor: vendorErrors.name ? '#ef4444' : '#cbd5e1' }}
-                />
-                {vendorErrors.name && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{vendorErrors.name}</span>}
-              </div>
-
-              <div>
-                <label style={formLabelStyle}>
-                  Company Name <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Metro Cash & Carry Pvt Ltd"
-                  value={vendorForm.companyName}
-                  onChange={e => setVendorForm({ ...vendorForm, companyName: e.target.value })}
-                  style={{ ...formInputStyle, borderColor: vendorErrors.companyName ? '#ef4444' : '#cbd5e1' }}
-                />
-                {vendorErrors.companyName && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{vendorErrors.companyName}</span>}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              <div>
-                <label style={formLabelStyle}>
-                  Contact Number <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. +91 9876543210"
-                  value={vendorForm.phone}
-                  onChange={e => setVendorForm({ ...vendorForm, phone: e.target.value })}
-                  style={{ ...formInputStyle, borderColor: vendorErrors.phone ? '#ef4444' : '#cbd5e1' }}
-                />
-                {vendorErrors.phone && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>{vendorErrors.phone}</span>}
-              </div>
-
-              <div>
-                <label style={formLabelStyle}>
-                  Vendor Status
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', height: '42px' }}>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 700, color: vendorForm.status === 'ACTIVE' ? '#16a34a' : '#64748b' }}>
-                    <input
-                      type="radio"
-                      name="vendorStatus"
-                      value="ACTIVE"
-                      checked={vendorForm.status === 'ACTIVE'}
-                      onChange={() => setVendorForm({ ...vendorForm, status: 'ACTIVE' })}
-                    />
-                    Active
-                  </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', fontWeight: 700, color: vendorForm.status === 'INACTIVE' ? '#dc2626' : '#64748b' }}>
-                    <input
-                      type="radio"
-                      name="vendorStatus"
-                      value="INACTIVE"
-                      checked={vendorForm.status === 'INACTIVE'}
-                      onChange={() => setVendorForm({ ...vendorForm, status: 'INACTIVE' })}
-                    />
-                    Inactive
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-              <button
-                type="button"
-                onClick={() => setShowVendorModal(false)}
-                style={{ background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', padding: '10px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                style={{
-                  background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 24px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  opacity: isSubmitting ? 0.7 : 1
-                }}
-              >
-                {isSubmitting ? 'Saving...' : (editingVendor ? 'Update Vendor' : 'Save Vendor')}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // -------------------------------------------------------------
-  // VIEW: VIEW PURCHASE DETAIL
-  // -------------------------------------------------------------
   if (viewState === 'VIEW_PURCHASE' && selectedPurchase) {
     const typeInfo = getTypeBadgeStyle(selectedPurchase.purchaseType || 'Material Purchase');
     const suppName = selectedPurchase.supplier || selectedPurchase.supplierName || 'General Supplier';
@@ -648,7 +436,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             </p>
           </div>
         </div>
-        {renderVendorModal()}
       </div>
     );
   }
@@ -909,84 +696,30 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             </button>
           </div>
         </form>
-        {showVendorModal && renderVendorModal()}
       </div>
     );
   }
+
+  const formatDateDDMMYYYY = (dateStr) => {
+    if (!dateStr) return '';
+    const cleanStr = String(dateStr).split('T')[0];
+    const parts = cleanStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return dateStr;
+  };
 
   // -------------------------------------------------------------
   // RENDER MAIN TABLE / LIST VIEW
   // -------------------------------------------------------------
   return (
     <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-      {/* Top Filter and Action Bar: Supplier, Date Range, Item */}
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Search Input */}
-          <div style={{ position: 'relative', width: '200px' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}>
-              <SearchIcon size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search code, supplier..."
-              value={searchTerm}
-              onKeyDown={preventSpaceInput}
-              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
-              style={{ ...filterInputStyle, paddingLeft: '32px' }}
-            />
-          </div>
+      {/* Top Filter and Action Bar: Row 1 (Buttons) & Row 2 (Full Width Search & Inputs) */}
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Filter 1: Supplier */}
-          <div style={{ width: '160px' }}>
-            <select
-              value={supplierFilter}
-              onChange={e => { setSupplierFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              <option value="All">All Suppliers</option>
-              {suppliers.filter(s => s !== 'All').map(sup => (
-                <option key={sup} value={sup}>{sup}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter 2: Date Range */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => { setStartDate(e.target.value); setCurrentPage(0); }}
-              style={{ ...filterInputStyle, width: '135px' }}
-              title="From Date"
-            />
-            <span style={{ color: '#94a3b8', fontSize: '12px' }}>to</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => { setEndDate(e.target.value); setCurrentPage(0); }}
-              style={{ ...filterInputStyle, width: '135px' }}
-              title="To Date"
-            />
-          </div>
-
-          {/* Filter 3: Item */}
-          <div style={{ width: '150px' }}>
-            <select
-              value={itemFilter}
-              onChange={e => { setItemFilter(e.target.value); setCurrentPage(0); }}
-              style={filterInputStyle}
-            >
-              <option value="All">All Items</option>
-              {displayItems.map(i => (
-                <option key={i.id || i._id} value={i.name}>{i.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Vendor Management Page Link */}
+        {/* ROW 1: Vendors & Record New Purchase buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => navigate('/inventory/vendors')}
@@ -994,20 +727,20 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              background: '#f8fafc',
+              background: '#ffffff',
               color: '#0f172a',
               border: '1px solid #cbd5e1',
-              padding: '10px 16px',
+              padding: '9px 18px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: 700,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}
           >
             <span>Vendors ({vendorsList.length})</span>
           </button>
 
-          {/* Record New Purchase Button */}
           <button
             type="button"
             onClick={() => {
@@ -1034,7 +767,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
               background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
               color: '#ffffff',
               border: 'none',
-              padding: '10px 20px',
+              padding: '9px 20px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: 800,
@@ -1045,6 +778,82 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             <PlusIcon size={15} />
             <span>Record New Purchase</span>
           </button>
+        </div>
+
+        {/* ROW 2: Full Width Search & Filter Controls */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+          width: '100%',
+          background: '#f8fafc',
+          padding: '12px 16px',
+          borderRadius: '10px',
+          border: '1px solid #edf2f7',
+          boxSizing: 'border-box'
+        }}>
+          {/* Search Box */}
+          <div style={{ position: 'relative', flex: '1 1 220px', minWidth: '200px' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+              <SearchIcon size={14} color="#94a3b8" />
+            </span>
+            <input
+              type="text"
+              placeholder="Search code, supplier..."
+              value={searchTerm}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, paddingLeft: '34px', width: '100%' }}
+            />
+          </div>
+
+          {/* All Suppliers Dropdown */}
+          <div style={{ flex: '1 1 160px', minWidth: '150px' }}>
+            <select
+              value={supplierFilter}
+              onChange={e => { setSupplierFilter(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '100%' }}
+            >
+              <option value="All">All Suppliers</option>
+              {suppliers.filter(s => s !== 'All').map(sup => (
+                <option key={sup} value={sup}>{sup}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date Range */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'nowrap' }}>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => { setStartDate(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '140px' }}
+              title="From Date"
+            />
+            <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 600 }}>to</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => { setEndDate(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '140px' }}
+              title="To Date"
+            />
+          </div>
+
+          {/* All Items Dropdown */}
+          <div style={{ flex: '1 1 150px', minWidth: '140px' }}>
+            <select
+              value={itemFilter}
+              onChange={e => { setItemFilter(e.target.value); setCurrentPage(0); }}
+              style={{ ...filterInputStyle, width: '100%' }}
+            >
+              <option value="All">All Items</option>
+              {displayItems.map(i => (
+                <option key={i.id || i._id} value={i.name}>{i.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1092,7 +901,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                       {currentPage * PAGE_SIZE + index + 1}
                     </td>
                     <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                      {p.purchaseDate || p.date}
+                      {formatDateDDMMYYYY(p.purchaseDate || p.date)}
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f' }}>
                       {purCode}
@@ -1187,7 +996,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
         onPageChange={setCurrentPage}
       />
 
-      {renderVendorModal()}
     </div>
   );
 }

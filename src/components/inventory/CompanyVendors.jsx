@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
 
 export default function CompanyVendors() {
+  const navigate = useNavigate();
   const [vendorsList, setVendorsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -429,28 +431,50 @@ export default function CompanyVendors() {
           </div>
         </div>
 
-        {/* Add Vendor Button */}
-        <button
-          type="button"
-          onClick={openAddVendor}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-            color: '#ffffff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: 800,
-            cursor: 'pointer',
-            boxShadow: '0 2px 10px rgba(255, 90, 31, 0.3)'
-          }}
-        >
-          <PlusIcon size={15} />
-          <span>Register New Vendor</span>
-        </button>
+        {/* Buttons: Back to Purchases & Add Vendor */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            onClick={() => navigate('/inventory/purchases')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: '#f8fafc',
+              color: '#0f172a',
+              border: '1px solid #cbd5e1',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            ← Back to Purchases
+          </button>
+
+          <button
+            type="button"
+            onClick={openAddVendor}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
+              color: '#ffffff',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(255, 90, 31, 0.3)'
+            }}
+          >
+            <PlusIcon size={15} />
+            <span>Register New Vendor</span>
+          </button>
+        </div>
       </div>
 
       {/* Vendors Table */}
