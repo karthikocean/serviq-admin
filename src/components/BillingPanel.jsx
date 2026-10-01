@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
+import SearchableSelect from './SearchableSelect.jsx';
 import BillingApi from '../api/Billing.js';
 import OrderApi from '../api/Order.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
+import ReceiptCard, { generateReceiptHtml } from './ReceiptTemplate.jsx';
 
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -35,6 +37,13 @@ const DownloadIcon = ({ size = 15, color = 'currentColor' }) => (
   </svg>
 );
 
+const CreditCardIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+    <line x1="1" y1="10" x2="23" y2="10"></line>
+  </svg>
+);
+
 export default function BillingPanel({
   billingData = [],
   setBillingData,
@@ -57,17 +66,114 @@ export default function BillingPanel({
   const [payRefNo, setPayRefNo] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  // Filters State: Dining Table, Customer, Cashier/Staff, and Search
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTable, setSelectedTable] = useState('All');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [selectedStaff, setSelectedStaff] = useState('All');
+
   // Pagination for List Table
   const [page, setPage] = useState(0);
   const limit = 10;
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, selectedTable, customerFilter, selectedStaff]);
+
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
-  const paginatedBills = displayBillingData.slice(page * limit, (page + 1) * limit);
-  const totalPages = Math.max(1, Math.ceil(displayBillingData.length / limit));
+
+  // Table options derived from data & active restaurant
+  const tableOptions = useMemo(() => {
+    const set = new Set();
+    displayBillingData.forEach(b => {
+      const t = b.table || b.tableNumber || b.tableNo;
+      if (t) set.add(String(t).replace(/^Table\s*/i, '').trim());
+    });
+    if (Array.isArray(activeRestaurant?.tables)) {
+      activeRestaurant.tables.forEach(t => {
+        const tNum = t.tableNumber || t.tableNo || t.name;
+        if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
+      });
+    }
+    const sorted = Array.from(set).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+    return [
+      { value: 'All', label: 'All Tables' },
+      ...sorted.map(t => ({ value: t, label: `Table ${t}` }))
+    ];
+  }, [displayBillingData, activeRestaurant]);
+
+  // Cashier / Staff options
+  const staffOptions = useMemo(() => {
+    const set = new Set();
+    displayBillingData.forEach(b => {
+      const s = b.staff || b.waiter || b.billedBy || b.waiterName;
+      if (s) set.add(String(s).trim());
+    });
+    if (Array.isArray(activeRestaurant?.staff)) {
+      activeRestaurant.staff.forEach(s => {
+        const sName = s.name || s.staffName || s.fullName;
+        if (sName) set.add(String(sName).trim());
+      });
+    }
+    const sorted = Array.from(set).filter(Boolean).sort();
+    return [
+      { value: 'All', label: 'All Cashier / Staff' },
+      ...sorted.map(s => ({ value: s, label: s }))
+    ];
+  }, [displayBillingData, activeRestaurant]);
+
+  // Filter bills by Dining Table, Customer, Cashier/Staff, and Search
+  const filteredBills = useMemo(() => {
+    return displayBillingData.filter(bill => {
+      // 1. Table Filter
+      if (selectedTable && selectedTable !== 'All') {
+        const bTable = String(bill.table || bill.tableNumber || bill.tableNo || '').replace(/^Table\s*/i, '').trim().toLowerCase();
+        const sTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
+        if (bTable !== sTable) return false;
+      }
+
+      // 2. Customer Filter
+      if (customerFilter && customerFilter.trim()) {
+        const cq = customerFilter.toLowerCase().trim();
+        const cName = (bill.customerName || bill.customer?.name || bill.clientName || '').toLowerCase();
+        const cPhone = (bill.customerPhone || bill.customerMobile || bill.phone || '').toLowerCase();
+        if (!cName.includes(cq) && !cPhone.includes(cq)) return false;
+      }
+
+      // 3. Cashier / Staff Filter
+      if (selectedStaff && selectedStaff !== 'All') {
+        const bStaff = (bill.staff || bill.waiter || bill.billedBy || bill.waiterName || '').trim().toLowerCase();
+        if (bStaff !== String(selectedStaff).trim().toLowerCase()) return false;
+      }
+
+      // 4. Search Term
+      if (searchTerm && searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const matchesBill = (bill.billNo || bill.billNumber || '').toLowerCase().includes(q);
+        const matchesOrd = (bill.orderId || '').toLowerCase().includes(q);
+        const matchesTab = (bill.table || '').toLowerCase().includes(q) || `table ${bill.table}`.toLowerCase().includes(q);
+        const matchesStaff = (bill.staff || bill.waiter || bill.billedBy || '').toLowerCase().includes(q);
+        const matchesCust = (bill.customerName || '').toLowerCase().includes(q);
+        if (!matchesBill && !matchesOrd && !matchesTab && !matchesStaff && !matchesCust) return false;
+      }
+
+      return true;
+    });
+  }, [displayBillingData, selectedTable, customerFilter, selectedStaff, searchTerm]);
+
+  const paginatedBills = filteredBills.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil(filteredBills.length / limit));
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
+  const restaurantTagline = activeRestaurant?.tagline || 'Good Food • Great Moments';
 
   const staffName = currentUser?.name || currentUser?.userName || 'Admin / Cashier';
 
@@ -240,104 +346,272 @@ export default function BillingPanel({
     }
   };
 
-  // Print Tax Invoice Popup Handler
-  const handlePrintInvoicePopup = (invoice) => {
-    const rawItems = invoice.items || [];
+  // Modern Tax Invoice HTML Generator (matching Admin theme and screenshot design)
+  const generateTaxInvoiceHtml = (invoice) => {
+    const rawItems = (invoice.items && invoice.items.length > 0) ? invoice.items : [
+      { hsn: '996331', name: 'Paneer Butter Masala', qty: 1, rate: 280, amount: 280 },
+      { hsn: '996331', name: 'Butter Naan', qty: 3, rate: 45, amount: 135 },
+      { hsn: '996331', name: 'Veg Biryani', qty: 1, rate: 220, amount: 220 }
+    ];
     const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
     const cgst = parseFloat((subtotal * 0.025).toFixed(2));
     const sgst = parseFloat((subtotal * 0.025).toFixed(2));
     const total = (subtotal + cgst + sgst).toFixed(2);
-    const invNo = invoice.invoiceNo || invoice.invoiceNumber || `INV/25-26/${String(Math.floor(10000 + Math.random() * 90000))}`;
+    const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.id || `INV/25-26/${String(Math.floor(10000 + Math.random() * 90000))}`;
     const tableNo = String(invoice.table || invoice.tableNumber || '12').replace(/^Table\s*/i, '');
-    const dateStr = formatDateDMY(new Date());
-    const payMethodStr = invoice.paymentMethod || 'UPI';
+    const payMethodStr = invoice.paymentMethod || payMethod || 'UPI';
+
+    const d = invoice.createdAt || invoice.date ? new Date(invoice.createdAt || invoice.date) : new Date();
+    const dateObj = isNaN(d.getTime()) ? new Date() : d;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dateStr = `${String(dateObj.getDate()).padStart(2, '0')}-${months[dateObj.getMonth()]}-${dateObj.getFullYear()}`;
 
     const itemsHtml = rawItems.map(it => `
-      <tr>
-        <td style="text-align: left; padding: 4px 0;">${it.hsn || '996331'}</td>
-        <td style="text-align: left; padding: 4px 0;">${it.name || 'Dish'}</td>
-        <td style="text-align: center; padding: 4px 0;">${it.qty || 1}</td>
-        <td style="text-align: right; padding: 4px 0;">${Number(it.rate || it.price || 0).toFixed(2)}</td>
-        <td style="text-align: right; padding: 4px 0;">${Number(it.amount || ((it.qty || 1) * (it.rate || it.price || 0))).toFixed(2)}</td>
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td style="padding: 10px 14px; text-align: left; font-size: 13px; color: #475569;">${it.hsn || '996331'}</td>
+        <td style="padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 600; color: #0f172a;">${it.name || 'Item'}</td>
+        <td style="padding: 10px 10px; text-align: center; font-size: 13px; color: #0f172a;">${it.qty || 1}</td>
+        <td style="padding: 10px 14px; text-align: right; font-size: 13px; color: #0f172a; font-variant-numeric: tabular-nums;">${Number(it.rate || it.price || 0).toFixed(2)}</td>
+        <td style="padding: 10px 14px; text-align: right; font-size: 13px; font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums;">${Number(it.amount || ((it.qty || 1) * (it.rate || it.price || 0))).toFixed(2)}</td>
       </tr>
     `).join('');
 
-    const htmlContent = `
+    return `
       <!DOCTYPE html>
       <html>
       <head>
         <title>Tax Invoice - ${invNo}</title>
+        <meta charset="utf-8" />
         <style>
-          body { font-family: monospace, Courier, sans-serif; width: 340px; margin: 0 auto; padding: 20px; font-size: 13px; color: #000; }
-          .center { text-align: center; }
-          .line { border-bottom: 1px dashed #000; margin: 10px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
-          .bold { font-weight: bold; }
-          @media print { body { width: 100%; padding: 0; } }
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #0f172a;
+            padding: 24px;
+            display: flex;
+            justify-content: center;
+          }
+          @media print {
+            body { padding: 0; background: transparent; }
+            .card { box-shadow: none !important; border: 1px solid #fed7aa !important; }
+            @page { margin: 10mm; }
+          }
+          .card {
+            width: 100%;
+            max-width: 660px;
+            background: #ffffff;
+            border: 1.5px solid #fed7aa;
+            border-radius: 16px;
+            padding: 28px 32px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+          }
+          .logo-wrap {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+          }
+          .circle-logo {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 2.5px solid #ff5a1f;
+            background: #fff7ed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+          }
+          .info-box {
+            background: #f8fafc;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            padding: 12px 18px;
+            margin: 18px 0;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 8px 24px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-bottom: 14px;
+          }
+          th {
+            background: #f8fafc;
+            border-top: 1px solid #f1f5f9;
+            border-bottom: 1.5px solid #e2e8f0;
+            padding: 10px 14px;
+            font-size: 12px;
+            font-weight: 800;
+            color: #334155;
+            text-transform: uppercase;
+          }
+          .totals-card {
+            width: 320px;
+            background: #f8fafc;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-left: auto;
+            margin-top: 14px;
+          }
+          .footer-note {
+            margin-top: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+          }
         </style>
       </head>
       <body>
-        <div class="center bold" style="font-size: 16px;">${restaurantName}</div>
-        <div class="center">${restaurantAddress}</div>
-        <div class="center">GST No: ${restaurantGst}</div>
-        <div class="line"></div>
-        <div class="center bold" style="font-size: 14px; margin: 5px 0;">TAX INVOICE</div>
-        <div class="line"></div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Invoice No: ${invNo}</span>
-          <span style="float: right;">Date: ${dateStr}</span>
+        <div class="card">
+          <!-- Header -->
+          <div class="header">
+            <div class="logo-wrap">
+              <div class="circle-logo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ff5a1f" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 3v5c0 1.1.9 2 2 2s2-.9 2-2V3"></path>
+                  <line x1="8" y1="3" x2="8" y2="8"></line>
+                  <line x1="8" y1="10" x2="8" y2="21"></line>
+                  <path d="M16 3a2.5 2.5 0 0 1 2.5 2.5c0 1.8-1.2 3.2-2.5 3.5v12"></path>
+                  <path d="M16 3a2.5 2.5 0 0 0-2.5 2.5c0 1.8 1.2 3.2 2.5 3.5"></path>
+                </svg>
+              </div>
+              <div>
+                <h2 style="font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px;">${restaurantName}</h2>
+                <p style="font-size: 13px; color: #64748b; font-weight: 500; margin-top: 2px;">${restaurantTagline}</p>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: flex-end; text-align: right;">
+              <div style="display: flex; align-items: flex-start; gap: 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="#ff5a1f" stroke="#ff5a1f" stroke-width="1" style="margin-top: 2px; flex-shrink: 0;">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3" fill="#ffffff"></circle>
+                </svg>
+                <div style="font-size: 12px; color: #475569; line-height: 1.45; text-align: left;">
+                  <div style="font-weight: 700; color: #0f172a;">${restaurantName}</div>
+                  <div>${restaurantAddress}</div>
+                  <div>GST No: <span style="font-weight: 600;">${restaurantGst}</span></div>
+                </div>
+              </div>
+              <div style="width: 100%; height: 1.5px; background: #e2e8f0; margin: 8px 0 6px 0;"></div>
+              <div style="font-size: 13px; font-weight: 800; color: #ff5a1f; letter-spacing: 1px; text-transform: uppercase;">TAX INVOICE</div>
+            </div>
+          </div>
+
+          <!-- Info Grid -->
+          <div class="info-box">
+            <div style="display: flex; align-items: center;">
+              <span style="min-width: 95px; font-size: 13px; font-weight: 700; color: #475569;">Invoice No:</span>
+              <span style="font-size: 13px; font-weight: 700; color: #0f172a;">${invNo}</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="min-width: 85px; font-size: 13px; font-weight: 700; color: #475569;">Date:</span>
+              <span style="font-size: 13px; font-weight: 700; color: #0f172a;">${dateStr}</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="min-width: 95px; font-size: 13px; font-weight: 700; color: #475569;">Table No:</span>
+              <span style="font-size: 13px; font-weight: 700; color: #0f172a;">${tableNo}</span>
+            </div>
+            <div style="display: flex; align-items: center;">
+              <span style="min-width: 85px; font-size: 13px; font-weight: 700; color: #475569;">Payment:</span>
+              <span style="font-size: 13px; font-weight: 700; color: #0f172a;">${payMethodStr}</span>
+            </div>
+          </div>
+
+          <!-- Table -->
+          <table>
+            <colgroup>
+              <col style="width: 15%;" />
+              <col style="width: 43%;" />
+              <col style="width: 10%;" />
+              <col style="width: 16%;" />
+              <col style="width: 16%;" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th style="text-align: left;">HSN</th>
+                <th style="text-align: left;">Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Rate</th>
+                <th style="text-align: right;">Taxable Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <!-- Totals Card -->
+          <div class="totals-card">
+            <div style="padding: 12px 18px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: #334155;">
+                <span>Taxable Value</span>
+                <span style="font-weight: 800; color: #0f172a;">${subtotal.toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; color: #475569;">
+                <span>CGST @2.5%</span>
+                <span style="font-weight: 600; color: #0f172a;">${cgst.toFixed(2)}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 13px; color: #475569;">
+                <span>SGST @2.5%</span>
+                <span style="font-weight: 600; color: #0f172a;">${sgst.toFixed(2)}</span>
+              </div>
+            </div>
+            <div style="background: #fff2ea; border-top: 1.5px solid #fed7aa; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 15px; font-weight: 800; color: #0f172a;">Total Value</span>
+              <span style="font-size: 20px; font-weight: 900; color: #ff5a1f;">₹${total}</span>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="footer-note">
+            <div style="flex: 1; max-width: 120px; height: 1px; background: #cbd5e1;"></div>
+            <span style="font-style: italic; font-family: 'Brush Script MT', 'Outfit', cursive, sans-serif; font-size: 20px; color: #ff5a1f; font-weight: 700; letter-spacing: 0.5px;">
+              Thank you, visit again!
+            </span>
+            <div style="flex: 1; max-width: 120px; height: 1px; background: #cbd5e1;"></div>
+          </div>
         </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Table No: ${tableNo}</span>
-          <span style="float: right;">Payment: ${payMethodStr}</span>
-        </div>
-        <div class="line"></div>
-        <table>
-          <thead>
-            <tr style="border-bottom: 1px solid #000;">
-              <th style="text-align: left;">HSN</th>
-              <th style="text-align: left;">Item</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Rate</th>
-              <th style="text-align: right;">Taxable Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-        <div class="line"></div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Taxable Value</span>
-          <span>${subtotal.toFixed(2)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>CGST @2.5%</span>
-          <span>${cgst.toFixed(2)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>SGST @2.5%</span>
-          <span>${sgst.toFixed(2)}</span>
-        </div>
-        <div class="line"></div>
-        <div style="display: flex; justify-content: space-between;" class="bold">
-          <span>Total Value</span>
-          <span>${total}</span>
-        </div>
-        <div class="line"></div>
-        <div class="center bold" style="margin-top: 15px;">Thank you, visit again!</div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
       </body>
       </html>
     `;
+  };
 
-    const printWin = window.open('', '_blank', 'width=480,height=650');
+  // Print Tax Invoice Popup Handler
+  const handlePrintInvoicePopup = (invoice) => {
+    const htmlContent = generateTaxInvoiceHtml(invoice);
+    const printWin = window.open('', '_blank', 'width=720,height=800');
     if (printWin) {
-      printWin.document.write(htmlContent);
+      printWin.document.write(htmlContent + `<script>window.onload = function() { window.print(); }</script>`);
       printWin.document.close();
     }
+  };
+
+  // Download Invoice HTML Handler
+  const handleDownloadInvoicePopup = (bill) => {
+    const htmlContent = generateTaxInvoiceHtml(bill);
+    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.id || 'INV-Doc';
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TaxInvoice-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ShowNotifications.showAlertNotification("Tax Invoice downloaded successfully!", true);
   };
 
   return (
@@ -358,23 +632,96 @@ export default function BillingPanel({
         <span style={{ fontSize: '13px', color: '#64748b' }}>Manage active restaurant table billing, collect payments, and print invoices.</span>
       </div>
 
+      {/* FILTER BAR: DINING TABLE, CUSTOMER, CASHIER/STAFF & SEARCH */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: '12px',
+        alignItems: 'flex-end',
+        marginBottom: '20px',
+        background: '#ffffff',
+        padding: '16px',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)'
+      }}>
+        {/* Search */}
+        <div>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Search</label>
+          <input
+            type="text"
+            placeholder="Bill No / Order ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
+          />
+        </div>
+
+        {/* Dining Table */}
+        <div>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Dining Table</label>
+          <SearchableSelect
+            value={selectedTable}
+            onChange={(e) => setSelectedTable(e.target.value)}
+            options={tableOptions}
+            placeholder="Select Table..."
+          />
+        </div>
+
+        {/* Customer */}
+        <div>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Customer</label>
+          <input
+            type="text"
+            placeholder="Name or Phone..."
+            value={customerFilter}
+            onChange={(e) => setCustomerFilter(e.target.value)}
+            style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
+          />
+        </div>
+
+        {/* Cashier / Staff */}
+        <div>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Cashier / Staff</label>
+          <SearchableSelect
+            value={selectedStaff}
+            onChange={(e) => setSelectedStaff(e.target.value)}
+            options={staffOptions}
+            placeholder="Select Staff..."
+          />
+        </div>
+      </div>
+
       {/* CURRENT BILLING LIST TABLE */}
-      <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div className="billing-table-card">
+        <div className="billing-table-responsive">
+          <table className="billing-table" style={{ minWidth: '1350px' }}>
+            <colgroup>
+              <col style={{ width: '60px' }} />   {/* 1. S.NO */}
+              <col style={{ width: '130px' }} />  {/* 2. BILL NO. */}
+              <col style={{ width: '130px' }} />  {/* 3. ORDER ID */}
+              <col style={{ width: '115px' }} />  {/* 4. ORDER TYPE */}
+              <col style={{ width: '170px' }} />  {/* 5. TABLE */}
+              <col style={{ width: '160px' }} />  {/* 6. BILL DATE & TIME */}
+              <col style={{ width: '135px' }} />  {/* 7. BILL AMOUNT */}
+              <col style={{ width: '135px' }} />  {/* 8. PAID AMOUNT */}
+              <col style={{ width: '135px' }} />  {/* 9. BALANCE AMOUNT */}
+              <col style={{ width: '130px' }} />  {/* 10. PAYMENT STATUS */}
+              <col style={{ width: '145px' }} />  {/* 11. ACTIONS */}
+            </colgroup>
             <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', width: '50px' }}>S.NO</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', minWidth: '110px' }}>BILL NO.</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', minWidth: '120px' }}>ORDER ID</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', minWidth: '110px' }}>ORDER TYPE</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', minWidth: '100px' }}>TABLE</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', minWidth: '140px' }}>BILL DATE & TIME</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right', minWidth: '110px' }}>BILL AMOUNT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right', minWidth: '110px' }}>PAID AMOUNT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'right', minWidth: '120px' }}>BALANCE AMOUNT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', minWidth: '120px' }}>PAYMENT STATUS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', textAlign: 'center', minWidth: '240px', position: 'sticky', right: 0, zIndex: 10, backgroundColor: '#000000' }}>ACTIONS</th>
+              <tr>
+                <th style={{ textAlign: 'center' }}>S.NO</th>
+                <th style={{ textAlign: 'left' }}>BILL NO.</th>
+                <th style={{ textAlign: 'left' }}>ORDER ID</th>
+                <th style={{ textAlign: 'center' }}>ORDER TYPE</th>
+                <th style={{ textAlign: 'center' }}>TABLE</th>
+                <th style={{ textAlign: 'center' }}>BILL DATE & TIME</th>
+                <th style={{ textAlign: 'right' }}>BILL AMOUNT</th>
+                <th style={{ textAlign: 'right' }}>PAID AMOUNT</th>
+                <th style={{ textAlign: 'right' }}>BALANCE AMOUNT</th>
+                <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
+                <th style={{ textAlign: 'center' }} className="sticky-actions-header">ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -392,76 +739,168 @@ export default function BillingPanel({
                 const timeStr = bill.time || (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:45 PM');
 
                 return (
-                  <tr key={bill.tableId || bill._id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>{page * limit + index + 1}</td>
-                    <td style={{ padding: '16px', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>{billNo}</td>
-                    <td style={{ padding: '16px', fontSize: '13px', fontWeight: 700, color: '#475569' }}>{bill.orderId || `ORD-${100 + index}`}</td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: '#eff6ff', color: '#2563eb' }}>
+                  <tr key={bill.tableId || bill._id || index}>
+                    <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+                      {page * limit + index + 1}
+                    </td>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                      {billNo}
+                    </td>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                      {bill.orderId || `ORD-${100 + index}`}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: '#eff6ff', color: '#2563eb' }}>
                         {bill.orderType || 'Dine-In'}
                       </span>
                     </td>
-                    <td style={{ padding: '16px', textAlign: 'center', fontWeight: 700, color: '#ea580c' }}>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: '#ea580c', fontSize: '13px' }}>
                       {bill.table ? (bill.table.includes('Table') ? bill.table : `Table ${bill.table}`) : 'Table 12'}
                     </td>
-                    <td style={{ padding: '16px', textAlign: 'center', fontSize: '12px', color: '#475569' }}>
-                      <div>{dateStr}</div>
-                      <div style={{ fontSize: '11px', color: '#94a3b8' }}>{timeStr}</div>
+                    <td style={{ textAlign: 'center' }}>
+                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', lineHeight: 1.2 }}>{dateStr}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', lineHeight: 1.2 }}>{timeStr}</div>
                     </td>
-                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>₹{billAmount.toFixed(2)}</td>
-                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>₹{paidAmount.toFixed(2)}</td>
-                    <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b' }}>₹{balanceAmount.toFixed(2)}</td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                      ₹{billAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                      ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                      ₹{balanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
                       <span style={{
+                        display: 'inline-block',
                         padding: '4px 12px',
                         borderRadius: '12px',
                         fontSize: '11px',
                         fontWeight: 800,
                         backgroundColor: isPaid ? '#dcfce7' : '#fef2f2',
-                        color: isPaid ? '#166534' : '#dc2626'
+                        color: isPaid ? '#166534' : '#dc2626',
+                        border: isPaid ? '1px solid #86efac' : '1px solid #fecaca'
                       }}>
                         {isPaid ? 'Paid' : 'Unpaid'}
                       </span>
                     </td>
-                    <td style={{ padding: '16px', textAlign: 'center', position: 'sticky', right: 0, backgroundColor: '#ffffff' }}>
-                      <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
-                        {/* View Bill */}
+                    <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
+                      <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
+                        {/* 1. View Bill (Icon without text) */}
                         <button
                           type="button"
                           onClick={() => setViewingBill(bill)}
-                          style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                          title="View Bill"
+                          aria-label="View Bill"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            color: '#334155',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
                         >
-                          View Bill
+                          <EyeIcon size={15} color="#334155" />
                         </button>
 
                         {!isPaid ? (
                           <>
-                            {/* Print Bill */}
+                            {/* 2. Print Bill (Icon without text) */}
                             <button
                               type="button"
                               onClick={() => handlePrintBillPopup(bill)}
-                              style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#2563eb', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                              title="Print Bill"
+                              aria-label="Print Bill"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: '1px solid #bfdbfe',
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
                             >
-                              Print Bill
+                              <PrinterIcon size={15} color="#2563eb" />
                             </button>
-                            {/* Collect Payment */}
+                            {/* 3. Collect Payment (Icon without text) */}
                             <button
                               type="button"
                               onClick={() => handleOpenCollectPayment(bill)}
-                              style={{ background: '#ff5a1f', border: 'none', color: '#ffffff', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                              title="Collect Payment"
+                              aria-label="Collect Payment"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: '#ff5a1f',
+                                color: '#ffffff',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
                             >
-                              Collect Payment
+                              <CreditCardIcon size={15} color="#ffffff" />
                             </button>
                           </>
                         ) : (
                           <>
-                            {/* Print Invoice / Receipt */}
+                            {/* 4. Print Invoice (Icon without text) */}
                             <button
                               type="button"
                               onClick={() => handlePrintInvoicePopup(bill)}
-                              style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                              title="Print Invoice"
+                              aria-label="Print Invoice"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: '1px solid #bbf7d0',
+                                background: '#f0fdf4',
+                                color: '#16a34a',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
                             >
-                              Print Invoice
+                              <PrinterIcon size={15} color="#16a34a" />
+                            </button>
+                            {/* 5. Download Invoice (Icon without text) */}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadInvoicePopup(bill)}
+                              title="Download Invoice"
+                              aria-label="Download Invoice"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '6px',
+                                border: '1px solid #fed7aa',
+                                background: '#fff7ed',
+                                color: '#ea580c',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <DownloadIcon size={15} color="#ea580c" />
                             </button>
                           </>
                         )}
@@ -473,7 +912,9 @@ export default function BillingPanel({
 
               {paginatedBills.length === 0 && (
                 <tr>
-                  <td colSpan="11" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>No active bills found.</td>
+                  <td colSpan="11" style={{ textAlign: 'center', padding: '48px 16px', color: '#64748b', fontSize: '13px' }}>
+                    No active bills found for the selected filters.
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -481,95 +922,78 @@ export default function BillingPanel({
         </div>
 
         {/* PAGINATION */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-          <span style={{ fontSize: '13px', color: '#64748b' }}>Showing {page * limit + 1} to {Math.min((page + 1) * limit, displayBillingData.length)} of {displayBillingData.length} bills</span>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button type="button" disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: page === 0 ? 'not-allowed' : 'pointer' }}>Prev</button>
-            <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}>Next</button>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 20px',
+          background: '#ffffff',
+          borderTop: '1px solid #e2e8f0',
+          boxSizing: 'border-box'
+        }}>
+          <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+            Showing {filteredBills.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredBills.length)} of {filteredBills.length} bills
+          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage(p => p - 1)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                border: '1px solid #e2e8f0',
+                background: page === 0 ? '#f8fafc' : '#ffffff',
+                color: page === 0 ? '#cbd5e1' : '#334155',
+                cursor: page === 0 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Prev
+            </button>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', padding: '0 4px' }}>
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(p => p + 1)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                border: '1px solid #e2e8f0',
+                background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
+                color: page >= totalPages - 1 ? '#cbd5e1' : '#334155',
+                cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
 
-      {/* VIEW BILL MODAL (Sample Bill Format) */}
-      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Details" maxWidth="420px">
-        {viewingBill && (() => {
-          const rawItems = viewingBill.items || [
-            { name: 'Paneer Butter Masala', qty: 1, rate: 280, amount: 280 },
-            { name: 'Butter Naan', qty: 3, rate: 45, amount: 135 },
-            { name: 'Veg Biryani', qty: 1, rate: 220, amount: 220 }
-          ];
-          const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
-          const cgst = parseFloat((subtotal * 0.025).toFixed(2));
-          const sgst = parseFloat((subtotal * 0.025).toFixed(2));
-          const totalPayable = (subtotal + cgst + sgst).toFixed(2);
-          const billNo = viewingBill.billNo || viewingBill.billNumber || 'B-1042';
-          const tableNo = String(viewingBill.table || '12').replace(/^Table\s*/i, '');
-          const isPaid = (viewingBill.status || viewingBill.paymentStatus || '').toLowerCase() === 'paid';
-
-          return (
-            <div style={{ fontFamily: 'monospace', fontSize: '13px', background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '16px', color: '#0f172a' }}>{restaurantName}</div>
-              <div style={{ textAlign: 'center', color: '#64748b' }}>{restaurantAddress}</div>
-              <div style={{ textAlign: 'center', color: '#64748b', marginBottom: '10px' }}>GST No: {restaurantGst}</div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '10px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Table No: {tableNo}</span>
-                <span>Bill No: {billNo}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Date: {formatDateDMY(new Date())}</span>
-                <span>Time: 8:45 PM</span>
-              </div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '10px 0' }}></div>
-
-              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-                    <th>Item</th>
-                    <th style={{ textAlign: 'center' }}>Qty</th>
-                    <th style={{ textAlign: 'right' }}>Rate</th>
-                    <th style={{ textAlign: 'right' }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rawItems.map((it, idx) => (
-                    <tr key={idx}>
-                      <td style={{ padding: '4px 0' }}>{it.name}</td>
-                      <td style={{ textAlign: 'center' }}>{it.qty || 1}</td>
-                      <td style={{ textAlign: 'right' }}>{Number(it.rate || 0).toFixed(2)}</td>
-                      <td style={{ textAlign: 'right' }}>{Number(it.amount || ((it.qty || 1) * (it.rate || 0))).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '10px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Subtotal</span><span>{subtotal.toFixed(2)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CGST @2.5%</span><span>{cgst.toFixed(2)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>SGST @2.5%</span><span>{sgst.toFixed(2)}</span></div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '10px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '15px', color: '#0f172a' }}>
-                <span>Total Payable</span>
-                <span>₹{totalPayable}</span>
-              </div>
-
-              {/* MODAL ACTION BUTTONS */}
-              <div style={{ display: 'flex', gap: '8px', marginTop: '20px', borderTop: '1px solid #cbd5e1', paddingTop: '16px' }}>
-                <button type="button" onClick={() => handlePrintBillPopup(viewingBill)} style={{ flex: 1, padding: '8px', background: '#000000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <PrinterIcon size={14} color="#fff" /> Print Bill
-                </button>
-                <button type="button" onClick={() => handlePrintBillPopup(viewingBill)} style={{ flex: 1, padding: '8px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <DownloadIcon size={14} /> Download
-                </button>
-                {!isPaid && (
-                  <button type="button" onClick={() => { setViewingBill(null); handleOpenCollectPayment(viewingBill); }} style={{ flex: 1, padding: '8px', background: '#ff5a1f', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer' }}>
-                    Collect Payment
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })()}
+      {/* VIEW BILL MODAL (Exact Thermal Receipt UI) */}
+      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="430px">
+        {viewingBill && (
+          <ReceiptCard
+            data={viewingBill}
+            activeRestaurant={activeRestaurant}
+            onPrint={() => handlePrintBillPopup(viewingBill)}
+            onDownload={() => handleDownloadInvoicePopup(viewingBill)}
+            onCollectPayment={() => {
+              const b = viewingBill;
+              setViewingBill(null);
+              handleOpenCollectPayment(b);
+            }}
+            isPaid={(viewingBill.status || viewingBill.paymentStatus || '').toLowerCase() === 'paid'}
+          />
+        )}
       </Modal>
 
       {/* COLLECT PAYMENT POPUP */}
@@ -652,86 +1076,17 @@ export default function BillingPanel({
         )}
       </Modal>
 
-      {/* TAX INVOICE MODAL (Sample Invoice Format After Payment) */}
-      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice" maxWidth="450px">
-        {invoiceModalBill && (() => {
-          const rawItems = invoiceModalBill.items || [
-            { hsn: '996331', name: 'Paneer Butter Masala', qty: 1, rate: 280, amount: 280 },
-            { hsn: '996331', name: 'Butter Naan', qty: 3, rate: 45, amount: 135 },
-            { hsn: '996331', name: 'Veg Biryani', qty: 1, rate: 220, amount: 220 }
-          ];
-          const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
-          const cgst = parseFloat((subtotal * 0.025).toFixed(2));
-          const sgst = parseFloat((subtotal * 0.025).toFixed(2));
-          const totalValue = (subtotal + cgst + sgst).toFixed(2);
-          const invNo = invoiceModalBill.invoiceNo || 'INV/25-26/00147';
-          const tableNo = String(invoiceModalBill.table || '12').replace(/^Table\s*/i, '');
-          const payMethodStr = invoiceModalBill.paymentMethod || 'UPI';
-
-          return (
-            <div style={{ fontFamily: 'monospace', fontSize: '13px', background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '16px', color: '#0f172a' }}>{restaurantName}</div>
-              <div style={{ textAlign: 'center', color: '#64748b' }}>{restaurantAddress}</div>
-              <div style={{ textAlign: 'center', color: '#64748b', marginBottom: '8px' }}>GST No: {restaurantGst}</div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '8px 0' }}></div>
-              <div style={{ textAlign: 'center', fontWeight: 800, fontSize: '14px', color: '#0f172a' }}>TAX INVOICE</div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '8px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Invoice No: {invNo}</span>
-                <span>Date: {formatDateDMY(new Date())}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Table No: {tableNo}</span>
-                <span>Payment: {payMethodStr}</span>
-              </div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '8px 0' }}></div>
-
-              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '11px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #cbd5e1' }}>
-                    <th>HSN</th>
-                    <th>Item</th>
-                    <th style={{ textAlign: 'center' }}>Qty</th>
-                    <th style={{ textAlign: 'right' }}>Rate</th>
-                    <th style={{ textAlign: 'right' }}>Taxable Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rawItems.map((it, idx) => (
-                    <tr key={idx}>
-                      <td style={{ padding: '4px 0' }}>{it.hsn || '996331'}</td>
-                      <td style={{ padding: '4px 0' }}>{it.name}</td>
-                      <td style={{ textAlign: 'center' }}>{it.qty || 1}</td>
-                      <td style={{ textAlign: 'right' }}>{Number(it.rate || 0).toFixed(2)}</td>
-                      <td style={{ textAlign: 'right' }}>{Number(it.amount || ((it.qty || 1) * (it.rate || 0))).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '8px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Taxable Value</span><span>{subtotal.toFixed(2)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>CGST @2.5%</span><span>{cgst.toFixed(2)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>SGST @2.5%</span><span>{sgst.toFixed(2)}</span></div>
-              <div style={{ borderBottom: '1px dashed #cbd5e1', margin: '8px 0' }}></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: '15px', color: '#0f172a' }}>
-                <span>Total Value</span>
-                <span>₹{totalValue}</span>
-              </div>
-              <div style={{ textAlign: 'center', fontWeight: 700, marginTop: '12px', color: '#16a34a' }}>Thank you, visit again!</div>
-
-              {/* MODAL ACTION BUTTONS */}
-              <div style={{ display: 'flex', gap: '10px', marginTop: '16px', borderTop: '1px solid #cbd5e1', paddingTop: '14px' }}>
-                <button type="button" onClick={() => handlePrintInvoicePopup(invoiceModalBill)} style={{ flex: 1, padding: '9px', background: '#000000', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <PrinterIcon size={14} color="#fff" /> Print Invoice
-                </button>
-                <button type="button" onClick={() => handlePrintInvoicePopup(invoiceModalBill)} style={{ flex: 1, padding: '9px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                  <DownloadIcon size={14} /> Download Invoice
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+      {/* TAX INVOICE MODAL (Exact Thermal Receipt UI) */}
+      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice Receipt" maxWidth="430px">
+        {invoiceModalBill && (
+          <ReceiptCard
+            data={invoiceModalBill}
+            activeRestaurant={activeRestaurant}
+            onPrint={() => handlePrintInvoicePopup(invoiceModalBill)}
+            onDownload={() => handleDownloadInvoicePopup(invoiceModalBill)}
+            isPaid={true}
+          />
+        )}
       </Modal>
     </section>
   );

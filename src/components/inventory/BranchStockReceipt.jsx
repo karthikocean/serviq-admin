@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
 export default function BranchStockReceipt({ receipts, distributions, transfers, items, onSaveReceipt, onDeleteReceipt }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -353,7 +353,8 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
             type="text"
             placeholder="Search stock receipts..."
             value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+            onKeyDown={preventSpaceInput}
+            onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
             style={{ ...filterInputStyle, paddingLeft: '32px' }}
           />
         </div>
@@ -385,6 +386,7 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Receipt No</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Request/Transfer No</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Source</th>
@@ -399,15 +401,18 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
           <tbody>
             {paginatedReceipts.length === 0 ? (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No stock receipt records found.
                 </td>
               </tr>
             ) : (
-              paginatedReceipts.map(r => {
+              paginatedReceipts.map((r, index) => {
                 const refNum = r.reqTrfNo || r.refNo || r.requestNo || 'N/A';
                 return (
                   <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                      {currentPage * PAGE_SIZE + index + 1}
+                    </td>
                     <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{r.receiptNo}</td>
                     <td style={{ padding: '14px 16px', fontWeight: 800, color: '#ff5a1f' }}>{refNum}</td>
                     <td style={{ padding: '14px 16px', color: '#475569' }}>{r.source}</td>
@@ -428,46 +433,32 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
                       </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      <div style={{ display: 'inline-flex', gap: '6px' }}>
                         <button
                           type="button"
                           onClick={() => { setSelectedReceipt(r); setViewState('VIEW_DETAIL'); }}
+                          title="View Receipt Details"
                           style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#0f172a',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb'
                           }}
                         >
-                          <EyeIcon size={13} />
-                          <span>View</span>
+                          <EyeIcon size={15} color="#2563eb" />
                         </button>
                         <button
                           type="button"
                           onClick={() => onDeleteReceipt(r)}
+                          title="Delete Stock Receipt"
                           style={{
+                            ...actionIconBtnStyle,
                             background: '#fef2f2',
                             border: '1px solid #fecaca',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#dc2626',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            color: '#dc2626'
                           }}
                         >
-                          <TrashIcon size={13} />
-                          <span>Delete</span>
+                          <TrashIcon size={15} color="#dc2626" />
                         </button>
                       </div>
                     </td>

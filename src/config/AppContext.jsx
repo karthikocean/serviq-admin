@@ -242,11 +242,9 @@ export const AppProvider = ({ children }) => {
   const [darkMode, setDarkMode] = useState(false);
   const [accentColor, setAccentColor] = useState('#ff7a00');
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
-  // Branch filter state (null = All Branches)
+  // Branch filter state (defaults to 'COMPANY' overview scope on open/refresh)
   const [selectedBranchId, setSelectedBranchId] = useState(() => {
     try {
-      const stored = sessionStorage.getItem('selectedBranchId');
-      if (stored && stored !== 'ALL') return stored;
       const user = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
       if (user) {
         const uType = (user.userType || '').toUpperCase();
@@ -258,7 +256,7 @@ export const AppProvider = ({ children }) => {
         }
       }
     } catch (e) {}
-    return null;
+    return 'COMPANY';
   });
 
   // Synchronize currentUser to sessionStorage whenever it changes
@@ -1254,22 +1252,27 @@ export const AppProvider = ({ children }) => {
             roleLower.includes('admin') ||
             roleLower.includes('supervisor');
 
-          // ONLY Waiter and Kitchen staff are disallowed from Admin Panel login.
-          // Branch managers, Managers, and all other management roles have login access.
-          const isDisallowedStaff = 
-            !isRestaurantOwner &&
-            !isManagerOrBranchAdmin &&
-            (
-              roleLower.includes('waiter') ||
-              roleLower.includes('kitchen') ||
-              roleLower.includes('chef') ||
-              roleLower.includes('cook') ||
-              roleLower.includes('server') ||
-              roleLower.includes('steward') ||
-              userTypeUpper === 'STATION'
-            );
+          // Check dynamic Role Admin Access setting
+          const hasExplicitAdminAccess = roleObj ? (roleObj.adminAccess ?? roleObj.isAdminAccess) : undefined;
+          let isRestrictedFromAdmin = false;
 
-          if (isDisallowedStaff) {
+          if (!isRestaurantOwner) {
+            if (hasExplicitAdminAccess !== undefined) {
+              isRestrictedFromAdmin = !hasExplicitAdminAccess;
+            } else {
+              isRestrictedFromAdmin = !isManagerOrBranchAdmin && (
+                roleLower.includes('waiter') ||
+                roleLower.includes('kitchen') ||
+                roleLower.includes('chef') ||
+                roleLower.includes('cook') ||
+                roleLower.includes('server') ||
+                roleLower.includes('steward') ||
+                userTypeUpper === 'STATION'
+              );
+            }
+          }
+
+          if (isRestrictedFromAdmin) {
             sessionStorage.removeItem("userToken");
             sessionStorage.removeItem("token");
             sessionStorage.removeItem("currentUser");
@@ -1278,7 +1281,7 @@ export const AppProvider = ({ children }) => {
             setCurrentUser(null);
             return {
               success: false,
-              error: "Access Denied: Staff credentials (Waiters, Kitchen staff) are only for mobile app login, not for the Admin panel."
+              error: "Access Denied: This role is restricted from accessing the Admin panel."
             };
           }
 
@@ -1338,8 +1341,8 @@ export const AppProvider = ({ children }) => {
             setSelectedBranchId(userBranchId);
             sessionStorage.setItem("selectedBranchId", userBranchId);
           } else {
-            setSelectedBranchId(null);
-            sessionStorage.removeItem("selectedBranchId");
+            setSelectedBranchId('COMPANY');
+            sessionStorage.setItem("selectedBranchId", 'COMPANY');
           }
 
           ShowNotifications.showAlertNotification(payload.message || "Login successful.", true);
@@ -1396,7 +1399,7 @@ export const AppProvider = ({ children }) => {
   const logout = () => {
     setCurrentUser(null);
     setCurrentRestaurantId(null);
-    setSelectedBranchId(null);
+    setSelectedBranchId('COMPANY');
     try {
       sessionStorage.removeItem('userToken');
       sessionStorage.removeItem('token');

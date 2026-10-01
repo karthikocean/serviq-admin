@@ -61,7 +61,7 @@ export default function StaffManagement() {
   const rawOrders = activeRestaurant.orders || [];
   const rawBranches = activeRestaurant.branches || [];
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const staff = isBranchFiltered ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || [])) : rawStaff;
   const tables = isBranchFiltered ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || [])) : rawTables;
   const orders = isBranchFiltered ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || [])) : rawOrders;

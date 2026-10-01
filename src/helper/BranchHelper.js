@@ -316,7 +316,7 @@ export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
 };
 
 export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => {
-  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All' || String(targetBranchId).toLowerCase() === 'all branches') return true;
+  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All' || String(targetBranchId).toLowerCase() === 'all branches' || String(targetBranchId).toUpperCase() === 'COMPANY') return true;
   if (!itemBranch) return false;
   if (itemBranch.isServerReport === true) return true;
 

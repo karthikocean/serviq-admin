@@ -31,7 +31,7 @@ export default function OrderManagement() {
 
   const fetchOrdersAndStaff = async () => {
     try {
-      const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
+      const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
       const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&page=${page}&limit=10` : `?page=${page}&limit=10`;
 
       let fetchedOrders = [];
@@ -135,7 +135,7 @@ export default function OrderManagement() {
 
   if (!activeRestaurant) return null;
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const displayOrders = isBranchFiltered
     ? apiOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
     : apiOrders;

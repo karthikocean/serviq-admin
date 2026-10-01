@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
 export default function BranchDirectPurchase({ purchases, items: initialItems, onSaveDirectPurchase, onDeletePurchase }) {
@@ -254,25 +254,11 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         </div>
 
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-          {/* Row 1: Purchase Category & Vendor */}
+          {/* Row 1: Supplier * (170) & Purchase Date * (171) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
-                Purchase Category / Type <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                value={purForm.purchaseType}
-                onChange={e => setPurForm({ ...purForm, purchaseType: e.target.value })}
-                style={{ ...formInputStyle }}
-              >
-                <option value="Vendor Direct Purchase">Vendor Direct Purchase (Emergency Local Vendor)</option>
-                <option value="Material Purchase">Material Purchase (Raw Ingredients)</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={formLabelStyle}>
-                Vendor / Supplier Name <span style={{ color: '#ef4444' }}>*</span>
+                Supplier <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
@@ -283,20 +269,46 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
               />
               {purErrors.supplier && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purErrors.supplier}</span>}
             </div>
+
+            <div>
+              <label style={formLabelStyle}>
+                Purchase Date <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="date"
+                value={purForm.purchaseDate}
+                onChange={e => setPurForm({ ...purForm, purchaseDate: e.target.value })}
+                style={{ ...formInputStyle, borderColor: purErrors.purchaseDate ? '#ef4444' : '#cbd5e1' }}
+              />
+              {purErrors.purchaseDate && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purErrors.purchaseDate}</span>}
+            </div>
           </div>
 
-          {/* Row 2: Item Name & Bill Ref */}
+          {/* Row 2: Invoice Number (172) & Item * (173) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
-                Material / Inventory Item <span style={{ color: '#ef4444' }}>*</span>
+                Invoice Number
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. INV-9041"
+                value={purForm.invoiceNo}
+                onChange={e => setPurForm({ ...purForm, invoiceNo: e.target.value })}
+                style={{ ...formInputStyle }}
+              />
+            </div>
+
+            <div>
+              <label style={formLabelStyle}>
+                Item <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 value={purForm.item}
                 onChange={e => handleItemSelect(e.target.value)}
                 style={{ ...formInputStyle, borderColor: purErrors.item ? '#ef4444' : '#cbd5e1' }}
               >
-                <option value="">-- Select Material Item --</option>
+                <option value="">-- Select Item --</option>
                 {displayItems.map((i, idx) => {
                   const itemName = typeof i === 'string' ? i : (i.name || i.itemName || '');
                   const keyVal = typeof i === 'string' ? `${i}-${idx}` : (i.id || i._id || itemName || idx);
@@ -306,52 +318,12 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                   );
                 })}
               </select>
-            </div>
-
-            <div>
-              <label style={formLabelStyle}>
-                Invoice / Receipt Bill No
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. BILL-4410"
-                value={purForm.invoiceNo}
-                onChange={e => setPurForm({ ...purForm, invoiceNo: e.target.value })}
-                style={{ ...formInputStyle }}
-              />
+              {purErrors.item && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purErrors.item}</span>}
             </div>
           </div>
 
-          {/* Row 3: Purchase Date & Unit */}
+          {/* Row 3: Quantity * (174) & Unit (175) */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div>
-              <label style={formLabelStyle}>
-                Purchase Date <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="date"
-                value={purForm.purchaseDate}
-                onChange={e => setPurForm({ ...purForm, purchaseDate: e.target.value })}
-                style={{ ...formInputStyle }}
-              />
-            </div>
-
-            <div>
-              <label style={formLabelStyle}>
-                Unit of Measure
-              </label>
-              <input
-                type="text"
-                value={purForm.unit}
-                onChange={e => setPurForm({ ...purForm, unit: e.target.value })}
-                placeholder="e.g. kg, Ltr, pcs"
-                style={{ ...formInputStyle }}
-              />
-            </div>
-          </div>
-
-          {/* Row 4: Quantity & Unit Rate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
                 Quantity <span style={{ color: '#ef4444' }}>*</span>
@@ -368,7 +340,23 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
             <div>
               <label style={formLabelStyle}>
-                Unit Rate (₹) <span style={{ color: '#ef4444' }}>*</span>
+                Unit
+              </label>
+              <input
+                type="text"
+                value={purForm.unit}
+                onChange={e => setPurForm({ ...purForm, unit: e.target.value })}
+                placeholder="e.g. kg, Ltr, pcs"
+                style={{ ...formInputStyle }}
+              />
+            </div>
+          </div>
+
+          {/* Row 4: Purchase Rate * (176) & Total Amount — Auto (177) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <label style={formLabelStyle}>
+                Purchase Rate <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="number"
@@ -382,7 +370,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
             <div>
               <label style={formLabelStyle}>
-                Total Valuation (₹)
+                Total Amount — Auto
               </label>
               <input
                 type="text"
@@ -393,14 +381,14 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
             </div>
           </div>
 
-          {/* Row 5: Remarks */}
+          {/* Row 5: Remarks (178) */}
           <div style={{ marginBottom: '32px' }}>
             <label style={formLabelStyle}>
-              Remarks / Emergency Purchase Reason
+              Remarks
             </label>
             <textarea
               rows="3"
-              placeholder="e.g. Urgent local vendor purchase due to unexpected weekend stock exhaustion"
+              placeholder="e.g. Direct local purchase for immediate stock"
               value={purForm.remarks}
               onChange={e => setPurForm({ ...purForm, remarks: e.target.value })}
               style={{ ...formInputStyle, height: 'auto', padding: '12px 16px' }}
@@ -459,7 +447,8 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
               type="text"
               placeholder="Search code, vendor..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -504,50 +493,45 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase No</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Type</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Vendor / Supplier</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase No.</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Supplier</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Qty</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Total (₹)</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Remarks</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Action</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Quantity</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Purchase Rate</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Total Amount</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedPurchases.length === 0 ? (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
-                  No direct vendor purchase records found.
+                <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                  No direct purchase records found.
                 </td>
               </tr>
             ) : (
-              paginatedPurchases.map(p => {
+              paginatedPurchases.map((p, index) => {
                 const purCode = p.purchaseNo || p.id;
-                const typeInfo = getTypeBadgeStyle(p.purchaseType || 'Vendor Direct Purchase');
                 const suppName = p.supplier || p.supplierName || 'Local Vendor';
                 const itemTitle = p.item || p.itemName;
-                const purTotal = p.total ? p.total : (p.totalAmount ? p.totalAmount : p.quantity * (p.rate || p.unitPrice || 0));
+                const purRate = p.rate || p.unitPrice || 0;
+                const purTotal = p.total ? p.total : (p.totalAmount ? p.totalAmount : p.quantity * purRate);
+                const status = p.status || 'Received';
 
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                      {currentPage * PAGE_SIZE + index + 1}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px' }}>
+                      {p.date || p.purchaseDate}
+                    </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f' }}>
                       {purCode}
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{
-                        background: typeInfo.bg,
-                        color: typeInfo.text,
-                        border: `1px solid ${typeInfo.border}`,
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap'
-                      }}>
-                        {typeInfo.label}
-                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
                       {suppName}
@@ -557,62 +541,60 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px' }}>
-                      {p.date || p.purchaseDate}
-                    </td>
                     <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>
                       {itemTitle}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
-                      {p.quantity} {p.unit}
+                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 700 }}>
+                      {p.quantity}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#475569' }}>
+                      {p.unit || 'kg'}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#0f172a' }}>
+                      ₹{Number(purRate).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#16a34a' }}>
                       ₹{Number(purTotal).toLocaleString('en-IN')}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.remarks || p.notes || '—'}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span style={{
+                        background: '#e6f4ea',
+                        color: '#16a34a',
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 700
+                      }}>
+                        {status}
+                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      <div style={{ display: 'inline-flex', gap: '6px' }}>
                         <button
                           type="button"
                           onClick={() => { setSelectedPurchase(p); setViewState('VIEW_DETAIL'); }}
+                          title="View Purchase Details"
                           style={{
-                            background: '#f1f5f9',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#0f172a',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb'
                           }}
                         >
-                          <EyeIcon size={13} />
-                          <span>View</span>
+                          <EyeIcon size={15} color="#2563eb" />
                         </button>
                         <button
                           type="button"
                           onClick={() => onDeletePurchase(p)}
+                          title="Delete Direct Purchase"
                           style={{
+                            ...actionIconBtnStyle,
                             background: '#fef2f2',
                             border: '1px solid #fecaca',
-                            borderRadius: '6px',
-                            padding: '6px 10px',
-                            color: '#dc2626',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
+                            color: '#dc2626'
                           }}
                         >
-                          <TrashIcon size={13} />
-                          <span>Delete</span>
+                          <TrashIcon size={15} color="#dc2626" />
                         </button>
                       </div>
                     </td>

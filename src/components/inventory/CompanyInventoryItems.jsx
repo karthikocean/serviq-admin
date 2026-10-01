@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar } from './InventoryCommon';
+import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
 export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem }) {
@@ -429,7 +429,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
               type="text"
               placeholder="Search items..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -475,11 +476,11 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item Ref ID</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800, width: '60px' }}>S.No</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item Name</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Category</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Min Stock Level</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th> 
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Minimum Stock Level</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
               <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
             </tr>
@@ -498,15 +499,33 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                 </td>
               </tr>
             ) : (
-              paginatedItems.map(item => (
+              paginatedItems.map((item, index) => (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
-                    {item.itemCode || `INV-${String(item._id || '').slice(-3).toUpperCase()}`}
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                    {currentPage * PAGE_SIZE + index + 1}
                   </td>
-                  <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{item.name}</td>
+                  <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>
+                    <div>{item.name}</div>
+                    {item.itemCode && (
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>
+                        {item.itemCode}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '14px 16px', color: '#475569' }}>{item.category}</td>
-                  <td style={{ padding: '14px 16px', color: '#475569' }}>{item.unit}</td>
-                  <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{item.minAlertLevel} {item.unit}</td>
+                  <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      background: '#f1f5f9',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#334155'
+                    }}>
+                      {item.unit}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{item.minAlertLevel} {item.unit}</td>
                   <td style={{ padding: '14px 16px' }}>
                     <span style={{
                       display: 'inline-block',
@@ -525,42 +544,28 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(item)}
+                        title="Edit Item"
                         style={{
-                          background: '#f1f5f9',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#2563eb',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
+                          ...actionIconBtnStyle,
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          color: '#2563eb'
                         }}
                       >
-                        <PencilIcon size={13} />
-                        <span>Edit</span>
+                        <PencilIcon size={14} />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(item)}
+                        title="Delete Item"
                         style={{
+                          ...actionIconBtnStyle,
                           background: '#fef2f2',
                           border: '1px solid #fecaca',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: '#dc2626',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px'
+                          color: '#dc2626'
                         }}
                       >
-                        <TrashIcon size={13} />
-                        <span>Delete</span>
+                        <TrashIcon size={14} />
                       </button>
                     </div>
                   </td>

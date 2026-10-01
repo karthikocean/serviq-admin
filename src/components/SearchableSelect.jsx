@@ -33,6 +33,7 @@ export default function SearchableSelect({
   className = '',
   menuPlacement = 'auto',
   noOptionsMessage = () => 'No options found',
+  isCompact = false,
   ...rest
 }) {
   const containerRef = useRef(null);
@@ -138,13 +139,14 @@ export default function SearchableSelect({
   const customStyles = useMemo(() => ({
     control: (provided, state) => ({
       ...provided,
-      minHeight: '40px',
-      borderRadius: '10px',
+      minHeight: isCompact ? '34px' : '40px',
+      height: isCompact ? '34px' : undefined,
+      borderRadius: isCompact ? '7px' : '10px',
       borderWidth: '1.5px',
       borderColor: (state.selectProps?.menuIsOpen || state.isFocused) ? '#ff5a1f' : '#cbd5e1',
       boxShadow: state.selectProps?.menuIsOpen ? '0 0 0 1px #ff5a1f' : (state.isFocused ? '0 0 0 2px rgba(255, 90, 31, 0.15)' : 'none'),
       backgroundColor: state.isDisabled ? '#f8fafc' : '#ffffff',
-      fontSize: '13px',
+      fontSize: isCompact ? '12.5px' : '13px',
       fontWeight: '700',
       color: '#0f172a',
       transition: 'all 0.15s ease',
@@ -156,25 +158,27 @@ export default function SearchableSelect({
     }),
     valueContainer: (provided) => ({
       ...provided,
-      padding: '2px 14px'
+      padding: isCompact ? '0 10px' : '2px 14px'
     }),
     singleValue: (provided) => ({
       ...provided,
       color: '#0f172a',
       fontWeight: '700',
-      fontSize: '13px'
+      fontSize: isCompact ? '12.5px' : '13px'
     }),
     placeholder: (provided) => ({
       ...provided,
       color: '#94a3b8',
-      fontSize: '13px',
+      fontSize: isCompact ? '12.5px' : '13px',
       fontWeight: '600'
     }),
     input: (provided) => ({
       ...provided,
       color: '#0f172a',
-      fontSize: '13px',
-      fontWeight: '600'
+      fontSize: isCompact ? '12.5px' : '13px',
+      fontWeight: '600',
+      margin: 0,
+      padding: 0
     }),
     menu: (provided) => ({
       ...provided,
@@ -236,7 +240,7 @@ export default function SearchableSelect({
     dropdownIndicator: (provided, state) => ({
       ...provided,
       color: (state.selectProps?.menuIsOpen || state.isFocused) ? '#ff5a1f' : '#ea580c',
-      padding: '6px 10px',
+      padding: isCompact ? '2px 8px' : '6px 10px',
       transition: 'all 0.15s ease',
       transform: state.selectProps?.menuIsOpen ? 'rotate(180deg)' : 'none',
       '&:hover': {
@@ -246,13 +250,13 @@ export default function SearchableSelect({
     clearIndicator: (provided) => ({
       ...provided,
       color: '#94a3b8',
-      padding: '6px',
+      padding: isCompact ? '2px 4px' : '6px',
       cursor: 'pointer',
       '&:hover': {
         color: '#ef4444'
       }
     })
-  }), [style, dynamicMaxHeight]);
+  }), [style, dynamicMaxHeight, isCompact]);
 
   // Handle value change supporting both direct string/value or standard event object
   const handleChange = (selected) => {

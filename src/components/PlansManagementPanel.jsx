@@ -740,8 +740,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   }
 
-  const addonInvoices = invoices.filter(inv => inv.type === 'addon');
-  const subscriptionInvoices = invoices.filter(inv => inv.type !== 'addon');
+  const isAddonInvoice = (inv) => {
+    const desc = (inv.description || '').toLowerCase();
+    const name = (inv.planName || '').toLowerCase();
+    const type = (inv.type || '').toLowerCase();
+    return type === 'addon' || desc.includes('branch') || desc.includes('slot') || name.includes('add-on') || desc.includes('add-on');
+  };
+
+  const isUpgradeInvoice = (inv) => {
+    const desc = (inv.description || '').toLowerCase();
+    const name = (inv.planName || '').toLowerCase();
+    const type = (inv.type || '').toLowerCase();
+    return type === 'upgrade' || type === 'renewal' || desc.includes('upgrade') || desc.includes('renewal') || name.includes('upgrade') || name.includes('renewal');
+  };
+
+  const addonInvoices = invoices.filter(inv => isAddonInvoice(inv));
+  const upgradeInvoices = invoices.filter(inv => !isAddonInvoice(inv) && isUpgradeInvoice(inv));
+  const subscriptionInvoices = invoices.filter(inv => !isAddonInvoice(inv) && !isUpgradeInvoice(inv));
 
   const lastRecharge = (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId)) ? {
     id: lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId || invoices[0]?.id || 'PLAN-ACTIVE',
@@ -772,13 +787,17 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       (inv.date || '').toLowerCase().includes(historySearch.toLowerCase()) ||
       (inv.paymentMethod || '').toLowerCase().includes(historySearch.toLowerCase());
 
-    const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
+    const isAddon = isAddonInvoice(inv);
+    const isUpgrade = isUpgradeInvoice(inv);
 
     if (historyFilter === 'addon') {
       return matchesSearch && isAddon;
     }
+    if (historyFilter === 'upgrade') {
+      return matchesSearch && !isAddon && isUpgrade;
+    }
     if (historyFilter === 'subscription') {
-      return matchesSearch && !isAddon;
+      return matchesSearch && !isAddon && !isUpgrade;
     }
     return matchesSearch;
   });
@@ -1328,7 +1347,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               {[
                 { id: 'all', label: `All History (${invoices.length})` },
                 { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
-                { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` }
+                { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` },
+                { id: 'upgrade', label: `Plan Upgrades (${upgradeInvoices.length})` }
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -1351,37 +1371,6 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 </button>
               ))}
             </div>
-
-            {/* RENEW / UPGRADE PLAN BUTTON (PLACED IN GREEN BOX LOCATION) */}
-            <button
-              type="button"
-              onClick={() => setIsUpgradeModalOpen(true)}
-              style={{
-                background: 'var(--primary-light, #fff7ed)',
-                border: '1.5px solid var(--primary, #ff5a1f)',
-                color: 'var(--primary, #ff5a1f)',
-                padding: '8px 16px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                transition: 'all 0.15s ease',
-                boxShadow: '0 1px 3px rgba(255, 90, 31, 0.12)'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'var(--primary)';
-                e.currentTarget.style.color = '#ffffff';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'var(--primary-light, #fff7ed)';
-                e.currentTarget.style.color = 'var(--primary, #ff5a1f)';
-              }}
-            >
-              ⚡ Renew / Upgrade Plan
-            </button>
           </div>
 
           <div style={{ position: 'relative', width: '320px', minWidth: '240px' }}>
@@ -1441,19 +1430,26 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 ) : filteredInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                      No recharge records found.
+                      {historyFilter === 'upgrade'
+                        ? 'No plan upgrade records found.'
+                        : historyFilter === 'addon'
+                        ? 'No branch add-on records found.'
+                        : historyFilter === 'subscription'
+                        ? 'No plan subscription records found.'
+                        : 'No recharge records found.'}
                     </td>
                   </tr>
                 ) : (
                   filteredInvoices.map((inv, idx) => {
                     const isLatest = idx === 0;
-                    const isAddon = (inv.type === 'addon' || (inv.description || '').toLowerCase().includes('branch') || (inv.description || '').toLowerCase().includes('slot') || (inv.planName || '').toLowerCase().includes('add-on'));
+                    const isAddon = isAddonInvoice(inv);
+                    const isUpgrade = (inv.type === 'upgrade' || (inv.description || '').toLowerCase().includes('upgrade'));
                     const isRenewalItem = inv.type === 'renewal' || (inv.description || '').toLowerCase().includes('renewal');
 
-                    const itemTypeLabel = isAddon ? 'Add-On' : (isRenewalItem ? 'Renewal' : 'Subscription');
-                    const itemTypeBg = isAddon ? '#eff6ff' : (isRenewalItem ? '#fef3c7' : '#f0fdf4');
-                    const itemTypeColor = isAddon ? '#1d4ed8' : (isRenewalItem ? '#b45309' : '#15803d');
-                    const itemTypeBorder = isAddon ? '#bfdbfe' : (isRenewalItem ? '#fde68a' : '#bbf7d0');
+                    const itemTypeLabel = isAddon ? 'Add-On' : (isUpgrade ? 'Upgrade' : (isRenewalItem ? 'Renewal' : 'Subscription'));
+                    const itemTypeBg = isAddon ? '#eff6ff' : (isUpgrade ? '#f3e8ff' : (isRenewalItem ? '#fef3c7' : '#f0fdf4'));
+                    const itemTypeColor = isAddon ? '#1d4ed8' : (isUpgrade ? '#7e22ce' : (isRenewalItem ? '#b45309' : '#15803d'));
+                    const itemTypeBorder = isAddon ? '#bfdbfe' : (isUpgrade ? '#d8b4fe' : (isRenewalItem ? '#fde68a' : '#bbf7d0'));
 
                     return (
                       <tr key={inv.id} style={{ borderBottom: idx !== filteredInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>

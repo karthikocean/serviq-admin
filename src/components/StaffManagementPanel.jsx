@@ -76,6 +76,22 @@ const TableAssignIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const getFormattedStaffId = (u, fallbackIndex) => {
+  if (!u) return '-';
+  const rawCode = u.employeeCode || u.staffCode || u.userCode || u.idCode;
+  const isRawHex = rawCode && /^[0-9a-fA-F]{24}$/.test(String(rawCode).trim());
+  if (rawCode && !isRawHex) {
+    return String(rawCode).trim();
+  }
+  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
+    return `EMP-${String(fallbackIndex + 1).padStart(3, '0')}`;
+  }
+  if (u._id && String(u._id).length >= 4) {
+    return `EMP-${String(u._id).slice(-4).toUpperCase()}`;
+  }
+  return 'EMP-001';
+};
+
 export default function StaffManagementPanel({
   tables = [],
   orders = [],
@@ -97,7 +113,8 @@ export default function StaffManagementPanel({
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
 
   const currentBranchId = typeof user?.branchId === 'object' ? (user?.branchId?._id || user?.branchId?.id) : user?.branchId;
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const isCompanyScope = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || isCompanyScope;
   const activeFilteredBranchId = !isAllBranches
     ? selectedBranchId
     : (!isAdmin && currentBranchId ? currentBranchId : null);
@@ -300,7 +317,7 @@ export default function StaffManagementPanel({
     return () => clearTimeout(timer);
   }, [selectedBranchId, roleFilter, statusFilter, dutyFilter, searchQuery]);
 
-  const isCompanyLogin = !selectedBranchId || selectedBranchId === 'COMPANY' || selectedBranchId === 'Company' || selectedBranchId === 'ALL';
+  const isCompanyLogin = isCompanyScope;
 
   const filteredUsers = apiUsers.filter(u => {
     // 1a. Selected Header Branch filter
@@ -434,8 +451,11 @@ export default function StaffManagementPanel({
       })
       .map(t => t._id || t.id);
 
+    const userIndex = apiUsers.findIndex(u => String(u._id || u.id) === String(user._id || user.id));
+    const empCode = getFormattedStaffId(user, userIndex >= 0 ? userIndex : undefined);
+
     setUserForm({
-      employeeCode: user.employeeCode || user.staffCode || user.userCode || `EMP-${user._id ? user._id.slice(-4) : '001'}`,
+      employeeCode: empCode,
       name: user.name || '',
       branchId: userBranchId,
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
@@ -1529,7 +1549,7 @@ export default function StaffManagementPanel({
             </div>
           )}
 
-          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All' || dutyFilter !== 'All' || branchFilter !== 'All') && (
+          {(searchQuery || roleFilter !== 'All' || statusFilter !== 'All' || dutyFilter !== 'All' || (isCompanyLogin && branchFilter !== 'All')) && (
             <button
               type="button"
               onClick={() => { setSearchQuery(''); setRoleFilter('All'); setStatusFilter('All'); setDutyFilter('All'); setBranchFilter('All'); }}
@@ -1557,7 +1577,7 @@ export default function StaffManagementPanel({
           <thead>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
               <th style={{ width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-              <th style={{ width: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ID</th>
+              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ID</th>
               <th style={{ minWidth: '170px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>NAME</th>
               <th style={{ minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
               <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
@@ -1593,7 +1613,7 @@ export default function StaffManagementPanel({
                   return tName.startsWith('Table') ? tName : `Table ${tName}`;
                 }) : [];
 
-              const staffCodeDisplay = user.employeeCode || user.staffCode || user.userCode || user.idCode || `EMP-${String(page * limit + index + 1).padStart(3, '0')}`;
+              const staffCodeDisplay = getFormattedStaffId(user, page * limit + index);
 
               return (
                 <tr key={user._id} style={{ borderBottom: '1px solid #f1f5f9', height: '58px', transition: 'background-color 0.15s' }}>
@@ -1602,8 +1622,8 @@ export default function StaffManagementPanel({
                     {page * limit + index + 1}
                   </td>
 
-                  {/* 2. Staff ID / Employee Code */}
-                  <td style={{ padding: '12px 12px', fontWeight: 700, fontSize: '12.5px', color: 'var(--primary)', fontFamily: 'monospace' }}>
+                  {/* 2. Staff ID Properly Formatted */}
+                  <td style={{ padding: '12px 12px', fontWeight: 700, fontSize: '13px', color: 'var(--primary)', fontFamily: 'monospace' }} title={user._id ? `Database ID: ${user._id}` : undefined}>
                     {staffCodeDisplay}
                   </td>
 
@@ -1814,26 +1834,26 @@ export default function StaffManagementPanel({
                         <PencilIcon size={15} />
                       </button>
 
-                      {/* Assign Tables / Station */}
+                      {/* Assign Tables (Only for Waiters) */}
                       <button
                         type="button"
-                        title="Assign Tables / Station"
+                        disabled={!isWaiter}
+                        title={isWaiter ? "Assign Tables to Waiter" : "Table assignment is only available for Waiters"}
                         onClick={() => {
-                          if (isKitchen) {
-                            openKitchenSettingsModal && openKitchenSettingsModal();
-                          } else {
+                          if (isWaiter) {
                             openAssignTablesModal(user._id || user.id);
                           }
                         }}
                         style={{
                           background: 'transparent',
                           border: 'none',
-                          color: '#059669',
-                          cursor: 'pointer',
+                          color: isWaiter ? '#059669' : '#cbd5e1',
+                          cursor: isWaiter ? 'pointer' : 'not-allowed',
                           padding: '5px',
                           borderRadius: '6px',
                           display: 'flex',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          opacity: isWaiter ? 1 : 0.4
                         }}
                       >
                         <TableAssignIcon size={15} />
@@ -2688,6 +2708,18 @@ export default function StaffManagementPanel({
                       {viewingStaff.name}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        background: '#fff7ed',
+                        color: '#ea580c',
+                        border: '1px solid #fed7aa',
+                        fontFamily: 'monospace'
+                      }}>
+                        {getFormattedStaffId(viewingStaff, apiUsers.findIndex(u => String(u._id || u.id) === String(viewingStaff._id || viewingStaff.id)) >= 0 ? apiUsers.findIndex(u => String(u._id || u.id) === String(viewingStaff._id || viewingStaff.id)) : undefined)}
+                      </span>
                       <span style={{
                         padding: '2px 8px',
                         borderRadius: '4px',

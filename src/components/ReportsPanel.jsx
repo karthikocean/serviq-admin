@@ -122,6 +122,42 @@ const toDisplayText = (val, fallback = '') => {
   return String(val);
 };
 
+// Helper to determine if an item is Veg, Non-Veg, or Egg
+const resolveFoodType = (item) => {
+  if (!item) return 'Veg';
+  if (item.foodType) {
+    const ft = String(item.foodType).trim().toLowerCase();
+    if (ft === 'veg' || ft === 'vegetarian') return 'Veg';
+    if (ft === 'egg') return 'Egg';
+    if (ft === 'non-veg' || ft === 'nonveg' || ft === 'non vegetarian') return 'Non-Veg';
+    return item.foodType;
+  }
+  if (item.egg) return 'Egg';
+  if (item.veg === true || item.isVeg === true) return 'Veg';
+  if (item.veg === false || item.isVeg === false) return 'Non-Veg';
+
+  const n = String(item.name || item.dishName || item.title || item.itemName || '').toLowerCase();
+  const c = String(item.category || item.categoryName || '').toLowerCase();
+  if (n.includes('egg') || c.includes('egg')) return 'Egg';
+  if (
+    n.includes('chicken') ||
+    n.includes('mutton') ||
+    n.includes('fish') ||
+    n.includes('prawn') ||
+    n.includes('meat') ||
+    n.includes('beef') ||
+    n.includes('pork') ||
+    n.includes('seafood') ||
+    c.includes('non-veg') ||
+    c.includes('non veg') ||
+    c.includes('chicken') ||
+    c.includes('meat')
+  ) {
+    return 'Non-Veg';
+  }
+  return 'Veg';
+};
+
 export default function ReportsPanel({
   branches = [],
   selectedBranchId,
@@ -141,6 +177,7 @@ export default function ReportsPanel({
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [dishFilter, setDishFilter] = useState('ALL');
+  const [foodTypeFilter, setFoodTypeFilter] = useState('ALL');
   const [stockStatusFilter, setStockStatusFilter] = useState('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
   const [staffRoleFilter, setStaffRoleFilter] = useState('ALL');
@@ -191,7 +228,12 @@ export default function ReportsPanel({
         .finally(() => { if (isSubscribed) setLoadingSalesReport(false); });
     } else if (activeTab === 'items') {
       setLoadingDishReport(true);
-      ReportsApi.getDishPerformanceReport({ ...commonFilters, category: categoryFilter })
+      ReportsApi.getDishPerformanceReport({
+        ...commonFilters,
+        category: categoryFilter,
+        dish: dishFilter,
+        foodType: foodTypeFilter
+      })
         .then(res => {
           if (isSubscribed) setDishApiData(res?.status ? res.response : null);
         })
@@ -235,6 +277,8 @@ export default function ReportsPanel({
     orderTypeFilter,
     orderStatusFilter,
     categoryFilter,
+    dishFilter,
+    foodTypeFilter,
     searchQuery,
     currentPage,
     pageSize
@@ -262,6 +306,7 @@ export default function ReportsPanel({
     orderStatusFilter,
     categoryFilter,
     dishFilter,
+    foodTypeFilter,
     stockStatusFilter,
     staffFilter,
     staffRoleFilter,
@@ -361,11 +406,13 @@ export default function ReportsPanel({
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const orderNo = String(ord.id || ord.orderNo || '').toLowerCase();
+        const orderNo = String(ord.id || ord.orderNo || ord.orderId || '').toLowerCase();
+        const billNo = String(ord.billNo || ord.billNumber || ord.bill_no || '').toLowerCase();
+        const invoiceNo = String(ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || '').toLowerCase();
         const customer = String(ord.customerName || ord.customer || '').toLowerCase();
         const table = String(ord.table || ord.tableNo || '').toLowerCase();
         const waiter = String(ord.waiter || ord.staff || '').toLowerCase();
-        if (!orderNo.includes(q) && !customer.includes(q) && !table.includes(q) && !waiter.includes(q)) {
+        if (!orderNo.includes(q) && !billNo.includes(q) && !invoiceNo.includes(q) && !customer.includes(q) && !table.includes(q) && !waiter.includes(q)) {
           return false;
         }
       }
@@ -407,6 +454,17 @@ export default function ReportsPanel({
   // --------------------------------------------------------------------------
   // TAB 2: ITEM / DISH PERFORMANCE REPORT CALCULATIONS
   // --------------------------------------------------------------------------
+  const availableDishes = useMemo(() => {
+    const set = new Set();
+    validCompletedOrders.forEach(ord => {
+      (ord.items || []).forEach(item => {
+        const name = toDisplayText(item.name || item.title || item.itemName, '').trim();
+        if (name) set.add(name);
+      });
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [validCompletedOrders]);
+
   const dishReportData = useMemo(() => {
     const map = {};
 
@@ -415,6 +473,7 @@ export default function ReportsPanel({
       items.forEach(item => {
         const name = toDisplayText(item.name || item.title || item.itemName, 'Unknown Item');
         const cat = toDisplayText(item.category || item.categoryName, 'General');
+        const fType = resolveFoodType(item);
         const qty = Number(item.quantity || item.qty || 1);
         const price = Number(item.price || item.rate || 0);
         const gross = price * qty;
@@ -422,7 +481,19 @@ export default function ReportsPanel({
         const net = gross - disc;
 
         if (!map[name]) {
-          map[name] = { name, category: cat, qtySold: 0, grossSales: 0, discount: 0, netSales: 0 };
+          map[name] = {
+            name,
+            category: cat,
+            foodType: fType,
+            qtySold: 0,
+            grossSales: 0,
+            discount: 0,
+            netSales: 0
+          };
+        } else {
+          if (map[name].foodType === 'Veg' && fType !== 'Veg') {
+            map[name].foodType = fType;
+          }
         }
         map[name].qtySold += qty;
         map[name].grossSales += gross;
@@ -438,15 +509,38 @@ export default function ReportsPanel({
     }
 
     if (dishFilter !== 'ALL') {
-      list = list.filter(d => d.name.toLowerCase().includes(dishFilter.toLowerCase()));
+      list = list.filter(d =>
+        d.name.toLowerCase() === dishFilter.toLowerCase() ||
+        d.name.toLowerCase().includes(dishFilter.toLowerCase())
+      );
+    }
+
+    if (foodTypeFilter !== 'ALL') {
+      list = list.filter(d => (d.foodType || '').toLowerCase() === foodTypeFilter.toLowerCase());
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(d =>
+        d.name.toLowerCase().includes(q) ||
+        d.category.toLowerCase().includes(q)
+      );
     }
 
     const totalDishSales = list.reduce((sum, d) => sum + d.netSales, 0);
     const totalItemsSold = list.reduce((sum, d) => sum + d.qtySold, 0);
     
+    // Sort by quantity sold descending for Top Selling Dish (highest quantity sold)
+    const listSortedByQty = [...list].sort((a, b) => b.qtySold - a.qtySold);
+    const topSellingDish = listSortedByQty.length > 0 && listSortedByQty[0].qtySold > 0
+      ? listSortedByQty[0].name
+      : (list.length > 0 ? list[0].name : 'N/A');
+
+    // Count of distinct dishes sold
+    const distinctDishesCount = list.filter(d => d.qtySold > 0).length;
+
     // Sort by net sales descending
     list.sort((a, b) => b.netSales - a.netSales);
-    const topSelling = list.length > 0 ? list[0].name : 'N/A';
 
     return {
       list: list.map(d => ({
@@ -455,10 +549,12 @@ export default function ReportsPanel({
       })),
       totalItemsSold,
       totalDishSales,
-      topSelling,
-      dishesCount: list.length
+      topSelling: topSellingDish,
+      topSellingDish,
+      distinctDishesCount,
+      dishesCount: distinctDishesCount
     };
-  }, [validCompletedOrders, categoryFilter, dishFilter]);
+  }, [validCompletedOrders, categoryFilter, dishFilter, foodTypeFilter, searchQuery]);
 
   // --------------------------------------------------------------------------
   // TAB 3: ORDER ANALYTICS REPORT CALCULATIONS
@@ -704,27 +800,48 @@ export default function ReportsPanel({
 
     if (activeTab === 'sales') {
       const list = (salesApiData && salesApiData.data) ? salesApiData.data : filteredOrders;
-      exportData = list.map((ord, idx) => ({
-        'S.No': idx + 1,
-        'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date),
-        'Order No': ord.orderId || ord.id || ord.orderNo,
-        'Payment Method': ord.paymentMethod || ord.paymentMode || 'N/A',
-        'Gross Subtotal (₹)': Number(ord.subtotal ?? ord.totalAmount ?? 0),
-        'Discount (₹)': Number(ord.discount || 0),
-        'Tax (₹)': Number(ord.tax || 0),
-        'Net Total (₹)': Number(ord.total ?? ord.totalAmount ?? 0),
-        'Status': ord.status || 'Paid'
-      }));
+      exportData = list.map((ord, idx) => {
+        const orderNo = ord.orderId || ord.id || ord.orderNo;
+        const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo ? `BILL-${orderNo}` : '-');
+        const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo ? `INV-${orderNo}` : '-');
+        return {
+          'S.No': idx + 1,
+          'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date),
+          'Order No': orderNo,
+          'Bill No.': billNo,
+          'Invoice No.': invoiceNo,
+          'Payment Method': ord.paymentMethod || ord.paymentMode || 'N/A',
+          'Gross Subtotal (₹)': Number(ord.subtotal ?? ord.totalAmount ?? 0),
+          'Discount (₹)': Number(ord.discount || 0),
+          'Tax (₹)': Number(ord.tax || 0),
+          'Net Total (₹)': Number(ord.total ?? ord.totalAmount ?? 0),
+          'Status': ord.status || 'Paid'
+        };
+      });
     } else if (activeTab === 'items') {
       const list = (dishApiData && dishApiData.data) ? dishApiData.data : dishReportData.list;
-      exportData = list.map(item => ({
-        'Dish Name': item.foodItem || item.name,
-        'Category': item.category || 'Uncategorized',
-        'Quantity Prepared / Sold': item.quantityPrepared ?? item.qtySold ?? 0,
-        'Revenue Generated (₹)': item.revenueGenerated ?? item.grossSales ?? 0,
-        'Avg Prep Time': item.avgPrepTime || 'N/A',
-        'Kitchen Status': item.kitchenStatus || 'Completed'
-      }));
+      exportData = list.map((item, idx) => {
+        const dishName = item.foodItem || item.name || item.dishName || 'Unknown Item';
+        const cat = item.category || 'General';
+        const foodType = item.foodType || resolveFoodType(item);
+        const qty = item.qtySold ?? item.quantityPrepared ?? item.quantity ?? 0;
+        const gross = Number(item.grossSales ?? item.revenueGenerated ?? 0);
+        const disc = Number(item.discount ?? 0);
+        const net = Number(item.netSales ?? (gross - disc) ?? 0);
+        const salesPct = item.salesPercent ?? (dishReportData.totalDishSales > 0 ? ((net / dishReportData.totalDishSales) * 100).toFixed(1) : '0.0');
+
+        return {
+          'S.No': idx + 1,
+          'Dish Name': dishName,
+          'Category': cat,
+          'Food Type': foodType,
+          'Quantity Sold': qty,
+          'Gross Sales (₹)': gross,
+          'Discount (₹)': disc,
+          'Net Sales (₹)': net,
+          'Sales %': `${salesPct}%`
+        };
+      });
     } else if (activeTab === 'orders') {
       const list = (orderAnalyticsApiData && orderAnalyticsApiData.data) ? orderAnalyticsApiData.data : filteredOrders;
       exportData = list.map(ord => ({
@@ -899,15 +1016,15 @@ export default function ReportsPanel({
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Active Categories</div>
-              <div className="kpi-value">
-                {dishApiData?.summary?.activeCategories ?? dishReportData.topSelling}
+              <div className="kpi-title">Top Selling Dish</div>
+              <div className="kpi-value" style={{ fontSize: '18px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={dishApiData?.summary?.topSellingDish || dishReportData.topSellingDish || 'N/A'}>
+                {dishApiData?.summary?.topSellingDish || dishReportData.topSellingDish || 'N/A'}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Avg Prep Time</div>
+              <div className="kpi-title">Number of Dishes Sold</div>
               <div className="kpi-value">
-                {dishApiData?.summary?.avgPrepTime ?? dishReportData.dishesCount}
+                {dishApiData?.summary?.numberOfDishesSold ?? dishApiData?.summary?.distinctDishesSold ?? dishReportData.distinctDishesCount ?? 0}
               </div>
             </div>
           </>
@@ -1178,6 +1295,30 @@ export default function ReportsPanel({
             </div>
           )}
 
+          {activeTab === 'items' && (
+            <div className="filter-item">
+              <label>Dish</label>
+              <select className="filter-control" value={dishFilter} onChange={e => setDishFilter(e.target.value)}>
+                <option value="ALL">All Dishes</option>
+                {availableDishes.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {activeTab === 'items' && (
+            <div className="filter-item">
+              <label>Food Type</label>
+              <select className="filter-control" value={foodTypeFilter} onChange={e => setFoodTypeFilter(e.target.value)}>
+                <option value="ALL">All Food Types</option>
+                <option value="Veg">Veg</option>
+                <option value="Non-Veg">Non-Veg</option>
+                <option value="Egg">Egg</option>
+              </select>
+            </div>
+          )}
+
           {activeTab === 'inventory' && (
             <div className="filter-item">
               <label>Stock Status</label>
@@ -1237,6 +1378,8 @@ export default function ReportsPanel({
                     <th>S.No</th>
                     <th>Date & Time</th>
                     <th>Order No</th>
+                    <th>Bill No.</th>
+                    <th>Invoice No.</th>
                     <th>Table / Type</th>
                     <th>Payment Method</th>
                     <th style={{ textAlign: 'right' }}>Gross Amount</th>
@@ -1250,8 +1393,10 @@ export default function ReportsPanel({
 
                 {activeTab === 'items' && (
                   <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
                     <th>Dish Name</th>
                     <th>Category</th>
+                    <th style={{ textAlign: 'center' }}>Food Type</th>
                     <th style={{ textAlign: 'right' }}>Quantity Sold</th>
                     <th style={{ textAlign: 'right' }}>Gross Sales</th>
                     <th style={{ textAlign: 'right' }}>Discount</th>
@@ -1320,13 +1465,15 @@ export default function ReportsPanel({
                 {activeTab === 'sales' && (
                   loadingSalesReport ? (
                     <tr>
-                      <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      <td colSpan={13} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         Loading Sales & Revenue report...
                       </td>
                     </tr>
                   ) : (
                     paginatedRecords.map((ord, idx) => {
                       const orderNo = ord.orderId || ord.id || ord.orderNo;
+                      const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo ? `BILL-${orderNo}` : '-');
+                      const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo ? `INV-${orderNo}` : '-');
                       const date = ord.createdAt || ord.date;
                       const paymentMode = ord.paymentMethod || ord.paymentMode || 'N/A';
                       const gross = Number(ord.subtotal ?? ord.totalAmount ?? ord.grossAmount ?? 0);
@@ -1339,6 +1486,8 @@ export default function ReportsPanel({
                           <td>{(currentPage - 1) * pageSize + idx + 1}</td>
                           <td>{formatDateTimeDMY(date)}</td>
                           <td><strong>#{orderNo}</strong></td>
+                          <td><span style={{ fontWeight: 600, color: '#334155' }}>{billNo}</span></td>
+                          <td><span style={{ fontWeight: 600, color: invoiceNo !== '-' ? '#1e293b' : '#94a3b8' }}>{invoiceNo}</span></td>
                           <td>{toDisplayText(ord.table || ord.orderType, 'Dine-In')}</td>
                           <td><span className="badge-type">{paymentMode}</span></td>
                           <td style={{ textAlign: 'right' }}>₹{gross.toLocaleString()}</td>
@@ -1369,31 +1518,58 @@ export default function ReportsPanel({
                 {activeTab === 'items' && (
                   loadingDishReport ? (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         Loading Dish Performance report...
+                      </td>
+                    </tr>
+                  ) : paginatedRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No dish performance records found.
                       </td>
                     </tr>
                   ) : (
                     paginatedRecords.map((item, idx) => {
-                      const dishName = item.foodItem || item.name;
-                      const cat = item.category || 'Uncategorized';
-                      const qty = item.quantityPrepared ?? item.qtySold ?? 0;
-                      const rev = item.revenueGenerated ?? item.grossSales ?? 0;
-                      const prepTime = item.avgPrepTime || 'N/A';
-                      const status = item.kitchenStatus || 'Completed';
+                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                      const dishName = item.foodItem || item.name || item.dishName || 'Unknown Item';
+                      const cat = item.category || 'General';
+                      const foodType = item.foodType || resolveFoodType(item);
+                      const isVeg = foodType === 'Veg';
+                      const isEgg = foodType === 'Egg';
+                      const qty = item.qtySold ?? item.quantityPrepared ?? item.quantity ?? 0;
+                      const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || 0) * qty) ?? 0);
+                      const disc = Number(item.discount ?? 0);
+                      const net = Number(item.netSales ?? (gross - disc) ?? 0);
+                      const salesPct = item.salesPercent ?? (dishReportData.totalDishSales > 0 ? ((net / dishReportData.totalDishSales) * 100).toFixed(1) : '0.0');
 
                       return (
-                        <tr key={item.menuId || idx}>
+                        <tr key={item.menuId || item.id || dishName + idx}>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
                           <td><strong>{dishName}</strong></td>
                           <td><span className="badge-type">{cat}</span></td>
-                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{qty} pcs</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{Number(rev).toLocaleString()}</td>
-                          <td style={{ textAlign: 'center' }}>{prepTime}</td>
                           <td style={{ textAlign: 'center' }}>
-                            <span className={`badge-status ${status.toLowerCase()}`}>
-                              {status}
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              textTransform: 'uppercase',
+                              background: isVeg ? '#e6f4ea' : (isEgg ? '#fef3c7' : '#fce8e6'),
+                              color: isVeg ? '#16a34a' : (isEgg ? '#d97706' : '#dc2626')
+                            }}>
+                              {foodType}
                             </span>
                           </td>
+                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{qty} pcs</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#334155' }}>₹{gross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: disc > 0 ? '#ef4444' : '#64748b' }}>
+                            {disc > 0 ? `-₹${disc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb' }}>{salesPct}%</td>
                         </tr>
                       );
                     })
@@ -1706,6 +1882,14 @@ export default function ReportsPanel({
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Table / Order Type</span>
                 <strong style={{ fontSize: '13px', color: '#0f172a' }}>{toDisplayText(viewOrder.table || viewOrder.orderType, 'Dine-In')}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Bill No.</span>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{viewOrder.billNo || viewOrder.billNumber || viewOrder.bill_no || (viewOrder.orderId || viewOrder.id ? `BILL-${viewOrder.orderId || viewOrder.id}` : '-')}</strong>
+              </div>
+              <div>
+                <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Invoice No.</span>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{viewOrder.invoiceNo || viewOrder.invoiceNumber || viewOrder.invoiceId || viewOrder.gstInvoiceNo || '-'}</strong>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Customer Name</span>

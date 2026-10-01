@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar } from './InventoryCommon';
+import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
 export default function BranchTransactions({ transactions }) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -118,7 +118,8 @@ export default function BranchTransactions({ transactions }) {
               type="text"
               placeholder="Search ref no, item..."
               value={searchTerm}
-              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
+              onKeyDown={preventSpaceInput}
+              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -157,12 +158,14 @@ export default function BranchTransactions({ transactions }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Txn ID</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Date & Time</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Type</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>S.No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Transaction Date</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Transaction No.</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Transaction Type</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Item</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Qty</th>
-              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Reference No</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Quantity</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Unit</th>
+              <th style={{ padding: '12px 16px', fontWeight: 800 }}>Reference No.</th>
               <th style={{ padding: '12px 16px', fontWeight: 800 }}>Status</th>
               <th style={{ padding: '12px 16px', fontWeight: 800, textAlign: 'right' }}>Actions</th>
             </tr>
@@ -170,18 +173,22 @@ export default function BranchTransactions({ transactions }) {
           <tbody>
             {paginatedTxns.length === 0 ? (
               <tr>
-                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="10" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No branch transaction logs found.
                 </td>
               </tr>
             ) : (
-              paginatedTxns.map(t => (
+              paginatedTxns.map((t, index) => (
                 <tr key={t.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{t.txnNo}</td>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                    {currentPage * PAGE_SIZE + index + 1}
+                  </td>
                   <td style={{ padding: '14px 16px', color: '#64748b' }}>{t.date}</td>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{t.txnNo}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{t.type}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{t.item}</td>
-                  <td style={{ padding: '14px 16px', color: '#0f172a' }}>{t.quantity} {t.unit}</td>
+                  <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 700 }}>{t.quantity}</td>
+                  <td style={{ padding: '14px 16px', color: '#475569' }}>{t.unit || 'kg'}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 800, color: '#ff5a1f' }}>{t.refNo || 'N/A'}</td>
                   <td style={{ padding: '14px 16px' }}>
                     <span style={{
@@ -199,22 +206,15 @@ export default function BranchTransactions({ transactions }) {
                     <button
                       type="button"
                       onClick={() => setSelectedTxn(t)}
+                      title="View Transaction Details"
                       style={{
-                        background: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        borderRadius: '6px',
-                        padding: '6px 12px',
-                        color: '#0f172a',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px'
+                        ...actionIconBtnStyle,
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        color: '#2563eb'
                       }}
                     >
-                      <EyeIcon size={13} />
-                      <span>View</span>
+                      <EyeIcon size={15} color="#2563eb" />
                     </button>
                   </td>
                 </tr>

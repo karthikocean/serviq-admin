@@ -504,8 +504,21 @@ textarea:focus {
   margin-top: 2px;
 }
 
+.sidebar,
 .sidebar-menu {
   list-style: none;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.sidebar::-webkit-scrollbar,
+.sidebar-menu::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
+.sidebar-menu {
   padding: 16px 12px;
   display: flex;
   flex-direction: column;
@@ -513,26 +526,6 @@ textarea:focus {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
-}
-
-.sidebar-menu::-webkit-scrollbar {
-  width: 5px;
-  display: block;
-}
-
-.sidebar-menu::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar-menu::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-}
-
-.sidebar-menu::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.45);
 }
 
 .sidebar-item {
@@ -3453,7 +3446,7 @@ body.dark-theme .dining-table-card.active {
   height: 100vh;
   background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 200;
+  z-index: 99999;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3461,15 +3454,35 @@ body.dark-theme .dining-table-card.active {
 }
 
 .modal-card {
+  margin: auto;
   background-color: var(--bg-secondary);
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  padding: 28px;
+  padding: 24px 28px;
   width: 100%;
   max-width: 420px;
   box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.04);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--text-main);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.modal-card::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-card::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 4px;
+}
+
+.modal-card::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
 }
 
 .modal-header-flex {
@@ -4660,3 +4673,60 @@ table thead th, .menu-items-table thead th, .admin-table thead th, .data-table t
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* Real Thermal Bill Receipt - Strict Black & White UI */
+.real-bill-receipt-card,
+.real-bill-receipt-card * {
+  box-sizing: border-box;
+}
+
+.real-bill-receipt-card table,
+.real-bill-receipt-card table thead,
+.real-bill-receipt-card table thead tr,
+.real-bill-receipt-card table thead th,
+.real-bill-receipt-card table tbody,
+.real-bill-receipt-card table tbody tr,
+.real-bill-receipt-card table tbody td {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #000000 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.real-bill-receipt-card table thead tr {
+  border-top: 1px dashed #000000 !important;
+  border-bottom: 1px dashed #000000 !important;
+  height: auto !important;
+}
+
+.real-bill-receipt-card table thead th {
+  border: none !important;
+  border-top: 1px dashed #000000 !important;
+  border-bottom: 1px dashed #000000 !important;
+  padding: 6px 0 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  color: #000000 !important;
+  background: transparent !important;
+}
+
+.real-bill-receipt-card table tbody tr {
+  background: transparent !important;
+  border: none !important;
+}
+
+.real-bill-receipt-card table tbody td {
+  border: none !important;
+  padding: 5px 0 !important;
+  color: #000000 !important;
+  background: transparent !important;
+}
+
+.real-bill-receipt-card::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+}
+
