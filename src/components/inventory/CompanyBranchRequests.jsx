@@ -135,8 +135,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
     try {
       if (req?._id || req?.id) {
         await InventoryApi.approveStockRequest(req._id || req.id, {
-          distributedQty: Number(req.reqQty || 0),
-          distQty: Number(req.reqQty || 0),
+          appQty: Number(req.reqQty || 0),
           remarks: req.remarks || 'Stock Request Approved'
         });
       }
@@ -167,6 +166,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
   };
 
   const handleOpenDistributeForm = (req) => {
+    const rem = (req.reqQty || 0) - (req.distQty || 0);
     setSelectedReq(req);
     setDistForm({
       requestNo: req.requestNo,
@@ -174,7 +174,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
       item: req.item,
       requestedQty: req.reqQty,
       approvedQty: req.appQty || req.reqQty,
-      distributedQty: req.appQty || req.reqQty,
+      distributedQty: rem > 0 ? rem : (req.appQty || req.reqQty),
       distDate: new Date().toISOString().split('T')[0],
       remarks: req.remarks || ''
     });
@@ -184,10 +184,10 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
 
   const validateDistribute = () => {
     const errors = {};
-    const app = Number(distForm.approvedQty);
+    const reqQ = Number(distForm.requestedQty || distForm.approvedQty);
     const dist = Number(distForm.distributedQty);
     if (!distForm.distributedQty || dist <= 0) errors.distributedQty = 'Distributed Quantity must be greater than 0';
-    if (dist > app) errors.distributedQty = `Distributed Quantity (${dist}) cannot exceed Approved Quantity (${app})`;
+    if (dist > reqQ) errors.distributedQty = `Distributed Quantity (${dist}) cannot exceed Requested Quantity (${reqQ})`;
     setDistErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -198,10 +198,9 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
 
     setIsSubmitting(true);
     try {
-      if (selectedReq?._id) {
-        // CALL BACKEND API TO DECREASE CENTRAL STOCK AUTOMATICALLY (- distributedQty)
-        await InventoryApi.approveStockRequest(selectedReq._id, {
-          distributedQty: Number(distForm.distributedQty),
+      if (selectedReq?._id || selectedReq?.id) {
+        await InventoryApi.distributeStockRequest(selectedReq._id || selectedReq.id, {
+          givenQty: Number(distForm.distributedQty),
           distQty: Number(distForm.distributedQty),
           remarks: distForm.remarks
         });

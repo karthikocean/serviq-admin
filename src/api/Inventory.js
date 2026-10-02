@@ -357,7 +357,7 @@ class InventoryApi {
       if (response.status === 200 || response.status === 201) {
         if (!options.silent) {
           ShowNotifications.showAlertNotification(
-            response.data.message || "Stock request approved & dispatched! Central stock decreased.",
+            response.data.message || "Stock request approved! Ready for distribution.",
             true
           );
         }
@@ -368,6 +368,33 @@ class InventoryApi {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to approve stock request.";
+      if (!options.silent) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async distributeStockRequest(id, data = {}, options = {}) {
+    try {
+      const response = await apiClient.put(`/inventory/requests/${id}/distribute`, data);
+      if (response.status === 200 || response.status === 201) {
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(
+            response.data.message || "Stock distributed successfully! Central stock updated.",
+            true
+          );
+        }
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to distribute stock.";
       if (!options.silent) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
