@@ -135,8 +135,8 @@ export default function BranchSearchDropdown() {
     userType === 'RESTAURANT_OWNER' ||
     userType === 'OWNER' ||
     userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
-    userType === 'ADMIN' ||
+    userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||     
     userRole === 'restaurant_owner' ||
     userRole === 'restaurant owner' ||
     userRole === 'owner' ||
@@ -144,7 +144,6 @@ export default function BranchSearchDropdown() {
     userRole === 'super_admin' ||
     userRole === 'admin' ||
     (!currentUser?.branchId && !currentUser?.activeBranchId);
-
   const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
     ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
     : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
@@ -196,6 +195,13 @@ export default function BranchSearchDropdown() {
   const handleSelectBranch = (branchId) => {
     if (isBranchLocked) return;
     setSelectedBranchId(branchId);
+    try {
+      if (branchId) {
+        sessionStorage.setItem('selectedBranchId', String(branchId));
+      } else {
+        sessionStorage.setItem('selectedBranchId', '');
+      }
+    } catch (e) {}
     setIsOpen(false);
     setSearchQuery('');
   };

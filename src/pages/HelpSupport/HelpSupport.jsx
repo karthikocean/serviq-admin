@@ -157,7 +157,17 @@ const ShareIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
-const STATUS_LIST = ['Open', 'In Progress', 'Waiting for Response', 'Resolved', 'Closed'];
+const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+
+const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed', 'Draft'];
 
 export default function HelpSupport() {
   const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
@@ -195,14 +205,9 @@ export default function HelpSupport() {
   // Company Admin: Restaurant Owner / HQ Admin not tied to a single branch
   const isCompanyAdmin = !isSuperAdmin && !isBranchAdmin;
 
-  // Header branch filter active state
-  const isBranchFilterActive = Boolean(
-    selectedBranchId &&
-    selectedBranchId !== 'ALL' &&
-    selectedBranchId !== 'All' &&
-    selectedBranchId !== 'all' &&
-    String(selectedBranchId).toUpperCase() !== 'COMPANY'
-  );
+  // Company filter active state: Resolve and Share icons are strictly for Company filter only
+  const isCompanyFilterActive = String(selectedBranchId || '').trim().toUpperCase() === 'COMPANY';
+  const isBranchFilterActive = !isCompanyFilterActive;
 
   const [tickets, setTickets] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
@@ -256,15 +261,35 @@ export default function HelpSupport() {
   const isMainBranchLogin = isSuperAdmin || (isCompanyAdmin && !hasSpecificBranch) || isUserBranchMain;
 
   // Auto Selection Rules for "Ticket Raised To":
-  // - Non-Main Branch -> Automatically set "Raised To" = Company (Read Only)
-  // - Main Branch -> Automatically set "Raised To" = Super Admin (Read Only)
-  const defaultRaisedTo = !isMainBranchLogin ? 'Company' : 'Super Admin';
+  // - Branch filter active or Non-Main Branch login -> Automatically set "Raised To" = Company (Read Only)
+  // - Company filter scope (Main Branch HQ) -> Automatically set "Raised To" = Super Admin (Read Only)
+  const defaultRaisedTo = (!isMainBranchLogin || !isCompanyFilterActive) ? 'Company' : 'Super Admin';
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [targetFilter, setTargetFilter] = useState('All'); // 'All' | 'Company' | 'Super Admin'
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search query to prevent excessive list API calls
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Persisted status counts for dropdown badges
+  const [persistedCounts, setPersistedCounts] = useState({
+    All: 0,
+    Open: 0,
+    Draft: 0,
+    'In Progress': 0,
+    'Waiting for Response': 0,
+    Resolved: 0,
+    Closed: 0
+  });
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0);
@@ -362,10 +387,14 @@ export default function HelpSupport() {
 
   // Resolving Raised To: 'Company' or 'Super Admin'
   const resolveTicketRaisedTo = useCallback((ticket) => {
-    if (ticket?.raisedTo) {
-      const str = String(ticket.raisedTo).toLowerCase().trim();
+    if (ticket?.isEscalated || String(ticket?.status).toLowerCase() === 'escalated') {
+      return 'Super Admin';
+    }
+    const rawVal = ticket?.ticketRaisedTo || ticket?.raisedTo;
+    if (rawVal) {
+      const str = String(rawVal).toLowerCase().trim();
       if (str.includes('super')) return 'Super Admin';
-      if (str.includes('company') || str.includes('admin')) return 'Company';
+      if (str.includes('company')) return 'Company';
     }
     // Check if ticket originated from branch assignment or branch user
     const bId = ticket?.branchId || ticket?.branch;
@@ -376,7 +405,7 @@ export default function HelpSupport() {
     if (bName && !['null', 'undefined', '-', '—', 'all branches'].includes(bName.toLowerCase()) && bName !== activeRestaurant?.name) {
       return 'Company';
     }
-    const creatorRole = String(ticket?.raisedByRole || ticket?.raisedBy?.role || ticket?.userRole || '').toLowerCase();
+    const creatorRole = String(ticket?.creatorRole || ticket?.raisedByRole || ticket?.raisedBy?.role || ticket?.userRole || '').toLowerCase();
     if (creatorRole.includes('branch') || creatorRole.includes('staff') || creatorRole.includes('waiter') || creatorRole.includes('cashier')) {
       return 'Company';
     }
@@ -388,18 +417,72 @@ export default function HelpSupport() {
   const resolveTicketRaisedBy = useCallback((ticket) => {
     if (ticket?.raisedBy && typeof ticket.raisedBy === 'object') {
       return {
-        name: ticket.raisedBy.name || ticket.raisedBy.userName || 'Admin',
-        role: ticket.raisedBy.role || ticket.raisedBy.userType || 'User',
+        name: ticket.raisedBy.name || ticket.raisedBy.userName || ticket.createdByName || 'Admin',
+        role: ticket.raisedBy.role || ticket.raisedBy.userType || ticket.creatorRole || 'User',
         email: ticket.raisedBy.email || ''
       };
     }
-    const name = ticket?.raisedByName || (typeof ticket?.raisedBy === 'string' ? ticket.raisedBy : null) || ticket?.createdBy?.name || ticket?.userName || currentUser?.name || 'Admin';
-    const role = ticket?.raisedByRole || ticket?.userRole || (ticket?.branchId ? 'Branch Admin' : 'Company Admin');
+    const name = ticket?.createdByName || ticket?.raisedByName || (typeof ticket?.raisedBy === 'string' ? ticket.raisedBy : null) || ticket?.createdBy?.name || ticket?.userName || currentUser?.name || 'Admin';
+    const role = ticket?.creatorRole || ticket?.raisedByRole || ticket?.userRole || (ticket?.branchId ? 'Branch Admin' : 'Company Admin');
     const email = ticket?.createdBy?.email || (typeof ticket?.createdBy === 'string' ? ticket.createdBy : '') || '';
     return { name, role, email };
   }, [currentUser]);
 
-  // Fetch Tickets
+  // Helper to compute status counts
+  const updateCountsFromTickets = useCallback((list) => {
+    if (!Array.isArray(list)) return;
+    const base = list.filter(t => {
+      if (!isMainBranchLogin) {
+        const raisedTo = resolveTicketRaisedTo(t);
+        if (raisedTo !== 'Company') return false;
+        if (userBranchId) {
+          const branchTarget = t.branchId || t.branch;
+          return isBranchMatch(branchTarget, userBranchId, allBranches);
+        }
+      }
+      return true;
+    });
+
+    const counts = {
+      All: base.length,
+      Open: 0,
+      Draft: 0,
+      'In Progress': 0,
+      'Waiting for Response': 0,
+      Resolved: 0,
+      Closed: 0
+    };
+
+    base.forEach(t => {
+      const st = t.status || 'Open';
+      if (counts[st] !== undefined) {
+        counts[st] += 1;
+      } else {
+        counts.Open += 1;
+      }
+    });
+
+    setPersistedCounts(counts);
+  }, [isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
+
+  // Fetch status counts across all tickets for the active scope
+  const fetchStatusCounts = useCallback(async () => {
+    try {
+      const countParams = {};
+      if (!isMainBranchLogin && userBranchId) {
+        countParams.branchId = userBranchId;
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        countParams.branchId = selectedBranchId;
+      }
+      const data = await ticketApi.getTickets(countParams);
+      const list = (data && data.status && Array.isArray(data.data)) ? data.data : (Array.isArray(data) ? data : []);
+      updateCountsFromTickets(list);
+    } catch (err) {
+      console.warn("Failed to fetch status counts:", err);
+    }
+  }, [isMainBranchLogin, userBranchId, selectedBranchId, updateCountsFromTickets]);
+
+  // Fetch Tickets calling list API with active filters
   const fetchTickets = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -410,22 +493,54 @@ export default function HelpSupport() {
       } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
         params.branchId = selectedBranchId;
       }
+
+      // Pass status in list API call
+      if (statusFilter && statusFilter !== 'All' && statusFilter !== 'ALL') {
+        params.status = statusFilter;
+      }
+
+      // Pass priority in list API call
+      if (priorityFilter && priorityFilter !== 'All' && priorityFilter !== 'ALL') {
+        params.priority = priorityFilter;
+      }
+
+      // Pass search in list API call
+      if (debouncedSearch && debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
+      }
+
+      // Pass target level in list API call
+      if (targetFilter && targetFilter !== 'All' && targetFilter !== 'ALL') {
+        params.ticketRaisedTo = targetFilter;
+      }
+
       const data = await ticketApi.getTickets(params);
       if (data && data.status && data.data) {
-        setTickets(Array.isArray(data.data) ? data.data : []);
+        const list = Array.isArray(data.data) ? data.data : [];
+        setTickets(list);
+        if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+          updateCountsFromTickets(list);
+        }
       } else if (Array.isArray(data)) {
         setTickets(data);
+        if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+          updateCountsFromTickets(data);
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch tickets:", e);
     } finally {
       setIsLoading(false);
     }
-  }, [isMainBranchLogin, userBranchId, selectedBranchId]);
+  }, [isMainBranchLogin, userBranchId, selectedBranchId, statusFilter, priorityFilter, targetFilter, debouncedSearch, updateCountsFromTickets]);
 
   useEffect(() => {
     fetchBranches();
   }, [fetchBranches]);
+
+  useEffect(() => {
+    fetchStatusCounts();
+  }, [fetchStatusCounts]);
 
   useEffect(() => {
     setCurrentPage(0);
@@ -515,6 +630,7 @@ export default function HelpSupport() {
     const counts = {
       All: baseTickets.length,
       Open: 0,
+      Draft: 0,
       'In Progress': 0,
       'Waiting for Response': 0,
       Resolved: 0,
@@ -533,15 +649,24 @@ export default function HelpSupport() {
     return counts;
   }, [tickets, isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
 
+  // Use persistedCounts when filtered so dropdown options don't zero-out other statuses
+  const displayCounts = useMemo(() => {
+    if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+      return statusCounts;
+    }
+    return (persistedCounts && persistedCounts.All > 0) ? persistedCounts : statusCounts;
+  }, [statusFilter, debouncedSearch, priorityFilter, targetFilter, statusCounts, persistedCounts]);
+
   // Status Filter Options with live counts
   const statusOptions = useMemo(() => [
-    { value: 'All', label: `All Status (${statusCounts.All ?? 0})` },
-    { value: 'Open', label: `Open (${statusCounts.Open ?? 0})` },
-    { value: 'In Progress', label: `In Progress (${statusCounts['In Progress'] ?? 0})` },
-    { value: 'Waiting for Response', label: `Waiting (${statusCounts['Waiting for Response'] ?? 0})` },
-    { value: 'Resolved', label: `Resolved (${statusCounts.Resolved ?? 0})` },
-    { value: 'Closed', label: `Closed (${statusCounts.Closed ?? 0})` }
-  ], [statusCounts]);
+    { value: 'All', label: `All Status (${displayCounts.All ?? 0})` },
+    { value: 'Open', label: `Open (${displayCounts.Open ?? 0})` },
+    { value: 'Draft', label: `Draft (${displayCounts.Draft ?? 0})` },
+    { value: 'In Progress', label: `In Progress (${displayCounts['In Progress'] ?? 0})` },
+    { value: 'Waiting for Response', label: `Waiting (${displayCounts['Waiting for Response'] ?? 0})` },
+    { value: 'Resolved', label: `Resolved (${displayCounts.Resolved ?? 0})` },
+    { value: 'Closed', label: `Closed (${displayCounts.Closed ?? 0})` }
+  ], [displayCounts]);
 
   // Check if any filter is active
   const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0;
@@ -601,7 +726,7 @@ export default function HelpSupport() {
         if (isReply) {
           setReplyAttachment(fileUrl);
         } else {
-          setNewTicket(prev => ({ ...prev, attachment: fileUrl }));
+          setNewTicket(prev => ({ ...prev, attachment: fileUrl, attachmentUrl: fileUrl }));
         }
         ShowNotifications.showAlertNotification('Attachment uploaded successfully!', true);
       } else {
@@ -639,15 +764,21 @@ export default function HelpSupport() {
         ? (branchObj.branchName || branchObj.name || branchObj.branchCode) 
         : (activeRestaurant?.name || 'Main Branch');
 
-      const creatorRole = !isMainBranchLogin ? 'Branch Admin' : (isCompanyAdmin ? 'Company Admin' : 'Admin');
-      const creatorName = currentUser?.name || currentUser?.userName || (!isMainBranchLogin ? `${branchNameToSend} Admin` : 'Company Admin');
+      const isBranchScopedTicket = !isMainBranchLogin || !isCompanyFilterActive;
+      const creatorRole = isBranchScopedTicket ? 'Branch Admin' : (isCompanyAdmin ? 'Company Admin' : 'Admin');
+      const creatorName = currentUser?.name || currentUser?.userName || (isBranchScopedTicket ? `${branchNameToSend} Admin` : 'Company Admin');
+
+      const isSuperAdminTarget = defaultRaisedTo === 'Super Admin';
+      const ticketRaisedTo = isSuperAdminTarget ? 'Super Admin' : 'Company Admin';
+      const fileAttachment = newTicket.attachmentUrl || newTicket.attachment || '';
 
       const payload = {
         subject: newTicket.subject.trim(),
         category: newTicket.category,
         priority: newTicket.priority,
         status: 'Open',
-        raisedTo: defaultRaisedTo, // Non-Main Branch -> Company, Main Branch -> Super Admin
+        ticketRaisedTo,
+        raisedTo: isSuperAdminTarget ? 'Super Admin' : 'Company',
         raisedBy: {
           name: creatorName,
           role: creatorRole,
@@ -655,11 +786,14 @@ export default function HelpSupport() {
         },
         raisedByName: creatorName,
         raisedByRole: creatorRole,
-        branchId: branchIdToSend || undefined,
+        createdByName: creatorName,
+        creatorRole: creatorRole,
+        branchId: branchIdToSend || null,
         branchName: branchNameToSend,
         restaurantName: activeRestaurant?.name || 'Restaurant',
         description: newTicket.description.trim(),
-        attachment: newTicket.attachment || undefined
+        attachmentUrl: fileAttachment,
+        attachment: fileAttachment
       };
 
       const res = await ticketApi.createTicket(payload);
@@ -691,6 +825,7 @@ export default function HelpSupport() {
       }
 
       fetchTickets();
+      fetchStatusCounts();
     } catch (error) {
       console.warn("Raise ticket error:", error);
     } finally {
@@ -902,9 +1037,14 @@ export default function HelpSupport() {
   // Open Resolve Ticket Modal
   const handleOpenResolveModal = (ticket) => {
     setResolveTicketModal(ticket);
-    setResolutionStatus(ticket.status === 'Resolved' ? 'Closed' : 'Resolved');
-    setResolutionNote('');
-    setResolutionAttachment('');
+    const initialStatus = ticket.status === 'Draft' 
+      ? 'Draft' 
+      : (ticket.status === 'In Progress' ? 'In Progress' : 'Resolved');
+    setResolutionStatus(initialStatus);
+    const prevNote = ticket.solutionRemarks || ticket.resolutionNote || ticket.resolutionRemarks || '';
+    const prevAttachment = ticket.resolutionAttachment || '';
+    setResolutionNote(prevNote);
+    setResolutionAttachment(prevAttachment);
     setIsResolving(false);
     setIsUploadingResolutionFile(false);
   };
@@ -950,22 +1090,36 @@ export default function HelpSupport() {
         : (isCompanyAdmin ? 'Company Admin' : (isSuperAdmin ? 'Super Admin' : 'Admin'));
       const senderName = currentUser?.name || currentUser?.userName || senderRole;
 
-      // 1. Update ticket status in backend
-      await ticketApi.updateTicket(targetId, {
+      const updatePayload = {
         status: resolutionStatus,
-        resolvedAt: new Date().toISOString()
+        resolutionNote: cleanNote,
+        solutionRemarks: cleanNote,
+        resolutionAttachment: resolutionAttachment || undefined,
+        resolvedBy: senderName,
+        resolvedRole: senderRole,
+        resolvedAt: new Date().toISOString(),
+        ...(resolutionStatus === 'Resolved' ? { resolvedAt: new Date().toISOString() } : {})
+      };
+
+      // 1. Update ticket status & resolution details via dedicated /status endpoint
+      const statusRes = await ticketApi.updateTicketStatus(targetId, {
+        status: resolutionStatus,
+        resolution: cleanNote,
+        ...updatePayload
       });
 
       // 2. Post resolution remark and proof in thread
       await ticketApi.addReply(
         targetId,
-        `[Resolution - ${resolutionStatus}]: ${cleanNote}`,
+        `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
         senderName,
         resolutionAttachment || undefined,
         {
           role: senderRole,
           status: resolutionStatus,
-          isResolution: true,
+          isResolution: resolutionStatus === 'Resolved',
+          isDraft: resolutionStatus === 'Draft',
+          isInProgress: resolutionStatus === 'In Progress',
           attachment: resolutionAttachment || undefined
         }
       );
@@ -985,16 +1139,22 @@ export default function HelpSupport() {
       }
 
       // 4. Update local state
-      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, status: resolutionStatus } : t));
+      const mergedResolved = {
+        ...(statusRes?.data || {}),
+        ...updatePayload,
+        resolution: cleanNote
+      };
+      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...mergedResolved } : t));
+      fetchStatusCounts();
       if (viewTicket && (viewTicket._id === targetId || viewTicket.id === targetId)) {
         setViewTicket(prev => ({
           ...prev,
-          status: resolutionStatus,
+          ...mergedResolved,
           replies: [
             ...(Array.isArray(prev.replies) ? prev.replies : []),
             {
               id: `reply-${Date.now()}`,
-              message: `[Resolution - ${resolutionStatus}]: ${cleanNote}`,
+              message: `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
               sender: senderName,
               role: senderRole,
               isCreator: false,
@@ -1005,7 +1165,14 @@ export default function HelpSupport() {
         }));
       }
 
-      ShowNotifications.showAlertNotification(`Ticket #${resolveTicketModal.ticketNumber || ''} marked as ${resolutionStatus}!`, true);
+      ShowNotifications.showAlertNotification(
+        resolutionStatus === 'Draft'
+          ? `Ticket #${resolveTicketModal.ticketNumber || ''} saved as Draft!`
+          : (resolutionStatus === 'In Progress'
+              ? `Ticket #${resolveTicketModal.ticketNumber || ''} updated to In Progress!`
+              : `Ticket #${resolveTicketModal.ticketNumber || ''} marked as Resolved!`),
+        true
+      );
       setResolveTicketModal(null);
     } catch (err) {
       console.warn("Failed to resolve ticket:", err);
@@ -1033,30 +1200,27 @@ export default function HelpSupport() {
     try {
       const senderName = currentUser?.name || currentUser?.userName || 'Company Admin';
       const noteText = forwardNote.trim();
+      const reasonToSend = noteText || 'Issue cannot be resolved at company level. Requires database sync fix from ServIQ core engineering team.';
 
-      // 1. Update ticket target level to 'Super Admin'
-      await ticketApi.updateTicket(targetId, {
-        raisedTo: 'Super Admin',
-        escalatedBy: senderName,
-        escalatedAt: new Date().toISOString()
-      });
+      // 1. Escalate ticket to Super Admin via dedicated /tickets/:id/escalate endpoint
+      const escalateRes = await ticketApi.escalateTicket(targetId, reasonToSend);
 
       // 2. Add an escalation remark into ticket thread if note provided
       if (noteText) {
         await ticketApi.addReply(
           targetId,
-          `[Shared with Super Admin by ${senderName}]: ${noteText}`,
+          `[Escalated to Super Admin by ${senderName}]: ${noteText}`,
           senderName,
           undefined,
-          { role: 'Company Admin', isForwarded: true }
+          { role: 'Company Admin', isForwarded: true, isEscalated: true }
         );
       }
 
       // 3. Notify Super Admin
       try {
         await notificationApi.createNotification({
-          title: `Branch Ticket #${forwardTicketModal.ticketNumber || ''} Shared to Super Admin`,
-          message: `${activeRestaurant?.name || 'Company'} shared branch ticket "${forwardTicketModal.subject}" to Super Admin${noteText ? `: ${noteText.slice(0, 50)}...` : ''}`,
+          title: `Branch Ticket #${forwardTicketModal.ticketNumber || ''} Escalated to Super Admin`,
+          message: `${activeRestaurant?.name || 'Company'} escalated branch ticket "${forwardTicketModal.subject}" to Super Admin${noteText ? `: ${noteText.slice(0, 50)}...` : ''}`,
           type: 'TICKET_FORWARDED',
           targetRole: 'SUPER_ADMIN'
         });
@@ -1064,17 +1228,35 @@ export default function HelpSupport() {
         // silent
       }
 
-      // 4. Update local tickets state so table immediately displays Super Admin
-      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, raisedTo: 'Super Admin' } : t));
+      // 4. Update local tickets state so table immediately displays Super Admin & Escalated
+      const updatedData = escalateRes?.data || {};
+      const newStatus = updatedData.status || 'Escalated';
+      const mergedTicket = {
+        ...forwardTicketModal,
+        ...updatedData,
+        status: newStatus,
+        isEscalated: true,
+        ticketRaisedTo: 'Super Admin',
+        raisedTo: 'Super Admin',
+        escalationReason: reasonToSend,
+        escalatedByName: senderName,
+        escalatedAt: new Date().toISOString()
+      };
+
+      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...mergedTicket } : t));
+      fetchStatusCounts();
       if (viewTicket && (viewTicket._id === targetId || viewTicket.id === targetId)) {
-        setViewTicket(prev => ({ ...prev, raisedTo: 'Super Admin' }));
+        setViewTicket(prev => ({ ...prev, ...mergedTicket }));
       }
 
-      ShowNotifications.showAlertNotification(`Ticket #${forwardTicketModal.ticketNumber || ''} shared with Super Admin!`, true);
+      ShowNotifications.showAlertNotification(
+        escalateRes?.message || `Ticket #${forwardTicketModal.ticketNumber || ''} successfully escalated to Super Admin!`,
+        true
+      );
       setForwardTicketModal(null);
     } catch (err) {
-      console.warn("Failed to share ticket with Super Admin:", err);
-      ShowNotifications.showAlertNotification('Failed to share ticket. Please try again.', false);
+      console.warn("Failed to escalate ticket to Super Admin:", err);
+      ShowNotifications.showAlertNotification('Failed to escalate ticket. Please try again.', false);
     } finally {
       setIsForwarding(false);
     }
@@ -1087,10 +1269,12 @@ export default function HelpSupport() {
     try {
       await ticketApi.deleteTicket(targetId);
       setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
+      fetchStatusCounts();
       ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
       setDeleteTicketConfirm(null);
     } catch (error) {
       setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
+      fetchStatusCounts();
       ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
       setDeleteTicketConfirm(null);
     } finally {
@@ -1109,9 +1293,11 @@ export default function HelpSupport() {
   const getStatusBadgeClass = (status) => {
     const s = String(status || 'Open').toLowerCase();
     if (s === 'open') return 'badge-status-open';
+    if (s === 'draft') return 'badge-status-draft';
     if (s === 'in progress') return 'badge-status-progress';
     if (s === 'waiting for response') return 'badge-status-waiting';
     if (s === 'resolved') return 'badge-status-resolved';
+    if (s === 'escalated') return 'badge-status-escalated';
     return 'badge-status-closed';
   };
 
@@ -1302,7 +1488,7 @@ export default function HelpSupport() {
                 <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>PRIORITY</th>
                 <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>STATUS</th>
                 <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '115px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>LAST UPDATED</th>
-                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: !isMainBranchLogin ? '110px' : '180px', minWidth: !isMainBranchLogin ? '110px' : '180px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: isCompanyFilterActive ? '180px' : '110px', minWidth: isCompanyFilterActive ? '180px' : '110px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -1331,22 +1517,32 @@ export default function HelpSupport() {
                   const raisedBy = resolveTicketRaisedBy(ticket);
 
                   const isClosed = String(ticket.status || '').toLowerCase() === 'closed';
+                  const isResolved = String(ticket.status || '').toLowerCase() === 'resolved';
                   const isBranchTicket = raisedTo === 'Company';
                   const isSuperAdminTicket = raisedTo === 'Super Admin';
+                  const isEscalated = Boolean(ticket.isEscalated || String(ticket.status || '').toLowerCase() === 'escalated');
 
-                  // When the login is not a main branch: show ONLY View and Delete. Do NOT show all the options (Resolve and Share are hidden).
-                  // When the login is a main branch: show all options (View, Resolve, Share, Delete).
-                  const canSolveThisTicket = isMainBranchLogin && !isClosed && (
-                    (isCompanyAdmin && isBranchTicket) ||
-                    (isSuperAdmin && isSuperAdminTicket)
-                  );
+                  // In Company filter: Never remove Resolve or Share icons; keep all 4 icons visible and disable them when not applicable
+                  const isResolveDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isShareDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
 
-                  // If Company Admin cannot solve this branch ticket, they share it to Super Admin (Main branch only)
-                  const canShareToSuperAdmin = isMainBranchLogin && !isClosed && isCompanyAdmin && isBranchTicket;
+                  const resolveTitle = isResolved
+                    ? "Ticket already resolved"
+                    : isClosed
+                      ? "Ticket is closed"
+                      : (isSuperAdminTicket || isEscalated)
+                        ? "Ticket routed to Super Admin"
+                        : (ticket.status === 'Draft' ? "Update Draft / Resolve Ticket" : "Resolve Ticket (Company)");
 
-                  // Delete action:
-                  // - If the login is not a main branch: show View and Delete
-                  // - If the login is a main branch: show all options including Delete
+                  const shareTitle = (isEscalated || isSuperAdminTicket)
+                    ? "Ticket already escalated to Super Admin"
+                    : isResolved
+                      ? "Ticket already resolved"
+                      : isClosed
+                        ? "Ticket is closed"
+                        : "Share to Super Admin (If unable to solve)";
+
+                  // Delete action is available for all
                   const canDeleteThisTicket = true;
 
                   return (
@@ -1366,18 +1562,14 @@ export default function HelpSupport() {
                         {ticket.ticketNumber || `#TK-${String(ticket._id || index).slice(-5).toUpperCase()}`}
                       </td>
 
-                      {/* 3. Subject & Category */}
+                      {/* 3. Subject */}
                       <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
-                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px', lineHeight: 1.35 }}>
-                          {ticket.subject}
-                        </div>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                          <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 7px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <TagIcon size={10} color="#64748b" />
-                            <span>{ticket.category || 'General'}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px', lineHeight: 1.35 }}>
+                            {ticket.subject}
                           </span>
-                          {ticket.attachment && (
-                            <span style={{ fontSize: '10.5px', color: '#ea580c', background: '#fff7ed', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          {(ticket.attachmentUrl || ticket.attachment) && (
+                            <span style={{ fontSize: '10.5px', color: '#ea580c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                               <PaperclipIcon size={10} color="#ea580c" />
                               <span>File</span>
                             </span>
@@ -1442,8 +1634,8 @@ export default function HelpSupport() {
                         {formatDateDMY(ticket.updatedAt || ticket.createdAt)}
                       </td>
 
-                      {/* 10. Actions: For non-main branch login, show only View and Delete. For main branch login, show all options. */}
-                      <td style={{ padding: '14px 14px', textAlign: 'center', verticalAlign: 'middle', width: !isMainBranchLogin ? '110px' : '180px', minWidth: !isMainBranchLogin ? '110px' : '180px' }}>
+                      {/* 10. Actions: For branch filter view, show only View and Delete. For Company filter, show all options. */}
+                      <td style={{ padding: '14px 14px', textAlign: 'center', verticalAlign: 'middle', width: isCompanyFilterActive ? '180px' : '110px', minWidth: isCompanyFilterActive ? '180px' : '110px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           {/* View Button */}
                           <button
@@ -1467,51 +1659,55 @@ export default function HelpSupport() {
                             <EyeIcon size={14} color="#ea580c" />
                           </button>
 
-                          {/* Resolve Button (Company Admin solves Branch tickets, Super Admin solves Super Admin tickets) */}
-                          {canSolveThisTicket && (
+                          {/* Resolve Button (Always visible in Company filter, disabled when not applicable) */}
+                          {isCompanyFilterActive && (
                             <button
                               type="button"
-                              onClick={() => handleOpenResolveModal(ticket)}
-                              title={ticket.status === 'Resolved' ? "Update Resolution / Close Ticket" : "Resolve Ticket (Company)"}
+                              onClick={isResolveDisabled ? undefined : () => handleOpenResolveModal(ticket)}
+                              disabled={isResolveDisabled}
+                              title={resolveTitle}
                               style={{
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '8px',
-                                border: '1px solid #bbf7d0',
-                                background: '#dcfce7',
-                                color: '#16a34a',
+                                border: isResolveDisabled ? '1px solid #e2e8f0' : '1px solid #bbf7d0',
+                                background: isResolveDisabled ? '#f8fafc' : '#dcfce7',
+                                color: isResolveDisabled ? '#94a3b8' : '#16a34a',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
+                                cursor: isResolveDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isResolveDisabled ? 0.45 : 1,
                                 transition: 'all 0.15s ease'
                               }}
                             >
-                              <CheckCircleIcon size={14} color="#16a34a" />
+                              <CheckCircleIcon size={14} color={isResolveDisabled ? '#94a3b8' : '#16a34a'} />
                             </button>
                           )}
 
-                          {/* Share to Super Admin Button (If Company Admin cannot solve this branch ticket) */}
-                          {canShareToSuperAdmin && (
+                          {/* Share to Super Admin Button (Always visible in Company filter, disabled when not applicable) */}
+                          {isCompanyFilterActive && (
                             <button
                               type="button"
-                              onClick={() => handleOpenForwardModal(ticket)}
-                              title="Share to Super Admin (If unable to solve)"
+                              onClick={isShareDisabled ? undefined : () => handleOpenForwardModal(ticket)}
+                              disabled={isShareDisabled}
+                              title={shareTitle}
                               style={{
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '8px',
-                                border: '1px solid #bfdbfe',
-                                background: '#eff6ff',
-                                color: '#2563eb',
+                                border: isShareDisabled ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
+                                background: isShareDisabled ? '#f8fafc' : '#eff6ff',
+                                color: isShareDisabled ? '#94a3b8' : '#2563eb',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
+                                cursor: isShareDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isShareDisabled ? 0.45 : 1,
                                 transition: 'all 0.15s ease'
                               }}
                             >
-                              <ShareIcon size={14} color="#2563eb" />
+                              <ShareIcon size={14} color={isShareDisabled ? '#94a3b8' : '#2563eb'} />
                             </button>
                           )}
 
@@ -1592,50 +1788,112 @@ export default function HelpSupport() {
         isOpen={!!viewTicket}
         onClose={() => setViewTicket(null)}
         title={viewTicket ? `Ticket Details - ${viewTicket.ticketNumber || '#TK'}` : 'Ticket Details'}
-        maxWidth="760px"
+        maxWidth="720px"
       >
         {viewTicket && (() => {
           const conversation = getTicketConversation(viewTicket);
           const raisedTo = resolveTicketRaisedTo(viewTicket);
           const raisedBy = resolveTicketRaisedBy(viewTicket);
           const branchName = resolveTicketBranchName(viewTicket, allBranches);
-          const replyUpdates = conversation.filter(c => c.id !== 'initial');
+
+          // Extract Company Response & Solution Remarks
+          const companyResponse = (() => {
+            // 1. Direct fields on the ticket
+            const directRemarks = viewTicket.solutionRemarks || viewTicket.resolutionNote || viewTicket.resolutionRemarks || viewTicket.resolutionDetails || (typeof viewTicket.resolution === 'string' ? viewTicket.resolution : viewTicket.resolution?.note);
+            const directAttachment = viewTicket.resolutionAttachment || viewTicket.resolutionProof || viewTicket.solutionAttachment || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.attachment : null);
+            const directResolvedBy = viewTicket.resolvedBy || viewTicket.resolvedByName || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.by : null);
+            const directResolvedRole = viewTicket.resolvedRole || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.role : null);
+            const directDate = viewTicket.resolvedAt || viewTicket.updatedAt;
+
+            if (directRemarks && String(directRemarks).trim().length > 0) {
+              return {
+                remarks: String(directRemarks).trim(),
+                attachment: directAttachment || null,
+                sender: directResolvedBy || 'Company Admin',
+                role: directResolvedRole || 'Company Admin',
+                status: viewTicket.status || 'Resolved',
+                date: directDate
+              };
+            }
+
+            // 2. Check replies in reverse order for company response
+            const repliesReversed = [...conversation].filter(c => c.id !== 'initial').reverse();
+            for (const r of repliesReversed) {
+              const msg = r.message || '';
+              const isCompanySender = (r.role && String(r.role).toLowerCase().includes('company')) ||
+                                      (r.sender && String(r.sender).toLowerCase().includes('company')) ||
+                                      r.isResolution || r.isInProgress || r.isDraft;
+              const hasTag = msg.startsWith('[Resolution') || msg.startsWith('[Progress Update') || msg.startsWith('[Draft Note') || msg.startsWith('[Solution');
+
+              if (hasTag || (isCompanySender && !r.isCreator)) {
+                let cleanText = msg;
+                let inferredStatus = viewTicket.status;
+                const tagMatch = msg.match(/^\[(.*?)\]:\s*(.*)$/s);
+                if (tagMatch) {
+                  cleanText = tagMatch[2];
+                  if (tagMatch[1].includes('Resolved') || tagMatch[1].includes('Resolution')) inferredStatus = 'Resolved';
+                  else if (tagMatch[1].includes('Progress')) inferredStatus = 'In Progress';
+                  else if (tagMatch[1].includes('Draft')) inferredStatus = 'Draft';
+                }
+                return {
+                  remarks: cleanText.trim(),
+                  attachment: r.attachment || null,
+                  sender: r.sender || 'Company Admin',
+                  role: r.role || 'Company Admin',
+                  status: inferredStatus || viewTicket.status,
+                  date: r.createdAt
+                };
+              }
+            }
+
+            return null;
+          })();
+
+          // Filter out the resolution reply from generic updates so it does not repeat
+          const replyUpdates = conversation.filter(c => {
+            if (c.id === 'initial') return false;
+            if (companyResponse && companyResponse.remarks) {
+              const cleanC = (c.message || '').replace(/^\[(.*?)\]:\s*/, '').trim();
+              if (cleanC === companyResponse.remarks.trim()) return false;
+            }
+            return true;
+          });
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Top Summary Header */}
               <div style={{
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                padding: '16px',
+                borderRadius: '10px',
+                padding: '10px 14px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: '6px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                   <div>
-                    <h3 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
                       {viewTicket.subject}
                     </h3>
-                    <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <ClockIcon size={12} color="#64748b" />
+                        <ClockIcon size={11} color="#64748b" />
                         <span>Created on {formatDateTimeDMY(viewTicket.createdAt)}</span>
                       </span>
                       <span>•</span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <TagIcon size={12} color="#64748b" />
+                        <TagIcon size={11} color="#64748b" />
                         <span>Category: {viewTicket.category || 'General'}</span>
                       </span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className={`badge ${getPriorityBadgeClass(viewTicket.priority)}`}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className={`badge ${getPriorityBadgeClass(viewTicket.priority)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
                       {viewTicket.priority || 'Medium'} Priority
                     </span>
-                    <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`}>
+                    <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
                       {viewTicket.status || 'Open'}
                     </span>
                   </div>
@@ -1644,42 +1902,43 @@ export default function HelpSupport() {
                 {/* Metadata Grid (Read Only) */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-                  gap: '10px',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                  gap: '6px',
                   borderTop: '1px solid #e2e8f0',
-                  paddingTop: '12px'
+                  paddingTop: '6px',
+                  marginTop: '1px'
                 }}>
                   <div>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised By</span>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                      <UserIcon size={12} color="#64748b" />
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised By</span>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                      <UserIcon size={11} color="#64748b" />
                       <span>{raisedBy.name}</span>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>{raisedBy.role}</span>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>{raisedBy.role}</span>
                   </div>
 
                   <div>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised To</span>
-                    <div style={{ marginTop: '2px' }}>
-                      <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`}>
-                        {raisedTo === 'Company' ? <BuildingIcon size={11} color="#ea580c" /> : <ShieldIcon size={11} color="#4338ca" />}
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised To</span>
+                    <div style={{ marginTop: '1px' }}>
+                      <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                        {raisedTo === 'Company' ? <BuildingIcon size={10} color="#ea580c" /> : <ShieldIcon size={10} color="#4338ca" />}
                         <span>{raisedTo}</span>
                       </span>
                     </div>
                   </div>
 
                   <div>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Branch</span>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                      <StoreIcon size={12} color="#0369a1" />
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Branch</span>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                      <StoreIcon size={11} color="#0369a1" />
                       <span>{branchName}</span>
                     </div>
                   </div>
 
                   <div>
-                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Status</span>
-                    <div style={{ marginTop: '4px' }}>
-                      <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`}>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Status</span>
+                    <div style={{ marginTop: '1px' }}>
+                      <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
                         {viewTicket.status || 'Open'}
                       </span>
                     </div>
@@ -1691,39 +1950,39 @@ export default function HelpSupport() {
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                padding: '16px',
+                borderRadius: '10px',
+                padding: '10px 14px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '10px'
+                gap: '4px'
               }}>
-                <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                   Issue Description
                 </span>
-                <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                <p style={{ margin: 0, fontSize: '12.5px', color: '#334155', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
                   {viewTicket.description || 'No additional description provided.'}
                 </p>
 
                 {/* Optional Attachment Preview */}
-                {(viewTicket.attachment || viewTicket.attachments?.[0]) && (
-                  <div style={{ marginTop: '8px', paddingTop: '10px', borderTop: '1px dashed #e2e8f0' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                {Boolean(viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]) && (
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
                       Attached File / Screenshot
                     </span>
                     <a
-                      href={viewTicket.attachment || viewTicket.attachments?.[0]}
+                      href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Click to view full attachment"
                       style={{ display: 'inline-block' }}
                     >
                       <img
-                        src={viewTicket.attachment || viewTicket.attachments?.[0]}
+                        src={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
                         alt="Ticket Attachment"
                         style={{
-                          maxWidth: '220px',
-                          maxHeight: '160px',
-                          borderRadius: '8px',
+                          maxWidth: '180px',
+                          maxHeight: '90px',
+                          borderRadius: '6px',
                           border: '1px solid #cbd5e1',
                           objectFit: 'cover'
                         }}
@@ -1733,20 +1992,230 @@ export default function HelpSupport() {
                 )}
               </div>
 
+              {/* ESCALATION TO SUPER ADMIN CARD */}
+              {Boolean(viewTicket.isEscalated || viewTicket.status === 'Escalated' || viewTicket.escalationReason) && (
+                <div style={{
+                  background: '#fffbeb',
+                  border: '1.5px solid #fde68a',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldIcon size={14} color="#b45309" />
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      Escalated to Super Admin
+                    </span>
+                  </div>
+                  {viewTicket.escalationReason && (
+                    <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.4, background: '#fef3c7', padding: '6px 10px', borderRadius: '6px' }}>
+                      <strong>Reason:</strong> {viewTicket.escalationReason}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '10.5px', color: '#92400e', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {viewTicket.escalatedByName && <span><strong>Escalated By:</strong> {viewTicket.escalatedByName}</span>}
+                    {viewTicket.escalatedAt && <span><strong>Escalated At:</strong> {formatDateTimeDMY(viewTicket.escalatedAt)}</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* COMPANY RESPONSE & SOLUTION REMARKS CARD */}
+              {companyResponse ? (
+                <div style={{
+                  background: companyResponse.status === 'In Progress' ? '#eff6ff' : (companyResponse.status === 'Draft' ? '#fffbeb' : '#f0fdf4'),
+                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  {/* Card Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        background: companyResponse.status === 'In Progress' ? '#dbeafe' : (companyResponse.status === 'Draft' ? '#fef3c7' : '#dcfce7'),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: companyResponse.status === 'In Progress' ? '#1d4ed8' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                        flexShrink: 0
+                      }}>
+                        {companyResponse.status === 'In Progress' ? (
+                          <ClockIcon size={15} color="#1d4ed8" />
+                        ) : companyResponse.status === 'Draft' ? (
+                          <FileTextIcon size={15} color="#b45309" />
+                        ) : (
+                          <CheckCircleIcon size={15} color="#15803d" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>Company Response & Solution Remarks</span>
+                          {isBranchFilterActive && (
+                            <span style={{
+                              fontSize: '9.5px',
+                              fontWeight: 700,
+                              background: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              textTransform: 'none',
+                              color: '#334155'
+                            }}>
+                              Shared with Branch
+                            </span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: companyResponse.status === 'In Progress' ? '#2563eb' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap',
+                          marginTop: '1px'
+                        }}>
+                          <span>Responded by <strong>{companyResponse.sender}</strong> ({companyResponse.role || 'Company Admin'})</span>
+                          {companyResponse.date && (
+                            <>
+                              <span>•</span>
+                              <span>{formatDateTimeDMY(companyResponse.date)}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <span className={`badge ${getStatusBadgeClass(companyResponse.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                      {companyResponse.status}
+                    </span>
+                  </div>
+
+                  {/* Remarks Content */}
+                  <div style={{
+                    background: '#ffffff',
+                    border: `1px solid ${companyResponse.status === 'In Progress' ? '#bfdbfe' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    fontSize: '12.5px',
+                    color: '#0f172a',
+                    lineHeight: 1.45,
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {companyResponse.remarks}
+                  </div>
+
+                  {/* Resolution Proof / Attachment */}
+                  {companyResponse.attachment && (
+                    <div style={{
+                      paddingTop: '6px',
+                      borderTop: `1px dashed ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                        textTransform: 'uppercase',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <PaperclipIcon size={11} color="currentColor" />
+                        <span>Resolution Proof / Screenshot</span>
+                      </span>
+                      <a
+                        href={companyResponse.attachment}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Click to view full attachment"
+                        style={{ display: 'inline-block' }}
+                      >
+                        <img
+                          src={companyResponse.attachment}
+                          alt="Resolution Proof"
+                          style={{
+                            maxWidth: '180px',
+                            maxHeight: '90px',
+                            borderRadius: '6px',
+                            border: `1px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                            objectFit: 'cover',
+                            background: '#ffffff',
+                            cursor: 'pointer'
+                          }}
+                        />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* When in branch filter or branch-scoped ticket and no company response yet */
+                isBranchFilterActive && (
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px dashed #cbd5e1',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      background: '#f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b',
+                      flexShrink: 0
+                    }}>
+                      <BuildingIcon size={14} color="#64748b" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                        Awaiting Company Response
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Company Admin has not submitted resolution details or remarks for this branch ticket yet.
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
+
               {/* Updates & Replies History (Read Only) */}
               {replyUpdates.length > 0 && (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <MessageSquareIcon size={14} color="#FF7A00" />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <MessageSquareIcon size={13} color="#FF7A00" />
                       <span>Updates & Replies ({replyUpdates.length})</span>
                     </span>
                     {isLoadingTicketDetails && (
-                      <span style={{ fontSize: '11px', color: '#FF7A00', fontWeight: 600 }}>Refreshing...</span>
+                      <span style={{ fontSize: '10.5px', color: '#FF7A00', fontWeight: 600 }}>Refreshing...</span>
                     )}
                   </div>
 
-                  <div className="ticket-conversation-box">
+                  <div className="ticket-conversation-box" style={{ maxHeight: '130px', overflowY: 'auto' }}>
                     {replyUpdates.map(msg => {
                       const isMyRole = 
                         (!isMainBranchLogin && msg.isCreator) || 
@@ -1760,7 +2229,7 @@ export default function HelpSupport() {
                         >
                           <div className="ticket-chat-header">
                             <span className="ticket-chat-sender" style={{ color: isMyRole ? '#ea580c' : '#0369a1' }}>
-                              {isMyRole ? <UserIcon size={12} color="#ea580c" /> : <ShieldIcon size={12} color="#0369a1" />}
+                              {isMyRole ? <UserIcon size={11} color="#ea580c" /> : <ShieldIcon size={11} color="#0369a1" />}
                               <span>{msg.sender} ({msg.role})</span>
                             </span>
                             <span className="ticket-chat-time">
@@ -1768,14 +2237,14 @@ export default function HelpSupport() {
                             </span>
                           </div>
 
-                          <div className="ticket-chat-body">
+                          <div className="ticket-chat-body" style={{ fontSize: '12px' }}>
                             {msg.message}
                           </div>
 
                           {msg.attachment && (
                             <div className="ticket-chat-attachment">
                               <a href={msg.attachment} target="_blank" rel="noopener noreferrer" title="Click to view full image">
-                                <img src={msg.attachment} alt="Attachment" />
+                                <img src={msg.attachment} alt="Attachment" style={{ maxHeight: '80px' }} />
                               </a>
                             </div>
                           )}
@@ -1788,11 +2257,12 @@ export default function HelpSupport() {
               )}
 
               {/* Modal Footer (Read Only) */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '8px', marginTop: '2px' }}>
                 <button
                   type="button"
                   className="btn btn-outline"
                   onClick={() => setViewTicket(null)}
+                  style={{ padding: '6px 16px', fontSize: '12.5px' }}
                 >
                   Close Window
                 </button>
@@ -1807,11 +2277,12 @@ export default function HelpSupport() {
         isOpen={showRaiseTicketModal}
         onClose={() => setShowRaiseTicketModal(false)}
         title="Raise Support Ticket"
+        maxWidth="660px"
       >
-        <form onSubmit={handleRaiseTicket} className="raise-ticket-form">
+        <form onSubmit={handleRaiseTicket} className="raise-ticket-form" style={{ gap: '10px' }}>
           {/* 1. Subject */}
-          <div className="form-group">
-            <label>Subject *</label>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Subject *</label>
             <input
               type="text"
               className={errors.subject ? 'error' : ''}
@@ -1821,76 +2292,71 @@ export default function HelpSupport() {
                 if (errors.subject) setErrors({ ...errors, subject: '' });
               }}
               placeholder="E.g., POS terminal order synchronization issue"
+              style={{ padding: '8px 12px', fontSize: '13px', height: '38px', boxSizing: 'border-box' }}
             />
             {errors.subject && <span className="error-text">{errors.subject}</span>}
           </div>
 
-          {/* 2. Ticket Raised To (Auto-selected & Read-Only) */}
-          <div className="form-group">
-            <label>
-              <span>Ticket Raised To</span>
-              <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>(Auto-assigned based on your role)</span>
-            </label>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '10px 14px',
-              borderRadius: '8px',
-              background: '#f8fafc',
-              border: '1.5px solid #e2e8f0'
-            }}>
-              <LockIcon size={14} color="#64748b" />
-              <span className={`badge ${defaultRaisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`}>
-                {defaultRaisedTo === 'Company' ? <BuildingIcon size={12} color="#ea580c" /> : <ShieldIcon size={12} color="#4338ca" />}
-                <span>{defaultRaisedTo}</span>
-              </span>
-              <span style={{ fontSize: '12px', color: '#64748b', marginLeft: 'auto', fontWeight: 600 }}>
-                {defaultRaisedTo === 'Company' ? 'Routing to Company Management' : 'Routing to ServIQ Super Admin'}
-              </span>
+          {/* Row 2: Branch Assignment, Category & Priority in 3 balanced columns */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {/* Branch Assignment */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>
+                <span>Branch Assignment</span>
+                {!isCompanyFilterActive && (
+                  <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 500 }}>(Assigned)</span>
+                )}
+              </label>
+              {!isCompanyFilterActive ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  height: '38px',
+                  minHeight: '38px',
+                  boxSizing: 'border-box'
+                }}>
+                  <LockIcon size={13} color="#64748b" />
+                  <StoreIcon size={13} color="#ea580c" />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const targetBId = newTicket.branchId || selectedBranchId || userBranchId;
+                      const foundBranch = allBranches.find(b => 
+                        String(b._id || b.id) === String(targetBId) || 
+                        String(b.branchCode) === String(targetBId)
+                      );
+                      return foundBranch 
+                        ? (foundBranch.branchName || foundBranch.name)
+                        : (activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Spice Route Restaurant');
+                    })()}
+                  </span>
+                </div>
+              ) : (
+                <SearchableSelect
+                  value={newTicket.branchId}
+                  onChange={e => setNewTicket({ ...newTicket, branchId: e.target.value })}
+                  options={[
+                    { value: '', label: activeRestaurant?.name || 'Main Branch' },
+                    ...allBranches.map(b => ({
+                      value: b._id || b.id,
+                      label: `${b.branchName || b.name}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                    }))
+                  ]}
+                  placeholder="Select Branch..."
+                />
+              )}
             </div>
-          </div>
 
-          {/* 3. Branch Assignment */}
-          <div className="form-group">
-            <label>Branch Assignment</label>
-            {!isMainBranchLogin ? (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                background: '#f8fafc',
-                border: '1.5px solid #e2e8f0',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#0f172a'
-              }}>
-                <StoreIcon size={14} color="#ea580c" />
-                <span>{resolveTicketBranchName({ branchId: userBranchId }, allBranches)}</span>
-                <span style={{ fontSize: '11px', color: '#64748b', marginLeft: 'auto' }}>(Locked to your assigned branch)</span>
-              </div>
-            ) : (
-              <SearchableSelect
-                value={newTicket.branchId}
-                onChange={e => setNewTicket({ ...newTicket, branchId: e.target.value })}
-                options={[
-                  { value: '', label: activeRestaurant?.name || 'Main Branch' },
-                  ...allBranches.map(b => ({
-                    value: b._id || b.id,
-                    label: `${b.branchName || b.name}${b.branchCode ? ` (${b.branchCode})` : ''}`
-                  }))
-                ]}
-                placeholder="Select Branch..."
-              />
-            )}
-          </div>
-
-          {/* 4. Category & Priority */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div className="form-group">
-              <label>Category *</label>
+            {/* Category */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Category *</label>
               <SearchableSelect
                 value={newTicket.category}
                 onChange={e => setNewTicket({ ...newTicket, category: e.target.value })}
@@ -1906,8 +2372,9 @@ export default function HelpSupport() {
               />
             </div>
 
-            <div className="form-group">
-              <label>Priority *</label>
+            {/* Priority */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Priority *</label>
               <SearchableSelect
                 value={newTicket.priority}
                 onChange={e => setNewTicket({ ...newTicket, priority: e.target.value })}
@@ -1922,10 +2389,10 @@ export default function HelpSupport() {
           </div>
 
           {/* 5. Description */}
-          <div className="form-group">
-            <label>Description *</label>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Description *</label>
             <textarea
-              rows="4"
+              rows="3"
               className={errors.description ? 'error' : ''}
               value={newTicket.description}
               onChange={e => {
@@ -1933,13 +2400,14 @@ export default function HelpSupport() {
                 if (errors.description) setErrors({ ...errors, description: '' });
               }}
               placeholder="Describe your issue with all relevant details..."
+              style={{ minHeight: '62px', maxHeight: '85px', padding: '8px 12px', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
             />
             {errors.description && <span className="error-text">{errors.description}</span>}
           </div>
 
           {/* 6. Optional Attachment Upload */}
-          <div className="form-group">
-            <label>Attachment (Optional)</label>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Attachment (Optional)</label>
             <input
               type="file"
               ref={fileInputRef}
@@ -1954,27 +2422,29 @@ export default function HelpSupport() {
                 className="btn-outline"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploadingAttachment}
+                style={{ padding: '6px 12px', fontSize: '12px', height: '34px' }}
               >
                 <PaperclipIcon size={13} color="#475569" />
                 <span>{isUploadingAttachment ? 'Uploading...' : 'Choose Attachment'}</span>
               </button>
 
-              {newTicket.attachment && (
-                <span className="attachment-preview-tag">
+              {(newTicket.attachmentUrl || newTicket.attachment) && (
+                <span className="attachment-preview-tag" style={{ fontSize: '12px', padding: '4px 8px' }}>
                   <CheckCircleIcon size={12} color="#16a34a" />
                   <span>File attached</span>
-                  <button type="button" onClick={() => setNewTicket(prev => ({ ...prev, attachment: '' }))}>×</button>
+                  <button type="button" onClick={() => setNewTicket(prev => ({ ...prev, attachment: '', attachmentUrl: '' }))}>×</button>
                 </span>
               )}
             </div>
           </div>
 
           {/* Form Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
             <button
               type="button"
               className="btn btn-outline"
               onClick={() => setShowRaiseTicketModal(false)}
+              style={{ padding: '7px 16px', fontSize: '13px' }}
             >
               Cancel
             </button>
@@ -1982,6 +2452,7 @@ export default function HelpSupport() {
               type="submit"
               className="btn btn-primary"
               disabled={isSubmitting || isUploadingAttachment}
+              style={{ padding: '7px 16px', fontSize: '13px' }}
             >
               <SendIcon size={13} color="#ffffff" />
               <span>{isSubmitting ? 'Submitting...' : 'Submit Ticket'}</span>
@@ -2052,7 +2523,7 @@ export default function HelpSupport() {
       <Modal
         isOpen={!!resolveTicketModal}
         onClose={() => setResolveTicketModal(null)}
-        title={resolveTicketModal ? `Resolve Ticket - ${resolveTicketModal.ticketNumber || '#TK'}` : 'Resolve Ticket'}
+        title={resolveTicketModal ? `Update Ticket Status - ${resolveTicketModal.ticketNumber || '#TK'}` : 'Update Ticket Status'}
         maxWidth="660px"
       >
         {resolveTicketModal && (
@@ -2123,6 +2594,52 @@ export default function HelpSupport() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   type="button"
+                  onClick={() => setResolutionStatus('In Progress')}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: resolutionStatus === 'In Progress' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                    background: resolutionStatus === 'In Progress' ? '#e0f2fe' : '#ffffff',
+                    color: resolutionStatus === 'In Progress' ? '#0369a1' : '#475569',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <ClockIcon size={14} color={resolutionStatus === 'In Progress' ? '#0284c7' : '#64748b'} />
+                  <span>In Progress</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolutionStatus('Draft')}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: resolutionStatus === 'Draft' ? '2px solid #475569' : '1px solid #cbd5e1',
+                    background: resolutionStatus === 'Draft' ? '#f1f5f9' : '#ffffff',
+                    color: resolutionStatus === 'Draft' ? '#0f172a' : '#475569',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <FileTextIcon size={14} color={resolutionStatus === 'Draft' ? '#0f172a' : '#64748b'} />
+                  <span>Draft</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setResolutionStatus('Resolved')}
                   style={{
                     flex: 1,
@@ -2144,29 +2661,6 @@ export default function HelpSupport() {
                   <CheckCircleIcon size={15} color={resolutionStatus === 'Resolved' ? '#15803d' : '#64748b'} />
                   <span>Mark as Resolved</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setResolutionStatus('Closed')}
-                  style={{
-                    flex: 1,
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: resolutionStatus === 'Closed' ? '2px solid #0f172a' : '1px solid #cbd5e1',
-                    background: resolutionStatus === 'Closed' ? '#f1f5f9' : '#ffffff',
-                    color: resolutionStatus === 'Closed' ? '#0f172a' : '#475569',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <LockIcon size={14} color={resolutionStatus === 'Closed' ? '#0f172a' : '#64748b'} />
-                  <span>Close Ticket</span>
-                </button>
               </div>
             </div>
 
@@ -2174,7 +2668,9 @@ export default function HelpSupport() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
-                  Resolution Details & Solution Remarks <span style={{ color: '#dc2626' }}>*</span>
+                  {resolutionStatus === 'Draft' 
+                    ? 'Draft Notes / Remarks' 
+                    : (resolutionStatus === 'In Progress' ? 'Progress Notes & Actions Taken' : 'Resolution Details & Solution Remarks')} <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>Shared with branch</span>
               </div>
@@ -2182,7 +2678,13 @@ export default function HelpSupport() {
                 rows={4}
                 value={resolutionNote}
                 onChange={e => setResolutionNote(e.target.value)}
-                placeholder="Explain the solution provided, steps taken to resolve the issue, or instructions for the branch staff..."
+                placeholder={
+                  resolutionStatus === 'Draft' 
+                    ? "Add draft notes, internal findings, or preliminary instructions..." 
+                    : (resolutionStatus === 'In Progress'
+                        ? "Describe ongoing investigation, actions taken, or expected timeline for the branch..."
+                        : "Explain the solution provided, steps taken to resolve the issue, or instructions for the branch staff...")
+                }
                 required
                 style={{
                   width: '100%',
@@ -2268,7 +2770,9 @@ export default function HelpSupport() {
                 type="submit"
                 disabled={isResolving || !resolutionNote.trim() || isUploadingResolutionFile}
                 style={{
-                  background: resolutionStatus === 'Closed' ? '#0f172a' : '#16a34a',
+                  background: resolutionStatus === 'Draft' 
+                    ? '#475569' 
+                    : (resolutionStatus === 'In Progress' ? '#0284c7' : '#16a34a'),
                   color: '#ffffff',
                   border: 'none',
                   padding: '10px 20px',
@@ -2280,11 +2784,25 @@ export default function HelpSupport() {
                   alignItems: 'center',
                   gap: '8px',
                   opacity: (isResolving || !resolutionNote.trim() || isUploadingResolutionFile) ? 0.6 : 1,
-                  boxShadow: resolutionStatus === 'Closed' ? '0 2px 8px rgba(15, 23, 42, 0.25)' : '0 2px 8px rgba(22, 163, 74, 0.25)'
+                  boxShadow: resolutionStatus === 'Draft' 
+                    ? '0 2px 8px rgba(71, 85, 105, 0.25)' 
+                    : (resolutionStatus === 'In Progress' ? '0 2px 8px rgba(2, 132, 199, 0.25)' : '0 2px 8px rgba(22, 163, 74, 0.25)')
                 }}
               >
-                <CheckCircleIcon size={14} color="#ffffff" />
-                <span>{isResolving ? 'Updating...' : `Save & Mark as ${resolutionStatus}`}</span>
+                {resolutionStatus === 'Draft' ? (
+                  <FileTextIcon size={14} color="#ffffff" />
+                ) : resolutionStatus === 'In Progress' ? (
+                  <ClockIcon size={14} color="#ffffff" />
+                ) : (
+                  <CheckCircleIcon size={14} color="#ffffff" />
+                )}
+                <span>
+                  {isResolving 
+                    ? 'Updating...' 
+                    : (resolutionStatus === 'Draft' 
+                        ? 'Save as Draft' 
+                        : (resolutionStatus === 'In Progress' ? 'Save & Mark as In Progress' : 'Save & Mark as Resolved'))}
+                </span>
               </button>
             </div>
           </form>

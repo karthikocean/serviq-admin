@@ -259,6 +259,17 @@ export const AppProvider = ({ children }) => {
     return 'COMPANY';
   });
 
+  // Synchronize selectedBranchId to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (selectedBranchId) {
+        sessionStorage.setItem('selectedBranchId', String(selectedBranchId));
+      } else {
+        sessionStorage.setItem('selectedBranchId', '');
+      }
+    } catch (e) {}
+  }, [selectedBranchId]);
+
   // Synchronize currentUser to sessionStorage whenever it changes
   useEffect(() => {
     try {

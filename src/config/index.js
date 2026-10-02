@@ -22,9 +22,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.88.17:5000/public";
-    BASE_URL = "http://192.168.88.17:5000/api/admin";
-    server = "http://192.168.88.17:5000";
+    IMAGE_BASE_URL = "http://192.168.88.21:5000/public";
+    BASE_URL = "http://192.168.88.21:5000/api/admin";
+    server = "http://192.168.88.21:5000";
     break;
 }
 

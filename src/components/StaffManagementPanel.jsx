@@ -667,6 +667,20 @@ export default function StaffManagementPanel({
   };
 
   const handleToggleDuty = async (user) => {
+    const roleName = getStaffRoleName(user).toLowerCase();
+    const isManager = roleName.includes('manager') || 
+      roleName.includes('admin') || 
+      user.userType === 'BRANCH_ADMIN' || 
+      user.userType === 'RESTAURANT_OWNER' ||
+      String(user.role || '').toLowerCase().includes('manager') ||
+      String(user.designation || '').toLowerCase().includes('manager');
+
+    const canChange = !isManager || isCompanyUser || isCompanyScope;
+    if (!canChange) {
+      ShowNotifications.showAlertNotification("Only company has access to change manager's duty status.", false);
+      return;
+    }
+
     const isCurrentlyOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
     const nextDutyStatus = isCurrentlyOnDuty ? 'OFF_DUTY' : 'ON_DUTY';
     const nextStatus = isCurrentlyOnDuty ? 'Off Duty' : 'On Duty';
@@ -695,9 +709,9 @@ export default function StaffManagementPanel({
     }
 
     // 3. Update backend API with complete payload to pass schema validations
-    const resolvedRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
+    const rawRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
+    const resolvedRoleId = await ensureValidRoleId(rawRoleId || roleName, apiRoles);
     const resolvedBranchId = typeof user.branchId === 'object' ? (user.branchId?._id || user.branchId?.id) : (user.branchId || user.branch);
-    const roleName = getStaffRoleName(user).toLowerCase();
     const isBranchAdmin = roleName.includes('manager') || roleName.includes('admin') || user.userType === 'BRANCH_ADMIN';
     const isKitchen = roleName.includes('kitchen');
 
@@ -709,25 +723,28 @@ export default function StaffManagementPanel({
       userType: user.userType || (isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')
     };
 
+    if (user.employeeCode || user.empCode) {
+      payload.employeeCode = String(user.employeeCode || user.empCode).trim();
+    }
     if (resolvedRoleId && isObjectId(resolvedRoleId)) {
       payload.roleId = resolvedRoleId;
     }
-    if (resolvedBranchId && resolvedBranchId !== 'ALL') {
+    if (resolvedBranchId && resolvedBranchId !== 'ALL' && isObjectId(resolvedBranchId)) {
       payload.branchId = resolvedBranchId;
     }
     if (user.email && !isKitchen) {
-      payload.email = user.email;
+      payload.email = user.email.trim();
     }
 
     try {
       const res = await UserApi.updateUser(targetId, payload);
-      ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
+      ShowNotifications.showAlertNotification(`${user.name || 'Staff'} marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
       if (res?.status) {
         fetchData();
       }
     } catch (err) {
       console.warn("UserApi.updateUser error:", err);
-      ShowNotifications.showAlertNotification(`Staff marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
+      ShowNotifications.showAlertNotification(`${user.name || 'Staff'} marked as ${nextDutyStatus === 'ON_DUTY' ? 'On Duty' : 'Off Duty'}.`, true);
     }
   };
 
@@ -1603,6 +1620,13 @@ export default function StaffManagementPanel({
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
+              const isManager = uRoleName.toLowerCase().includes('manager') || 
+                uRoleName.toLowerCase().includes('admin') || 
+                user.userType === 'BRANCH_ADMIN' || 
+                user.userType === 'RESTAURANT_OWNER' ||
+                String(user.role || '').toLowerCase().includes('manager') ||
+                String(user.designation || '').toLowerCase().includes('manager');
+              const canChangeDuty = !isManager || isCompanyUser || isCompanyScope;
               const isOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
               const isStaffActive = user.isActive !== undefined ? Boolean(user.isActive) : (user.status !== 'Inactive');
               const assignedTables = isWaiter ? apiTables
@@ -1758,11 +1782,14 @@ export default function StaffManagementPanel({
                   </td>
 
                   {/* 9. Duty Status */}
-                  <td style={{ padding: '12px 10px', textAlign: 'center', verticalAlign: 'middle' }}>
+                  <td style={{ padding: '12px 10px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                     <button
                       type="button"
-                      onClick={() => handleToggleDuty(user)}
-                      title="Click to toggle duty status"
+                      disabled={!canChangeDuty}
+                      onClick={() => {
+                        if (canChangeDuty) handleToggleDuty(user);
+                      }}
+                      title={!canChangeDuty ? "Only company has access to change manager's duty status" : "Click to toggle duty status"}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -1776,7 +1803,8 @@ export default function StaffManagementPanel({
                         color: isOnDuty ? '#166534' : '#64748b',
                         background: isOnDuty ? '#dcfce7' : '#f1f5f9',
                         border: isOnDuty ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
-                        cursor: 'pointer',
+                        cursor: !canChangeDuty ? 'not-allowed' : 'pointer',
+                        opacity: !canChangeDuty ? 0.65 : 1,
                         width: '105px',
                         minWidth: '105px',
                         whiteSpace: 'nowrap',

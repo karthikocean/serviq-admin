@@ -194,7 +194,13 @@ export default function OverviewPanel({
     userRole === 'super_admin';
   const isAdmin = isRestaurantOwner || userRole === 'admin' || userType === 'ADMIN';
 
-  const isSpecificBranch = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All');
+  const isSpecificBranch = Boolean(
+    selectedBranchId && 
+    selectedBranchId !== 'ALL' && 
+    selectedBranchId !== 'All' && 
+    String(selectedBranchId).toLowerCase() !== 'all branches' && 
+    String(selectedBranchId).toUpperCase() !== 'COMPANY'
+  );
   const isAllBranches = !isSpecificBranch;
 
   const selectedBranch = isSpecificBranch
@@ -230,8 +236,8 @@ export default function OverviewPanel({
     setIsLoadingStats(true);
     const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getDashboardStats(branchParam);
-    if (res && res.status && res.response?.data) {
-      setStatsData(res.response.data);
+    if (res && res.status && res.response) {
+      setStatsData(res.response.data || res.response);
     }
     setIsLoadingStats(false);
   };
@@ -240,8 +246,8 @@ export default function OverviewPanel({
     setIsLoadingGrowth(true);
     const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getRevenueGrowth(branchParam);
-    if (res && res.status && res.response?.data) {
-      setRevenueGrowthData(res.response.data);
+    if (res && res.status && res.response) {
+      setRevenueGrowthData(res.response.data || res.response);
     }
     setIsLoadingGrowth(false);
   };
@@ -250,8 +256,8 @@ export default function OverviewPanel({
     setIsLoadingBreakdown(true);
     const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getOrderBreakdown(branchParam);
-    if (res && res.status && res.response?.data) {
-      setOrderBreakdownData(res.response.data);
+    if (res && res.status && res.response) {
+      setOrderBreakdownData(res.response.data || res.response);
     }
     setIsLoadingBreakdown(false);
   };
@@ -260,8 +266,9 @@ export default function OverviewPanel({
     setIsLoadingLiveOrders(true);
     const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 5 } : { limit: 5 };
     const res = await DashboardApi.getLiveOrders(branchParam);
-    if (res && res.status && res.response?.data) {
-      setLiveOrdersData(Array.isArray(res.response.data) ? res.response.data : (res.response.data?.orders || []));
+    if (res && res.status && res.response) {
+      const respData = res.response.data || res.response;
+      setLiveOrdersData(Array.isArray(respData) ? respData : (respData?.orders || []));
     }
     setIsLoadingLiveOrders(false);
   };
@@ -270,8 +277,8 @@ export default function OverviewPanel({
     setIsLoadingLiveTables(true);
     const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
     const res = await DashboardApi.getLiveTables(branchParam);
-    if (res && res.status && res.response?.data) {
-      setLiveTablesData(res.response.data);
+    if (res && res.status && res.response) {
+      setLiveTablesData(res.response.data || res.response);
     }
     setIsLoadingLiveTables(false);
   };
@@ -280,7 +287,8 @@ export default function OverviewPanel({
     try {
       const res = await TableApi.getTables({ limit: 1000 });
       if (res && res.status && res.response) {
-        const tList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
+        const resp = res.response;
+        const tList = Array.isArray(resp) ? resp : (Array.isArray(resp.data) ? resp.data : (Array.isArray(resp.tables) ? resp.tables : (Array.isArray(resp.data?.tables) ? resp.data.tables : [])));
         if (tList.length > 0) {
           setFetchedAllTables(tList);
         }
@@ -301,13 +309,13 @@ export default function OverviewPanel({
 
   // Current view tables and orders
   const displayTables = isSpecificBranch
-    ? (tables && tables.length > 0 ? tables : allTables).filter(t => isBranchMatch(t, selectedBranchId, branches))
+    ? (tables || []).filter(t => isBranchMatch(t, selectedBranchId, branches))
     : (allTables && allTables.length > 0 ? allTables : tables);
   const displayOrders = isSpecificBranch
-    ? (orders && orders.length > 0 ? orders : allOrders).filter(o => isBranchMatch(o, selectedBranchId, branches))
+    ? (orders || []).filter(o => isBranchMatch(o, selectedBranchId, branches))
     : (allOrders && allOrders.length > 0 ? allOrders : orders);
   const displayStaff = isSpecificBranch
-    ? (staff && staff.length > 0 ? staff : allStaff).filter(s => isBranchMatch(s, selectedBranchId, branches))
+    ? (staff || []).filter(s => isBranchMatch(s, selectedBranchId, branches))
     : (allStaff && allStaff.length > 0 ? allStaff : staff);
 
 
@@ -588,7 +596,7 @@ export default function OverviewPanel({
               style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px', background: '#ffffff' }}
               onClick={() => onSelectBranch(null)}
             >
-              ← View {activeRestaurant?.restaurantName || activeRestaurant?.name || 'Spice Route'}
+              ← View {activeRestaurant?.restaurantName || activeRestaurant?.name || 'All Branches'}
             </button>
           )}
         </div>

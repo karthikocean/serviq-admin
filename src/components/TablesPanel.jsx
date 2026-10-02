@@ -665,17 +665,17 @@ export default function TablesPanel({
         width: '100%'
       }}>
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLE NO</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SECTION / AREA</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>SEATING CAPACITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DEFAULT WAITER</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>QR CODE</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', whiteSpace: 'nowrap' }}>S.NO</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '160px' }}>TABLE NO</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>SECTION / AREA</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>SEATING CAPACITY</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DEFAULT WAITER</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QR CODE</th>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -699,13 +699,13 @@ export default function TablesPanel({
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       {/* S.NO */}
-                      <td style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 700, fontSize: '12px', color: '#0f172a', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                         {page * limit + index + 1}
                       </td>
 
                       {/* TABLE NO */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', minWidth: '160px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
                           <div style={{
                             width: '36px',
                             height: '36px',
@@ -719,26 +719,27 @@ export default function TablesPanel({
                           }}>
                             <TableIcon size={16} color={statusProps.color} />
                           </div>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
+                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', wordBreak: 'keep-all', display: 'inline-block' }}>
                             {tableIdStr}
                           </span>
                         </div>
                       </td>
 
                       {/* SECTION / AREA */}
-                      <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                      <td style={{ padding: '14px 16px', fontSize: '13px', fontWeight: 600, color: '#475569', whiteSpace: 'nowrap' }}>
                         {table.section || 'Main Dining'}
                       </td>
 
                       {/* SEATING CAPACITY */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div style={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '6px',
                           color: '#475569',
                           fontSize: '13px',
-                          fontWeight: 600
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap'
                         }}>
                           <UsersGroupIcon size={14} color="#64748b" />
                           <span>{table.seatingCapacity ?? table.seats ?? 4} seats</span>
@@ -746,17 +747,17 @@ export default function TablesPanel({
                       </td>
 
                       {/* DEFAULT WAITER */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
                           {waiterName ? (
                             <>
                               <UserIcon size={14} color="#0f172a" />
-                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px', whiteSpace: 'nowrap' }}>
                                 {waiterName}
                               </span>
                             </>
                           ) : (
-                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px', whiteSpace: 'nowrap' }}>
                               Unassigned
                             </span>
                           )}
@@ -764,7 +765,7 @@ export default function TablesPanel({
                       </td>
 
                       {/* STATUS */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <span style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -789,7 +790,7 @@ export default function TablesPanel({
                       </td>
 
                       {/* QR CODE */}
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div
                           onClick={() => setViewingQrTable({
                             tableId: tableIdStr,
@@ -844,7 +845,7 @@ export default function TablesPanel({
                       </td>
 
                       {/* KEY (ICON STYLE ACTIONS) */}
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
                           {/* Action 1: Edit Icon */}
                           <button

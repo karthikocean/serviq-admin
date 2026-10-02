@@ -182,6 +182,18 @@ export default function AdminLayout() {
         ];
         return invKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
       }
+      if (moduleName === 'reports_analytics' || moduleName === 'reports') {
+        const repKeys = [
+          'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
+          'reports_inventory', 'reports_staff', 'reports_tax'
+        ];
+        return repKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
+      }
+      if (moduleName.startsWith('reports_')) {
+        return !!currentUser.role.permissions[moduleName]?.[action] ||
+               !!currentUser.role.permissions['reports_analytics']?.[action] ||
+               !!currentUser.role.permissions['reports']?.[action];
+      }
       const modulePerms = currentUser.role.permissions[moduleName] || {};
       return !!modulePerms[action];
     }
@@ -196,6 +208,19 @@ export default function AdminLayout() {
         'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
       ];
       return invKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
+    }
+    if (moduleName === 'reports_analytics' || moduleName === 'reports') {
+      const repKeys = [
+        'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
+        'reports_inventory', 'reports_staff', 'reports_tax'
+      ];
+      return repKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
+    }
+    if (moduleName.startsWith('reports_')) {
+      return !!userRoleConfig.permissions?.[moduleName]?.[action] ||
+             !!userRoleConfig.permissions?.[moduleName.replace('reports_', 'report_')]?.[action] ||
+             !!userRoleConfig.permissions?.['reports_analytics']?.[action] ||
+             !!userRoleConfig.permissions?.['reports']?.[action];
     }
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
@@ -734,67 +759,79 @@ export default function AdminLayout() {
               </div>
               {sidebarReportsOpen && (
                 <ul className="sidebar-submenu">
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'sales' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=sales" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <line x1="12" y1="1" x2="12" y2="23"></line>
-                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                      </svg>
-                      <span>Sales & Revenue</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'items' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=items" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2"></path>
-                        <path d="M15 11v11"></path>
-                        <path d="M5 2v14a3 3 0 0 0 3 3h1v3"></path>
-                        <path d="M9 2v6"></path>
-                      </svg>
-                      <span>Dish Performance</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'orders' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=orders" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-                        <path d="M3 6h18"></path>
-                        <path d="M16 10a4 4 0 0 1-8 0"></path>
-                      </svg>
-                      <span>Order Analytics</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'inventory' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=inventory" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <path d="m7.5 4.27 9 5.15"></path>
-                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
-                        <path d="m3.27 6.96 8.73 5.05 8.73-5.05"></path>
-                        <path d="M12 22.08V12"></path>
-                      </svg>
-                      <span>Inventory & Stock</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'staff' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=staff" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                      </svg>
-                      <span>Staff Performance</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${isReportsActive && currentReportTab === 'tax' ? 'active' : ''}`}>
-                    <Link to="/reports?tab=tax" style={{ display: 'flex', alignItems: 'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
-                        <path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2z"></path>
-                        <line x1="8" y1="6" x2="16" y2="6"></line>
-                        <line x1="8" y1="10" x2="16" y2="10"></line>
-                        <line x1="8" y1="14" x2="12" y2="14"></line>
-                      </svg>
-                      <span>Tax & Settlement</span>
-                    </Link>
-                  </li>
+                  {hasPermission('reports_sales', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'sales' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=sales" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <line x1="12" y1="1" x2="12" y2="23"></line>
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Sales & Revenue</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_items', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'items' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=items" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2"></path>
+                          <path d="M15 11v11"></path>
+                          <path d="M5 2v14a3 3 0 0 0 3 3h1v3"></path>
+                          <path d="M9 2v6"></path>
+                        </svg>
+                        <span>Dish Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_orders', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'orders' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=orders" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+                          <path d="M3 6h18"></path>
+                          <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        </svg>
+                        <span>Order Analytics</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_inventory', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'inventory' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=inventory" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="m7.5 4.27 9 5.15"></path>
+                          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                          <path d="m3.27 6.96 8.73 5.05 8.73-5.05"></path>
+                          <path d="M12 22.08V12"></path>
+                        </svg>
+                        <span>Inventory & Stock</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_staff', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'staff' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=staff" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>Staff Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_tax', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'tax' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=tax" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2z"></path>
+                          <line x1="8" y1="6" x2="16" y2="6"></line>
+                          <line x1="8" y1="10" x2="16" y2="10"></line>
+                          <line x1="8" y1="14" x2="12" y2="14"></line>
+                        </svg>
+                        <span>Tax & Settlement</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               )}
             </li>

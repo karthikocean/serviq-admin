@@ -5,7 +5,7 @@ export const ticketApi = {
     // Get all tickets for the authenticated restaurant
     getTickets: async (params = {}) => {
         try {
-            const cleanParams = { limit: 10, page: 0 };
+            const cleanParams = {};
             Object.keys(params).forEach(key => {
                 if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
                     cleanParams[key] = params[key];
@@ -17,29 +17,50 @@ export const ticketApi = {
             if (params.priority && !cleanParams.priority && params.priority !== 'All' && params.priority !== 'ALL') cleanParams.priority = params.priority;
             if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
 
-            if (cleanParams.page !== undefined) {
-                cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+            // Load all current tickets (or specified limit)
+            if (!cleanParams.limit) {
+                cleanParams.limit = 100;
             }
-            if (cleanParams.limit !== undefined) {
-                cleanParams.limit = Number(cleanParams.limit) || 10;
-            }
+
             const response = await apiClient.get('/tickets', { params: cleanParams });
             if (response.status === 200 || response.status === 201) {
-                return { status: true, ...response.data };
+                const resData = response.data;
+                const ticketList = Array.isArray(resData?.data) ? resData.data : (Array.isArray(resData) ? resData : []);
+                return {
+                    status: true,
+                    data: ticketList,
+                    total: resData?.total ?? ticketList.length,
+                    totalPages: resData?.totalPages,
+                    currentPage: resData?.currentPage,
+                    from: resData?.from,
+                    to: resData?.to,
+                    ...resData
+                };
             }
         } catch (error) {
             const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Fetch Tickets';
             console.warn("TicketApi getTickets note:", errorMessage);
-            return { status: false, error: errorMessage };
+            return { status: false, error: errorMessage, data: [] };
         }
     },
 
     // Create a new ticket
     createTicket: async (ticketData) => {
         try {
-            const response = await apiClient.post('/tickets', ticketData);
+            const attachmentUrl = ticketData.attachmentUrl || ticketData.attachment || '';
+            const ticketRaisedTo = ticketData.ticketRaisedTo || (ticketData.raisedTo === 'Super Admin' ? 'Super Admin' : 'Company Admin');
+
+            const payload = {
+                ...ticketData,
+                attachmentUrl,
+                attachment: attachmentUrl,
+                ticketRaisedTo,
+                raisedTo: ticketRaisedTo
+            };
+
+            const response = await apiClient.post('/tickets', payload);
             if (response.status === 200 || response.status === 201) {
-                return { status: true, data: response.data };
+                return { status: true, data: response.data?.data || response.data };
             }
         } catch (error) {
             const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Create Ticket';
@@ -50,19 +71,80 @@ export const ticketApi = {
         }
     },
 
+    // Escalate a ticket to Super Admin
+    escalateTicket: async (ticketId, escalationReason) => {
+        try {
+            const reasonText = typeof escalationReason === 'object'
+                ? (escalationReason.escalationReason || escalationReason.reason || '')
+                : (escalationReason || 'Issue cannot be resolved at company level. Requires database sync fix from ServIQ core engineering team.');
+
+            const payload = {
+                escalationReason: reasonText,
+                reason: reasonText
+            };
+
+            try {
+                const response = await apiClient.put(`/tickets/${ticketId}/escalate`, payload);
+                if (response.status === 200 || response.status === 201) {
+                    return { status: true, data: response.data?.data || response.data };
+                }
+            } catch (putErr) {
+                const postRes = await apiClient.post(`/tickets/${ticketId}/escalate`, payload);
+                if (postRes.status === 200 || postRes.status === 201) {
+                    return { status: true, data: postRes.data?.data || postRes.data };
+                }
+            }
+        } catch (error) {
+            const errorMessage = error?.response?.data?.message || error?.message || 'Failed to Escalate Ticket';
+            if (error?.response?.status !== 401) {
+                ShowNotifications.showAlertNotification(errorMessage, false);
+            }
+            throw new Error(errorMessage);
+        }
+    },
+
+    // Update ticket status & resolution (/tickets/:id/status)
+    updateTicketStatus: async (ticketId, statusData) => {
+        try {
+            const payload = typeof statusData === 'string' ? { status: statusData } : statusData;
+
+            try {
+                const response = await apiClient.put(`/tickets/${ticketId}/status`, payload);
+                if (response.status === 200 || response.status === 201) {
+                    return { status: true, data: response.data?.data || response.data };
+                }
+            } catch (putErr) {
+                try {
+                    const patchRes = await apiClient.patch(`/tickets/${ticketId}/status`, payload);
+                    if (patchRes.status === 200 || patchRes.status === 201) {
+                        return { status: true, data: patchRes.data?.data || patchRes.data };
+                    }
+                } catch (patchErr) {
+                    const postRes = await apiClient.post(`/tickets/${ticketId}/status`, payload);
+                    if (postRes.status === 200 || postRes.status === 201) {
+                        return { status: true, data: postRes.data?.data || postRes.data };
+                    }
+                }
+            }
+        } catch (error) {
+            // Fallback to general updateTicket if /status endpoint is not found
+            return await ticketApi.updateTicket(ticketId, typeof statusData === 'string' ? { status: statusData } : statusData);
+        }
+    },
+
     // Update an existing ticket
     updateTicket: async (ticketId, ticketData) => {
         try {
             const response = await apiClient.put(`/tickets/${ticketId}`, ticketData);
             if (response.status === 200 || response.status === 201) {
-                return { status: true, data: response.data };
+                return { status: true, data: response.data?.data || response.data };
             }
             return { status: false, data: response.data };
         } catch (error) {
             try {
                 const patchRes = await apiClient.patch(`/tickets/${ticketId}`, ticketData);
                 if (patchRes.status === 200 || patchRes.status === 201) {
-                    return { status: true, data: patchRes.data };
+                    return { status: true, data: patchRes.data?.data || patchRes.data };
                 }
             } catch (patchErr) {
                 // Ignore fallback error

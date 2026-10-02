@@ -484,18 +484,27 @@ export default function StaffFormPage() {
           </div>
 
           <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
-              Duty Status
-            </label>
-            <SearchableSelect
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              options={[
-                { value: 'On Duty', label: 'On Duty' },
-                { value: 'Off Duty', label: 'Off Duty' }
-              ]}
-              placeholder="Select Status..."
-            />
+            {(() => {
+              const isManagerRole = String(form.role || '').toLowerCase().includes('manager') || String(form.role || '').toLowerCase().includes('admin');
+              const isLocked = isManagerRole && !isCompanyUser;
+              return (
+                <>
+                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+                    Duty Status {isLocked && <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>(Locked for Manager)</span>}
+                  </label>
+                  <SearchableSelect
+                    value={form.status}
+                    isDisabled={isLocked}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                    options={[
+                      { value: 'On Duty', label: 'On Duty' },
+                      { value: 'Off Duty', label: 'Off Duty' }
+                    ]}
+                    placeholder="Select Status..."
+                  />
+                </>
+              );
+            })()}
           </div>
 
 
