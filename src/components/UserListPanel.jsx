@@ -871,11 +871,11 @@ export default function UserListPanel() {
           </div>
         </div>
 
-        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', position: 'relative', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO.
                 </th>
                 <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>

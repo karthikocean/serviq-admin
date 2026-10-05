@@ -120,6 +120,9 @@
 .orders-table-responsive {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
+  position: relative;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 #f1f5f9;
 }
@@ -145,14 +148,24 @@
   font-family: inherit;
 }
 
+.orders-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
 .orders-table thead tr {
   background-color: #000000;
   height: 48px;
 }
 
 .orders-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   padding: 12px 10px;
   color: #ffffff;
+  background-color: #000000;
   font-weight: 800;
   font-size: 11px;
   text-transform: uppercase;
@@ -160,6 +173,7 @@
   white-space: nowrap;
   vertical-align: middle;
   border-bottom: 3px solid #ff5a1f;
+  box-shadow: inset 0 -3px 0 #ff5a1f;
   box-sizing: border-box;
 }
 
@@ -188,10 +202,11 @@
 
 .orders-sticky-actions-header {
   position: sticky;
+  top: 0;
   right: 0;
-  z-index: 10;
+  z-index: 25;
   background-color: #000000;
-  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.15);
+  box-shadow: -4px 0 10px rgba(0, 0, 0, 0.15), inset 0 -3px 0 #ff5a1f;
   width: 180px;
   min-width: 180px;
   max-width: 180px;

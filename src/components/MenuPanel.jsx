@@ -285,7 +285,7 @@ export default function MenuPanel({
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
-      <div className="menu-table-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', maxHeight: 'none', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+      <div className="menu-table-wrapper" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', position: 'relative', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <table className="menu-items-table" style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>

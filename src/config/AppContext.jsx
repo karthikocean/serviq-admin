@@ -9,6 +9,7 @@ import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
 import SubscriptionApi from '../api/Subscription.js';
+import RoleApi from '../api/Role.js';
 import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -1080,6 +1081,100 @@ export const AppProvider = ({ children }) => {
           return null;
         }
 
+        // Verify admin access for current user profile
+        const profUserType = (profileData.userType || '').toUpperCase().trim();
+        let profRoleObj = (typeof profileData.role === 'object' && profileData.role !== null) ? profileData.role :
+                            (typeof profileData.roleId === 'object' && profileData.roleId !== null) ? profileData.roleId : null;
+
+        const roleIdToLookup = (typeof profileData.roleId === 'string' && profileData.roleId) || 
+                               (typeof profileData.role === 'string' && profileData.role);
+
+        if (!profRoleObj && roleIdToLookup) {
+          try {
+            if (/^[0-9a-fA-F]{24}$/.test(roleIdToLookup)) {
+              const rRes = await RoleApi.getRoleById(roleIdToLookup);
+              if (rRes && rRes.status && rRes.response) {
+                profRoleObj = rRes.response?.data || rRes.response;
+              }
+            }
+            if (!profRoleObj) {
+              const listRes = await RoleApi.getRoles({ limit: 100 });
+              if (listRes && listRes.status && listRes.response) {
+                const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
+                if (Array.isArray(rolesList)) {
+                  profRoleObj = rolesList.find(r => 
+                    String(r._id) === String(roleIdToLookup) || 
+                    String(r.id) === String(roleIdToLookup) ||
+                    String(r.roleName || '').trim().toLowerCase() === String(roleIdToLookup).trim().toLowerCase()
+                  );
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("Could not fetch role in fetchProfile:", err);
+          }
+        }
+
+        const profRoleStr = profRoleObj?.roleName || profRoleObj?.name || (typeof profileData.role === 'string' ? profileData.role : '') || '';
+        const profRoleUpper = profRoleStr.toUpperCase().trim();
+        const profRoleLower = profRoleStr.toLowerCase().trim();
+
+        const isOwnerAccount = 
+          profUserType === 'RESTAURANT_OWNER' || 
+          profUserType === 'OWNER' || 
+          profUserType === 'SUPER ADMIN' || 
+          profUserType === 'SUPER_ADMIN' || 
+          profRoleUpper === 'RESTAURANT_OWNER' || 
+          profRoleUpper === 'OWNER' || 
+          profRoleUpper === 'SUPER ADMIN';
+
+        const resolveAdminAccessFlag = (obj) => {
+          if (!obj || typeof obj !== 'object') return undefined;
+          if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
+          if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+          return undefined;
+        };
+
+        let profAdminAccess = 
+          resolveAdminAccessFlag(profileData) ??
+          resolveAdminAccessFlag(profRoleObj) ??
+          resolveAdminAccessFlag(typeof profileData.role === 'object' ? profileData.role : null) ??
+          resolveAdminAccessFlag(typeof profileData.roleId === 'object' ? profileData.roleId : null);
+
+        if (profAdminAccess === undefined) {
+          if (isOwnerAccount) {
+            profAdminAccess = true;
+          } else {
+            profAdminAccess = !(
+              profRoleLower.includes('waiter') ||
+              profRoleLower.includes('kitchen') ||
+              profRoleLower.includes('chef') ||
+              profRoleLower.includes('cook') ||
+              profRoleLower.includes('server') ||
+              profRoleLower.includes('steward') ||
+              profUserType === 'STATION' ||
+              profUserType === 'WAITER' ||
+              profUserType === 'KITCHEN'
+            );
+          }
+        }
+
+        if (profAdminAccess === false) {
+          const deniedMsg = "Access Denied: You do not have admin access to access the Admin Panel.";
+          sessionStorage.setItem("deactivatedToast", deniedMsg);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(deniedMsg, false);
+          }
+          return null;
+        }
+
         setCurrentUser(prevUser => {
           const profileSub = profileData.subscription || restObj?.subscription;
           const prevSub = prevUser?.subscription;
@@ -1107,6 +1202,9 @@ export const AppProvider = ({ children }) => {
             phoneNumber: profileData.phoneNumber || prevUser?.phoneNumber,
             profileImage: profileData.profileImage || prevUser?.profileImage,
             userType: profileData.userType || prevUser?.userType,
+            role: profRoleObj || profileData.role || prevUser?.role,
+            roleId: profileData.roleId || profRoleObj?._id || prevUser?.roleId,
+            adminAccess: profAdminAccess,
             restaurantId: profileData.restaurantId || prevUser?.restaurantId,
             plan: livePlan,
             subscription: mergedSub,
@@ -1233,57 +1331,96 @@ export const AppProvider = ({ children }) => {
             };
           }
 
-          const userTypeUpper = (apiUser.userType || '').toUpperCase();
-          const roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
+          const userTypeUpper = (apiUser.userType || '').toUpperCase().trim();
+          let roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
                           (typeof apiUser.roleId === 'object' && apiUser.roleId !== null) ? apiUser.roleId : null;
+
+          const roleIdentifier = (typeof apiUser.roleId === 'string' && apiUser.roleId) ? apiUser.roleId : 
+                                 (typeof apiUser.role === 'string' && apiUser.role) ? apiUser.role : null;
+
+          // Temporarily set token in sessionStorage so RoleApi calls are authenticated
+          sessionStorage.setItem("userToken", token);
+          sessionStorage.setItem("token", token);
+
+          if (!roleObj && roleIdentifier) {
+            try {
+              if (/^[0-9a-fA-F]{24}$/.test(roleIdentifier)) {
+                const rRes = await RoleApi.getRoleById(roleIdentifier);
+                if (rRes && rRes.status && rRes.response) {
+                  roleObj = rRes.response?.data || rRes.response;
+                }
+              }
+              if (!roleObj) {
+                const listRes = await RoleApi.getRoles({ limit: 100 });
+                if (listRes && listRes.status && listRes.response) {
+                  const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
+                  if (Array.isArray(rolesList)) {
+                    roleObj = rolesList.find(r => 
+                      String(r._id) === String(roleIdentifier) || 
+                      String(r.id) === String(roleIdentifier) ||
+                      String(r.roleName || '').trim().toLowerCase() === String(roleIdentifier).trim().toLowerCase()
+                    );
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("Could not fetch role in login:", err);
+            }
+          }
+
           const roleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
-          const roleUpper = roleStr.toUpperCase();
+          const roleUpper = roleStr.toUpperCase().trim();
           const roleLower = roleStr.toLowerCase().trim();
-          const emailLower = cleanEmail.toLowerCase().trim();
 
           const isRestaurantOwner = 
             userTypeUpper === 'RESTAURANT_OWNER' || 
             userTypeUpper === 'OWNER' || 
             userTypeUpper === 'SUPER ADMIN' || 
             userTypeUpper === 'SUPER_ADMIN' ||
-            userTypeUpper === 'ADMIN' ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
-            roleUpper === 'OWNER' ||
-            roleUpper === 'ADMIN' ||
-            roleLower === 'admin' ||
-            String(apiUser.name || '').toLowerCase().includes('admin') ||
-            emailLower.includes('admin');
+            roleUpper === 'OWNER';
 
           const isManagerOrBranchAdmin = 
             userTypeUpper === 'BRANCH_ADMIN' ||
             userTypeUpper === 'BRANCH ADMIN' ||
             userTypeUpper === 'MANAGER' ||
             roleLower.includes('manager') ||
-            roleLower.includes('admin') ||
             roleLower.includes('supervisor');
 
           // Check dynamic Role Admin Access setting
-          const hasExplicitAdminAccess = roleObj ? (roleObj.adminAccess ?? roleObj.isAdminAccess) : undefined;
-          let isRestrictedFromAdmin = false;
+          const resolveAdminAccessFlag = (obj) => {
+            if (!obj || typeof obj !== 'object') return undefined;
+            if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
+            if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+            return undefined;
+          };
 
-          if (!isRestaurantOwner) {
-            if (hasExplicitAdminAccess !== undefined) {
-              isRestrictedFromAdmin = !hasExplicitAdminAccess;
+          let hasExplicitAdminAccess = 
+            resolveAdminAccessFlag(apiUser) ??
+            resolveAdminAccessFlag(roleObj) ??
+            resolveAdminAccessFlag(typeof apiUser.role === 'object' ? apiUser.role : null) ??
+            resolveAdminAccessFlag(typeof apiUser.roleId === 'object' ? apiUser.roleId : null);
+
+          if (hasExplicitAdminAccess === undefined) {
+            if (isRestaurantOwner) {
+              hasExplicitAdminAccess = true;
             } else {
-              isRestrictedFromAdmin = !isManagerOrBranchAdmin && (
+              const isNonAdminStaff = 
                 roleLower.includes('waiter') ||
                 roleLower.includes('kitchen') ||
                 roleLower.includes('chef') ||
                 roleLower.includes('cook') ||
                 roleLower.includes('server') ||
                 roleLower.includes('steward') ||
-                userTypeUpper === 'STATION'
-              );
+                userTypeUpper === 'STATION' ||
+                userTypeUpper === 'WAITER' ||
+                userTypeUpper === 'KITCHEN';
+              hasExplicitAdminAccess = !isNonAdminStaff;
             }
           }
 
-          if (isRestrictedFromAdmin) {
+          if (hasExplicitAdminAccess === false) {
             sessionStorage.removeItem("userToken");
             sessionStorage.removeItem("token");
             sessionStorage.removeItem("currentUser");
@@ -1292,7 +1429,7 @@ export const AppProvider = ({ children }) => {
             setCurrentUser(null);
             return {
               success: false,
-              error: "Access Denied: This role is restricted from accessing the Admin panel."
+              error: "Access Denied: You do not have admin access to log into the Admin panel."
             };
           }
 
@@ -1334,8 +1471,9 @@ export const AppProvider = ({ children }) => {
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber || '',
             userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : (isManagerOrBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')),
-            role: resolvedRole,
-            roleId: apiUser.roleId || apiUser.role,
+            role: roleObj || resolvedRole,
+            roleId: apiUser.roleId || roleObj?._id || apiUser.role,
+            adminAccess: hasExplicitAdminAccess,
             restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
             plan: apiUser.plan || apiUser.subscription?.planName || 'Standard',
             subscription: apiUser.subscription || null,
