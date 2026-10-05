@@ -141,6 +141,65 @@ const getFormattedStaffId = (u, fallbackIndex) => {
   return 'EMP-001';
 };
 
+// Formatted Order Number helper
+const getFormattedOrderNo = (ord, fallbackIndex) => {
+  if (!ord) return '-';
+  if (typeof ord === 'string' || typeof ord === 'number') {
+    const s = String(ord).trim();
+    if (!s || s === '-') return '-';
+    if (/^[0-9a-fA-F]{24}$/.test(s)) {
+      return `#ORD-${s.slice(-6).toUpperCase()}`;
+    }
+    if (s.startsWith('#ORD-')) return s;
+    if (s.startsWith('ORD-')) return `#${s}`;
+    if (s.startsWith('#')) return s;
+    return `#ORD-${s}`;
+  }
+
+  // Priority 1: Check human-readable non-hex custom order identifiers
+  const candidates = [
+    ord.orderNumber,
+    ord.customOrderId,
+    ord.orderCode,
+    ord.orderNo,
+    ord.orderRefId,
+    ord.tokenNo,
+    ord.orderId,
+    ord.id,
+    ord._id
+  ];
+
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== '') {
+      const str = String(c).trim();
+      // If it's NOT a 24-character hex MongoDB ObjectId, format and return it!
+      if (!/^[0-9a-fA-F]{24}$/.test(str)) {
+        if (str.startsWith('#ORD-')) return str;
+        if (str.startsWith('ORD-')) return `#${str}`;
+        if (str.startsWith('#')) return str;
+        return `#ORD-${str}`;
+      }
+    }
+  }
+
+  // Priority 2: If only a 24-character hex ID exists, format cleanly as #ORD-{LAST6}
+  const hexCandidate = ord.orderId || ord._id || ord.id;
+  if (hexCandidate) {
+    const strHex = String(hexCandidate).trim();
+    if (strHex.length >= 6) {
+      return `#ORD-${strHex.slice(-6).toUpperCase()}`;
+    }
+    return `#ORD-${strHex.toUpperCase()}`;
+  }
+
+  // Priority 3: Fallback index
+  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
+    return `#ORD-${String(fallbackIndex + 1).padStart(4, '0')}`;
+  }
+
+  return '#ORD-0001';
+};
+
 // Helper to determine if an item is Veg, Non-Veg, or Egg
 const resolveFoodType = (item) => {
   if (!item) return 'Veg';
@@ -311,6 +370,9 @@ export default function ReportsPanel({
   const [orderAnalyticsApiData, setOrderAnalyticsApiData] = useState(null);
   const [loadingOrderAnalyticsReport, setLoadingOrderAnalyticsReport] = useState(false);
 
+  const [inventoryApiData, setInventoryApiData] = useState(null);
+  const [loadingInventoryReport, setLoadingInventoryReport] = useState(false);
+
   const [staffApiData, setStaffApiData] = useState(null);
   const [loadingStaffReport, setLoadingStaffReport] = useState(false);
 
@@ -332,7 +394,7 @@ export default function ReportsPanel({
 
     if (activeTab === 'sales') {
       setLoadingSalesReport(true);
-      ReportsApi.getSalesReport({ ...commonFilters, paymentMethod: paymentFilter })
+      ReportsApi.getSalesReport({ ...commonFilters, paymentMethod: paymentFilter, orderType: orderTypeFilter })
         .then(res => {
           if (isSubscribed) setSalesApiData(res?.status ? res.response : null);
         })
@@ -344,10 +406,17 @@ export default function ReportsPanel({
         ...commonFilters,
         category: categoryFilter,
         dish: dishFilter,
-        foodType: foodTypeFilter
+        foodType: foodTypeFilter,
+        orderType: orderTypeFilter
       })
         .then(res => {
-          if (isSubscribed) setDishApiData(res?.status ? res.response : null);
+          if (isSubscribed) {
+            if (res?.status && res?.response?.success !== false) {
+              setDishApiData(res.response);
+            } else {
+              setDishApiData(null);
+            }
+          }
         })
         .catch(() => { if (isSubscribed) setDishApiData(null); })
         .finally(() => { if (isSubscribed) setLoadingDishReport(false); });
@@ -355,10 +424,35 @@ export default function ReportsPanel({
       setLoadingOrderAnalyticsReport(true);
       ReportsApi.getOrderAnalyticsReport({ ...commonFilters, orderType: orderTypeFilter, orderStatus: orderStatusFilter })
         .then(res => {
-          if (isSubscribed) setOrderAnalyticsApiData(res?.status ? res.response : null);
+          if (isSubscribed) {
+            if (res?.status && res?.response?.success !== false) {
+              setOrderAnalyticsApiData(res.response);
+            } else {
+              setOrderAnalyticsApiData(null);
+            }
+          }
         })
         .catch(() => { if (isSubscribed) setOrderAnalyticsApiData(null); })
         .finally(() => { if (isSubscribed) setLoadingOrderAnalyticsReport(false); });
+    } else if (activeTab === 'inventory') {
+      setLoadingInventoryReport(true);
+      ReportsApi.getInventoryStockReport({
+        ...commonFilters,
+        category: categoryFilter,
+        item: inventoryItemFilter,
+        stockStatus: stockStatusFilter
+      })
+        .then(res => {
+          if (isSubscribed) {
+            if (res?.status && res?.response?.success !== false) {
+              setInventoryApiData(res.response);
+            } else {
+              setInventoryApiData(null);
+            }
+          }
+        })
+        .catch(() => { if (isSubscribed) setInventoryApiData(null); })
+        .finally(() => { if (isSubscribed) setLoadingInventoryReport(false); });
     } else if (activeTab === 'staff') {
       setLoadingStaffReport(true);
       ReportsApi.getStaffPerformanceReport({
@@ -367,7 +461,13 @@ export default function ReportsPanel({
         role: staffRoleFilter
       })
         .then(res => {
-          if (isSubscribed) setStaffApiData(res?.status ? res.response : null);
+          if (isSubscribed) {
+            if (res?.status && res?.response?.success !== false) {
+              setStaffApiData(res.response);
+            } else {
+              setStaffApiData(null);
+            }
+          }
         })
         .catch(() => { if (isSubscribed) setStaffApiData(null); })
         .finally(() => { if (isSubscribed) setLoadingStaffReport(false); });
@@ -379,7 +479,13 @@ export default function ReportsPanel({
         taxType: taxTypeFilter
       })
         .then(res => {
-          if (isSubscribed) setTaxApiData(res?.status ? res.response : null);
+          if (isSubscribed) {
+            if (res?.status && res?.response?.success !== false) {
+              setTaxApiData(res.response);
+            } else {
+              setTaxApiData(null);
+            }
+          }
         })
         .catch(() => { if (isSubscribed) setTaxApiData(null); })
         .finally(() => { if (isSubscribed) setLoadingTaxReport(false); });
@@ -390,6 +496,8 @@ export default function ReportsPanel({
     };
   }, [
     activeTab,
+    inventorySubTab,
+    taxSubTab,
     branchFilter,
     dateStart,
     dateEnd,
@@ -537,13 +645,14 @@ export default function ReportsPanel({
       // Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const orderNo = String(ord.id || ord.orderNo || ord.orderId || '').toLowerCase();
+        const formattedNo = getFormattedOrderNo(ord).toLowerCase();
+        const orderNo = String(ord.id || ord.orderNo || ord.orderId || ord._id || '').toLowerCase();
         const billNo = String(ord.billNo || ord.billNumber || ord.bill_no || '').toLowerCase();
         const invoiceNo = String(ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || '').toLowerCase();
         const customer = String(ord.customerName || ord.customer || '').toLowerCase();
         const table = String(ord.table || ord.tableNo || '').toLowerCase();
         const waiter = String(ord.waiter || ord.staff || '').toLowerCase();
-        if (!orderNo.includes(q) && !billNo.includes(q) && !invoiceNo.includes(q) && !customer.includes(q) && !table.includes(q) && !waiter.includes(q)) {
+        if (!formattedNo.includes(q) && !orderNo.includes(q) && !billNo.includes(q) && !invoiceNo.includes(q) && !customer.includes(q) && !table.includes(q) && !waiter.includes(q)) {
           return false;
         }
       }
@@ -725,13 +834,43 @@ export default function ReportsPanel({
     const pending = filteredOrders.filter(o => ['new', 'preparing', 'ready'].includes((o.status || '').toLowerCase())).length;
     const cancelled = filteredOrders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length;
     const dineIn = filteredOrders.filter(o => (o.orderType || o.type || 'Dine-In').toLowerCase().includes('dine')).length;
-    const takeawayDelivery = filteredOrders.filter(o => {
+    const takeaway = filteredOrders.filter(o => {
       const t = (o.orderType || o.type || '').toLowerCase();
-      return t.includes('takeaway') || t.includes('delivery');
+      return t.includes('takeaway') || t.includes('take');
     }).length;
+    const delivery = filteredOrders.filter(o => {
+      const t = (o.orderType || o.type || '').toLowerCase();
+      return t.includes('delivery') || t.includes('deliv');
+    }).length;
+    const takeawayDelivery = takeaway + delivery;
 
-    return { total, completed, pending, cancelled, dineIn, takeawayDelivery };
+    return { total, completed, pending, cancelled, dineIn, takeaway, delivery, takeawayDelivery };
   }, [filteredOrders]);
+
+  const orderAnalyticsCounts = useMemo(() => {
+    let takeaway = orderAnalyticsApiData?.summary?.takeawayOrders ?? orderAnalyticsApiData?.summary?.takeaway;
+    let delivery = orderAnalyticsApiData?.summary?.deliveryOrders ?? orderAnalyticsApiData?.summary?.delivery;
+
+    if (Array.isArray(orderAnalyticsApiData?.data) && orderAnalyticsApiData.data.length > 0) {
+      if (takeaway === undefined) {
+        takeaway = orderAnalyticsApiData.data.filter(o => {
+          const t = String(o.orderType || o.type || o.source || '').toLowerCase();
+          return t.includes('take');
+        }).length;
+      }
+      if (delivery === undefined) {
+        delivery = orderAnalyticsApiData.data.filter(o => {
+          const t = String(o.orderType || o.type || o.source || '').toLowerCase();
+          return t.includes('deliv');
+        }).length;
+      }
+    }
+
+    if (takeaway === undefined) takeaway = orderAnalyticsMetrics.takeaway ?? 0;
+    if (delivery === undefined) delivery = orderAnalyticsMetrics.delivery ?? 0;
+
+    return { takeaway, delivery };
+  }, [orderAnalyticsApiData, orderAnalyticsMetrics]);
 
   // --------------------------------------------------------------------------
   // TAB 4: INVENTORY & STOCK REPORT CALCULATIONS
@@ -1280,61 +1419,116 @@ export default function ReportsPanel({
     };
   }, [filteredOrders, paymentFilter, taxTypeFilter, searchQuery]);
 
+  // Derived Tax and Payment Settlement rows (API data with local calculations fallback)
+  const taxSummaryRows = useMemo(() => {
+    if (taxApiData) {
+      if (Array.isArray(taxApiData.taxSummaryTable) && taxApiData.taxSummaryTable.length > 0) {
+        return taxApiData.taxSummaryTable;
+      }
+      if (Array.isArray(taxApiData.data) && taxApiData.data.length > 0) {
+        return taxApiData.data;
+      }
+    }
+    return taxReportData.taxRows;
+  }, [taxApiData, taxReportData.taxRows]);
+
+  const paymentSettlementRows = useMemo(() => {
+    if (taxApiData && Array.isArray(taxApiData.paymentSettlementTable) && taxApiData.paymentSettlementTable.length > 0) {
+      return taxApiData.paymentSettlementTable;
+    }
+    return taxReportData.settlementList;
+  }, [taxApiData, taxReportData.settlementList]);
+
   // --------------------------------------------------------------------------
   // PAGINATION HELPER FOR CURRENT ACTIVE TAB
   // --------------------------------------------------------------------------
   const currentTabRecords = useMemo(() => {
-    if (activeTab === 'sales') return filteredOrders;
-    if (activeTab === 'items') return dishReportData.list;
-    if (activeTab === 'orders') return filteredOrders;
+    if (activeTab === 'sales') {
+      if (salesApiData && Array.isArray(salesApiData.data)) return salesApiData.data;
+      return filteredOrders;
+    }
+    if (activeTab === 'items') return (dishApiData && Array.isArray(dishApiData.data)) ? dishApiData.data : dishReportData.list;
+    if (activeTab === 'orders') return (orderAnalyticsApiData && Array.isArray(orderAnalyticsApiData.data)) ? orderAnalyticsApiData.data : filteredOrders;
     if (activeTab === 'inventory') {
       if (inventorySubTab === 'movement') return stockMovementData.list;
-      if (inventorySubTab === 'low-stock') return inventoryReportData.lowStockList;
+      if (inventorySubTab === 'low-stock') {
+        if (inventoryApiData && Array.isArray(inventoryApiData.data)) {
+          return inventoryApiData.data.filter(item => {
+            const current = Number(item.closingStock ?? item.quantity ?? item.stock ?? 0);
+            const min = Number(item.minStock ?? item.minimumStock ?? 10);
+            return current <= min;
+          });
+        }
+        return inventoryReportData.lowStockList;
+      }
+      if (inventoryApiData && Array.isArray(inventoryApiData.data)) return inventoryApiData.data;
       return inventoryReportData.list;
     }
-    if (activeTab === 'staff') return staffReportData.list;
-    if (activeTab === 'tax') return taxSubTab === 'tax-summary' ? taxReportData.taxRows : taxReportData.settlementList;
+    if (activeTab === 'staff') return (staffApiData && Array.isArray(staffApiData.data)) ? staffApiData.data : staffReportData.list;
+    if (activeTab === 'tax') return taxSubTab === 'tax-summary' ? taxSummaryRows : paymentSettlementRows;
     return [];
   }, [
     activeTab,
     inventorySubTab,
     taxSubTab,
     filteredOrders,
+    salesApiData,
+    dishApiData,
+    orderAnalyticsApiData,
+    inventoryApiData,
+    staffApiData,
     dishReportData.list,
     inventoryReportData.list,
     inventoryReportData.lowStockList,
     stockMovementData.list,
     staffReportData.list,
-    taxReportData.taxRows,
-    taxReportData.settlementList
+    taxSummaryRows,
+    paymentSettlementRows
   ]);
 
   const currentApiData = useMemo(() => {
     if (activeTab === 'sales') return salesApiData;
     if (activeTab === 'items') return dishApiData;
     if (activeTab === 'orders') return orderAnalyticsApiData;
+    if (activeTab === 'inventory' && inventorySubTab === 'position') return inventoryApiData;
     if (activeTab === 'staff') return staffApiData;
     if (activeTab === 'tax') return taxApiData;
     return null;
-  }, [activeTab, salesApiData, dishApiData, orderAnalyticsApiData, staffApiData, taxApiData]);
+  }, [activeTab, inventorySubTab, salesApiData, dishApiData, orderAnalyticsApiData, inventoryApiData, staffApiData, taxApiData]);
 
   const totalRecordsCount = useMemo(() => {
-    if (currentApiData && currentApiData.totalItems !== undefined) {
-      return currentApiData.totalItems;
+    if (activeTab === 'tax') {
+      return taxSubTab === 'tax-summary' ? taxSummaryRows.length : paymentSettlementRows.length;
+    }
+    if (currentApiData) {
+      if (typeof currentApiData.totalItems === 'number') return currentApiData.totalItems;
+      if (typeof currentApiData.totalRecords === 'number') return currentApiData.totalRecords;
+      if (typeof currentApiData.count === 'number') return currentApiData.count;
     }
     return currentTabRecords.length;
-  }, [currentApiData, currentTabRecords.length]);
+  }, [activeTab, taxSubTab, taxSummaryRows.length, paymentSettlementRows.length, currentApiData, currentTabRecords.length]);
 
   const totalPages = useMemo(() => {
-    if (currentApiData && currentApiData.totalPages !== undefined) {
-      return currentApiData.totalPages || 1;
+    if (activeTab === 'tax') {
+      return Math.max(1, Math.ceil(totalRecordsCount / pageSize));
     }
-    return Math.ceil(totalRecordsCount / pageSize) || 1;
-  }, [currentApiData, totalRecordsCount, pageSize]);
+    if (currentApiData && typeof currentApiData.totalPages === 'number') {
+      return Math.max(1, currentApiData.totalPages);
+    }
+    return Math.max(1, Math.ceil(totalRecordsCount / pageSize));
+  }, [activeTab, currentApiData, totalRecordsCount, pageSize]);
 
   const paginatedRecords = useMemo(() => {
-    if (currentApiData && Array.isArray(currentApiData.data) && currentApiData.data.length > 0) {
-      if (currentApiData.data.length > pageSize) {
+    if (activeTab === 'tax') {
+      const records = taxSubTab === 'tax-summary' ? taxSummaryRows : paymentSettlementRows;
+      if (records.length > pageSize) {
+        const start = (currentPage - 1) * pageSize;
+        return records.slice(start, start + pageSize);
+      }
+      return records;
+    }
+    if (currentApiData && Array.isArray(currentApiData.data)) {
+      if (currentApiData.data.length > pageSize && currentApiData.totalPages === undefined) {
         const start = (currentPage - 1) * pageSize;
         return currentApiData.data.slice(start, start + pageSize);
       }
@@ -1342,7 +1536,7 @@ export default function ReportsPanel({
     }
     const start = (currentPage - 1) * pageSize;
     return currentTabRecords.slice(start, start + pageSize);
-  }, [currentApiData, currentTabRecords, currentPage, pageSize]);
+  }, [activeTab, taxSubTab, taxSummaryRows, paymentSettlementRows, currentApiData, currentTabRecords, currentPage, pageSize]);
 
   // --------------------------------------------------------------------------
   // EXPORT TO EXCEL (.xlsx)
@@ -1352,41 +1546,47 @@ export default function ReportsPanel({
     let fileName = `Serviq_${activeTab.toUpperCase()}_Report.xlsx`;
 
     if (activeTab === 'sales') {
-      const list = (salesApiData && salesApiData.data) ? salesApiData.data : filteredOrders;
+      const list = (salesApiData && Array.isArray(salesApiData.data)) ? salesApiData.data : filteredOrders;
       exportData = list.map((ord, idx) => {
-        const orderNo = ord.orderId || ord.id || ord.orderNo;
-        const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo ? `BILL-${orderNo}` : '-');
-        const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo ? `INV-${orderNo}` : '-');
+        const orderNo = getFormattedOrderNo(ord, idx);
+        const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo !== '-' ? `BILL-${orderNo.replace('#', '')}` : '-');
+        const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo !== '-' ? `INV-${orderNo.replace('#', '')}` : '-');
+        const gross = Number(ord.grossRevenue ?? ord.grossAmount ?? ord.subtotal ?? ord.totalAmount ?? 0);
+        const disc = Number(ord.totalDiscount ?? ord.discount ?? ord.discountAmount ?? 0);
+        const tax = Number(ord.taxCollected ?? ord.tax ?? ord.taxAmount ?? ord.gst ?? 0);
+        const total = Number(ord.netSales ?? ord.total ?? ord.netTotal ?? (gross - disc));
+
         return {
           'S.No': idx + 1,
-          'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date),
+          'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date || ord.orderDate),
           'Order No': orderNo,
           'Bill No.': billNo,
           'Invoice No.': invoiceNo,
-          'Payment Method': ord.paymentMethod || ord.paymentMode || 'N/A',
-          'Gross Subtotal (₹)': Number(ord.subtotal ?? ord.totalAmount ?? 0),
-          'Discount (₹)': Number(ord.discount || 0),
-          'Tax (₹)': Number(ord.tax || 0),
-          'Net Total (₹)': Number(ord.total ?? ord.totalAmount ?? 0),
+          'Payment Method': ord.paymentMethod || ord.paymentMode || ord.mode || 'N/A',
+          'Gross Subtotal (₹)': gross,
+          'Discount (₹)': disc,
+          'Tax (₹)': tax,
+          'Net Total (₹)': total,
           'Status': ord.status || 'Paid'
         };
       });
     } else if (activeTab === 'items') {
-      const list = (dishApiData && dishApiData.data) ? dishApiData.data : dishReportData.list;
+      const list = (dishApiData && Array.isArray(dishApiData.data)) ? dishApiData.data : dishReportData.list;
       const totalSalesForPct = Number(
+        dishApiData?.summary?.totalNetSales ??
         dishApiData?.summary?.totalDishSales ??
         dishApiData?.summary?.foodRevenueGenerated ??
         dishReportData.totalDishSales ??
         0
       );
       exportData = list.map((item, idx) => {
-        const dishName = item.dishName || item.name || item.foodItem || item.itemName || 'Unknown Item';
+        const dishName = item.dishName || item.name || item.foodItem || item.itemName || item.title || 'Unknown Item';
         const cat = toDisplayText(item.category || item.categoryName, 'General');
         const foodType = item.foodType || resolveFoodType(item);
-        const qty = Number(item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
-        const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
-        const disc = Number(item.discount ?? item.discountAmount ?? 0);
-        const net = Number(item.netSales ?? (gross - disc) ?? 0);
+        const qty = Number(item.totalQuantitySold ?? item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
+        const gross = Number(item.grossSales ?? item.totalGrossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
+        const disc = Number(item.discount ?? item.discountAmount ?? item.totalDiscount ?? 0);
+        const net = Number(item.netSales ?? item.totalNetSales ?? (gross - disc) ?? 0);
         const salesPct = item.salesPercent ?? item.salesPct ?? item.salesPercentage ?? (totalSalesForPct > 0 ? ((net / totalSalesForPct) * 100).toFixed(1) : '0.0');
 
         return {
@@ -1402,9 +1602,9 @@ export default function ReportsPanel({
         };
       });
     } else if (activeTab === 'orders') {
-      const list = (orderAnalyticsApiData && orderAnalyticsApiData.data) ? orderAnalyticsApiData.data : filteredOrders;
+      const list = (orderAnalyticsApiData && Array.isArray(orderAnalyticsApiData.data)) ? orderAnalyticsApiData.data : filteredOrders;
       exportData = list.map((ord, idx) => {
-        const orderNo = ord.orderId || ord.id || ord.orderNo;
+        const orderNo = getFormattedOrderNo(ord, idx);
         const rawType = ord.orderType || ord.type || ord.source || 'Dine-In';
         const orderType = String(rawType).toLowerCase().includes('take') ? 'Takeaway'
           : String(rawType).toLowerCase().includes('deliv') ? 'Delivery'
@@ -1433,19 +1633,30 @@ export default function ReportsPanel({
     } else if (activeTab === 'inventory') {
       const wb = XLSX.utils.book_new();
 
-      const posData = inventoryReportData.list.map((item, idx) => ({
-        'S.No': idx + 1,
-        'Item Name': item.name,
-        'Category': item.category,
-        'Unit': item.unit,
-        'Opening Stock': item.openingStock,
-        'Purchased / Added': item.purchased,
-        'Used / Consumed': item.used,
-        'Wastage': item.wastage,
-        'Closing / Current Stock': item.closingStock,
-        'Minimum Stock': item.minStock,
-        'Status': item.status
-      }));
+      const itemsList = (inventoryApiData && Array.isArray(inventoryApiData.data)) ? inventoryApiData.data : inventoryReportData.list;
+      const posData = itemsList.map((item, idx) => {
+        const current = Number(item.closingStock ?? item.quantity ?? item.stock ?? 0);
+        const min = Number(item.minStock ?? item.minimumStock ?? 10);
+        const opening = Number(item.openingStock ?? (current + 5));
+        const purchased = Number(item.purchased ?? item.purchasedAdded ?? item.added ?? 0);
+        const used = Number(item.used ?? item.usedConsumed ?? item.consumed ?? 0);
+        const wastage = Number(item.wastage ?? 0);
+        const status = item.status || (current <= 0 ? 'Out of Stock' : (current <= min ? 'Low Stock' : 'In Stock'));
+
+        return {
+          'S.No': idx + 1,
+          'Item Name': item.name || item.itemName,
+          'Category': toDisplayText(item.category || item.categoryName, 'General'),
+          'Unit': item.unit || 'pcs',
+          'Opening Stock': opening,
+          'Purchased / Added': purchased,
+          'Used / Consumed': used,
+          'Wastage': wastage,
+          'Closing / Current Stock': current,
+          'Minimum Stock': min,
+          'Status': status
+        };
+      });
 
       const movData = stockMovementData.list.map((t, idx) => ({
         'S.No': idx + 1,
@@ -1497,18 +1708,19 @@ export default function ReportsPanel({
       }));
     } else if (activeTab === 'tax') {
       const wb = XLSX.utils.book_new();
-      const taxSheetData = taxReportData.taxRows.map(r => ({
+      const taxSheetData = taxSummaryRows.map(r => ({
         'Tax Type': r.taxType,
         'Tax Rate': r.taxRate,
         'Taxable Amount (₹)': Number(r.taxableAmount || 0),
         'Tax Amount (₹)': Number(r.taxAmount || 0)
       }));
-      const settlementSheetData = taxReportData.settlementList.map(s => ({
-        'Payment Method': s.method,
-        'Transaction Count': s.count,
-        'Collected Amount (₹)': Number(s.collected || 0),
-        'Refund Amount (₹)': Number(s.refund || 0),
-        'Net Collected (₹)': Number(s.netCollected || 0)
+      const settlementSheetData = paymentSettlementRows.map((s, idx) => ({
+        'S.No': s.sNo || (idx + 1),
+        'Payment Method': s.paymentMethod || s.method,
+        'Transaction Count': Number(s.transactionCount ?? s.count ?? 0),
+        'Taxable Amount (₹)': Number(s.taxableAmount ?? (s.collected ? s.collected - (s.refund || 0) : 0)),
+        'Tax Amount (₹)': Number(s.taxAmount ?? 0),
+        'Total Amount (₹)': Number(s.totalAmount ?? s.netCollected ?? s.collected ?? 0)
       }));
 
       const wsTax = XLSX.utils.json_to_sheet(taxSheetData);
@@ -1593,31 +1805,31 @@ export default function ReportsPanel({
       </div>
 
       {/* 1st - SUMMARY KPI CARDS SECTION */}
-      <div className={`reports-kpi-grid cards-${activeTab === 'orders' ? '6' : activeTab === 'sales' ? '5' : '4'}`}>
+      <div className={`reports-kpi-grid cards-${activeTab === 'orders' ? '7' : activeTab === 'sales' ? '5' : '4'}`}>
         {activeTab === 'sales' && (
           <>
             <div className="kpi-card">
               <div className="kpi-title">Gross Revenue</div>
               <div className="kpi-value">
-                ₹{Number(salesApiData?.summary?.grossSales ?? salesMetrics.grossRevenue ?? 0).toLocaleString()}
+                ₹{Number(salesApiData?.summary?.grossRevenue ?? salesApiData?.summary?.grossSales ?? salesMetrics.grossRevenue ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Net Sales (Excl. Tax)</div>
               <div className="kpi-value">
-                ₹{Number(salesApiData?.summary?.netRevenue ?? salesMetrics.netSales ?? 0).toLocaleString()}
+                ₹{Number(salesApiData?.summary?.netSales ?? salesApiData?.summary?.netRevenue ?? salesMetrics.netSales ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Total Discount</div>
               <div className="kpi-value">
-                ₹{Number(salesApiData?.summary?.totalDiscounts ?? salesMetrics.totalDiscount ?? 0).toLocaleString()}
+                ₹{Number(salesApiData?.summary?.totalDiscount ?? salesApiData?.summary?.totalDiscounts ?? salesMetrics.totalDiscount ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">GST / Tax Collected</div>
               <div className="kpi-value">
-                ₹{Number(salesApiData?.summary?.totalTax ?? salesMetrics.taxCollected ?? 0).toLocaleString()}
+                ₹{Number(salesApiData?.summary?.taxCollected ?? salesApiData?.summary?.totalTax ?? salesMetrics.taxCollected ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
@@ -1634,13 +1846,24 @@ export default function ReportsPanel({
             <div className="kpi-card">
               <div className="kpi-title">Total Quantity Sold</div>
               <div className="kpi-value">
-                {Number(dishApiData?.summary?.totalDishesPrepared ?? dishReportData.totalItemsSold ?? 0).toLocaleString()}
+                {Number(
+                  dishApiData?.summary?.totalQuantitySold ??
+                  dishApiData?.summary?.totalDishesPrepared ??
+                  dishReportData.totalItemsSold ??
+                  0
+                ).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Total Net Sales</div>
               <div className="kpi-value">
-                ₹{Number(dishApiData?.summary?.foodRevenueGenerated ?? dishReportData.totalDishSales ?? 0).toLocaleString()}
+                ₹{Number(
+                  dishApiData?.summary?.totalNetSales ??
+                  dishApiData?.summary?.foodRevenueGenerated ??
+                  dishApiData?.summary?.totalDishSales ??
+                  dishReportData.totalDishSales ??
+                  0
+                ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
@@ -1652,7 +1875,12 @@ export default function ReportsPanel({
             <div className="kpi-card">
               <div className="kpi-title">Number of Dishes Sold</div>
               <div className="kpi-value">
-                {dishApiData?.summary?.numberOfDishesSold ?? dishApiData?.summary?.distinctDishesSold ?? dishReportData.distinctDishesCount ?? 0}
+                {Number(
+                  dishApiData?.summary?.numberOfDishesSold ??
+                  dishApiData?.summary?.distinctDishesSold ??
+                  dishReportData.distinctDishesCount ??
+                  0
+                ).toLocaleString()}
               </div>
             </div>
           </>
@@ -1691,9 +1919,15 @@ export default function ReportsPanel({
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Takeaway / Delivery Orders</div>
+              <div className="kpi-title">Takeaway Orders</div>
+              <div className="kpi-value" style={{ color: '#ea580c' }}>
+                {orderAnalyticsCounts.takeaway}
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-title">Delivery Orders</div>
               <div className="kpi-value" style={{ color: '#7c3aed' }}>
-                {orderAnalyticsApiData?.summary?.takeawayDeliveryOrders ?? orderAnalyticsApiData?.summary?.takeawayDelivery ?? orderAnalyticsMetrics.takeawayDelivery}
+                {orderAnalyticsCounts.delivery}
               </div>
             </div>
           </>
@@ -1742,19 +1976,27 @@ export default function ReportsPanel({
             <>
               <div className="kpi-card">
                 <div className="kpi-title">Total Inventory Items</div>
-                <div className="kpi-value">{inventoryReportData.totalItems}</div>
+                <div className="kpi-value">
+                  {Number(inventoryApiData?.summary?.totalInventoryItems ?? inventoryReportData.totalItems).toLocaleString()}
+                </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-title">Low Stock Items</div>
-                <div className="kpi-value" style={{ color: '#b45309' }}>{inventoryReportData.lowStockCount}</div>
+                <div className="kpi-value" style={{ color: '#b45309' }}>
+                  {Number(inventoryApiData?.summary?.lowStockItems ?? inventoryReportData.lowStockCount).toLocaleString()}
+                </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-title">Out of Stock Items</div>
-                <div className="kpi-value" style={{ color: '#be123c' }}>{inventoryReportData.outOfStockCount}</div>
+                <div className="kpi-value" style={{ color: '#be123c' }}>
+                  {Number(inventoryApiData?.summary?.outOfStockItems ?? inventoryReportData.outOfStockCount).toLocaleString()}
+                </div>
               </div>
               <div className="kpi-card">
                 <div className="kpi-title">Total Stock Value</div>
-                <div className="kpi-value">₹{inventoryReportData.totalStockValue.toLocaleString()}</div>
+                <div className="kpi-value">
+                  ₹{Number(inventoryApiData?.summary?.totalStockValue ?? inventoryReportData.totalStockValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
               </div>
             </>
           )
@@ -1795,25 +2037,25 @@ export default function ReportsPanel({
             <div className="kpi-card">
               <div className="kpi-title">Total Taxable Amount</div>
               <div className="kpi-value">
-                ₹{Number(taxApiData?.summary?.totalTaxableAmount ?? taxReportData.taxableAmount ?? 0).toLocaleString()}
+                ₹{Number(taxApiData?.summary?.totalTaxableAmount ?? taxReportData.taxableAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Total Tax Collected</div>
-              <div className="kpi-value">
-                ₹{Number(taxApiData?.summary?.totalTaxCollected ?? taxReportData.taxCollected ?? 0).toLocaleString()}
+              <div className="kpi-value" style={{ color: '#15803d' }}>
+                ₹{Number(taxApiData?.summary?.totalTaxCollected ?? taxReportData.taxCollected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Total Payments Collected</div>
-              <div className="kpi-value">
-                ₹{Number(taxApiData?.summary?.totalPaymentsCollected ?? taxReportData.totalPaymentsCollected ?? 0).toLocaleString()}
+              <div className="kpi-value" style={{ color: '#0f172a' }}>
+                ₹{Number(taxApiData?.summary?.totalPaymentsCollected ?? taxReportData.totalPaymentsCollected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Refund Amount</div>
-              <div className="kpi-value">
-                ₹{Number(taxApiData?.summary?.refundAmount ?? taxReportData.refundAmount ?? 0).toLocaleString()}
+              <div className="kpi-value" style={{ color: '#b91c1c' }}>
+                ₹{Number(taxApiData?.summary?.refundAmount ?? taxReportData.refundAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </>
@@ -2239,7 +2481,7 @@ export default function ReportsPanel({
             <div className="reports-table-header-bar">
               <div className="reports-table-title">
                 <span>Tax Summary Table</span>
-                <span className="reports-record-badge">{taxReportData.taxRows.length} Records</span>
+                <span className="reports-record-badge">{taxSummaryRows.length} Records</span>
               </div>
             </div>
 
@@ -2260,20 +2502,20 @@ export default function ReportsPanel({
                         Loading Tax Summary report...
                       </td>
                     </tr>
-                  ) : taxReportData.taxRows.length === 0 ? (
+                  ) : taxSummaryRows.length === 0 ? (
                     <tr>
                       <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         No tax summary records found matching filters.
                       </td>
                     </tr>
                   ) : (
-                    taxReportData.taxRows.map((r, idx) => (
+                    taxSummaryRows.map((r, idx) => (
                       <tr key={r.taxType || idx}>
                         <td>
-                          <strong style={{ color: '#0f172a' }}>{r.taxType}</strong>
+                          <strong style={{ color: '#0f172a' }}>{r.taxType || r.name || 'GST'}</strong>
                         </td>
                         <td>
-                          <span className="badge-type">{r.taxRate}</span>
+                          <span className="badge-type">{r.taxRate || (r.rate ? `${r.rate}%` : '2.5%')}</span>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
                           ₹{Number(r.taxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -2285,23 +2527,82 @@ export default function ReportsPanel({
                     ))
                   )}
                 </tbody>
-                {taxReportData.taxRows.length > 0 && (
+                {taxSummaryRows.length > 0 && (
                   <tfoot>
                     <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
                       <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
                         Total Tax Summary:
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                        ₹{taxReportData.taxRows.reduce((sum, r) => sum + Number(r.taxableAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{Number(taxApiData?.tableSummary?.totalTaxableAmount ?? taxSummaryRows.reduce((sum, r) => sum + Number(r.taxableAmount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
-                        ₹{taxReportData.taxRows.reduce((sum, r) => sum + Number(r.taxAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{Number(taxApiData?.tableSummary?.totalTaxAmount ?? taxSummaryRows.reduce((sum, r) => sum + Number(r.taxAmount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
+
+            {/* PAGINATION BAR FOR TAX SUMMARY */}
+            {totalRecordsCount > pageSize && (
+              <div className="reports-pagination-bar">
+                <div className="pagination-info">
+                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                </div>
+
+                <div className="pagination-controls">
+                  <div className="page-size-selector">
+                    <span>Rows per page:</span>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  <div className="pagination-nav">
+                    <button
+                      type="button"
+                      className="btn-page-nav"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    >
+                      Prev
+                    </button>
+
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = i + 1;
+                      if (totalPages > 5 && currentPage > 3) {
+                        pageNum = currentPage - 3 + i;
+                        if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className="btn-page-nav"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /*  PAYMENT SETTLEMENT TABLE */
@@ -2309,7 +2610,7 @@ export default function ReportsPanel({
             <div className="reports-table-header-bar">
               <div className="reports-table-title">
                 <span>Payment Settlement Table</span>
-                <span className="reports-record-badge">{taxReportData.settlementList.length} Records</span>
+                <span className="reports-record-badge">{paymentSettlementRows.length} Records</span>
               </div>
             </div>
 
@@ -2317,71 +2618,139 @@ export default function ReportsPanel({
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: '70px' }}>S.No</th>
                     <th>Payment Method</th>
                     <th style={{ textAlign: 'right' }}>Transaction Count</th>
-                    <th style={{ textAlign: 'right' }}>Collected Amount</th>
-                    <th style={{ textAlign: 'right' }}>Refund Amount</th>
-                    <th style={{ textAlign: 'right' }}>Net Collected</th>
+                    <th style={{ textAlign: 'right' }}>Taxable Amount</th>
+                    <th style={{ textAlign: 'right' }}>Tax Amount</th>
+                    <th style={{ textAlign: 'right' }}>Total Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingTaxReport ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         Loading Payment Settlement report...
                       </td>
                     </tr>
-                  ) : taxReportData.settlementList.length === 0 ? (
+                  ) : paymentSettlementRows.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         No payment settlement records found matching filters.
                       </td>
                     </tr>
                   ) : (
-                    taxReportData.settlementList.map((item, idx) => (
-                      <tr key={item.method || idx}>
+                    paymentSettlementRows.map((item, idx) => (
+                      <tr key={item.paymentMethod || item.method || idx}>
+                        <td style={{ color: '#64748b', fontWeight: 600 }}>
+                          {item.sNo || (idx + 1)}
+                        </td>
                         <td>
-                          <strong style={{ color: '#0f172a' }}>{item.method}</strong>
+                          <strong style={{ color: '#0f172a' }}>{item.paymentMethod || item.method}</strong>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                          {Number(item.count || 0).toLocaleString()}
+                          {Number(item.transactionCount ?? item.count ?? 0).toLocaleString()}
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
-                          ₹{Number(item.collected || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₹{Number(item.taxableAmount ?? (item.collected ? item.collected - (item.refund || 0) : 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: item.refund > 0 ? '#b91c1c' : '#64748b' }}>
-                          ₹{Number(item.refund || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
+                          ₹{Number(item.taxAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 700, color: '#15803d' }}>
-                          ₹{Number(item.netCollected || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ₹{Number(item.totalAmount ?? item.netCollected ?? item.collected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {item.refund > 0 && (
+                            <div style={{ fontSize: '11px', color: '#b91c1c', fontWeight: 500, marginTop: '2px' }}>
+                              Refund: ₹{Number(item.refund).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))
                   )}
                 </tbody>
-                {taxReportData.settlementList.length > 0 && (
+                {paymentSettlementRows.length > 0 && (
                   <tfoot>
                     <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
                         Total Settlement:
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                        {taxReportData.settlementList.reduce((sum, s) => sum + Number(s.count || 0), 0).toLocaleString()}
+                        {paymentSettlementRows.reduce((sum, s) => sum + Number(s.transactionCount ?? s.count ?? 0), 0).toLocaleString()}
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.collected || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.taxableAmount ?? (s.collected ? s.collected - (s.refund || 0) : 0)), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
-                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.refund || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                        ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.taxAmount ?? 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
-                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.netCollected || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.totalAmount ?? s.netCollected ?? s.collected ?? 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
+
+            {/* PAGINATION BAR FOR PAYMENT SETTLEMENT */}
+            {totalRecordsCount > pageSize && (
+              <div className="reports-pagination-bar">
+                <div className="pagination-info">
+                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                </div>
+
+                <div className="pagination-controls">
+                  <div className="page-size-selector">
+                    <span>Rows per page:</span>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  <div className="pagination-nav">
+                    <button
+                      type="button"
+                      className="btn-page-nav"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    >
+                      Prev
+                    </button>
+
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = i + 1;
+                      if (totalPages > 5 && currentPage > 3) {
+                        pageNum = currentPage - 3 + i;
+                        if (pageNum > totalPages) pageNum = totalPages - (4 - i);
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum)}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className="btn-page-nav"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )
       ) : (
@@ -2523,26 +2892,33 @@ export default function ReportsPanel({
                         Loading Sales & Revenue report...
                       </td>
                     </tr>
+                  ) : paginatedRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No sales & revenue records found.
+                      </td>
+                    </tr>
                   ) : (
                     paginatedRecords.map((ord, idx) => {
-                      const orderNo = ord.orderId || ord.id || ord.orderNo;
-                      const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo ? `BILL-${orderNo}` : '-');
-                      const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo ? `INV-${orderNo}` : '-');
-                      const date = ord.createdAt || ord.date;
-                      const paymentMode = ord.paymentMethod || ord.paymentMode || 'N/A';
-                      const gross = Number(ord.subtotal ?? ord.totalAmount ?? ord.grossAmount ?? 0);
-                      const disc = Number(ord.discount ?? 0);
-                      const tax = Number(ord.tax ?? 0);
-                      const total = Number(ord.total ?? (gross - disc));
+                      const orderNo = getFormattedOrderNo(ord, idx);
+                      const rawId = ord._id || ord.orderId || ord.id || '';
+                      const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo !== '-' ? `BILL-${orderNo.replace('#', '')}` : '-');
+                      const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo !== '-' ? `INV-${orderNo.replace('#', '')}` : '-');
+                      const date = ord.createdAt || ord.date || ord.orderDate || ord.timestamp;
+                      const paymentMode = ord.paymentMethod || ord.paymentMode || ord.mode || 'N/A';
+                      const gross = Number(ord.grossRevenue ?? ord.grossAmount ?? ord.subtotal ?? ord.totalAmount ?? 0);
+                      const disc = Number(ord.totalDiscount ?? ord.discount ?? ord.discountAmount ?? 0);
+                      const tax = Number(ord.taxCollected ?? ord.tax ?? ord.taxAmount ?? ord.gst ?? 0);
+                      const total = Number(ord.netSales ?? ord.total ?? ord.netTotal ?? (gross - disc));
 
                       return (
                         <tr key={ord.id || ord._id || idx}>
                           <td>{(currentPage - 1) * pageSize + idx + 1}</td>
                           <td>{formatDateTimeDMY(date)}</td>
-                          <td><strong>#{orderNo}</strong></td>
+                          <td><strong style={{ color: '#0f172a' }} title={rawId ? `Order ID: ${rawId}` : undefined}>{orderNo}</strong></td>
                           <td><span style={{ fontWeight: 600, color: '#334155' }}>{billNo}</span></td>
                           <td><span style={{ fontWeight: 600, color: invoiceNo !== '-' ? '#1e293b' : '#94a3b8' }}>{invoiceNo}</span></td>
-                          <td>{toDisplayText(ord.table || ord.orderType, 'Dine-In')}</td>
+                          <td>{toDisplayText(ord.table || ord.tableNumber || ord.orderType, 'Dine-In')}</td>
                           <td><span className="badge-type">{paymentMode}</span></td>
                           <td style={{ textAlign: 'right' }}>₹{gross.toLocaleString()}</td>
                           <td style={{ textAlign: 'right', color: '#be123c' }}>₹{disc.toLocaleString()}</td>
@@ -2585,16 +2961,17 @@ export default function ReportsPanel({
                   ) : (
                     paginatedRecords.map((item, idx) => {
                       const serialNo = (currentPage - 1) * pageSize + idx + 1;
-                      const dishName = item.dishName || item.name || item.foodItem || item.itemName || 'Unknown Item';
+                      const dishName = item.dishName || item.name || item.foodItem || item.itemName || item.title || 'Unknown Item';
                       const cat = toDisplayText(item.category || item.categoryName, 'General');
                       const foodType = item.foodType || resolveFoodType(item);
                       const isVeg = String(foodType).toLowerCase() === 'veg' || String(foodType).toLowerCase() === 'vegetarian';
                       const isEgg = String(foodType).toLowerCase() === 'egg';
-                      const qty = Number(item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
-                      const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
-                      const disc = Number(item.discount ?? item.discountAmount ?? 0);
-                      const net = Number(item.netSales ?? (gross - disc) ?? 0);
+                      const qty = Number(item.totalQuantitySold ?? item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
+                      const gross = Number(item.grossSales ?? item.totalGrossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
+                      const disc = Number(item.discount ?? item.discountAmount ?? item.totalDiscount ?? 0);
+                      const net = Number(item.netSales ?? item.totalNetSales ?? (gross - disc) ?? 0);
                       const totalSalesForPct = Number(
+                        dishApiData?.summary?.totalNetSales ??
                         dishApiData?.summary?.totalDishSales ??
                         dishApiData?.summary?.foodRevenueGenerated ??
                         dishReportData.totalDishSales ??
@@ -2603,7 +2980,7 @@ export default function ReportsPanel({
                       const salesPct = item.salesPercent ?? item.salesPct ?? item.salesPercentage ?? (totalSalesForPct > 0 ? ((net / totalSalesForPct) * 100).toFixed(1) : '0.0');
 
                       return (
-                        <tr key={item.menuId || item.id || dishName + idx}>
+                        <tr key={item._id || item.menuId || item.id || dishName + idx}>
                           <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
                           <td><strong style={{ color: '#0f172a' }}>{dishName}</strong></td>
                           <td><span className="badge-type">{cat}</span></td>
@@ -2653,7 +3030,8 @@ export default function ReportsPanel({
                   ) : (
                     paginatedRecords.map((ord, idx) => {
                       const serialNo = (currentPage - 1) * pageSize + idx + 1;
-                      const orderNo = ord.orderId || ord.id || ord.orderNo;
+                      const orderNo = getFormattedOrderNo(ord, idx);
+                      const rawId = ord._id || ord.orderId || ord.id || '';
                       const date = ord.createdAt || ord.date;
                       const rawType = ord.orderType || ord.type || ord.source || 'Dine-In';
                       const orderType = String(rawType).toLowerCase().includes('take') ? 'Takeaway'
@@ -2671,7 +3049,7 @@ export default function ReportsPanel({
                       return (
                         <tr key={ord._id || ord.id || idx}>
                           <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
-                          <td><strong style={{ color: '#0f172a' }}>#{orderNo}</strong></td>
+                          <td><strong style={{ color: '#0f172a' }} title={rawId ? `Order ID: ${rawId}` : undefined}>{orderNo}</strong></td>
                           <td>{formatDateTimeDMY(date)}</td>
                           <td>
                             <span className="badge-type" style={{
@@ -2781,28 +3159,53 @@ export default function ReportsPanel({
                       })
                     )
                   ) : (
-                    paginatedRecords.map((item, idx) => {
-                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
-                      return (
-                        <tr key={item.id || idx}>
-                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
-                          <td><strong style={{ color: '#0f172a' }}>{item.name}</strong></td>
-                          <td><span className="badge-type">{item.category}</span></td>
-                          <td style={{ textAlign: 'center' }}>{item.unit}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.openingStock}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d' }}>+{item.purchased}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#b91c1c' }}>-{item.used}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 600, color: item.wastage > 0 ? '#b45309' : '#64748b' }}>{item.wastage}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{item.closingStock}</td>
-                          <td style={{ textAlign: 'right', color: '#64748b' }}>{item.minStock}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            <span className={`badge-status ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                              {item.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
+                    loadingInventoryReport ? (
+                      <tr>
+                        <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                          Loading Stock Position report...
+                        </td>
+                      </tr>
+                    ) : paginatedRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                          No stock position records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedRecords.map((item, idx) => {
+                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        const itemName = item.name || item.itemName || 'Inventory Item';
+                        const cat = toDisplayText(item.category || item.categoryName, 'General');
+                        const unit = item.unit || 'pcs';
+                        const opening = Number(item.openingStock ?? (Number(item.closingStock ?? item.quantity ?? 0) + 5));
+                        const purchased = Number(item.purchased ?? item.purchasedAdded ?? item.added ?? 0);
+                        const used = Number(item.used ?? item.usedConsumed ?? item.consumed ?? 0);
+                        const wastage = Number(item.wastage ?? 0);
+                        const closing = Number(item.closingStock ?? item.quantity ?? item.currentStock ?? 0);
+                        const min = Number(item.minStock ?? item.minimumStock ?? 10);
+                        const status = item.status || (closing <= 0 ? 'Out of Stock' : (closing <= min ? 'Low Stock' : 'In Stock'));
+
+                        return (
+                          <tr key={item._id || item.id || idx}>
+                            <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                            <td><strong style={{ color: '#0f172a' }}>{itemName}</strong></td>
+                            <td><span className="badge-type">{cat}</span></td>
+                            <td style={{ textAlign: 'center' }}>{unit}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{opening.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d' }}>+{purchased.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: '#b91c1c' }}>-{used.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 600, color: wastage > 0 ? '#b45309' : '#64748b' }}>{wastage.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{closing.toLocaleString()}</td>
+                            <td style={{ textAlign: 'right', color: '#64748b' }}>{min.toLocaleString()}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge-status ${status.toLowerCase().replace(/\s+/g, '-')}`}>
+                                {status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )
                   )
                 )}
                 {activeTab === 'staff' && (
@@ -2853,6 +3256,28 @@ export default function ReportsPanel({
                   )
                 )}
               </tbody>
+              {activeTab === 'sales' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={7} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Summary:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{Number(salesApiData?.summary?.grossRevenue ?? salesApiData?.summary?.grossSales ?? salesMetrics.grossRevenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#be123c' }}>
+                      ₹{Number(salesApiData?.summary?.totalDiscount ?? salesApiData?.summary?.totalDiscounts ?? salesMetrics.totalDiscount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                      ₹{Number(salesApiData?.summary?.taxCollected ?? salesApiData?.summary?.totalTax ?? salesMetrics.taxCollected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{Number(salesApiData?.summary?.netSales ?? salesApiData?.summary?.netRevenue ?? salesMetrics.netSales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              )}
               {activeTab === 'items' && paginatedRecords.length > 0 && (
                 <tfoot>
                   <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
@@ -2860,16 +3285,37 @@ export default function ReportsPanel({
                       Total Summary:
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      {Number(dishApiData?.summary?.totalDishesPrepared ?? dishReportData.totalItemsSold ?? 0).toLocaleString()}
+                      {Number(
+                        dishApiData?.summary?.totalQuantitySold ??
+                        dishApiData?.summary?.totalDishesPrepared ??
+                        dishReportData.totalItemsSold ??
+                        0
+                      ).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#334155' }}>
-                      ₹{Number(dishApiData?.summary?.grossSales ?? dishReportData.totalDishGross ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{Number(
+                        dishApiData?.summary?.grossSales ??
+                        dishApiData?.summary?.totalGrossSales ??
+                        dishReportData.totalDishGross ??
+                        0
+                      ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#be123c' }}>
-                      ₹{Number(dishApiData?.summary?.totalDiscount ?? dishReportData.totalDishDiscount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{Number(
+                        dishApiData?.summary?.totalDiscount ??
+                        dishApiData?.summary?.discount ??
+                        dishReportData.totalDishDiscount ??
+                        0
+                      ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      ₹{Number(dishApiData?.summary?.foodRevenueGenerated ?? dishReportData.totalDishSales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{Number(
+                        dishApiData?.summary?.totalNetSales ??
+                        dishApiData?.summary?.foodRevenueGenerated ??
+                        dishApiData?.summary?.totalDishSales ??
+                        dishReportData.totalDishSales ??
+                        0
+                      ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
                       100.0%
@@ -2884,19 +3330,23 @@ export default function ReportsPanel({
                       Total Summary:
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      {inventoryReportData.list.reduce((sum, i) => sum + i.openingStock, 0)}
+                      {Number(inventoryApiData?.tableSummary?.totalOpeningStock ?? inventoryReportData.list.reduce((sum, i) => sum + i.openingStock, 0)).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
-                      +{inventoryReportData.list.reduce((sum, i) => sum + i.purchased, 0)}
+                      {inventoryApiData?.tableSummary?.totalPurchasedAdded !== undefined
+                        ? inventoryApiData.tableSummary.totalPurchasedAdded
+                        : `+${inventoryReportData.list.reduce((sum, i) => sum + i.purchased, 0).toLocaleString()}`}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
-                      -{inventoryReportData.list.reduce((sum, i) => sum + i.used, 0)}
+                      {inventoryApiData?.tableSummary?.totalUsedConsumed !== undefined
+                        ? inventoryApiData.tableSummary.totalUsedConsumed
+                        : `-${inventoryReportData.list.reduce((sum, i) => sum + i.used, 0).toLocaleString()}`}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b45309' }}>
-                      {inventoryReportData.list.reduce((sum, i) => sum + i.wastage, 0)}
+                      {Number(inventoryApiData?.tableSummary?.totalWastage ?? inventoryReportData.list.reduce((sum, i) => sum + i.wastage, 0)).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      {inventoryReportData.list.reduce((sum, i) => sum + i.closingStock, 0)}
+                      {Number(inventoryApiData?.tableSummary?.totalClosingStock ?? inventoryReportData.list.reduce((sum, i) => sum + i.closingStock, 0)).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', color: '#64748b' }}>
                       -
@@ -2941,22 +3391,22 @@ export default function ReportsPanel({
                       Total Summary:
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      {Number(staffApiData?.summary?.ordersHandled ?? staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled).toLocaleString()}
+                      {Number(staffApiData?.tableSummary?.totalOrdersHandled ?? staffApiData?.summary?.ordersHandled ?? staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
-                      {Number(staffApiData?.summary?.kotsHandled ?? staffReportData.totalKotsHandled).toLocaleString()}
+                      {Number(staffApiData?.tableSummary?.totalKotsHandled ?? staffApiData?.summary?.kotsHandled ?? staffReportData.totalKotsHandled).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0d9488' }}>
-                      {Number(staffApiData?.summary?.billsGenerated ?? staffReportData.totalBillsGenerated).toLocaleString()}
+                      {Number(staffApiData?.tableSummary?.totalBillsGenerated ?? staffApiData?.summary?.billsGenerated ?? staffReportData.totalBillsGenerated).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
-                      {Number(staffApiData?.summary?.paymentsCollected ?? staffReportData.totalPaymentsCollected).toLocaleString()}
+                      {Number(staffApiData?.tableSummary?.totalPaymentsCollected ?? staffApiData?.summary?.paymentsCollected ?? staffReportData.totalPaymentsCollected).toLocaleString()}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
-                      ₹{Number(staffApiData?.summary?.salesAmount ?? staffApiData?.summary?.totalStaffSales ?? staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{Number(staffApiData?.tableSummary?.totalSalesAmount ?? staffApiData?.summary?.salesAmount ?? staffApiData?.summary?.totalStaffSales ?? staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
-                      {Number(staffApiData?.summary?.cancelledOrders ?? staffReportData.totalCancelledOrders).toLocaleString()}
+                      {Number(staffApiData?.tableSummary?.totalCancelledOrders ?? staffApiData?.summary?.cancelledOrders ?? staffReportData.totalCancelledOrders).toLocaleString()}
                     </td>
                   </tr>
                 </tfoot>
@@ -3032,7 +3482,7 @@ export default function ReportsPanel({
         <Modal
           isOpen={!!viewOrder}
           onClose={() => setViewOrder(null)}
-          title={`Order Details #${viewOrder.id || viewOrder.orderNo}`}
+          title={`Order Details ${getFormattedOrderNo(viewOrder)}`}
           maxWidth="600px"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -3047,7 +3497,7 @@ export default function ReportsPanel({
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Bill No.</span>
-                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{viewOrder.billNo || viewOrder.billNumber || viewOrder.bill_no || (viewOrder.orderId || viewOrder.id ? `BILL-${viewOrder.orderId || viewOrder.id}` : '-')}</strong>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{viewOrder.billNo || viewOrder.billNumber || viewOrder.bill_no || (getFormattedOrderNo(viewOrder) !== '-' ? `BILL-${getFormattedOrderNo(viewOrder).replace('#', '')}` : '-')}</strong>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Invoice No.</span>

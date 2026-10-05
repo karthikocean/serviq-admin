@@ -6,7 +6,7 @@ import SearchableSelect from './SearchableSelect.jsx';
 import BillingApi from '../api/Billing.js';
 import OrderApi from '../api/Order.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import ReceiptCard, { generateReceiptHtml } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
 
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -251,99 +251,10 @@ export default function BillingPanel({
     }
   };
 
-  // Print Bill Popup Handler
+  // Print Bill Popup Handler (Centered Thermal Bill Print Window)
   const handlePrintBillPopup = (bill) => {
-    const rawItems = bill.items || [];
-    const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
-    const cgst = parseFloat((subtotal * 0.025).toFixed(2));
-    const sgst = parseFloat((subtotal * 0.025).toFixed(2));
-    const total = (subtotal + cgst + sgst).toFixed(2);
-    const billNo = bill.billNo || bill.billNumber || `B-${String(Math.floor(1000 + Math.random() * 9000))}`;
-    const tableNo = String(bill.table || bill.tableNumber || '12').replace(/^Table\s*/i, '');
-    const dateStr = formatDateDMY(new Date());
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    const itemsHtml = rawItems.map(it => `
-      <tr>
-        <td style="text-align: left; padding: 4px 0;">${it.name || 'Dish'}</td>
-        <td style="text-align: center; padding: 4px 0;">${it.qty || 1}</td>
-        <td style="text-align: right; padding: 4px 0;">${Number(it.rate || it.price || 0).toFixed(2)}</td>
-        <td style="text-align: right; padding: 4px 0;">${Number(it.amount || ((it.qty || 1) * (it.rate || it.price || 0))).toFixed(2)}</td>
-      </tr>
-    `).join('');
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Print Bill - ${billNo}</title>
-        <style>
-          body { font-family: monospace, Courier, sans-serif; width: 300px; margin: 0 auto; padding: 20px; font-size: 13px; color: #000; }
-          .center { text-align: center; }
-          .line { border-bottom: 1px dashed #000; margin: 10px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
-          .bold { font-weight: bold; }
-          @media print { body { width: 100%; padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="center bold" style="font-size: 16px;">${restaurantName}</div>
-        <div class="center">${restaurantAddress}</div>
-        <div class="center">GST No: ${restaurantGst}</div>
-        <div class="line"></div>
-        <div style="display: flex; justify-space-between;">
-          <span>Table No: ${tableNo}</span>
-          <span style="float: right;">Bill No: ${billNo}</span>
-        </div>
-        <div style="display: flex; justify-space-between;">
-          <span>Date: ${dateStr}</span>
-          <span style="float: right;">Time: ${timeStr}</span>
-        </div>
-        <div class="line"></div>
-        <table>
-          <thead>
-            <tr style="border-bottom: 1px solid #000;">
-              <th style="text-align: left;">Item</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Rate</th>
-              <th style="text-align: right;">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-        <div class="line"></div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>Subtotal</span>
-          <span>${subtotal.toFixed(2)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>CGST @2.5%</span>
-          <span>${cgst.toFixed(2)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <span>SGST @2.5%</span>
-          <span>${sgst.toFixed(2)}</span>
-        </div>
-        <div class="line"></div>
-        <div style="display: flex; justify-content: space-between;" class="bold">
-          <span>Total Payable</span>
-          <span>${total}</span>
-        </div>
-        <div class="line"></div>
-        <script>
-          window.onload = function() { window.print(); }
-        </script>
-      </body>
-      </html>
-    `;
-
-    const printWin = window.open('', '_blank', 'width=450,height=600');
-    if (printWin) {
-      printWin.document.write(htmlContent);
-      printWin.document.close();
-    }
+    const htmlContent = generateReceiptHtml(bill, activeRestaurant);
+    openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, 480, 700);
   };
 
   // Modern Tax Invoice HTML Generator (matching Admin theme and screenshot design)
@@ -396,7 +307,7 @@ export default function BillingPanel({
           @media print {
             body { padding: 0; background: transparent; }
             .card { box-shadow: none !important; border: 1px solid #fed7aa !important; }
-            @page { margin: 10mm; }
+            @page { size: portrait; margin: 8mm; }
           }
           .card {
             width: 100%;
@@ -588,14 +499,11 @@ export default function BillingPanel({
     `;
   };
 
-  // Print Tax Invoice Popup Handler
+  // Print Tax Invoice Popup Handler (Opens centered on screen)
   const handlePrintInvoicePopup = (invoice) => {
     const htmlContent = generateTaxInvoiceHtml(invoice);
-    const printWin = window.open('', '_blank', 'width=720,height=800');
-    if (printWin) {
-      printWin.document.write(htmlContent + `<script>window.onload = function() { window.print(); }</script>`);
-      printWin.document.close();
-    }
+    const script = `<script>window.onload = function() { setTimeout(function(){ window.print(); }, 100); }; window.onafterprint = function() { try{ window.close(); }catch(e){} };</script>`;
+    openCenteredPrintWindow(htmlContent + script, 'Tax Invoice', 760, 840);
   };
 
   // Download Invoice HTML Handler
@@ -649,10 +557,12 @@ export default function BillingPanel({
         <div>
           <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Search</label>
           <input
-            type="text"
-            placeholder="Bill No / Order ID..."
+            type="search"
+            data-search="true"
+            placeholder="Search Bill No / Order ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value.replace(/\s+/g, ''))}
+            onKeyDown={(e) => { if (e.key === ' ' || e.code === 'Space') e.preventDefault(); }}
             style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
           />
         </div>
@@ -738,6 +648,22 @@ export default function BillingPanel({
                 const dateStr = bill.date || formatDateDMY(bill.createdAt || new Date());
                 const timeStr = bill.time || (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:45 PM');
 
+                const currentBill = {
+                  ...bill,
+                  billNo,
+                  total: billAmount,
+                  items: rawItems,
+                  orderId: bill.orderId || `ORD-${100 + index}`,
+                  orderType: bill.orderType || 'Dine-In',
+                  table: bill.table || 'Table 1',
+                  date: dateStr,
+                  time: timeStr,
+                  paidAmount,
+                  balanceAmount,
+                  status: isPaid ? 'Paid' : (bill.status || 'Unpaid'),
+                  paymentStatus: isPaid ? 'Paid' : (bill.paymentStatus || 'Unpaid')
+                };
+
                 return (
                   <tr key={bill.tableId || bill._id || index}>
                     <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
@@ -789,7 +715,7 @@ export default function BillingPanel({
                         {/* 1. View Bill (Icon without text) */}
                         <button
                           type="button"
-                          onClick={() => setViewingBill(bill)}
+                          onClick={() => setViewingBill(currentBill)}
                           title="View Bill"
                           aria-label="View Bill"
                           style={{
@@ -814,7 +740,7 @@ export default function BillingPanel({
                             {/* 2. Print Bill (Icon without text) */}
                             <button
                               type="button"
-                              onClick={() => handlePrintBillPopup(bill)}
+                              onClick={() => handlePrintBillPopup(currentBill)}
                               title="Print Bill"
                               aria-label="Print Bill"
                               style={{
@@ -836,7 +762,7 @@ export default function BillingPanel({
                             {/* 3. Collect Payment (Icon without text) */}
                             <button
                               type="button"
-                              onClick={() => handleOpenCollectPayment(bill)}
+                              onClick={() => handleOpenCollectPayment(currentBill)}
                               title="Collect Payment"
                               aria-label="Collect Payment"
                               style={{
@@ -861,7 +787,7 @@ export default function BillingPanel({
                             {/* 4. Print Invoice (Icon without text) */}
                             <button
                               type="button"
-                              onClick={() => handlePrintInvoicePopup(bill)}
+                              onClick={() => handlePrintInvoicePopup(currentBill)}
                               title="Print Invoice"
                               aria-label="Print Invoice"
                               style={{
@@ -883,7 +809,7 @@ export default function BillingPanel({
                             {/* 5. Download Invoice (Icon without text) */}
                             <button
                               type="button"
-                              onClick={() => handleDownloadInvoicePopup(bill)}
+                              onClick={() => handleDownloadInvoicePopup(currentBill)}
                               title="Download Invoice"
                               aria-label="Download Invoice"
                               style={{

@@ -669,19 +669,19 @@ export default function TablesPanel({
         overflow: 'hidden',
         width: '100%'
       }}>
-        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', position: 'relative', paddingBottom: '6px' }}>
+        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', whiteSpace: 'nowrap' }}>S.NO</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '160px' }}>TABLE NO</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>SECTION / AREA</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>SEATING CAPACITY</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DEFAULT WAITER</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QR CODE</th>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', whiteSpace: 'nowrap' }}>S.NO</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap', minWidth: '160px' }}>TABLE NO</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>SECTION / AREA</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>SEATING CAPACITY</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DEFAULT WAITER</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QR CODE</th>
                 {(checkPermission('tables', 'edit') || checkPermission('tables', 'delete')) && (
-                  <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
                 )}
               </tr>
             </thead>

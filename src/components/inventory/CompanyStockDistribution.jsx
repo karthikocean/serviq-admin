@@ -364,19 +364,19 @@ export default function CompanyStockDistribution({ distributions: initialDistrib
         </div>
 
         {/* Table */}
-        <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch', paddingBottom: '6px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1150px' }}>
+        <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1150px', fontSize: '13px' }}>
             <thead>
-              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.5px' }}>
-                <th style={{ padding: '12px 14px', fontWeight: 800, width: '45px', whiteSpace: 'nowrap' }}>S.No</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, whiteSpace: 'nowrap' }}>Request No.</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, whiteSpace: 'nowrap' }}>Branch</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, whiteSpace: 'nowrap' }}>Item</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center', whiteSpace: 'nowrap' }}>Requested Qty</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center', whiteSpace: 'nowrap' }}>Given Qty</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center', whiteSpace: 'nowrap' }}>Remaining Qty</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center', whiteSpace: 'nowrap' }}>Status</th>
-                <th style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', width: '45px', whiteSpace: 'nowrap' }}>S.No</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Request No.</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Branch</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Item</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', whiteSpace: 'nowrap' }}>Requested Qty</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', whiteSpace: 'nowrap' }}>Given Qty</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', whiteSpace: 'nowrap' }}>Remaining Qty</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'center', whiteSpace: 'nowrap' }}>Status</th>
+                <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>

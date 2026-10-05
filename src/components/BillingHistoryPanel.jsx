@@ -5,7 +5,7 @@ import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import ReceiptCard, { generateReceiptHtml } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
 import '../pages/Billing/Billing.css';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -202,11 +202,7 @@ export default function BillingHistoryPanel({
 
   const handlePrintInvoiceDirect = (invoice) => {
     const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
-    const printWin = window.open('', '_blank', 'width=450,height=650');
-    if (printWin) {
-      printWin.document.write(htmlContent);
-      printWin.document.close();
-    }
+    openCenteredPrintWindow(htmlContent, `Receipt - ${invoice?.id || invoice?.billNo || 'Doc'}`, 480, 700);
   };
 
   const handleDownloadInvoiceDirect = (invoice) => {

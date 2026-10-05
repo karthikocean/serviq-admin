@@ -189,6 +189,16 @@ export default function AdminLayout() {
     return hasPermission(permissionKey, 'view');
   };
 
+  const getFirstAllowedReportTab = () => {
+    if (hasPermission('reports_sales', 'view')) return 'sales';
+    if (hasPermission('reports_items', 'view')) return 'items';
+    if (hasPermission('reports_orders', 'view')) return 'orders';
+    if (hasPermission('reports_inventory', 'view')) return 'inventory';
+    if (hasPermission('reports_staff', 'view')) return 'staff';
+    if (hasPermission('reports_tax', 'view')) return 'tax';
+    return 'sales';
+  };
+
   const getModuleForPath = (pathname) => {
     if (pathname === '/' || pathname === '/dashboard' || pathname === '/overview') return 'dashboard';
     if (pathname.startsWith('/roles-permissions')) return 'roles-permissions';
@@ -196,14 +206,85 @@ export default function AdminLayout() {
     if (pathname.startsWith('/plans-management') || pathname.startsWith('/plans')) return 'plans-management';
     if (pathname.startsWith('/tables')) return 'tables';
     if (pathname.startsWith('/menu')) return 'menu';
+
+    // Inventory sub-routes
+    if (pathname === '/inventory/items') return 'inventory_items';
+    if (pathname === '/inventory/central-stock') return 'inventory_central_stock';
+    if (pathname === '/inventory/purchases') return 'inventory_purchases';
+    if (pathname === '/inventory/branch-requests') return 'inventory_branch_requests';
+    if (pathname === '/inventory/distribution' || pathname === '/inventory/stock-distribution') return 'inventory_distribution';
+    if (pathname === '/inventory/my-stock') return 'inventory_my_stock';
+    if (pathname === '/inventory/stock-request') return 'inventory_stock_request';
+    if (pathname === '/inventory/branch-transfer') return 'inventory_branch_transfer';
+    if (pathname === '/inventory/direct-purchase') return 'inventory_direct_purchase';
+    if (pathname === '/inventory/stock-receipt') return 'inventory_stock_receipt';
+    if (pathname === '/inventory/transactions') return 'inventory_transactions';
     if (pathname.startsWith('/inventory')) return 'inventory';
+
     if (pathname.startsWith('/orders')) return 'orders';
     if (pathname.startsWith('/staff') || pathname.startsWith('/waiter') || pathname.startsWith('/kitchen')) return 'staff_management';
     if (pathname.startsWith('/users')) return 'users';
-    if (pathname.startsWith('/billing')) return 'billing';
-    if (pathname.startsWith('/reports')) return 'reports_analytics';
+
+    // Billing sub-routes
+    if (pathname === '/billing/history') return 'billing_history';
+    if (pathname.startsWith('/billing')) return 'billing_current';
+
+    // Reports sub-routes
+    if (pathname.startsWith('/reports')) {
+      const searchParams = new URLSearchParams(location.search);
+      const tab = searchParams.get('tab') || 'sales';
+      if (tab === 'sales') return 'reports_sales';
+      if (tab === 'items') return 'reports_items';
+      if (tab === 'orders') return 'reports_orders';
+      if (tab === 'inventory') return 'reports_inventory';
+      if (tab === 'staff') return 'reports_staff';
+      if (tab === 'tax') return 'reports_tax';
+      return 'reports_analytics';
+    }
+
     if (pathname.startsWith('/settings')) return 'settings';
     if (pathname.startsWith('/help-support')) return 'help_support';
+    return null;
+  };
+
+  const getFirstAllowedRoute = () => {
+    if (isTabAllowed('dashboard')) return '/dashboard';
+    if (isTabAllowed('roles-permissions')) return '/roles-permissions';
+    if (isTabAllowed('branch-management')) return '/branch-management';
+    if (isTabAllowed('plans-management')) return '/plans-management';
+    if (isTabAllowed('tables')) return '/tables';
+    if (isTabAllowed('menu')) return '/menu';
+    if (isTabAllowed('inventory')) {
+      const isComp = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
+      if (isComp) {
+        if (hasPermission('inventory_items', 'view')) return '/inventory/items';
+        if (hasPermission('inventory_central_stock', 'view')) return '/inventory/central-stock';
+        if (hasPermission('inventory_purchases', 'view')) return '/inventory/purchases';
+        if (hasPermission('inventory_branch_requests', 'view')) return '/inventory/branch-requests';
+        if (hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view')) return '/inventory/distribution';
+        if (hasPermission('inventory_transactions', 'view')) return '/inventory/transactions';
+      } else {
+        if (hasPermission('inventory_my_stock', 'view')) return '/inventory/my-stock';
+        if (hasPermission('inventory_stock_request', 'view')) return '/inventory/stock-request';
+        if (hasPermission('inventory_branch_transfer', 'view')) return '/inventory/branch-transfer';
+        if (hasPermission('inventory_direct_purchase', 'view')) return '/inventory/direct-purchase';
+        if (hasPermission('inventory_stock_receipt', 'view')) return '/inventory/stock-receipt';
+        if (hasPermission('inventory_transactions', 'view')) return '/inventory/transactions';
+      }
+      return '/inventory';
+    }
+    if (isTabAllowed('orders')) return '/orders';
+    if (isTabAllowed('staff_management')) return '/staff';
+    if (isTabAllowed('billing')) {
+      if (hasPermission('billing_current', 'view')) return '/billing';
+      if (hasPermission('billing_history', 'view')) return '/billing/history';
+      return '/billing';
+    }
+    if (isTabAllowed('reports_analytics')) {
+      return `/reports?tab=${getFirstAllowedReportTab()}`;
+    }
+    if (isTabAllowed('help_support')) return '/help-support';
+    if (isTabAllowed('settings')) return '/settings';
     return null;
   };
 
@@ -320,7 +401,7 @@ export default function AdminLayout() {
     setSidebarKitchenOpen(false);
     if (!isReportsActive) {
       setSidebarReportsOpen(true);
-      navigate('/reports?tab=sales');
+      navigate(`/reports?tab=${getFirstAllowedReportTab()}`);
     } else {
       setSidebarReportsOpen(prev => !prev);
     }
@@ -345,7 +426,8 @@ export default function AdminLayout() {
 
   // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
   if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
-    return <Navigate to="/dashboard" replace />;
+    const fallback = getFirstAllowedRoute() || '/dashboard';
+    return <Navigate to={fallback} replace />;
   }
 
   // Protect Plan-Gated Routes:
@@ -359,6 +441,14 @@ export default function AdminLayout() {
   if (isStaffActive && !isModuleAllowedForPlan('staff_management', activeRestaurant || currentSubPlan)) {
     ShowNotifications.showAlertNotification("Staff Management is not included in the Basic Plan. Please upgrade your subscription to access this module.", false);
     return <Navigate to="/plans-management" replace />;
+  }
+
+  // 3. Permission-Gated Pages: If a user navigates to an unpermitted route, redirect to their first allowed module
+  if (!isCurrentPageAllowed) {
+    const fallbackRoute = getFirstAllowedRoute();
+    if (fallbackRoute && fallbackRoute !== pathname) {
+      return <Navigate to={fallbackRoute} replace />;
+    }
   }
 
   return (
@@ -482,7 +572,7 @@ export default function AdminLayout() {
                 <ul className="sidebar-submenu">
                   {(String(selectedBranchId || '').toUpperCase() === 'COMPANY') ? (
                     <>
-                      {(hasPermission('inventory_items', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_items', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/items' || location.pathname === '/inventory' ? 'active' : ''}`}>
                           <Link to="/inventory/items" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -490,7 +580,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_central_stock', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_central_stock', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/central-stock' ? 'active' : ''}`}>
                           <Link to="/inventory/central-stock" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M3 21h18"></path><path d="M5 21V7l8-4v14"></path><path d="M19 21V11l-6-3"></path></svg>
@@ -498,7 +588,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_purchases', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_purchases', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/purchases' ? 'active' : ''}`}>
                           <Link to="/inventory/purchases" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
@@ -506,7 +596,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_branch_requests', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_branch_requests', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/branch-requests' ? 'active' : ''}`}>
                           <Link to="/inventory/branch-requests" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -514,7 +604,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view') || hasPermission('inventory', 'view')) && (
+                      {(hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view')) && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/distribution' || location.pathname === '/inventory/stock-distribution' ? 'active' : ''}`}>
                           <Link to="/inventory/distribution" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M16 3h5v5"></path><path d="M4 20L21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path></svg>
@@ -522,7 +612,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_transactions', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_transactions', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/transactions' ? 'active' : ''}`}>
                           <Link to="/inventory/transactions" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -533,7 +623,7 @@ export default function AdminLayout() {
                     </>
                   ) : (
                     <>
-                      {(hasPermission('inventory_my_stock', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_my_stock', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/my-stock' || location.pathname === '/inventory' ? 'active' : ''}`}>
                           <Link to="/inventory/my-stock" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M14 16h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
@@ -541,7 +631,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_stock_request', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_stock_request', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/stock-request' ? 'active' : ''}`}>
                           <Link to="/inventory/stock-request" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -549,7 +639,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_branch_transfer', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_branch_transfer', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/branch-transfer' ? 'active' : ''}`}>
                           <Link to="/inventory/branch-transfer" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
@@ -557,7 +647,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_direct_purchase', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_direct_purchase', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/direct-purchase' ? 'active' : ''}`}>
                           <Link to="/inventory/direct-purchase" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
@@ -565,7 +655,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_stock_receipt', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_stock_receipt', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/stock-receipt' ? 'active' : ''}`}>
                           <Link to="/inventory/stock-receipt" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -573,7 +663,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_transactions', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_transactions', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/transactions' ? 'active' : ''}`}>
                           <Link to="/inventory/transactions" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -647,16 +737,20 @@ export default function AdminLayout() {
               </div>
               {sidebarBillingOpen && (
                 <ul className="sidebar-submenu">
-                  <li className={`sidebar-item ${pathname === '/billing' ? 'active' : ''}`}>
-                    <Link to="/billing">
-                      <span>Current Billing</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${pathname === '/billing/history' ? 'active' : ''}`}>
-                    <Link to="/billing/history">
-                      <span>Billing History</span>
-                    </Link>
-                  </li>
+                  {hasPermission('billing_current', 'view') && (
+                    <li className={`sidebar-item ${pathname === '/billing' ? 'active' : ''}`}>
+                      <Link to="/billing">
+                        <span>Current Billing</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('billing_history', 'view') && (
+                    <li className={`sidebar-item ${pathname === '/billing/history' ? 'active' : ''}`}>
+                      <Link to="/billing/history">
+                        <span>Billing History</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               )}
             </li>

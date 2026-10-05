@@ -1,15 +1,45 @@
 import apiClient from "../config/index.js";
 import ShowNotifications from "../helper/ShowNotifications.js";
 
+const isValidMongoId = (id) => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
+
+const sanitizeParams = (params = {}) => {
+  const cleanParams = {};
+  Object.keys(params).forEach(key => {
+    const val = params[key];
+    if (val !== undefined && val !== null && val !== '') {
+      if (key === 'branchId') {
+        const sVal = String(val).toUpperCase();
+        if (sVal !== 'ALL' && sVal !== 'COMPANY' && isValidMongoId(val)) {
+          cleanParams[key] = val;
+        }
+      } else {
+        const sVal = String(val).toUpperCase();
+        if (sVal !== 'ALL' && sVal !== 'COMPANY') {
+          cleanParams[key] = val;
+        }
+      }
+    }
+  });
+  return cleanParams;
+};
+
+const sanitizePayload = (data = {}) => {
+  if (!data || typeof data !== 'object') return data;
+  const cleanData = { ...data };
+  if (cleanData.branchId) {
+    const sBranch = String(cleanData.branchId).toUpperCase();
+    if (sBranch === 'COMPANY' || sBranch === 'ALL' || !isValidMongoId(cleanData.branchId)) {
+      delete cleanData.branchId;
+    }
+  }
+  return cleanData;
+};
+
 class MenuApi {
   async getMenuItems(params = {}) {
     try {
-      const cleanParams = {};
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
-          cleanParams[key] = params[key];
-        }
-      });
+      const cleanParams = sanitizeParams(params);
       const searchVal = params.search || params.searchQuery || params.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.category && !cleanParams.category && params.category !== 'All' && params.category !== 'ALL') cleanParams.category = params.category;
@@ -40,12 +70,7 @@ class MenuApi {
 
   async getCategories(params = {}) {
     try {
-      const cleanParams = {};
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
-          cleanParams[key] = params[key];
-        }
-      });
+      const cleanParams = sanitizeParams(params);
       const searchVal = params.search || params.searchQuery || params.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
@@ -77,12 +102,13 @@ class MenuApi {
 
   async createCategory(data) {
     try {
+      const cleanData = sanitizePayload(data);
       let response;
       try {
-        response = await apiClient.post("/menu/category", data);
+        response = await apiClient.post("/menu/category", cleanData);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405) {
-          response = await apiClient.post("/menu/categories", data);
+          response = await apiClient.post("/menu/categories", cleanData);
         } else {
           throw err1;
         }
@@ -99,12 +125,13 @@ class MenuApi {
 
   async updateCategory(id, data) {
     try {
+      const cleanData = sanitizePayload(data);
       let response;
       try {
-        response = await apiClient.put(`/menu/category/${id}`, data);
+        response = await apiClient.put(`/menu/category/${id}`, cleanData);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405) {
-          response = await apiClient.put(`/menu/categories/${id}`, data);
+          response = await apiClient.put(`/menu/categories/${id}`, cleanData);
         } else {
           throw err1;
         }
@@ -143,7 +170,8 @@ class MenuApi {
 
   async createMenuItem(data) {
     try {
-      const response = await apiClient.post("/menu", data);
+      const cleanData = sanitizePayload(data);
+      const response = await apiClient.post("/menu", cleanData);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -162,7 +190,8 @@ class MenuApi {
 
   async updateMenuItem(id, data) {
     try {
-      const response = await apiClient.put(`/menu/${id}`, data);
+      const cleanData = sanitizePayload(data);
+      const response = await apiClient.put(`/menu/${id}`, cleanData);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

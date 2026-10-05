@@ -119,7 +119,7 @@ const ALL_MODULES = [
 ];
 
 export default function RolesPermissionsPanel() {
-  const { selectedBranchId, hasPermission } = useAppState();
+  const { selectedBranchId, hasPermission, currentUser, setCurrentUser, fetchProfile } = useAppState();
 
   const isCompany = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
   const visibleModules = useMemo(() => getSlidebarModules(isCompany), [isCompany]);
@@ -264,15 +264,15 @@ export default function RolesPermissionsPanel() {
     // Keep parent 'inventory', 'billing', and 'reports' permission in sync with submodules
     const invKeys = [...COMPANY_INVENTORY_MODULES, ...BRANCH_INVENTORY_MODULES].map(m => m.id);
     ['view', 'add', 'edit', 'delete'].forEach(act => {
-      const anyInv = invKeys.some(k => finalPermissions[k]?.[act]) || !!finalPermissions['inventory']?.[act];
+      const anyInv = invKeys.some(k => Boolean(finalPermissions[k]?.[act]));
       if (!finalPermissions['inventory']) finalPermissions['inventory'] = {};
       finalPermissions['inventory'][act] = anyInv;
 
-      const anyBill = BILLING_SUBMODULES.some(m => finalPermissions[m.id]?.[act]) || !!finalPermissions['billing']?.[act];
+      const anyBill = BILLING_SUBMODULES.some(m => Boolean(finalPermissions[m.id]?.[act]));
       if (!finalPermissions['billing']) finalPermissions['billing'] = {};
       finalPermissions['billing'][act] = anyBill;
 
-      const anyReport = REPORTS_SUBMODULES.some(m => finalPermissions[m.id]?.[act]) || !!finalPermissions['reports_analytics']?.[act] || !!finalPermissions['reports']?.[act];
+      const anyReport = REPORTS_SUBMODULES.some(m => Boolean(finalPermissions[m.id]?.[act]));
       if (!finalPermissions['reports_analytics']) finalPermissions['reports_analytics'] = {};
       finalPermissions['reports_analytics'][act] = anyReport;
       if (!finalPermissions['reports']) finalPermissions['reports'] = {};
@@ -297,6 +297,9 @@ export default function RolesPermissionsPanel() {
     if (res.status) {
       setViewState('list');
       fetchRoles();
+      if (typeof fetchProfile === 'function') {
+        fetchProfile();
+      }
     }
   };
 
@@ -479,13 +482,13 @@ export default function RolesPermissionsPanel() {
           <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
             <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'center' }}>
               <thead>
-                <tr style={{ backgroundColor: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', width: '42%' }}>MODULES</th>
+                <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', width: '42%', color: '#ffffff' }}>MODULES</th>
                   {['view', 'add', 'edit', 'delete'].map(action => {
                     const allColChecked = visibleModules.length > 0 && visibleModules.every(m => permissionsState[m.id]?.[action]);
 
                     return (
-                      <th key={action} style={{ padding: '9px 12px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      <th key={action} style={{ padding: '9px 12px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', color: '#ffffff' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span>{action}</span>
                           <input
@@ -614,20 +617,20 @@ export default function RolesPermissionsPanel() {
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '4px' }}>
           <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
                   S.NO
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ROLE NAME
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ADMIN ACCESS
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
                   ACTIONS
                 </th>
               </tr>

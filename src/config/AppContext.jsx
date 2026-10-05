@@ -195,7 +195,7 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   // Extract embedded permissions object
   const permissions = roleObj?.permissions || currentUser.permissions || null;
 
-  // Map module aliases to check both hyphenated and underscored keys
+  // Map module aliases to check interchangeable alias keys
   const getNormalizedKeys = (key) => {
     switch (key) {
       case 'dashboard': case 'overview':
@@ -210,46 +210,73 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
         return ['tables', 'table'];
       case 'menu':
         return ['menu'];
-      case 'inventory':
-        return [
-          'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
-          'inventory_branch_requests', 'inventory_distribution', 'inventory_transactions',
-          'inventory_my_stock', 'inventory_stock_request', 'inventory_branch_transfer',
-          'inventory_direct_purchase', 'inventory_stock_receipt', 'inventory_vendors',
-          'inventory_categories', 'stock_reduction'
-        ];
       case 'orders': case 'order':
         return ['orders', 'order'];
       case 'staff': case 'staff_management': case 'waiter': case 'kitchen':
         return ['staff_management', 'staff', 'waiter', 'kitchen'];
       case 'users': case 'user_accounts':
         return ['user_accounts', 'users'];
-      case 'billing': case 'billing_current': case 'billing_history': case 'billing_payments':
-        return ['billing', 'billing_current', 'billing_history', 'billing_payments'];
-      case 'reports': case 'reports_analytics':
-        return [
-          'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
-          'reports_inventory', 'reports_staff', 'reports_tax'
-        ];
+      case 'billing_current':
+        return ['billing_current'];
+      case 'billing_history':
+        return ['billing_history'];
       case 'help-support': case 'help_support': case 'help':
         return ['help_support', 'help-support', 'help'];
       case 'settings':
         return ['settings'];
+      case 'inventory_distribution': case 'inventory_stock_distribution':
+        return ['inventory_distribution', 'inventory_stock_distribution'];
       default:
         return [key];
     }
   };
 
   if (permissions && typeof permissions === 'object' && Object.keys(permissions).length > 0) {
-    const keysToCheck = getNormalizedKeys(moduleName);
-
-    // Top-level module group checks
-    if (moduleName === 'inventory' || moduleName === 'reports' || moduleName === 'reports_analytics' || moduleName === 'billing') {
-      const anyActionTrue = keysToCheck.some(k => permissions[k] && Boolean(permissions[k][action]));
-      if (anyActionTrue) return true;
+    // 1. Group checks for parent navigation modules:
+    // Only return true if AT LEAST ONE child submodule is permitted for this action!
+    if (moduleName === 'inventory') {
+      const invSubKeys = [
+        'inventory_items', 'inventory_central_stock', 'inventory_purchases',
+        'inventory_branch_requests', 'inventory_distribution', 'inventory_stock_distribution',
+        'inventory_transactions', 'inventory_my_stock', 'inventory_stock_request',
+        'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt'
+      ];
+      const hasAnyChild = invSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['inventory'] && permissions['inventory'][action] !== undefined) {
+        return Boolean(permissions['inventory'][action]);
+      }
+      return false;
     }
 
-    // Direct key matching
+    if (moduleName === 'billing' || moduleName === 'billing_payments') {
+      const billSubKeys = ['billing_current', 'billing_history'];
+      const hasAnyChild = billSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['billing'] && permissions['billing'][action] !== undefined) {
+        return Boolean(permissions['billing'][action]);
+      }
+      return false;
+    }
+
+    if (moduleName === 'reports' || moduleName === 'reports_analytics') {
+      const repSubKeys = [
+        'reports_sales', 'reports_items', 'reports_orders',
+        'reports_inventory', 'reports_staff', 'reports_tax'
+      ];
+      const hasAnyChild = repSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
+        return Boolean(permissions['reports_analytics'][action]);
+      }
+      if (permissions['reports'] && permissions['reports'][action] !== undefined) {
+        return Boolean(permissions['reports'][action]);
+      }
+      return false;
+    }
+
+    // 2. Direct key matching for individual modules & submodules
+    const keysToCheck = getNormalizedKeys(moduleName);
     for (const k of keysToCheck) {
       if (permissions[k] !== undefined && permissions[k] !== null) {
         const modPerm = permissions[k];
@@ -259,28 +286,11 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       }
     }
 
-    // Sub-module fallbacks
-    if (moduleName.startsWith('reports_')) {
-      if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
-        return Boolean(permissions['reports_analytics'][action]);
-      }
-      if (permissions['reports'] && permissions['reports'][action] !== undefined) {
-        return Boolean(permissions['reports'][action]);
-      }
-    }
-    if (moduleName.startsWith('inventory_')) {
-      if (permissions['inventory'] && permissions['inventory'][action] !== undefined) {
-        return Boolean(permissions['inventory'][action]);
-      }
-    }
-    if (moduleName.startsWith('billing_')) {
-      if (permissions['billing'] && permissions['billing'][action] !== undefined) {
-        return Boolean(permissions['billing'][action]);
-      }
-    }
+    // Role permissions are explicitly defined, so anything not explicitly granted is strictly false
+    return false;
   }
 
-  // Fallback to activeRestaurant.roles or DEFAULT_ROLES if permissions object is not directly embedded
+  // Fallback to activeRestaurant.roles or DEFAULT_ROLES ONLY IF permissions object is completely absent
   const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
   const userRoleConfig = rolesConfig[roleNameStr] || rolesConfig[currentUser.userType] || DEFAULT_ROLES[roleNameStr] || DEFAULT_ROLES[currentUser.userType] || { permissions: {} };
 
@@ -331,6 +341,7 @@ export const extractRestaurantFromToken = (token) => {
           (typeof payload.restaurant === 'object' ? (payload.restaurant?.restaurantName || payload.restaurant?.name) : null) ||
           (typeof payload.restaurant === 'string' && !/^[0-9a-fA-F]{24}$/.test(payload.restaurant) ? payload.restaurant : null) ||
           null
+          
         );
       }
     }
@@ -1229,9 +1240,10 @@ export const AppProvider = ({ children }) => {
                             (typeof profileData.roleId === 'object' && profileData.roleId !== null) ? profileData.roleId : null;
 
         const roleIdToLookup = (typeof profileData.roleId === 'string' && profileData.roleId) || 
-                               (typeof profileData.role === 'string' && profileData.role);
+                               (typeof profileData.role === 'string' && profileData.role) ||
+                               profRoleObj?._id || profRoleObj?.id;
 
-        if (!profRoleObj && roleIdToLookup) {
+        if ((!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) && roleIdToLookup) {
           try {
             if (/^[0-9a-fA-F]{24}$/.test(roleIdToLookup)) {
               const rRes = await RoleApi.getRoleById(roleIdToLookup);
@@ -1239,7 +1251,7 @@ export const AppProvider = ({ children }) => {
                 profRoleObj = rRes.response?.data || rRes.response;
               }
             }
-            if (!profRoleObj) {
+            if (!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) {
               const listRes = await RoleApi.getRoles({ limit: 100 });
               if (listRes && listRes.status && listRes.response) {
                 const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
@@ -1504,13 +1516,14 @@ export const AppProvider = ({ children }) => {
                           (typeof apiUser.roleId === 'object' && apiUser.roleId !== null) ? apiUser.roleId : null;
 
           const roleIdentifier = (typeof apiUser.roleId === 'string' && apiUser.roleId) ? apiUser.roleId : 
-                                 (typeof apiUser.role === 'string' && apiUser.role) ? apiUser.role : null;
+                                 (typeof apiUser.role === 'string' && apiUser.role) ? apiUser.role : 
+                                 roleObj?._id || roleObj?.id;
 
           // Temporarily set token in sessionStorage so RoleApi calls are authenticated
           sessionStorage.setItem("userToken", token);
           sessionStorage.setItem("token", token);
 
-          if (!roleObj && roleIdentifier) {
+          if ((!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) && roleIdentifier) {
             try {
               if (/^[0-9a-fA-F]{24}$/.test(roleIdentifier)) {
                 const rRes = await RoleApi.getRoleById(roleIdentifier);
@@ -1518,7 +1531,7 @@ export const AppProvider = ({ children }) => {
                   roleObj = rRes.response?.data || rRes.response;
                 }
               }
-              if (!roleObj) {
+              if (!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) {
                 const listRes = await RoleApi.getRoles({ limit: 100 });
                 if (listRes && listRes.status && listRes.response) {
                   const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
@@ -1648,6 +1661,7 @@ export const AppProvider = ({ children }) => {
             userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : (isManagerOrBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')),
             role: roleObj || resolvedRole,
             roleId: apiUser.roleId || roleObj?._id || apiUser.role,
+            permissions: roleObj?.permissions || apiUser.permissions || {},
             adminAccess: hasExplicitAdminAccess,
             restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
             plan: apiUser.plan || apiUser.subscription?.planName || 'Standard',
@@ -3123,6 +3137,7 @@ export const AppProvider = ({ children }) => {
         updateInventoryCategory,
         hasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
         checkHasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
+        setCurrentUser,
         deleteInventoryCategory
       }}
     >

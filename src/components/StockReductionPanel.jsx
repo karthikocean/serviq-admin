@@ -1546,14 +1546,14 @@ export default function StockReductionPanel() {
           {activeTab === 'reductions' && (
             <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>S.NO</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>RAW MATERIAL ITEM</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>CATEGORY</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>CURRENT STOCK</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>MIN THRESHOLD</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>STATUS</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'right' }}>QUICK ACTION</th>
+                <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>RAW MATERIAL ITEM</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CURRENT STOCK</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MIN THRESHOLD</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>QUICK ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -1656,15 +1656,15 @@ export default function StockReductionPanel() {
           {activeTab === 'history' && (
             <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>DATE & TIME</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>RAW MATERIAL ITEM</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>QTY REDUCED</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>REASON</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>LOGGED BY</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>NOTES / REMARKS</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'right' }}>ACTION</th>
+                <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>DATE & TIME</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>RAW MATERIAL ITEM</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>QTY REDUCED</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REASON</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LOGGED BY</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>NOTES / REMARKS</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
@@ -1753,15 +1753,15 @@ export default function StockReductionPanel() {
           {activeTab === 'purchases' && (
             <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
-                <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, width: '50px' }}>S.NO.</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>INVOICE / DATE</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>ITEM & CATEGORY</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>SUPPLIER VENDOR</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>QTY & RATE</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>TOTAL AMOUNT</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800 }}>STATUS</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'right' }}>ACTION</th>
+                <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>S.NO.</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>INVOICE / DATE</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ITEM & CATEGORY</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>SUPPLIER VENDOR</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>QTY & RATE</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TOTAL AMOUNT</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>

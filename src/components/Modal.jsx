@@ -33,7 +33,7 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
         zIndex: 99999,
         padding: '16px',
         boxSizing: 'border-box',
-        overflow: 'hidden'
+        overflowY: 'auto'
       }}
     >
       <div 
@@ -41,12 +41,26 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
         style={{ 
           maxWidth, 
           width: '100%', 
-          maxHeight: '92vh',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
           margin: 'auto',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
-        <div className="modal-header-flex" style={{ marginBottom: '12px', paddingBottom: '10px' }}>
+        <div 
+          className="modal-header-flex" 
+          style={{ 
+            marginBottom: '12px', 
+            paddingBottom: '10px',
+            position: 'sticky',
+            top: 0,
+            background: 'inherit',
+            zIndex: 10,
+            flexShrink: 0
+          }}
+        >
           {title && <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{title}</h3>}
           {onClose && (
             <span 

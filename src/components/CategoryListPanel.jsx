@@ -8,6 +8,7 @@ import { useAppState } from '../config/AppContext';
 import SearchableSelect from './SearchableSelect.jsx';
 import { isBranchMatch } from '../helper/BranchHelper.js';
 import { cleanRelativeImagePath, getImageUrl } from '../helper/ImageHelper.js';
+import { isMongoId } from '../config/initialData';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -73,7 +74,7 @@ export default function CategoryListPanel({
       const params = {
         search: searchQuery ? searchQuery.trim() : undefined
       };
-      if (selectedBranchId && selectedBranchId !== 'ALL') {
+      if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && isMongoId(selectedBranchId)) {
         params.branchId = selectedBranchId;
       }
       const res = await MenuApi.getCategories(params);
@@ -234,7 +235,10 @@ export default function CategoryListPanel({
     }
 
     setIsSubmitting(true);
-    const finalBranch = formBranchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
+    const candidateBranch = (isMongoId(formBranchId) ? formBranchId : null) || 
+                            (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && isMongoId(selectedBranchId) ? selectedBranchId : null) || 
+                            (isMongoId(currentUser?.activeBranchId) ? currentUser.activeBranchId : null) || 
+                            (isMongoId(currentUser?.branchId) ? currentUser.branchId : null);
     const payload = {
       name: formName.trim(),
       image: cleanRelativeImagePath(formImage),
@@ -243,8 +247,8 @@ export default function CategoryListPanel({
       order: orderNum,
       status: formStatus || 'AVAILABLE'
     };
-    if (finalBranch && finalBranch !== 'ALL') {
-      payload.branchId = finalBranch;
+    if (candidateBranch) {
+      payload.branchId = candidateBranch;
     }
 
     try {
@@ -738,26 +742,26 @@ export default function CategoryListPanel({
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '1000px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
+              <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '80px' }}>
                   IMAGE
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   CATEGORY NAME
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>
                   DISPLAY ORDER
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   DESCRIPTION
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '120px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 16px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '110px' }}>
+                <th style={{ padding: '14px 16px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', width: '110px' }}>
                   ACTIONS
                 </th>
               </tr>

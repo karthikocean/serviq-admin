@@ -267,11 +267,11 @@ export default function InventoryManagement() {
         <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.04)', paddingBottom: '6px' }}>
           <table className="admin-table" style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 18px', fontWeight: 800, color: '#ffffff' }}>FEATURES & MODULES</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ffffff' }}>BASIC (₹999/mo)</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ffffff' }}>STANDARD (₹1,999/mo)</th>
-                <th style={{ padding: '14px 18px', fontWeight: 800, textAlign: 'center', color: '#ff7a00' }}>PREMIUM (₹4,999/mo)</th>
+              <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '14px 18px', fontWeight: 700, color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>FEATURES & MODULES</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center', color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BASIC (₹999/mo)</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center', color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STANDARD (₹1,999/mo)</th>
+                <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center', color: '#ffffff', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PREMIUM (₹4,999/mo)</th>
               </tr>
             </thead>
             <tbody>
