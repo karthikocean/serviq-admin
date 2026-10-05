@@ -100,7 +100,7 @@ export default function StaffManagementPanel({
   handleOpenAssignTablesModal,
   openKitchenSettingsModal
 }) {
-  const { currentUser: user, selectedBranchId, activeRestaurant, updateStaff: ctxUpdateStaff, deleteStaff: ctxDeleteStaff } = useContext(AppContext);
+  const { currentUser: user, selectedBranchId, activeRestaurant, updateStaff: ctxUpdateStaff, deleteStaff: ctxDeleteStaff, hasPermission } = useContext(AppContext);
   const updateStaff = propUpdateStaff || ctxUpdateStaff;
   const deleteStaff = propDeleteStaff || ctxDeleteStaff;
   const roleStr = typeof user?.role === 'object' && user?.role !== null
@@ -1403,22 +1403,24 @@ export default function StaffManagementPanel({
             <DownloadIcon size={14} /> Export CSV
           </button>
 
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={openAddUser}
-            style={{
-              padding: '9px 18px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px'
-            }}
-          >
-            + Add Staff Member
-          </button>
+          {hasPermission('staff', 'add') && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openAddUser}
+              style={{
+                padding: '9px 18px',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '8px'
+              }}
+            >
+              + Add Staff Member
+            </button>
+          )}
         </div>
       </div>
 
@@ -1849,23 +1851,25 @@ export default function StaffManagementPanel({
                       </button>
 
                       {/* Edit */}
-                      <button
-                        type="button"
-                        title="Edit Staff Member"
-                        onClick={() => openEditUser(user)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          padding: '5px',
-                          borderRadius: '6px',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <PencilIcon size={15} />
-                      </button>
+                      {hasPermission('staff', 'edit') && (
+                        <button
+                          type="button"
+                          title="Edit Staff Member"
+                          onClick={() => openEditUser(user)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            padding: '5px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <PencilIcon size={15} />
+                        </button>
+                      )}
 
                       {/* Assign Tables (Only for Waiters) */}
                       <button

@@ -119,7 +119,7 @@ const ALL_MODULES = [
 ];
 
 export default function RolesPermissionsPanel() {
-  const { selectedBranchId } = useAppState();
+  const { selectedBranchId, hasPermission } = useAppState();
 
   const isCompany = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
   const visibleModules = useMemo(() => getSlidebarModules(isCompany), [isCompany]);
@@ -583,9 +583,10 @@ export default function RolesPermissionsPanel() {
             Roles & Permissions
           </h2>
 
-          <button
-            type="button"
-            onClick={handleAddRole}
+          {hasPermission('roles-permissions', 'add') && (
+            <button
+              type="button"
+              onClick={handleAddRole}
               style={{
                 background: '#000000',
                 color: '#ffffff',
@@ -606,6 +607,7 @@ export default function RolesPermissionsPanel() {
             >
               + Add Role
             </button>
+          )}
           </div>
 
         {/* Roles List Table - Compact Layout */}
@@ -729,28 +731,30 @@ export default function RolesPermissionsPanel() {
                         >
                           <PowerIcon size={14} color={role.isActive ? '#059669' : '#dc2626'} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEditRole(role)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '5px',
-                            borderRadius: '5px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          title="Edit Role"
-                        >
-                          <PencilIcon size={15} />
-                        </button>
-                        {!role.isDefault && (
+                        {hasPermission('roles-permissions', 'edit') && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditRole(role)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '5px',
+                              borderRadius: '5px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                            title="Edit Role"
+                          >
+                            <PencilIcon size={15} />
+                          </button>
+                        )}
+                        {!role.isDefault && hasPermission('roles-permissions', 'delete') && (
                           <button
                             type="button"
                             onClick={() => handleDeleteRole(role)}

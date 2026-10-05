@@ -20,7 +20,8 @@ export default function MenuManagement() {
     selectedBranchId,
     addMenuItem,
     updateMenuItem,
-    deleteMenuItem
+    deleteMenuItem,
+    hasPermission
   } = useAppState();
 
   const navigate = useNavigate();
@@ -210,15 +211,7 @@ export default function MenuManagement() {
 
   const menu = menuItems;
 
-  // Permission checks
-  const role = currentUser?.role || 'Waiter';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
-    const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
+
 
   const openAddMenuModal = () => {
     setMenuForm({

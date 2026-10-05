@@ -62,7 +62,7 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 export default function UserListPanel() {
-  const { currentUser, selectedBranchId } = useAppState();
+  const { currentUser, selectedBranchId, hasPermission } = useAppState();
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
@@ -785,29 +785,31 @@ export default function UserListPanel() {
             >
               <DownloadIcon size={14} /> Export CSV
             </button>
-            <button 
-              type="button" 
-              onClick={openAddUser}
-              style={{
-                background: '#000000',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 22px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                transition: 'all 0.15s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
-              onMouseLeave={e => e.currentTarget.style.background = '#000000'}
-            >
-              + Create User
-            </button>
+            {hasPermission('users', 'add') && (
+              <button 
+                type="button" 
+                onClick={openAddUser}
+                style={{
+                  background: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 22px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
+                onMouseLeave={e => e.currentTarget.style.background = '#000000'}
+              >
+                + Create User
+              </button>
+            )}
           </div>
         </div>
 
@@ -1010,27 +1012,29 @@ export default function UserListPanel() {
                         >
                           <EyeIcon size={16} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditUser(user)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          title="Edit User"
-                        >
-                          <PencilIcon size={16} />
-                        </button>
+                        {hasPermission('users', 'edit') && (
+                          <button
+                            type="button"
+                            onClick={() => openEditUser(user)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                            title="Edit User"
+                          >
+                            <PencilIcon size={16} />
+                          </button>
+                        )}
                         <button
                         title="Change Password"
                         onClick={() => {
@@ -1059,21 +1063,23 @@ export default function UserListPanel() {
                       >
                         <KeyIcon />
                       </button>
-                      <button
-                          type="button"
-                          onClick={() => setUserToDelete(user)}
-                          title="Delete User"
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid #fee2e2',
-                            borderRadius: '6px',
-                            padding: '6px',
-                            cursor: 'pointer',
-                            color: '#dc2626'
-                          }}
-                        >
-                          <TrashIcon size={14} />
-                        </button>
+                      {hasPermission('users', 'delete') && (
+                        <button
+                            type="button"
+                            onClick={() => setUserToDelete(user)}
+                            title="Delete User"
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid #fee2e2',
+                              borderRadius: '6px',
+                              padding: '6px',
+                              cursor: 'pointer',
+                              color: '#dc2626'
+                            }}
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                      )}
                       </div>
                     </td>
                   </tr>

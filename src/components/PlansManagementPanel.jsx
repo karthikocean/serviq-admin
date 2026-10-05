@@ -60,7 +60,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     upgradeRestaurantPlan,
     purchaseExtraBranchSlots,
     toggleSubscriptionAutoRenew,
-    currentUser
+    currentUser,
+    hasPermission: contextHasPermission
   } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
@@ -75,21 +76,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin';
+    userRoleLower === 'super_admin';
 
   const role = roleStr || 'Admin';
-  const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (isRestaurantOwner) return true;
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    return !!userRoleConfig.permissions?.[moduleName]?.[action];
-  });
+  const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
 
   if (!isRestaurantOwner) {
     return (

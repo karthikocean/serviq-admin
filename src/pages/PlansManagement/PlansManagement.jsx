@@ -5,7 +5,7 @@ import PlansManagementPanel from '../../components/PlansManagementPanel';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 
 export default function PlansManagement() {
-  const { currentUser, activeRestaurant } = useAppState();
+  const { currentUser, activeRestaurant, hasPermission } = useAppState();
 
   if (!activeRestaurant) return null;
 
@@ -21,28 +21,17 @@ export default function PlansManagement() {
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin';
+    userRoleLower === 'super_admin';
 
   // Strict check: Only Restaurant Owner can access plans management
   if (!isRestaurantOwner) {
     ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner only.", false);
     return <Navigate to="/dashboard" replace />;
   }
-
-  const role = currentUser?.role || 'Admin';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (isRestaurantOwner) return true;
-    const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
 
   return <PlansManagementPanel hasPermission={hasPermission} />;
 }

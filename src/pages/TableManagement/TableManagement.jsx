@@ -20,7 +20,8 @@ export default function TableManagement() {
     assignQrCode,
     revokeQrCode,
     deleteQrCode,
-    selectedBranchId
+    selectedBranchId,
+    hasPermission
   } = useAppState();
 
   const navigate = useNavigate();
@@ -122,15 +123,7 @@ export default function TableManagement() {
 
 
 
-  // Permission checks
-  const role = currentUser?.role || 'Waiter';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
-    const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
+
 
   // Filter waiters by role (Waiters ONLY)
   const isOnlyWaiter = (s) => {

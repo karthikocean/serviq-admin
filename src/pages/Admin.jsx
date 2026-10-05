@@ -221,7 +221,8 @@ export default function Admin() {
     updateRolePermissions,
     addNewRole,
     updateMenuCategories,
-    selectedBranchId
+    selectedBranchId,
+    hasPermission
   } = useAppState();
 
   const [activeTab, setActiveTab] = useState('overview');
@@ -468,15 +469,7 @@ export default function Admin() {
     ? tables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []))
     : tables;
 
-  // Filter sidebar based on role
-  const role = currentUser?.role || 'Waiter';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
-    const rolesConfig = activeRestaurant.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
+
 
   const isTabAllowed = (tab) => {
     const userRoleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null

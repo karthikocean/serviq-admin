@@ -154,6 +154,148 @@ export const DEFAULT_ROLES = {
   }
 };
 
+export const checkHasPermission = (currentUser, activeRestaurant, moduleName, action = 'view') => {
+  if (!currentUser) return false;
+
+  const userTypeUpper = (currentUser.userType || '').toUpperCase().trim();
+  const roleObj = typeof currentUser.role === 'object' && currentUser.role !== null ? currentUser.role :
+                  typeof currentUser.roleId === 'object' && currentUser.roleId !== null ? currentUser.roleId : null;
+  const roleNameStr = roleObj?.roleName || roleObj?.name || (typeof currentUser.role === 'string' ? currentUser.role : '') || '';
+  const roleUpper = roleNameStr.toUpperCase().trim();
+
+  const isRestaurantOwner = 
+    userTypeUpper === 'RESTAURANT_OWNER' || 
+    userTypeUpper === 'OWNER' || 
+    userTypeUpper === 'SUPER ADMIN' || 
+    userTypeUpper === 'SUPER_ADMIN' || 
+    roleUpper === 'RESTAURANT_OWNER' || 
+    roleUpper === 'OWNER' || 
+    roleUpper === 'SUPER ADMIN';
+
+  // Restaurant Owner & Super Admin always have 100% full access to all modules and all actions
+  if (isRestaurantOwner) return true;
+
+  // Branch management & Plans management are strictly for Restaurant Owners only
+  if (
+    moduleName === 'branch-management' || 
+    moduleName === 'branch_management' || 
+    moduleName === 'branches' || 
+    moduleName === 'plans-management' || 
+    moduleName === 'plans_subscription' || 
+    moduleName === 'plans_management' || 
+    moduleName === 'plans'
+  ) {
+    return isRestaurantOwner;
+  }
+
+  // Check explicit admin access flag
+  const adminAccessFlag = currentUser.adminAccess ?? currentUser.isAdminAccess ?? roleObj?.adminAccess ?? roleObj?.isAdminAccess;
+  if (adminAccessFlag === false) return false;
+
+  // Extract embedded permissions object
+  const permissions = roleObj?.permissions || currentUser.permissions || null;
+
+  // Map module aliases to check both hyphenated and underscored keys
+  const getNormalizedKeys = (key) => {
+    switch (key) {
+      case 'dashboard': case 'overview':
+        return ['dashboard', 'overview'];
+      case 'roles-permissions': case 'roles_permissions': case 'roles':
+        return ['roles_permissions', 'roles-permissions', 'roles'];
+      case 'branch-management': case 'branch_management': case 'branches':
+        return ['branch_management', 'branch-management', 'branches'];
+      case 'plans-management': case 'plans_subscription': case 'plans_management': case 'plans':
+        return ['plans_subscription', 'plans_management', 'plans-management', 'plans'];
+      case 'tables': case 'table':
+        return ['tables', 'table'];
+      case 'menu':
+        return ['menu'];
+      case 'inventory':
+        return [
+          'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
+          'inventory_branch_requests', 'inventory_distribution', 'inventory_transactions',
+          'inventory_my_stock', 'inventory_stock_request', 'inventory_branch_transfer',
+          'inventory_direct_purchase', 'inventory_stock_receipt', 'inventory_vendors',
+          'inventory_categories', 'stock_reduction'
+        ];
+      case 'orders': case 'order':
+        return ['orders', 'order'];
+      case 'staff': case 'staff_management': case 'waiter': case 'kitchen':
+        return ['staff_management', 'staff', 'waiter', 'kitchen'];
+      case 'users': case 'user_accounts':
+        return ['user_accounts', 'users'];
+      case 'billing': case 'billing_current': case 'billing_history': case 'billing_payments':
+        return ['billing', 'billing_current', 'billing_history', 'billing_payments'];
+      case 'reports': case 'reports_analytics':
+        return [
+          'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
+          'reports_inventory', 'reports_staff', 'reports_tax'
+        ];
+      case 'help-support': case 'help_support': case 'help':
+        return ['help_support', 'help-support', 'help'];
+      case 'settings':
+        return ['settings'];
+      default:
+        return [key];
+    }
+  };
+
+  if (permissions && typeof permissions === 'object' && Object.keys(permissions).length > 0) {
+    const keysToCheck = getNormalizedKeys(moduleName);
+
+    // Top-level module group checks
+    if (moduleName === 'inventory' || moduleName === 'reports' || moduleName === 'reports_analytics' || moduleName === 'billing') {
+      const anyActionTrue = keysToCheck.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (anyActionTrue) return true;
+    }
+
+    // Direct key matching
+    for (const k of keysToCheck) {
+      if (permissions[k] !== undefined && permissions[k] !== null) {
+        const modPerm = permissions[k];
+        if (typeof modPerm === 'object' && modPerm[action] !== undefined) {
+          return Boolean(modPerm[action]);
+        }
+      }
+    }
+
+    // Sub-module fallbacks
+    if (moduleName.startsWith('reports_')) {
+      if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
+        return Boolean(permissions['reports_analytics'][action]);
+      }
+      if (permissions['reports'] && permissions['reports'][action] !== undefined) {
+        return Boolean(permissions['reports'][action]);
+      }
+    }
+    if (moduleName.startsWith('inventory_')) {
+      if (permissions['inventory'] && permissions['inventory'][action] !== undefined) {
+        return Boolean(permissions['inventory'][action]);
+      }
+    }
+    if (moduleName.startsWith('billing_')) {
+      if (permissions['billing'] && permissions['billing'][action] !== undefined) {
+        return Boolean(permissions['billing'][action]);
+      }
+    }
+  }
+
+  // Fallback to activeRestaurant.roles or DEFAULT_ROLES if permissions object is not directly embedded
+  const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
+  const userRoleConfig = rolesConfig[roleNameStr] || rolesConfig[currentUser.userType] || DEFAULT_ROLES[roleNameStr] || DEFAULT_ROLES[currentUser.userType] || { permissions: {} };
+
+  if (userRoleConfig?.permissions) {
+    const keysToCheck = getNormalizedKeys(moduleName);
+    for (const k of keysToCheck) {
+      if (userRoleConfig.permissions[k] && userRoleConfig.permissions[k][action] !== undefined) {
+        return Boolean(userRoleConfig.permissions[k][action]);
+      }
+    }
+  }
+
+  return false;
+};
+
 export const DEFAULT_INVENTORY_CATEGORIES = [
   { id: "INV-CAT-001", name: "Dairy", description: "Milk, butter, paneer, cream, yogurt", status: "AVAILABLE" },
   { id: "INV-CAT-002", name: "Grains & Rice", description: "Basmati rice, wheat flour, grains, pulses", status: "AVAILABLE" },
@@ -1130,8 +1272,15 @@ export const AppProvider = ({ children }) => {
 
         const resolveAdminAccessFlag = (obj) => {
           if (!obj || typeof obj !== 'object') return undefined;
-          if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
-          if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+          if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+            return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+          }
+          if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+            return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+          }
+          if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+            return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+          }
           return undefined;
         };
 
@@ -1192,6 +1341,24 @@ export const AppProvider = ({ children }) => {
 
           const livePlan = prevUser?.plan || prevSub?.planName || profileData.plan || profileSub?.planName || restObj?.plan || 'Standard';
 
+          // Preserve populated role permissions
+          let resolvedPermissions = 
+            (profRoleObj?.permissions && Object.keys(profRoleObj.permissions).length > 0) ? profRoleObj.permissions :
+            (typeof profileData.role === 'object' && profileData.role?.permissions && Object.keys(profileData.role.permissions).length > 0) ? profileData.role.permissions :
+            (typeof profileData.roleId === 'object' && profileData.roleId?.permissions && Object.keys(profileData.roleId.permissions).length > 0) ? profileData.roleId.permissions :
+            (typeof prevUser?.role === 'object' && prevUser?.role?.permissions && Object.keys(prevUser.role.permissions).length > 0) ? prevUser.role.permissions :
+            (typeof prevUser?.roleId === 'object' && prevUser?.roleId?.permissions && Object.keys(prevUser.roleId.permissions).length > 0) ? prevUser.roleId.permissions :
+            (prevUser?.permissions && Object.keys(prevUser.permissions).length > 0) ? prevUser.permissions :
+            {};
+
+          let finalRole = profRoleObj || profileData.role || prevUser?.role;
+          if (finalRole && typeof finalRole === 'object') {
+            finalRole = {
+              ...finalRole,
+              permissions: resolvedPermissions
+            };
+          }
+
           const updatedUser = {
             ...(prevUser || {}),
             ...profileData,
@@ -1202,8 +1369,9 @@ export const AppProvider = ({ children }) => {
             phoneNumber: profileData.phoneNumber || prevUser?.phoneNumber,
             profileImage: profileData.profileImage || prevUser?.profileImage,
             userType: profileData.userType || prevUser?.userType,
-            role: profRoleObj || profileData.role || prevUser?.role,
-            roleId: profileData.roleId || profRoleObj?._id || prevUser?.roleId,
+            role: finalRole,
+            roleId: finalRole || profileData.roleId || prevUser?.roleId,
+            permissions: resolvedPermissions,
             adminAccess: profAdminAccess,
             restaurantId: profileData.restaurantId || prevUser?.restaurantId,
             plan: livePlan,
@@ -1391,8 +1559,15 @@ export const AppProvider = ({ children }) => {
           // Check dynamic Role Admin Access setting
           const resolveAdminAccessFlag = (obj) => {
             if (!obj || typeof obj !== 'object') return undefined;
-            if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
-            if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+            if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+              return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+            }
+            if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+              return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+            }
+            if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+              return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+            }
             return undefined;
           };
 
@@ -2946,6 +3121,8 @@ export const AppProvider = ({ children }) => {
         deleteReductionRecord,
         addInventoryCategory,
         updateInventoryCategory,
+        hasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
+        checkHasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
         deleteInventoryCategory
       }}
     >

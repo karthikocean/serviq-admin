@@ -114,25 +114,23 @@ apiClient.interceptors.response.use(
         (errorMsg.includes('restaurant') && (errorMsg.includes('inactive') || errorMsg.includes('deactivat') || errorMsg.includes('disabled') || errorMsg.includes('suspended')));
 
       const isAuthIssue =
-        isRestaurantDeactivated ||
-        code === 'USER_INACTIVE' ||
-        code === 'ROLE_INACTIVE' ||
-        errorMsg.includes('expired') ||
-        errorMsg.includes('jwt') ||
-        errorMsg.includes('unauthorized') ||
-        errorMsg.includes('invalid token') ||
-        errorMsg.includes('token missing') ||
-        errorMsg.includes('inactive') ||
-        errorMsg.includes('disabled') ||
-        errorMsg.includes('suspended') ||
-        errorMsg.includes('deactivat') ||
-        status === 401 ||
-        status === 403;
+        status === 401 && (
+          isRestaurantDeactivated ||
+          code === 'USER_INACTIVE' ||
+          code === 'TOKEN_EXPIRED' ||
+          code === 'UNAUTHORIZED' ||
+          errorMsg.includes('jwt') ||
+          errorMsg.includes('token expired') ||
+          errorMsg.includes('expired') ||
+          errorMsg.includes('unauthorized') ||
+          errorMsg.includes('invalid token') ||
+          errorMsg.includes('token missing')
+        );
 
       const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
 
       if (token && isAuthIssue) {
-        if (isRestaurantDeactivated || errorMsg.includes('restaurant') || errorMsg.includes('deactivat') || errorMsg.includes('inactive')) {
+        if (isRestaurantDeactivated) {
           sessionStorage.setItem("deactivatedToast", "Your restaurant account has been deactivated. Please contact the Super Admin.");
         }
 
@@ -141,7 +139,7 @@ apiClient.interceptors.response.use(
         sessionStorage.removeItem("currentUser");
         try { localStorage.clear(); } catch (e) { }
 
-        // Automatically redirect to login page when token is expired/invalid/inactive
+        // Automatically redirect to login page when token is expired/invalid
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }

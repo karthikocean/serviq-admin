@@ -9,7 +9,8 @@ export default function Billing() {
   const {
     currentUser,
     activeRestaurant,
-    selectedBranchId
+    selectedBranchId,
+    hasPermission
   } = useAppState();
 
   const [selectedBillingTable, setSelectedBillingTable] = useState('');
@@ -145,15 +146,7 @@ export default function Billing() {
     setIsLoading(false);
   };
 
-  // Permission checks
-  const role = currentUser?.role || 'Waiter';
-  const hasPermission = (moduleName, action = 'view') => {
-    if (role === 'Admin') return true;
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
+
 
   if (!activeRestaurant) return null;
 

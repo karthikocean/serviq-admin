@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -40,6 +41,7 @@ export default function WaiterListPanel({
   handleOpenAssignTablesModal,
   setActivePage
 }) {
+  const { hasPermission } = useAppState();
   const [waiterToDelete, setWaiterToDelete] = useState(null);
   const [page, setPage] = useState(0);
   const limit = 10;
@@ -143,26 +145,28 @@ export default function WaiterListPanel({
               Assign Tables
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => openAddStaffModal ? openAddStaffModal('Waiter') : (setActivePage && setActivePage('staff-form'))}
-            style={{
-              background: '#ff5a1f',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: 700,
-              borderRadius: '8px',
-              padding: '10px 18px',
-              fontSize: '13px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
-            onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
-          >
-            Add Waiter
-          </button>
+          {hasPermission('staff', 'add') && (
+            <button
+              type="button"
+              onClick={() => openAddStaffModal ? openAddStaffModal('Waiter') : (setActivePage && setActivePage('staff-form'))}
+              style={{
+                background: '#ff5a1f',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                borderRadius: '8px',
+                padding: '10px 18px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
+              onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
+            >
+              Add Waiter
+            </button>
+          )}
         </div>
       </div>
 
@@ -338,27 +342,29 @@ export default function WaiterListPanel({
 
                     {/* ACTIONS */}
                     <td style={{ padding: '16px 18px', textAlign: 'right' }}>
-                      <button 
-                        type="button"
-                        onClick={() => openEditStaffModal ? openEditStaffModal(w.raw || w) : null}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          padding: '6px',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                        title="Edit Waiter"
-                      >
-                        <PencilIcon size={16} />
-                      </button>
+                      {hasPermission('staff', 'edit') && (
+                        <button 
+                          type="button"
+                          onClick={() => openEditStaffModal ? openEditStaffModal(w.raw || w) : null}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                          title="Edit Waiter"
+                        >
+                          <PencilIcon size={16} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

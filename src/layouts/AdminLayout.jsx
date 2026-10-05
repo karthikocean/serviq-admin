@@ -13,7 +13,8 @@ export default function AdminLayout() {
     activeRestaurant,
     logout,
     selectedBranchId,
-    fetchProfile
+    fetchProfile,
+    hasPermission
   } = useAppState();
 
   const location = useLocation();
@@ -111,18 +112,18 @@ export default function AdminLayout() {
     userRoleUpper === 'OWNER' || 
     userRoleUpper === 'SUPER ADMIN';
 
-  const isBranchAdmin = 
-    userType === 'BRANCH_ADMIN' || 
-    userType === 'BRANCH ADMIN' || 
-    userType === 'MANAGER' ||
-    userRoleLower.includes('manager') || 
-    userRoleLower.includes('supervisor');
-
   // Verify if current user has Admin access allowed or restricted
   const resolveAdminAccessFlag = (obj) => {
     if (!obj || typeof obj !== 'object') return undefined;
-    if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
-    if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+    if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+      return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+    }
+    if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+      return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+    }
+    if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+      return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+    }
     return undefined;
   };
 
@@ -136,7 +137,6 @@ export default function AdminLayout() {
     isRestrictedFromAdmin = !hasExplicitAdminAccess;
   } else if (!isRestaurantOwner) {
     isRestrictedFromAdmin = 
-      !isBranchAdmin &&
       (
         userRoleLower.includes('waiter') ||
         userRoleLower.includes('kitchen') ||
@@ -156,80 +156,6 @@ export default function AdminLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const isAdmin = 
-    isRestaurantOwner ||
-    userType === 'ADMIN' || 
-    userRoleLower === 'admin';
-
-  // Permission checks
-  const hasPermission = (moduleName, action = 'view') => {
-    // Branch management and Plans management are strictly ONLY accessible to Restaurant Owner
-    if (
-      moduleName === 'branch-management' || 
-      moduleName === 'branches' || 
-      moduleName === 'plans-management' || 
-      moduleName === 'plans'
-    ) {
-      return isRestaurantOwner;
-    }
-
-    if (isAdmin) return true;
-
-    // Use the permissions object directly embedded in the user's role if it exists
-    if (typeof currentUser?.role === 'object' && currentUser?.role?.permissions) {
-      if (moduleName === 'inventory') {
-        const invKeys = [
-          'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
-          'inventory_branch_requests', 'inventory_my_stock', 'inventory_stock_request',
-          'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt',
-          'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
-        ];
-        return invKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
-      }
-      if (moduleName === 'reports_analytics' || moduleName === 'reports') {
-        const repKeys = [
-          'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
-          'reports_inventory', 'reports_staff', 'reports_tax'
-        ];
-        return repKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
-      }
-      if (moduleName.startsWith('reports_')) {
-        return !!currentUser.role.permissions[moduleName]?.[action] ||
-               !!currentUser.role.permissions['reports_analytics']?.[action] ||
-               !!currentUser.role.permissions['reports']?.[action];
-      }
-      const modulePerms = currentUser.role.permissions[moduleName] || {};
-      return !!modulePerms[action];
-    }
-
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || rolesConfig[currentUser?.userType] || DEFAULT_ROLES[role] || DEFAULT_ROLES[currentUser?.userType] || { permissions: {} };
-    if (moduleName === 'inventory') {
-      const invKeys = [
-        'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
-        'inventory_branch_requests', 'inventory_my_stock', 'inventory_stock_request',
-        'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt',
-        'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
-      ];
-      return invKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
-    }
-    if (moduleName === 'reports_analytics' || moduleName === 'reports') {
-      const repKeys = [
-        'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
-        'reports_inventory', 'reports_staff', 'reports_tax'
-      ];
-      return repKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
-    }
-    if (moduleName.startsWith('reports_')) {
-      return !!userRoleConfig.permissions?.[moduleName]?.[action] ||
-             !!userRoleConfig.permissions?.[moduleName.replace('reports_', 'report_')]?.[action] ||
-             !!userRoleConfig.permissions?.['reports_analytics']?.[action] ||
-             !!userRoleConfig.permissions?.['reports']?.[action];
-    }
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
-
   const rawSubPlanName = activeRestaurant?.subscription?.planName || 
     activeRestaurant?.plan || 
     currentUser?.subscription?.planName || 
@@ -240,13 +166,11 @@ export default function AdminLayout() {
 
   const isTabAllowed = (permissionKey) => {
     // 1. Subscription Plan Module Gate:
-    // Only modules allowed by the current active plan are shown in sidebar
     if (!isModuleAllowedForPlan(permissionKey, activeRestaurant || currentSubPlan)) {
       return false;
     }
 
     // 2. Branch & Plans Management: restricted to Restaurant Owner only
-    // Branch Management is strictly shown ONLY when "All Branches" is selected
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches'
@@ -262,10 +186,29 @@ export default function AdminLayout() {
       return isRestaurantOwner;
     }
 
-    if (isAdmin || currentUser?.userType === 'BRANCH_ADMIN') return true;
-
     return hasPermission(permissionKey, 'view');
   };
+
+  const getModuleForPath = (pathname) => {
+    if (pathname === '/' || pathname === '/dashboard' || pathname === '/overview') return 'dashboard';
+    if (pathname.startsWith('/roles-permissions')) return 'roles-permissions';
+    if (pathname.startsWith('/branch-management') || pathname.startsWith('/branches')) return 'branch-management';
+    if (pathname.startsWith('/plans-management') || pathname.startsWith('/plans')) return 'plans-management';
+    if (pathname.startsWith('/tables')) return 'tables';
+    if (pathname.startsWith('/menu')) return 'menu';
+    if (pathname.startsWith('/inventory')) return 'inventory';
+    if (pathname.startsWith('/orders')) return 'orders';
+    if (pathname.startsWith('/staff') || pathname.startsWith('/waiter') || pathname.startsWith('/kitchen')) return 'staff_management';
+    if (pathname.startsWith('/users')) return 'users';
+    if (pathname.startsWith('/billing')) return 'billing';
+    if (pathname.startsWith('/reports')) return 'reports_analytics';
+    if (pathname.startsWith('/settings')) return 'settings';
+    if (pathname.startsWith('/help-support')) return 'help_support';
+    return null;
+  };
+
+  const activeModule = getModuleForPath(location.pathname);
+  const isCurrentPageAllowed = activeModule ? isTabAllowed(activeModule) : true;
 
   // Dynamic Route Titles
   const getRouteTitle = () => {
@@ -842,7 +785,7 @@ export default function AdminLayout() {
           )}
 
           {/* 11. Help & Support */}
-          {(isAdmin || currentUser?.userType === 'BRANCH_ADMIN') && (
+          {isTabAllowed('help_support') && (
             <li className={`sidebar-item ${isHelpSupportActive ? 'active' : ''}`}>
               <Link to="/help-support" onClick={handleCloseAllDropdowns}>
                 <span className="sidebar-icon-box">
@@ -1066,7 +1009,52 @@ export default function AdminLayout() {
 
         {/* CONTENT BODY */}
         <div className="content-body">
-          <Outlet />
+          {!isCurrentPageAllowed ? (
+            <div style={{
+              padding: '60px 20px',
+              textAlign: 'center',
+              background: '#ffffff',
+              borderRadius: '16px',
+              margin: '24px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
+              border: '1px solid #fee2e2'
+            }}>
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: '#fef2f2',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+                fontSize: '32px'
+              }}>
+                🚫
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#18181b', marginBottom: '8px' }}>
+                Access Denied
+              </h2>
+              <p style={{ fontSize: '15px', color: '#71717a', maxWidth: '460px', margin: '0 auto 24px' }}>
+                You do not have permission to view or access this module. Please contact your restaurant owner or system administrator if you require access.
+              </p>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="btn btn-primary"
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </div>
       </main>
 

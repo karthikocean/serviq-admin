@@ -131,7 +131,7 @@ const initialBranchState = {
 
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
   const navigate = useNavigate();
-  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders } = useAppState();
+  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders, hasPermission: contextHasPermission } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -145,28 +145,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' || 
-    userType === 'ADMINISTRATOR' || 
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin' ||
-    userRoleLower === 'administrator' ||
-    String(currentUser?.name || '').toLowerCase().includes('admin') ||
-    String(currentUser?.email || '').toLowerCase().includes('admin') ||
-    !currentUser?.branchId ||
-    currentUser?.branchId === 'ALL';
+    userRoleLower === 'super_admin';
 
   const role = roleStr || 'Admin';
-  const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (isRestaurantOwner) return true;
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  });
+  const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
 
   if (!isRestaurantOwner) {
     return (

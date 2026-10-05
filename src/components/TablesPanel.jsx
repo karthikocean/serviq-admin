@@ -3,6 +3,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 import TableApi from '../api/Table.js';
+import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -94,12 +95,14 @@ export default function TablesPanel({
   handleOpenAssignTablesModal,
   setAddTableForm,
   setActivePage,
-  hasPermission,
+  hasPermission: hasPermissionProp,
   generateQrCode,
   assignQrCode,
   revokeQrCode,
   deleteQrCode
 }) {
+  const { hasPermission: contextHasPermission } = useAppState();
+  const checkPermission = hasPermissionProp || contextHasPermission || (() => true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
@@ -497,32 +500,34 @@ export default function TablesPanel({
             <PrintIcon size={14} color="#0f172a" /> Print All QR Codes
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (setAddTableForm) setAddTableForm({ id: '', seats: 4 });
-              if (setActivePage) setActivePage('table-form');
-            }}
-            style={{
-              background: 'var(--primary)',
-              border: 'none',
-              padding: '9px 18px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: '#ffffff',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(255, 122, 0, 0.25)',
-              transition: 'all 0.15s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <PlusIcon size={15} color="#ffffff" /> Add Dining Table
-          </button>
+          {checkPermission('tables', 'add') && (
+            <button
+              type="button"
+              onClick={() => {
+                if (setAddTableForm) setAddTableForm({ id: '', seats: 4 });
+                if (setActivePage) setActivePage('table-form');
+              }}
+              style={{
+                background: 'var(--primary)',
+                border: 'none',
+                padding: '9px 18px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#ffffff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(255, 122, 0, 0.25)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              <PlusIcon size={15} color="#ffffff" /> Add Dining Table
+            </button>
+          )}
         </div>
       </div>
 
@@ -675,7 +680,9 @@ export default function TablesPanel({
                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>DEFAULT WAITER</th>
                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', whiteSpace: 'nowrap' }}>QR CODE</th>
-                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                {(checkPermission('tables', 'edit') || checkPermission('tables', 'delete')) && (
+                  <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACTIONS</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -845,98 +852,106 @@ export default function TablesPanel({
                       </td>
 
                       {/* KEY (ICON STYLE ACTIONS) */}
-                      <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                          {/* Action 1: Edit Icon */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (setAddTableForm) setAddTableForm(table);
-                              if (setActivePage) setActivePage('table-form');
-                            }}
-                            style={{
-                              background: '#f8fafc',
-                              border: '1px solid #cbd5e1',
-                              color: '#475569',
-                              cursor: 'pointer',
-                              width: '34px',
-                              height: '34px',
-                              borderRadius: '8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = '#0f172a';
-                              e.currentTarget.style.color = '#ffffff';
-                              e.currentTarget.style.borderColor = '#0f172a';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = '#f8fafc';
-                              e.currentTarget.style.color = '#475569';
-                              e.currentTarget.style.borderColor = '#cbd5e1';
-                            }}
-                            title="Edit Table"
-                          >
-                            <PencilIcon size={15} />
-                          </button>
+                      {(checkPermission('tables', 'edit') || checkPermission('tables', 'delete')) && (
+                        <td style={{ padding: '14px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                            {/* Action 1: Edit Icon */}
+                            {checkPermission('tables', 'edit') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (setAddTableForm) setAddTableForm(table);
+                                  if (setActivePage) setActivePage('table-form');
+                                }}
+                                style={{
+                                  background: '#f8fafc',
+                                  border: '1px solid #cbd5e1',
+                                  color: '#475569',
+                                  cursor: 'pointer',
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s'
+                                }}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.background = '#0f172a';
+                                  e.currentTarget.style.color = '#ffffff';
+                                  e.currentTarget.style.borderColor = '#0f172a';
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.background = '#f8fafc';
+                                  e.currentTarget.style.color = '#475569';
+                                  e.currentTarget.style.borderColor = '#cbd5e1';
+                                }}
+                                title="Edit Table"
+                              >
+                                <PencilIcon size={15} />
+                              </button>
+                            )}
 
-                          {/* Action 2: Active / Deactive QR Icon */}
-                          <button
-                            type="button"
-                            onClick={() => toggleQrActive(table)}
-                            style={{
-                              background: isQrActive ? '#e6f4ea' : '#fef2f2',
-                              border: isQrActive ? '1px solid #bbf7d0' : '1px solid #fecaca',
-                              color: isQrActive ? '#16a34a' : '#dc2626',
-                              cursor: 'pointer',
-                              width: '34px',
-                              height: '34px',
-                              borderRadius: '8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            title={isQrActive ? 'Deactivate QR Code' : 'Activate QR Code'}
-                          >
-                            <PowerIcon size={15} color={isQrActive ? '#16a34a' : '#dc2626'} />
-                          </button>
+                            {/* Action 2: Active / Deactive QR Icon */}
+                            {checkPermission('tables', 'edit') && (
+                              <button
+                                type="button"
+                                onClick={() => toggleQrActive(table)}
+                                style={{
+                                  background: isQrActive ? '#e6f4ea' : '#fef2f2',
+                                  border: isQrActive ? '1px solid #bbf7d0' : '1px solid #fecaca',
+                                  color: isQrActive ? '#16a34a' : '#dc2626',
+                                  cursor: 'pointer',
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s'
+                                }}
+                                title={isQrActive ? 'Deactivate QR Code' : 'Activate QR Code'}
+                              >
+                                <PowerIcon size={15} color={isQrActive ? '#16a34a' : '#dc2626'} />
+                              </button>
+                            )}
 
-                          {/* Action 3: Delete Icon */}
-                          <button
-                            type="button"
-                            onClick={() => setTableToDelete(table)}
-                            style={{
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
-                              color: '#dc2626',
-                              cursor: 'pointer',
-                              width: '34px',
-                              height: '34px',
-                              borderRadius: '8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = '#dc2626';
-                              e.currentTarget.style.color = '#ffffff';
-                              e.currentTarget.style.borderColor = '#dc2626';
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = '#fef2f2';
-                              e.currentTarget.style.color = '#dc2626';
-                              e.currentTarget.style.borderColor = '#fecaca';
-                            }}
-                            title="Delete Table"
-                          >
-                            <TrashIcon size={15} />
-                          </button>
-                        </div>
-                      </td>
+                            {/* Action 3: Delete Icon */}
+                            {checkPermission('tables', 'delete') && (
+                              <button
+                                type="button"
+                                onClick={() => setTableToDelete(table)}
+                                style={{
+                                  background: '#fef2f2',
+                                  border: '1px solid #fecaca',
+                                  color: '#dc2626',
+                                  cursor: 'pointer',
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s'
+                                }}
+                                onMouseEnter={e => {
+                                  e.currentTarget.style.background = '#dc2626';
+                                  e.currentTarget.style.color = '#ffffff';
+                                  e.currentTarget.style.borderColor = '#dc2626';
+                                }}
+                                onMouseLeave={e => {
+                                  e.currentTarget.style.background = '#fef2f2';
+                                  e.currentTarget.style.color = '#dc2626';
+                                  e.currentTarget.style.borderColor = '#fecaca';
+                                }}
+                                title="Delete Table"
+                              >
+                                <TrashIcon size={15} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
