@@ -1594,20 +1594,20 @@ export default function StaffManagementPanel({
       </div>
 
       {/* Staff Unified Table */}
-      <div style={{ overflowX: 'auto', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
+      <div className="table-responsive" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', position: 'relative', borderRadius: '14px 14px 0 0', border: '1px solid #e2e8f0', borderBottom: 'none', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '6px' }}>
         <table style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
             <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-              <th style={{ width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
-              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ID</th>
-              <th style={{ minWidth: '170px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>NAME</th>
-              <th style={{ minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
-              <th style={{ minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
-              <th style={{ minWidth: '110px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
-              <th style={{ minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION / TABLES</th>
-              <th style={{ minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACCOUNT STATUS</th>
-              <th style={{ minWidth: '110px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
-              <th style={{ minWidth: '160px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', width: '50px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>S.NO</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ID</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '170px', padding: '14px 14px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>NAME</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '100px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>ROLE</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '130px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '110px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>PHONE</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '140px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATION / TABLES</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '120px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACCOUNT STATUS</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '110px', padding: '14px 10px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>DUTY STATUS</th>
+              <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#000000', boxShadow: 'inset 0 -3px 0 #ff5a1f', minWidth: '160px', padding: '14px 12px', fontSize: '11px', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>ACTIONS</th>
             </tr>
           </thead>
           <tbody>

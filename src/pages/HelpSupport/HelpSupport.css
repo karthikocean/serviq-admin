@@ -95,6 +95,29 @@
   overflow: hidden;
 }
 
+.help-support-container .table-responsive {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
+  position: relative;
+  scrollbar-width: thin;
+}
+
+.help-support-container .data-table thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+}
+
+.help-support-container .data-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background-color: #0f172a !important;
+  background: #0f172a !important;
+  box-shadow: inset 0 -3px 0 #FF7A00 !important;
+}
+
 /* Filter Bar & Toolbar */
 .ticket-secondary-filters {
   display: flex;

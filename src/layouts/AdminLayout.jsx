@@ -95,59 +95,63 @@ export default function AdminLayout() {
   const restaurantName = activeRestaurant?.name || 'Serviq';
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? (currentUser?.role?.roleName || currentUser?.role?.name) : (currentUser?.role || '');
   const role = roleStr || 'Admin';
-  const userType = (currentUser?.userType || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
+  const userType = (currentUser?.userType || roleStr || '').toUpperCase().trim();
+  const userRoleStr = (typeof currentUser?.role === 'object' && currentUser?.role !== null)
+    ? (currentUser.role.roleName || currentUser.role.name || '')
+    : (currentUser?.role || roleStr || '');
+  const userRoleLower = userRoleStr.toLowerCase().trim();
+  const userRoleUpper = userRoleStr.toUpperCase().trim();
 
   const isRestaurantOwner = 
     userType === 'RESTAURANT_OWNER' || 
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' || 
-    userType === 'ADMINISTRATOR' || 
-    userRoleLower === 'restaurant_owner' || 
-    userRoleLower === 'restaurant owner' || 
-    userRoleLower === 'owner' || 
-    userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin' ||
-    userRoleLower === 'administrator' ||
-    String(currentUser?.name || '').toLowerCase().includes('admin') ||
-    String(currentUser?.email || '').toLowerCase().includes('admin');
+    userRoleUpper === 'RESTAURANT_OWNER' || 
+    userRoleUpper === 'OWNER' || 
+    userRoleUpper === 'SUPER ADMIN';
 
   const isBranchAdmin = 
     userType === 'BRANCH_ADMIN' || 
     userType === 'BRANCH ADMIN' || 
     userType === 'MANAGER' ||
     userRoleLower.includes('manager') || 
-    userRoleLower.includes('admin') ||
     userRoleLower.includes('supervisor');
 
-  // Verify if current user's role has Admin access allowed or restricted
-  const userRoleObj = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser.role : null;
-  const hasExplicitAdminAccess = userRoleObj ? (userRoleObj.adminAccess ?? userRoleObj.isAdminAccess) : undefined;
+  // Verify if current user has Admin access allowed or restricted
+  const resolveAdminAccessFlag = (obj) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    if (obj.adminAccess !== undefined && obj.adminAccess !== null) return Boolean(obj.adminAccess);
+    if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) return Boolean(obj.isAdminAccess);
+    return undefined;
+  };
 
-  const isRestrictedFromAdmin = 
-    !isRestaurantOwner &&
-    (
-      hasExplicitAdminAccess !== undefined
-        ? !hasExplicitAdminAccess
-        : (
-            !isBranchAdmin &&
-            (
-              userRoleLower.includes('waiter') ||
-              userRoleLower.includes('kitchen') ||
-              userRoleLower.includes('chef') ||
-              userRoleLower.includes('cook') ||
-              userRoleLower.includes('server') ||
-              userRoleLower.includes('steward') ||
-              userType === 'STATION'
-            )
-          )
-    );
+  const hasExplicitAdminAccess = 
+    resolveAdminAccessFlag(currentUser) ?? 
+    resolveAdminAccessFlag(currentUser?.role) ?? 
+    resolveAdminAccessFlag(currentUser?.roleId);
+
+  let isRestrictedFromAdmin = false;
+  if (hasExplicitAdminAccess !== undefined) {
+    isRestrictedFromAdmin = !hasExplicitAdminAccess;
+  } else if (!isRestaurantOwner) {
+    isRestrictedFromAdmin = 
+      !isBranchAdmin &&
+      (
+        userRoleLower.includes('waiter') ||
+        userRoleLower.includes('kitchen') ||
+        userRoleLower.includes('chef') ||
+        userRoleLower.includes('cook') ||
+        userRoleLower.includes('server') ||
+        userRoleLower.includes('steward') ||
+        userType === 'STATION' ||
+        userType === 'WAITER' ||
+        userType === 'KITCHEN'
+      );
+  }
 
   if (isRestrictedFromAdmin) {
-    ShowNotifications.showAlertNotification("Access Denied: This role is restricted from accessing the Admin Panel.", false);
+    ShowNotifications.showAlertNotification("Access Denied: You do not have admin access to access the Admin Panel.", false);
     handleLogout();
     return <Navigate to="/login" replace />;
   }
