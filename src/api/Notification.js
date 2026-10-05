@@ -43,6 +43,18 @@ class NotificationApi {
     }
   }
 
+  async createNotification(notificationData) {
+    try {
+      const response = await apiClient.post("/notifications", notificationData);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, data: response.data };
+      }
+    } catch (error) {
+      console.warn("NotificationApi createNotification note:", error?.message);
+      return { status: false, error: error?.message };
+    }
+  }
+
   async markAsRead(id) {
     try {
       const response = await apiClient.put(`/notifications/${id}/read`);

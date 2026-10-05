@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import { ticketApi } from '../../api/Ticket';
 import BranchApi from '../../api/Branch';
+import UploadApi from '../../api/Upload';
+import { notificationApi } from '../../api/Notification';
 import { isBranchMatch } from '../../helper/BranchHelper';
 import { Modal } from '../../components/Modal';
 import ShowNotifications from '../../helper/ShowNotifications';
@@ -10,13 +12,284 @@ import SearchableSelect from '../../components/SearchableSelect';
 import { formatDateDMY, formatDateTimeDMY } from '../../helper/DateHelper.js';
 import './HelpSupport.css';
 
+// Professional SVG Icons (No Emojis)
+const StoreIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
+  </svg>
+);
+
+const UserIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const ShieldIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+
+const BuildingIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="4" y="2" width="16" height="20" rx="2" ry="2" />
+    <path d="M9 22v-4h6v4" />
+    <line x1="8" y1="6" x2="10" y2="6" />
+    <line x1="14" y1="6" x2="16" y2="6" />
+    <line x1="8" y1="10" x2="10" y2="10" />
+    <line x1="14" y1="10" x2="16" y2="10" />
+    <line x1="8" y1="14" x2="10" y2="14" />
+    <line x1="14" y1="14" x2="16" y2="14" />
+  </svg>
+);
+
+const TagIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
+  </svg>
+);
+
+const ClockIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const SearchIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const PaperclipIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+const SendIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
+
+const MessageSquareIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const CheckCircleIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const XCircleIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="15" y1="9" x2="9" y2="15" />
+    <line x1="9" y1="9" x2="15" y2="15" />
+  </svg>
+);
+
+const LockIcon = ({ size = 13, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+const TrashIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <line x1="10" y1="11" x2="10" y2="17" />
+    <line x1="14" y1="11" x2="14" y2="17" />
+  </svg>
+);
+
+const EyeIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const RefreshCwIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M21 2v6h-6" />
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+    <path d="M3 22v-6h6" />
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
+const ForwardIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polyline points="15 14 20 9 15 4" />
+    <path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+  </svg>
+);
+
+const ShareIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+  </svg>
+);
+
+const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+    <polyline points="10 9 9 9 8 9" />
+  </svg>
+);
+
+const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed', 'Draft'];
+
 export default function HelpSupport() {
   const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
   const [searchParams] = useSearchParams();
   const location = useLocation();
+
+  // Role detection
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
+
+  // Hierarchy Roles
+  const isSuperAdmin = userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userRole === 'super admin' || userRole === 'super_admin';
+
+  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
+
+  const hasSpecificBranch = Boolean(userBranchId && userBranchId !== 'ALL' && userBranchId !== 'All' && String(userBranchId).toUpperCase() !== 'COMPANY');
+
+  // Branch Admin: Anyone assigned to a specific branch OR has branch-level role
+  const isBranchAdmin = !isSuperAdmin && (
+    hasSpecificBranch ||
+    userType === 'BRANCH_ADMIN' ||
+    userType === 'BRANCH' ||
+    userRole === 'branch_admin' ||
+    userRole === 'branch admin' ||
+    userRole === 'branch'
+  );
+
+  // Company Admin: Restaurant Owner / HQ Admin not tied to a single branch
+  const isCompanyAdmin = !isSuperAdmin && !isBranchAdmin;
+
+  // Company filter active state: Resolve and Share icons are strictly for Company filter only
+  const isCompanyFilterActive = String(selectedBranchId || '').trim().toUpperCase() === 'COMPANY';
+  const isBranchFilterActive = !isCompanyFilterActive;
+
   const [tickets, setTickets] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch branches from API
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await BranchApi.getBranches({ limit: 50 });
+      if (res?.status) {
+        const rawData = res.response?.data || res.response?.branches || res.response || [];
+        const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
+        setLiveBranches(list);
+      }
+    } catch (err) {
+      console.warn("Failed to load branches in HelpSupport:", err);
+    }
+  }, []);
+
+  const allBranches = useMemo(() => {
+    return liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+  }, [liveBranches, activeRestaurant]);
+
+  // Branch object for logged-in user if assigned to a branch
+  const userAssignedBranch = useMemo(() => {
+    if (!userBranchId || userBranchId === 'ALL' || userBranchId === 'All' || String(userBranchId).toUpperCase() === 'COMPANY') {
+      return null;
+    }
+    return allBranches.find(b => 
+      String(b._id || b.id) === String(userBranchId) ||
+      String(b.branchCode) === String(userBranchId)
+    );
+  }, [userBranchId, allBranches]);
+
+  // Check if assigned branch is flagged as a Main Branch
+  const isUserBranchMain = Boolean(
+    currentUser?.isMainBranch === true ||
+    currentUser?.branchId?.isMainBranch === true ||
+    currentUser?.branch?.isMainBranch === true ||
+    currentUser?.branchType === 'MAIN' ||
+    currentUser?.branchId?.branchType === 'MAIN' ||
+    currentUser?.branch?.branchType === 'MAIN' ||
+    userAssignedBranch?.isMainBranch === true ||
+    String(userAssignedBranch?.branchType).toUpperCase() === 'MAIN'
+  );
+
+  // A login is considered a "Main Branch" login if:
+  // 1. It is Super Admin
+  // 2. It is Company Admin (Restaurant Owner / HQ Admin not bound to a specific sub-branch)
+  // 3. Or it is assigned to a branch that is explicitly configured as the Main Branch (isMainBranch: true / branchType: 'MAIN')
+  const isMainBranchLogin = isSuperAdmin || (isCompanyAdmin && !hasSpecificBranch) || isUserBranchMain;
+
+  // Auto Selection Rules for "Ticket Raised To":
+  // - Branch filter active or Non-Main Branch login -> Automatically set "Raised To" = Company (Read Only)
+  // - Company filter scope (Main Branch HQ) -> Automatically set "Raised To" = Super Admin (Read Only)
+  const defaultRaisedTo = (!isMainBranchLogin || !isCompanyFilterActive) ? 'Company' : 'Super Admin';
+
+  // Filters State
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
+  const [targetFilter, setTargetFilter] = useState('All'); // 'All' | 'Company' | 'Super Admin'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search query to prevent excessive list API calls
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Persisted status counts for dropdown badges
+  const [persistedCounts, setPersistedCounts] = useState({
+    All: 0,
+    Open: 0,
+    Draft: 0,
+    'In Progress': 0,
+    'Waiting for Response': 0,
+    Resolved: 0,
+    Closed: 0
+  });
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(0);
@@ -25,47 +298,52 @@ export default function HelpSupport() {
   // Modals State
   const [showRaiseTicketModal, setShowRaiseTicketModal] = useState(false);
   const [viewTicket, setViewTicket] = useState(null);
-  const [editTicket, setEditTicket] = useState(null);
   const [deleteTicketConfirm, setDeleteTicketConfirm] = useState(null);
 
+  // New Ticket Form State
   const [newTicket, setNewTicket] = useState({
     subject: '',
     category: 'Billing',
     priority: 'Medium',
+    raisedTo: defaultRaisedTo,
     branchId: '',
-    description: ''
+    description: '',
+    attachment: ''
   });
   const [errors, setErrors] = useState({});
-  const [editErrors, setEditErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Ticket Replies State
-  const [replyInput, setReplyInput] = useState('');
+  // Conversation Reply State
+  const [replyText, setReplyText] = useState('');
+  const [replyStatus, setReplyStatus] = useState('');
+  const [replyAttachment, setReplyAttachment] = useState('');
   const [isSendingReply, setIsSendingReply] = useState(false);
+  const [isUploadingReplyAttachment, setIsUploadingReplyAttachment] = useState(false);
   const [isLoadingTicketDetails, setIsLoadingTicketDetails] = useState(false);
+  const replyFileInputRef = useRef(null);
+  const chatBottomRef = useRef(null);
 
-  // Fetch branches from API
-  const fetchBranches = useCallback(async () => {
-    try {
-      const res = await BranchApi.getBranches();
-      if (res?.status) {
-        const rawData = res.response?.data || res.response?.branches || res.response || [];
-        const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
-        setLiveBranches(list);
-      }
-    } catch (err) {
-      console.error("Failed to load branches:", err);
-    }
-  }, []);
+  // Dedicated Resolve Ticket Modal State
+  const [resolveTicketModal, setResolveTicketModal] = useState(null);
+  const [resolutionStatus, setResolutionStatus] = useState('Resolved');
+  const [resolutionNote, setResolutionNote] = useState('');
+  const [resolutionAttachment, setResolutionAttachment] = useState('');
+  const [isResolving, setIsResolving] = useState(false);
+  const [isUploadingResolutionFile, setIsUploadingResolutionFile] = useState(false);
+  const resolutionFileInputRef = useRef(null);
 
-  const allBranches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
+  // Dedicated Share / Forward Ticket to Super Admin Modal State
+  const [forwardTicketModal, setForwardTicketModal] = useState(null);
+  const [forwardNote, setForwardNote] = useState('');
+  const [isForwarding, setIsForwarding] = useState(false);
 
-  // Helper to dynamically resolve human-readable branch name from ticket
+  // Dynamic branch name resolution
   const resolveTicketBranchName = useCallback((ticket, branchesList = []) => {
-    if (!ticket) return 'All Branches';
+    if (!ticket) return 'Main Branch';
 
-    // 1. Direct branchName / branch properties
     if (ticket.branchName && typeof ticket.branchName === 'string') {
       const trimmed = ticket.branchName.trim();
       if (trimmed && !['null', 'undefined', '-', '—'].includes(trimmed.toLowerCase())) {
@@ -75,132 +353,400 @@ export default function HelpSupport() {
 
     if (ticket.branch && typeof ticket.branch === 'object') {
       const name = ticket.branch.branchName || ticket.branch.name || ticket.branch.branchCode;
-      if (name && typeof name === 'string' && name.trim()) {
-        return name.trim();
-      }
+      if (name && typeof name === 'string' && name.trim()) return name.trim();
     }
 
     if (ticket.branchId && typeof ticket.branchId === 'object') {
       const name = ticket.branchId.branchName || ticket.branchId.name || ticket.branchId.branchCode;
-      if (name && typeof name === 'string' && name.trim()) {
-        return name.trim();
-      }
+      if (name && typeof name === 'string' && name.trim()) return name.trim();
     }
 
-    // 2. Lookup by branchId or branch string ID in branches list
     const bId = String(
       (typeof ticket.branchId === 'string' ? ticket.branchId : '') ||
       (typeof ticket.branch === 'string' ? ticket.branch : '') ||
-      (typeof ticket.restaurantBranchId === 'string' ? ticket.restaurantBranchId : '') ||
-      (typeof ticket.activeBranchId === 'string' ? ticket.activeBranchId : '') ||
       ''
     ).trim();
 
-    if (bId && bId !== 'ALL' && bId !== 'All' && Array.isArray(branchesList)) {
+    if (bId && bId !== 'ALL' && bId !== 'All' && String(bId).toUpperCase() !== 'COMPANY' && Array.isArray(branchesList)) {
       const matched = branchesList.find(b => (
         String(b._id || b.id || '').toLowerCase() === bId.toLowerCase() ||
         String(b.branchCode || b.code || '').toLowerCase() === bId.toLowerCase() ||
         String(b.branchName || b.name || '').toLowerCase() === bId.toLowerCase()
       ));
       if (matched) {
-        return matched.branchName || matched.name || matched.branchCode || 'All Branches';
+        return matched.branchName || matched.name || matched.branchCode || 'Branch';
       }
     }
 
-    // 3. Check if ticket has branch string directly
-    if (typeof ticket.branch === 'string' && ticket.branch.trim() && !/^[0-9a-fA-F]{24}$/.test(ticket.branch.trim()) && ticket.branch !== 'ALL' && ticket.branch !== 'All') {
-      return ticket.branch.trim();
-    }
-
-    if (bId === 'ALL' || bId === 'All') {
+    if (bId === 'ALL' || bId === 'All' || String(bId).toUpperCase() === 'COMPANY') {
       return 'All Branches';
     }
 
-    // 4. Default: If no specific branch was found on this ticket, return 'All Branches'
-    return 'All Branches';
-  }, []);
+    return activeRestaurant?.name || 'Main Branch';
+  }, [activeRestaurant]);
 
+  // Resolving Raised To: 'Company' or 'Super Admin'
+  const resolveTicketRaisedTo = useCallback((ticket) => {
+    if (ticket?.isEscalated || String(ticket?.status).toLowerCase() === 'escalated') {
+      return 'Super Admin';
+    }
+    const rawVal = ticket?.ticketRaisedTo || ticket?.raisedTo;
+    if (rawVal) {
+      const str = String(rawVal).toLowerCase().trim();
+      if (str.includes('super')) return 'Super Admin';
+      if (str.includes('company')) return 'Company';
+    }
+    // Check if ticket originated from branch assignment or branch user
+    const bId = ticket?.branchId || ticket?.branch;
+    if (bId && bId !== 'ALL' && bId !== 'All' && String(bId).toUpperCase() !== 'COMPANY') {
+      return 'Company';
+    }
+    const bName = String(ticket?.branchName || '').trim();
+    if (bName && !['null', 'undefined', '-', '—', 'all branches'].includes(bName.toLowerCase()) && bName !== activeRestaurant?.name) {
+      return 'Company';
+    }
+    const creatorRole = String(ticket?.creatorRole || ticket?.raisedByRole || ticket?.raisedBy?.role || ticket?.userRole || '').toLowerCase();
+    if (creatorRole.includes('branch') || creatorRole.includes('staff') || creatorRole.includes('waiter') || creatorRole.includes('cashier')) {
+      return 'Company';
+    }
+    // In restaurant company portal, tickets default to Company unless explicitly raised/escalated to Super Admin
+    return 'Company';
+  }, [activeRestaurant]);
+
+  // Resolving Raised By: Name, Email & Role
+  const resolveTicketRaisedBy = useCallback((ticket) => {
+    if (ticket?.raisedBy && typeof ticket.raisedBy === 'object') {
+      return {
+        name: ticket.raisedBy.name || ticket.raisedBy.userName || ticket.createdByName || 'Admin',
+        role: ticket.raisedBy.role || ticket.raisedBy.userType || ticket.creatorRole || 'User',
+        email: ticket.raisedBy.email || ''
+      };
+    }
+    const name = ticket?.createdByName || ticket?.raisedByName || (typeof ticket?.raisedBy === 'string' ? ticket.raisedBy : null) || ticket?.createdBy?.name || ticket?.userName || currentUser?.name || 'Admin';
+    const role = ticket?.creatorRole || ticket?.raisedByRole || ticket?.userRole || (ticket?.branchId ? 'Branch Admin' : 'Company Admin');
+    const email = ticket?.createdBy?.email || (typeof ticket?.createdBy === 'string' ? ticket.createdBy : '') || '';
+    return { name, role, email };
+  }, [currentUser]);
+
+  // Helper to compute status counts
+  const updateCountsFromTickets = useCallback((list) => {
+    if (!Array.isArray(list)) return;
+    const base = list.filter(t => {
+      if (!isMainBranchLogin) {
+        const raisedTo = resolveTicketRaisedTo(t);
+        if (raisedTo !== 'Company') return false;
+        if (userBranchId) {
+          const branchTarget = t.branchId || t.branch;
+          return isBranchMatch(branchTarget, userBranchId, allBranches);
+        }
+      }
+      return true;
+    });
+
+    const counts = {
+      All: base.length,
+      Open: 0,
+      Draft: 0,
+      'In Progress': 0,
+      'Waiting for Response': 0,
+      Resolved: 0,
+      Closed: 0
+    };
+
+    base.forEach(t => {
+      const st = t.status || 'Open';
+      if (counts[st] !== undefined) {
+        counts[st] += 1;
+      } else {
+        counts.Open += 1;
+      }
+    });
+
+    setPersistedCounts(counts);
+  }, [isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
+
+  // Fetch status counts across all tickets for the active scope
+  const fetchStatusCounts = useCallback(async () => {
+    try {
+      const countParams = {};
+      if (!isMainBranchLogin && userBranchId) {
+        countParams.branchId = userBranchId;
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        countParams.branchId = selectedBranchId;
+      }
+      const data = await ticketApi.getTickets(countParams);
+      const list = (data && data.status && Array.isArray(data.data)) ? data.data : (Array.isArray(data) ? data : []);
+      updateCountsFromTickets(list);
+    } catch (err) {
+      console.warn("Failed to fetch status counts:", err);
+    }
+  }, [isMainBranchLogin, userBranchId, selectedBranchId, updateCountsFromTickets]);
+
+  // Fetch Tickets calling list API with active filters
   const fetchTickets = useCallback(async () => {
     setIsLoading(true);
     try {
       const params = {};
-      if (selectedBranchId && selectedBranchId !== 'ALL') {
+      // If login is not a main branch, filter by their branch
+      if (!isMainBranchLogin && userBranchId) {
+        params.branchId = userBranchId;
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
         params.branchId = selectedBranchId;
       }
+
+      // Pass status in list API call
+      if (statusFilter && statusFilter !== 'All' && statusFilter !== 'ALL') {
+        params.status = statusFilter;
+      }
+
+      // Pass priority in list API call
+      if (priorityFilter && priorityFilter !== 'All' && priorityFilter !== 'ALL') {
+        params.priority = priorityFilter;
+      }
+
+      // Pass search in list API call
+      if (debouncedSearch && debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
+      }
+
+      // Pass target level in list API call
+      if (targetFilter && targetFilter !== 'All' && targetFilter !== 'ALL') {
+        params.ticketRaisedTo = targetFilter;
+      }
+
       const data = await ticketApi.getTickets(params);
       if (data && data.status && data.data) {
-        setTickets(Array.isArray(data.data) ? data.data : []);
+        const list = Array.isArray(data.data) ? data.data : [];
+        setTickets(list);
+        if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+          updateCountsFromTickets(list);
+        }
       } else if (Array.isArray(data)) {
         setTickets(data);
+        if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+          updateCountsFromTickets(data);
+        }
       }
     } catch (e) {
-      console.error("Failed to fetch tickets:", e);
+      console.warn("Failed to fetch tickets:", e);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId]);
+  }, [isMainBranchLogin, userBranchId, selectedBranchId, statusFilter, priorityFilter, targetFilter, debouncedSearch, updateCountsFromTickets]);
 
   useEffect(() => {
     fetchBranches();
   }, [fetchBranches]);
 
   useEffect(() => {
+    fetchStatusCounts();
+  }, [fetchStatusCounts]);
+
+  useEffect(() => {
     setCurrentPage(0);
     fetchTickets();
-  }, [fetchTickets, selectedBranchId]);
+  }, [fetchTickets]);
 
-  // Filter tickets by selected branch
+  // Role-Based Visibility & Filters
   const filteredTickets = useMemo(() => {
-    if (!selectedBranchId || selectedBranchId === 'ALL') {
-      return tickets;
-    }
     return tickets.filter(t => {
-      const branchTarget = t.branchId || t.branch || t.restaurantBranchId || t.activeBranchId || t;
-      return isBranchMatch(branchTarget, selectedBranchId, allBranches);
-    });
-  }, [tickets, selectedBranchId, allBranches]);
+      // 1. Role-Based Access Control:
+      // If login is not a main branch, strictly view tickets belonging to their branch routed to Company
+      if (!isMainBranchLogin) {
+        const raisedTo = resolveTicketRaisedTo(t);
+        if (raisedTo !== 'Company') {
+          return false;
+        }
+        if (userBranchId) {
+          const branchTarget = t.branchId || t.branch;
+          if (!isBranchMatch(branchTarget, userBranchId, allBranches)) {
+            return false;
+          }
+        }
+      }
 
-  // Paginated tickets for table display
+      // If header selected a branch (for Company Admin), respect it
+      if (isCompanyAdmin && selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        const branchTarget = t.branchId || t.branch;
+        if (!isBranchMatch(branchTarget, selectedBranchId, allBranches)) {
+          return false;
+        }
+      }
+
+      // 2. Status Filter
+      if (statusFilter !== 'All') {
+        const currentStatus = String(t.status || 'Open').toLowerCase();
+        if (currentStatus !== statusFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 3. Priority Filter
+      if (priorityFilter !== 'All') {
+        const currentPriority = String(t.priority || 'Medium').toLowerCase();
+        if (currentPriority !== priorityFilter.toLowerCase()) {
+          return false;
+        }
+      }
+
+      // 4. Target Level Filter (Company vs Super Admin)
+      if (targetFilter !== 'All') {
+        const raisedTo = resolveTicketRaisedTo(t);
+        if (raisedTo !== targetFilter) {
+          return false;
+        }
+      }
+
+      // 5. Search Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const ticketNum = String(t.ticketNumber || '').toLowerCase();
+        const subject = String(t.subject || '').toLowerCase();
+        const branchName = resolveTicketBranchName(t, allBranches).toLowerCase();
+        const raisedBy = resolveTicketRaisedBy(t).name.toLowerCase();
+        const matches = ticketNum.includes(q) || subject.includes(q) || branchName.includes(q) || raisedBy.includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [tickets, isMainBranchLogin, userBranchId, isCompanyAdmin, selectedBranchId, allBranches, statusFilter, priorityFilter, targetFilter, searchQuery, resolveTicketRaisedTo, resolveTicketBranchName, resolveTicketRaisedBy]);
+
+  // Counts for status tabs
+  const statusCounts = useMemo(() => {
+    const baseTickets = tickets.filter(t => {
+      if (!isMainBranchLogin) {
+        const raisedTo = resolveTicketRaisedTo(t);
+        if (raisedTo !== 'Company') return false;
+        if (userBranchId) {
+          const branchTarget = t.branchId || t.branch;
+          return isBranchMatch(branchTarget, userBranchId, allBranches);
+        }
+        return true;
+      }
+      return true;
+    });
+
+    const counts = {
+      All: baseTickets.length,
+      Open: 0,
+      Draft: 0,
+      'In Progress': 0,
+      'Waiting for Response': 0,
+      Resolved: 0,
+      Closed: 0
+    };
+
+    baseTickets.forEach(t => {
+      const st = t.status || 'Open';
+      if (counts[st] !== undefined) {
+        counts[st] += 1;
+      } else {
+        counts.Open += 1;
+      }
+    });
+
+    return counts;
+  }, [tickets, isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
+
+  // Use persistedCounts when filtered so dropdown options don't zero-out other statuses
+  const displayCounts = useMemo(() => {
+    if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
+      return statusCounts;
+    }
+    return (persistedCounts && persistedCounts.All > 0) ? persistedCounts : statusCounts;
+  }, [statusFilter, debouncedSearch, priorityFilter, targetFilter, statusCounts, persistedCounts]);
+
+  // Status Filter Options with live counts
+  const statusOptions = useMemo(() => [
+    { value: 'All', label: `All Status (${displayCounts.All ?? 0})` },
+    { value: 'Open', label: `Open (${displayCounts.Open ?? 0})` },
+    { value: 'Draft', label: `Draft (${displayCounts.Draft ?? 0})` },
+    { value: 'In Progress', label: `In Progress (${displayCounts['In Progress'] ?? 0})` },
+    { value: 'Waiting for Response', label: `Waiting (${displayCounts['Waiting for Response'] ?? 0})` },
+    { value: 'Resolved', label: `Resolved (${displayCounts.Resolved ?? 0})` },
+    { value: 'Closed', label: `Closed (${displayCounts.Closed ?? 0})` }
+  ], [displayCounts]);
+
+  // Check if any filter is active
+  const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0;
+
+  const handleResetFilters = () => {
+    setStatusFilter('All');
+    setPriorityFilter('All');
+    setTargetFilter('All');
+    setSearchQuery('');
+    setCurrentPage(0);
+  };
+
+  // Pagination bounds
   const totalEntries = filteredTickets.length;
   const totalPages = Math.max(1, Math.ceil(totalEntries / limit));
   const paginatedTickets = filteredTickets.slice(currentPage * limit, (currentPage + 1) * limit);
 
-  // Auto-bounds check for page
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
       setCurrentPage(Math.max(0, totalPages - 1));
     }
   }, [totalPages, currentPage]);
 
-  const validateForm = () => {
-    const newErrs = {};
-    if (!newTicket.subject.trim()) newErrs.subject = 'Subject is required';
-    if (!newTicket.description.trim()) newErrs.description = 'Description is required';
-    setErrors(newErrs);
-    return Object.keys(newErrs).length === 0;
-  };
-
-  const validateEditForm = () => {
-    const newErrs = {};
-    if (!editTicket?.subject?.trim()) newErrs.subject = 'Subject is required';
-    if (!editTicket?.description?.trim()) newErrs.description = 'Description is required';
-    setEditErrors(newErrs);
-    return Object.keys(newErrs).length === 0;
-  };
-
+  // Raise Ticket Modal Handlers
   const handleOpenRaiseTicket = () => {
-    const defaultBranchId = (selectedBranchId && selectedBranchId !== 'ALL')
-      ? selectedBranchId
-      : (allBranches[0]?._id || allBranches[0]?.id || 'ALL');
+    let initialBranch = '';
+    if (!isMainBranchLogin && userBranchId) {
+      initialBranch = userBranchId;
+    } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+      initialBranch = selectedBranchId;
+    }
+
     setNewTicket({
       subject: '',
       category: 'Billing',
       priority: 'Medium',
-      branchId: defaultBranchId,
-      description: ''
+      raisedTo: defaultRaisedTo, // Auto-selected & read-only rule
+      branchId: initialBranch,
+      description: '',
+      attachment: ''
     });
     setErrors({});
     setShowRaiseTicketModal(true);
+  };
+
+  const handleFileUpload = async (e, isReply = false) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (isReply) setIsUploadingReplyAttachment(true);
+    else setIsUploadingAttachment(true);
+
+    try {
+      const uploadRes = await UploadApi.uploadImage(file, 'tickets', 'image');
+      if (uploadRes?.status && (uploadRes.url || uploadRes.path)) {
+        const fileUrl = uploadRes.url || uploadRes.path;
+        if (isReply) {
+          setReplyAttachment(fileUrl);
+        } else {
+          setNewTicket(prev => ({ ...prev, attachment: fileUrl, attachmentUrl: fileUrl }));
+        }
+        ShowNotifications.showAlertNotification('Attachment uploaded successfully!', true);
+      } else {
+        ShowNotifications.showAlertNotification('Failed to upload attachment. Please try again.', false);
+      }
+    } catch (err) {
+      console.warn("Upload error:", err);
+      ShowNotifications.showAlertNotification('Error uploading file.', false);
+    } finally {
+      if (isReply) setIsUploadingReplyAttachment(false);
+      else setIsUploadingAttachment(false);
+    }
+  };
+
+  const validateForm = () => {
+    const newErrs = {};
+    if (!newTicket.subject.trim()) newErrs.subject = 'Subject is required.';
+    if (!newTicket.description.trim()) newErrs.description = 'Description is required.';
+    setErrors(newErrs);
+    return Object.keys(newErrs).length === 0;
   };
 
   const handleRaiseTicket = async (e) => {
@@ -209,108 +755,91 @@ export default function HelpSupport() {
 
     setIsSubmitting(true);
     try {
-      const branchIdToSend = newTicket.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : 'ALL');
+      const branchIdToSend = !isMainBranchLogin 
+        ? userBranchId 
+        : (newTicket.branchId || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : ''));
+
       const branchObj = allBranches.find(b => String(b._id || b.id) === String(branchIdToSend));
       const branchNameToSend = branchObj 
         ? (branchObj.branchName || branchObj.name || branchObj.branchCode) 
-        : (branchIdToSend === 'ALL' || !branchIdToSend ? 'All Branches' : 'Main Branch');
+        : (activeRestaurant?.name || 'Main Branch');
+
+      const isBranchScopedTicket = !isMainBranchLogin || !isCompanyFilterActive;
+      const creatorRole = isBranchScopedTicket ? 'Branch Admin' : (isCompanyAdmin ? 'Company Admin' : 'Admin');
+      const creatorName = currentUser?.name || currentUser?.userName || (isBranchScopedTicket ? `${branchNameToSend} Admin` : 'Company Admin');
+
+      const isSuperAdminTarget = defaultRaisedTo === 'Super Admin';
+      const ticketRaisedTo = isSuperAdminTarget ? 'Super Admin' : 'Company Admin';
+      const fileAttachment = newTicket.attachmentUrl || newTicket.attachment || '';
 
       const payload = {
-        ...newTicket,
-        branchId: branchIdToSend,
+        subject: newTicket.subject.trim(),
+        category: newTicket.category,
+        priority: newTicket.priority,
+        status: 'Open',
+        ticketRaisedTo,
+        raisedTo: isSuperAdminTarget ? 'Super Admin' : 'Company',
+        raisedBy: {
+          name: creatorName,
+          role: creatorRole,
+          email: currentUser?.email || ''
+        },
+        raisedByName: creatorName,
+        raisedByRole: creatorRole,
+        createdByName: creatorName,
+        creatorRole: creatorRole,
+        branchId: branchIdToSend || null,
         branchName: branchNameToSend,
-        restaurantName: activeRestaurant?.name || 'Restaurant'
+        restaurantName: activeRestaurant?.name || 'Restaurant',
+        description: newTicket.description.trim(),
+        attachmentUrl: fileAttachment,
+        attachment: fileAttachment
       };
 
-      await ticketApi.createTicket(payload);
+      const res = await ticketApi.createTicket(payload);
       setShowRaiseTicketModal(false);
-      setNewTicket({ subject: '', category: 'Billing', priority: 'Medium', branchId: '', description: '' });
-      ShowNotifications.showAlertNotification('Support ticket raised successfully!', true);
+      ShowNotifications.showAlertNotification('Support ticket submitted successfully!', true);
+
+      // Trigger hierarchical notification
+      try {
+        if (defaultRaisedTo === 'Company') {
+          // Branch Admin raised ticket -> notify Company Admin
+          await notificationApi.createNotification({
+            title: `New Branch Ticket from ${branchNameToSend}`,
+            message: `Ticket raised to Company: "${payload.subject}" (${payload.priority} Priority)`,
+            type: 'TICKET_RAISED',
+            targetRole: 'COMPANY_ADMIN',
+            branchId: branchIdToSend
+          });
+        } else {
+          // Company Admin raised ticket -> notify Super Admin
+          await notificationApi.createNotification({
+            title: `New HQ Ticket from ${activeRestaurant?.name || 'Company'}`,
+            message: `Ticket raised to Super Admin: "${payload.subject}"`,
+            type: 'TICKET_RAISED',
+            targetRole: 'SUPER_ADMIN'
+          });
+        }
+      } catch (notifErr) {
+        // Silent notification catch
+      }
+
       fetchTickets();
+      fetchStatusCounts();
     } catch (error) {
-      // ticketApi handles the alert
+      console.warn("Raise ticket error:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleOpenEdit = (ticket) => {
-    const ticketBranchId = ticket.branchId 
-      ? (typeof ticket.branchId === 'object' ? (ticket.branchId._id || ticket.branchId.id) : ticket.branchId) 
-      : (ticket.branch ? (typeof ticket.branch === 'object' ? (ticket.branch._id || ticket.branch.id) : ticket.branch) : '');
-    
-    setEditTicket({
-      _id: ticket._id || ticket.id,
-      ticketNumber: ticket.ticketNumber,
-      subject: ticket.subject || '',
-      category: ticket.category || 'Billing',
-      priority: ticket.priority || 'Medium',
-      status: ticket.status || 'Open',
-      branchId: ticketBranchId || 'ALL',
-      description: ticket.description || ''
-    });
-    setEditErrors({});
-  };
-
-  const handleUpdateTicket = async (e) => {
-    e.preventDefault();
-    if (!validateEditForm()) return;
-
-    setIsSubmitting(true);
-    const targetId = editTicket._id;
-    try {
-      const branchObj = allBranches.find(b => String(b._id || b.id) === String(editTicket.branchId));
-      const branchName = branchObj 
-        ? (branchObj.branchName || branchObj.name) 
-        : (editTicket.branchId === 'ALL' || !editTicket.branchId ? 'All Branches' : undefined);
-      
-      const updateData = {
-        subject: editTicket.subject,
-        category: editTicket.category,
-        priority: editTicket.priority,
-        status: editTicket.status,
-        branchId: editTicket.branchId,
-        ...(branchName ? { branchName } : {}),
-        description: editTicket.description
-      };
-      await ticketApi.updateTicket(targetId, updateData);
-      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...updateData } : t));
-      ShowNotifications.showAlertNotification('Ticket updated successfully!', true);
-      setEditTicket(null);
-      fetchTickets();
-    } catch (error) {
-      // Fallback local update if API is mock or partial
-      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...editTicket } : t));
-      ShowNotifications.showAlertNotification('Ticket updated successfully!', true);
-      setEditTicket(null);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteTicket = async () => {
-    if (!deleteTicketConfirm) return;
-    const targetId = deleteTicketConfirm._id || deleteTicketConfirm.id;
-    setIsDeleting(true);
-    try {
-      await ticketApi.deleteTicket(targetId);
-      setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
-      ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
-      setDeleteTicketConfirm(null);
-      fetchTickets();
-    } catch (error) {
-      // Local fallback removal
-      setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
-      ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
-      setDeleteTicketConfirm(null);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
+  // View Ticket & Conversation History Details
   const handleOpenViewTicket = async (ticket) => {
     setViewTicket(ticket);
-    setReplyInput('');
+    setReplyText('');
+    setReplyAttachment('');
+    setReplyStatus(ticket.status || 'Open');
+
     const targetId = ticket._id || ticket.id;
     if (targetId) {
       setIsLoadingTicketDetails(true);
@@ -320,12 +849,19 @@ export default function HelpSupport() {
           setViewTicket(prev => (prev && (prev._id === targetId || prev.id === targetId) ? { ...prev, ...res.data } : prev));
         }
       } catch (err) {
-        console.error('Error fetching ticket details:', err);
+        console.warn('Error fetching ticket details:', err);
       } finally {
         setIsLoadingTicketDetails(false);
       }
     }
   };
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [viewTicket]);
 
   // Auto-open ticket from Notification click
   useEffect(() => {
@@ -339,303 +875,868 @@ export default function HelpSupport() {
           if (res && res.status && res.data) {
             handleOpenViewTicket(res.data);
           }
-        }).catch(err => console.error("Error opening ticket from notification:", err));
+        }).catch(err => console.warn("Error opening ticket from notification:", err));
       }
     }
   }, [searchParams, location.state, tickets]);
 
+  // Normalizing Conversation Replies & Chat Messages
+  const getTicketConversation = (ticket) => {
+    if (!ticket) return [];
+    const conversation = [];
+
+    // 1. Initial Ticket Description as the opening thread post
+    if (ticket.description) {
+      const creator = resolveTicketRaisedBy(ticket);
+      conversation.push({
+        id: 'initial',
+        message: ticket.description,
+        sender: creator.name,
+        role: creator.role,
+        isCreator: true,
+        attachment: ticket.attachment || ticket.attachments?.[0],
+        createdAt: ticket.createdAt
+      });
+    }
+
+    // 2. Thread replies
+    const rawReplies = Array.isArray(ticket.replies) ? ticket.replies : (Array.isArray(ticket.messages) ? ticket.messages : []);
+    rawReplies.forEach((r, idx) => {
+      if (typeof r === 'string') {
+        conversation.push({
+          id: `reply-${idx}`,
+          message: r,
+          sender: 'Support Team',
+          role: 'Support',
+          isCreator: false,
+          createdAt: ticket.updatedAt || ticket.createdAt
+        });
+      } else if (r && typeof r === 'object') {
+        conversation.push({
+          id: r._id || r.id || `reply-${idx}`,
+          message: r.message || r.reply || r.text || r.content || '',
+          sender: r.sender || r.repliedBy || r.author || 'User',
+          role: r.role || (r.isAdmin ? 'Support Team' : 'Admin'),
+          isCreator: !r.isAdmin && r.role !== 'admin' && r.role !== 'support',
+          attachment: r.attachment || r.attachmentUrl,
+          createdAt: r.createdAt || r.date || r.timestamp || ticket.updatedAt
+        });
+      }
+    });
+
+    return conversation.filter(c => c.message && c.message.trim().length > 0);
+  };
+
+  // Send Reply in Conversation
   const handleSendReply = async (e) => {
     if (e) e.preventDefault();
-    const cleanText = replyInput.trim();
+    const cleanText = replyText.trim();
     if (!cleanText || !viewTicket) return;
 
     const targetId = viewTicket._id || viewTicket.id;
     setIsSendingReply(true);
 
     try {
-      const senderName = activeRestaurant?.name || 'Restaurant Admin';
-      const res = await ticketApi.addReply(targetId, cleanText, senderName);
-      if (res && res.status) {
-        ShowNotifications.showAlertNotification('Reply sent successfully!', true);
-        const newReplyObj = {
-          message: cleanText,
-          sender: senderName,
-          role: 'user',
-          isAdmin: false,
-          createdAt: new Date().toISOString()
-        };
+      const senderRole = !isMainBranchLogin 
+        ? 'Branch Admin' 
+        : (isCompanyAdmin ? 'Company Admin' : (isSuperAdmin ? 'Super Admin' : 'Admin'));
+      const senderName = currentUser?.name || currentUser?.userName || senderRole;
 
-        // Update local viewTicket state
-        setViewTicket(prev => {
-          if (!prev) return prev;
-          const existingReplies = Array.isArray(prev.replies) ? prev.replies : (Array.isArray(prev.messages) ? prev.messages : []);
-          return {
-            ...prev,
-            replies: [...existingReplies, newReplyObj]
-          };
-        });
+      const extraMeta = {
+        role: senderRole,
+        status: replyStatus || viewTicket.status,
+        attachment: replyAttachment || undefined
+      };
 
-        setReplyInput('');
-        fetchTickets();
-      } else {
-        ShowNotifications.showAlertNotification(res?.error || 'Failed to send reply.', false);
+      const res = await ticketApi.addReply(targetId, cleanText, senderName, replyAttachment, extraMeta);
+
+      // If status changed in reply section, update ticket status
+      if (replyStatus && replyStatus !== viewTicket.status) {
+        await ticketApi.updateTicket(targetId, { status: replyStatus });
       }
+
+      ShowNotifications.showAlertNotification('Reply posted successfully!', true);
+
+      const newReplyObj = {
+        id: `reply-${Date.now()}`,
+        message: cleanText,
+        sender: senderName,
+        role: senderRole,
+        isCreator: !isMainBranchLogin,
+        attachment: replyAttachment || undefined,
+        createdAt: new Date().toISOString()
+      };
+
+      // Hierarchical Notification Flow
+      try {
+        const ticketTarget = resolveTicketRaisedTo(viewTicket);
+        if (ticketTarget === 'Company') {
+          // Branch ticket: Company Admin solves / replies -> notify Branch Admin
+          if (isCompanyAdmin || isSuperAdmin) {
+            await notificationApi.createNotification({
+              title: `Update on Ticket #${viewTicket.ticketNumber || ''}`,
+              message: `Company Admin replied: "${cleanText.slice(0, 50)}..."`,
+              type: 'TICKET_REPLY',
+              branchId: viewTicket.branchId
+            });
+          } else {
+            // Branch Admin replied -> notify Company Admin
+            await notificationApi.createNotification({
+              title: `Branch Reply on Ticket #${viewTicket.ticketNumber || ''}`,
+              message: `${senderName}: "${cleanText.slice(0, 50)}..."`,
+              type: 'TICKET_REPLY',
+              targetRole: 'COMPANY_ADMIN'
+            });
+          }
+        } else {
+          // Super Admin ticket
+          if (isSuperAdmin) {
+            // Super Admin replied -> notify Company Admin
+            await notificationApi.createNotification({
+              title: `Super Admin replied on Ticket #${viewTicket.ticketNumber || ''}`,
+              message: `Super Admin: "${cleanText.slice(0, 50)}..."`,
+              type: 'TICKET_REPLY',
+              targetRole: 'COMPANY_ADMIN'
+            });
+          } else {
+            // Company Admin replied -> notify Super Admin
+            await notificationApi.createNotification({
+              title: `Company update on Ticket #${viewTicket.ticketNumber || ''}`,
+              message: `${senderName}: "${cleanText.slice(0, 50)}..."`,
+              type: 'TICKET_REPLY',
+              targetRole: 'SUPER_ADMIN'
+            });
+          }
+        }
+      } catch (notifErr) {
+        // Silent notification catch
+      }
+
+      // Update local state
+      setViewTicket(prev => {
+        if (!prev) return prev;
+        const currentReplies = Array.isArray(prev.replies) ? prev.replies : [];
+        return {
+          ...prev,
+          status: replyStatus || prev.status,
+          replies: [...currentReplies, newReplyObj]
+        };
+      });
+
+      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, status: replyStatus || t.status } : t));
+      setReplyText('');
+      setReplyAttachment('');
     } catch (err) {
-      console.error('Error sending reply:', err);
-      ShowNotifications.showAlertNotification('Failed to send reply.', false);
+      console.warn('Error sending reply:', err);
+      ShowNotifications.showAlertNotification('Failed to post reply. Please try again.', false);
     } finally {
       setIsSendingReply(false);
     }
   };
 
-  const getTicketReplies = (ticket) => {
-    if (!ticket) return [];
-    const list = [];
-
-    if (Array.isArray(ticket.replies)) {
-      ticket.replies.forEach(r => {
-        if (typeof r === 'string') {
-          list.push({ message: r, sender: 'Support Team', role: 'admin', isAdmin: true, createdAt: ticket.updatedAt || ticket.createdAt });
-        } else if (r && typeof r === 'object') {
-          list.push({
-            message: r.message || r.reply || r.text || r.content || '',
-            sender: r.sender || r.repliedBy || r.author || (r.isAdmin || r.role === 'admin' ? 'Support Team' : 'Restaurant Admin'),
-            role: r.role || (r.isAdmin ? 'admin' : 'user'),
-            isAdmin: r.isAdmin !== undefined ? r.isAdmin : (r.role === 'admin' || String(r.sender || '').toLowerCase().includes('support') || String(r.sender || '').toLowerCase().includes('admin')),
-            createdAt: r.createdAt || r.date || r.timestamp || ticket.updatedAt
-          });
-        }
-      });
-    }
-
-    if (Array.isArray(ticket.messages) && list.length === 0) {
-      ticket.messages.forEach(m => {
-        if (typeof m === 'string') {
-          list.push({ message: m, sender: 'Support Team', role: 'admin', isAdmin: true, createdAt: ticket.updatedAt });
-        } else if (m && typeof m === 'object') {
-          list.push({
-            message: m.message || m.text || m.content || '',
-            sender: m.sender || (m.isAdmin ? 'Support Team' : 'Restaurant Admin'),
-            role: m.role || (m.isAdmin ? 'admin' : 'user'),
-            isAdmin: m.isAdmin ?? (m.role === 'admin'),
-            createdAt: m.createdAt || ticket.updatedAt
-          });
-        }
-      });
-    }
-
-    // Single reply strings (if not already captured in replies array)
-    const singleReply = ticket.reply || ticket.adminReply || ticket.adminResponse || ticket.response || ticket.adminNote || ticket.solution;
-    if (singleReply && typeof singleReply === 'string' && list.length === 0) {
-      list.push({
-        message: singleReply,
-        sender: 'ServIQ Support Team',
-        role: 'admin',
-        isAdmin: true,
-        createdAt: ticket.resolvedAt || ticket.updatedAt || ticket.createdAt
-      });
-    }
-
-    return list.filter(item => item.message && item.message.trim().length > 0);
+  // Open Resolve Ticket Modal
+  const handleOpenResolveModal = (ticket) => {
+    setResolveTicketModal(ticket);
+    const initialStatus = ticket.status === 'Draft' 
+      ? 'Draft' 
+      : (ticket.status === 'In Progress' ? 'In Progress' : 'Resolved');
+    setResolutionStatus(initialStatus);
+    const prevNote = ticket.solutionRemarks || ticket.resolutionNote || ticket.resolutionRemarks || '';
+    const prevAttachment = ticket.resolutionAttachment || '';
+    setResolutionNote(prevNote);
+    setResolutionAttachment(prevAttachment);
+    setIsResolving(false);
+    setIsUploadingResolutionFile(false);
   };
 
-  const getPriorityClass = (priority) => {
-    if (priority === 'High') return 'badge-priority-high';
-    if (priority === 'Medium') return 'badge-priority-medium';
+  // Upload Attachment for Resolution Proof
+  const handleResolutionFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingResolutionFile(true);
+    try {
+      const uploadRes = await UploadApi.uploadImage(file, 'tickets', 'image');
+      if (uploadRes?.status && (uploadRes.url || uploadRes.path)) {
+        const fileUrl = uploadRes.url || uploadRes.path;
+        setResolutionAttachment(fileUrl);
+        ShowNotifications.showAlertNotification('Proof file uploaded successfully!', true);
+      } else {
+        ShowNotifications.showAlertNotification('Failed to upload attachment.', false);
+      }
+    } catch (err) {
+      ShowNotifications.showAlertNotification('Failed to upload proof.', false);
+    } finally {
+      setIsUploadingResolutionFile(false);
+    }
+  };
+
+  // Submit Ticket Resolution
+  const handleSubmitResolution = async (e) => {
+    if (e) e.preventDefault();
+    if (!resolveTicketModal) return;
+
+    const cleanNote = resolutionNote.trim();
+    if (!cleanNote) {
+      ShowNotifications.showAlertNotification('Please provide resolution details / remarks.', false);
+      return;
+    }
+
+    const targetId = resolveTicketModal._id || resolveTicketModal.id;
+    setIsResolving(true);
+
+    try {
+      const senderRole = !isMainBranchLogin 
+        ? 'Branch Admin' 
+        : (isCompanyAdmin ? 'Company Admin' : (isSuperAdmin ? 'Super Admin' : 'Admin'));
+      const senderName = currentUser?.name || currentUser?.userName || senderRole;
+
+      const updatePayload = {
+        status: resolutionStatus,
+        resolutionNote: cleanNote,
+        solutionRemarks: cleanNote,
+        resolutionAttachment: resolutionAttachment || undefined,
+        resolvedBy: senderName,
+        resolvedRole: senderRole,
+        resolvedAt: new Date().toISOString(),
+        ...(resolutionStatus === 'Resolved' ? { resolvedAt: new Date().toISOString() } : {})
+      };
+
+      // 1. Update ticket status & resolution details via dedicated /status endpoint
+      const statusRes = await ticketApi.updateTicketStatus(targetId, {
+        status: resolutionStatus,
+        resolution: cleanNote,
+        ...updatePayload
+      });
+
+      // 2. Post resolution remark and proof in thread
+      await ticketApi.addReply(
+        targetId,
+        `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
+        senderName,
+        resolutionAttachment || undefined,
+        {
+          role: senderRole,
+          status: resolutionStatus,
+          isResolution: resolutionStatus === 'Resolved',
+          isDraft: resolutionStatus === 'Draft',
+          isInProgress: resolutionStatus === 'In Progress',
+          attachment: resolutionAttachment || undefined
+        }
+      );
+
+      // 3. Notify the branch that their ticket has been solved/closed
+      try {
+        if (resolveTicketModal.branchId) {
+          await notificationApi.createNotification({
+            title: `Ticket #${resolveTicketModal.ticketNumber || ''} ${resolutionStatus}`,
+            message: `${senderName}: "${cleanNote.slice(0, 60)}..."`,
+            type: 'TICKET_STATUS_UPDATED',
+            branchId: resolveTicketModal.branchId
+          });
+        }
+      } catch (notifErr) {
+        // silent
+      }
+
+      // 4. Update local state
+      const mergedResolved = {
+        ...(statusRes?.data || {}),
+        ...updatePayload,
+        resolution: cleanNote
+      };
+      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...mergedResolved } : t));
+      fetchStatusCounts();
+      if (viewTicket && (viewTicket._id === targetId || viewTicket.id === targetId)) {
+        setViewTicket(prev => ({
+          ...prev,
+          ...mergedResolved,
+          replies: [
+            ...(Array.isArray(prev.replies) ? prev.replies : []),
+            {
+              id: `reply-${Date.now()}`,
+              message: `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
+              sender: senderName,
+              role: senderRole,
+              isCreator: false,
+              attachment: resolutionAttachment || undefined,
+              createdAt: new Date().toISOString()
+            }
+          ]
+        }));
+      }
+
+      ShowNotifications.showAlertNotification(
+        resolutionStatus === 'Draft'
+          ? `Ticket #${resolveTicketModal.ticketNumber || ''} saved as Draft!`
+          : (resolutionStatus === 'In Progress'
+              ? `Ticket #${resolveTicketModal.ticketNumber || ''} updated to In Progress!`
+              : `Ticket #${resolveTicketModal.ticketNumber || ''} marked as Resolved!`),
+        true
+      );
+      setResolveTicketModal(null);
+    } catch (err) {
+      console.warn("Failed to resolve ticket:", err);
+      ShowNotifications.showAlertNotification('Failed to resolve ticket. Please try again.', false);
+    } finally {
+      setIsResolving(false);
+    }
+  };
+
+  // Open Share / Forward to Super Admin Modal
+  const handleOpenForwardModal = (ticket) => {
+    setForwardTicketModal(ticket);
+    setForwardNote('');
+    setIsForwarding(false);
+  };
+
+  // Submit Share / Forward to Super Admin
+  const handleSubmitForward = async (e) => {
+    if (e) e.preventDefault();
+    if (!forwardTicketModal) return;
+
+    const targetId = forwardTicketModal._id || forwardTicketModal.id;
+    setIsForwarding(true);
+
+    try {
+      const senderName = currentUser?.name || currentUser?.userName || 'Company Admin';
+      const noteText = forwardNote.trim();
+      const reasonToSend = noteText || 'Issue cannot be resolved at company level. Requires database sync fix from ServIQ core engineering team.';
+
+      // 1. Escalate ticket to Super Admin via dedicated /tickets/:id/escalate endpoint
+      const escalateRes = await ticketApi.escalateTicket(targetId, reasonToSend);
+
+      // 2. Add an escalation remark into ticket thread if note provided
+      if (noteText) {
+        await ticketApi.addReply(
+          targetId,
+          `[Escalated to Super Admin by ${senderName}]: ${noteText}`,
+          senderName,
+          undefined,
+          { role: 'Company Admin', isForwarded: true, isEscalated: true }
+        );
+      }
+
+      // 3. Notify Super Admin
+      try {
+        await notificationApi.createNotification({
+          title: `Branch Ticket #${forwardTicketModal.ticketNumber || ''} Escalated to Super Admin`,
+          message: `${activeRestaurant?.name || 'Company'} escalated branch ticket "${forwardTicketModal.subject}" to Super Admin${noteText ? `: ${noteText.slice(0, 50)}...` : ''}`,
+          type: 'TICKET_FORWARDED',
+          targetRole: 'SUPER_ADMIN'
+        });
+      } catch (notifErr) {
+        // silent
+      }
+
+      // 4. Update local tickets state so table immediately displays Super Admin & Escalated
+      const updatedData = escalateRes?.data || {};
+      const newStatus = updatedData.status || 'Escalated';
+      const mergedTicket = {
+        ...forwardTicketModal,
+        ...updatedData,
+        status: newStatus,
+        isEscalated: true,
+        ticketRaisedTo: 'Super Admin',
+        raisedTo: 'Super Admin',
+        escalationReason: reasonToSend,
+        escalatedByName: senderName,
+        escalatedAt: new Date().toISOString()
+      };
+
+      setTickets(prev => prev.map(t => (t._id === targetId || t.id === targetId) ? { ...t, ...mergedTicket } : t));
+      fetchStatusCounts();
+      if (viewTicket && (viewTicket._id === targetId || viewTicket.id === targetId)) {
+        setViewTicket(prev => ({ ...prev, ...mergedTicket }));
+      }
+
+      ShowNotifications.showAlertNotification(
+        escalateRes?.message || `Ticket #${forwardTicketModal.ticketNumber || ''} successfully escalated to Super Admin!`,
+        true
+      );
+      setForwardTicketModal(null);
+    } catch (err) {
+      console.warn("Failed to escalate ticket to Super Admin:", err);
+      ShowNotifications.showAlertNotification('Failed to escalate ticket. Please try again.', false);
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!deleteTicketConfirm) return;
+    const targetId = deleteTicketConfirm._id || deleteTicketConfirm.id;
+    setIsDeleting(true);
+    try {
+      await ticketApi.deleteTicket(targetId);
+      setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
+      fetchStatusCounts();
+      ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
+      setDeleteTicketConfirm(null);
+    } catch (error) {
+      setTickets(prev => prev.filter(t => (t._id !== targetId && t.id !== targetId)));
+      fetchStatusCounts();
+      ShowNotifications.showAlertNotification('Ticket deleted successfully!', true);
+      setDeleteTicketConfirm(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Badge Style Resolvers
+  const getPriorityBadgeClass = (priority) => {
+    const p = String(priority || 'Medium').toLowerCase();
+    if (p === 'high') return 'badge-priority-high';
+    if (p === 'medium') return 'badge-priority-medium';
     return 'badge-priority-low';
   };
 
-  const getStatusClass = (status) => {
-    if (status === 'Open') return 'badge-status-open';
-    if (status === 'Resolved') return 'badge-status-resolved';
-    if (status === 'Closed') return 'badge-status-closed';
-    return 'badge-status-progress';
+  const getStatusBadgeClass = (status) => {
+    const s = String(status || 'Open').toLowerCase();
+    if (s === 'open') return 'badge-status-open';
+    if (s === 'draft') return 'badge-status-draft';
+    if (s === 'in progress') return 'badge-status-progress';
+    if (s === 'waiting for response') return 'badge-status-waiting';
+    if (s === 'resolved') return 'badge-status-resolved';
+    if (s === 'escalated') return 'badge-status-escalated';
+    return 'badge-status-closed';
   };
 
   return (
     <div className="help-support-container">
+      {/* Header Bar */}
       <div className="page-header">
-        <h2>Help & Support</h2>
-        <button className="btn btn-primary" onClick={handleOpenRaiseTicket}>
-          + Raise Ticket
+        <div>
+          <h2>Help & Support</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>
+              {!isMainBranchLogin 
+                ? 'Branch Support Desk (Tickets routed to Company)' 
+                : (isCompanyAdmin ? 'Company Support Management (Solve Branch Tickets & Raise to Super Admin)' : 'Super Admin Support Desk')}
+            </span>
+          </div>
+        </div>
+
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          onClick={handleOpenRaiseTicket}
+        >
+          <PlusIcon size={14} color="#ffffff" />
+          <span>Raise Ticket</span>
         </button>
       </div>
 
+      {/* Main Ticket Card */}
       <div className="card list-card">
-        <div className="card-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>My Tickets</h3>
-          {selectedBranchId && selectedBranchId !== 'ALL' && (
-            <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd' }}>
-              📍 Filtered by: {allBranches.find(b => String(b._id || b.id) === String(selectedBranchId))?.branchName || 'Current Branch'}
+        {/* Filter Toolbar */}
+        <div className="ticket-secondary-filters">
+          {/* Search Box */}
+          <div className="ticket-search-box">
+            <span className="ticket-search-icon">
+              <SearchIcon size={14} color="#94a3b8" />
             </span>
-          )}
+            <input 
+              type="text" 
+              placeholder="Search by ticket no, subject, branch or user..." 
+              value={searchQuery}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(0);
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setCurrentPage(0);
+                }}
+                title="Clear search"
+                style={{
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  padding: 0
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Filter by Status Dropdown */}
+            <div style={{ minWidth: '165px' }}>
+              <SearchableSelect
+                isCompact={true}
+                value={statusFilter}
+                onChange={e => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(0);
+                }}
+                options={statusOptions}
+                placeholder="Status..."
+              />
+            </div>
+
+            {/* Filter by Target Level (Only for Main Branch) */}
+            {isMainBranchLogin && (
+              <div style={{ minWidth: '165px' }}>
+                <SearchableSelect
+                  isCompact={true}
+                  value={targetFilter}
+                  onChange={e => {
+                    setTargetFilter(e.target.value);
+                    setCurrentPage(0);
+                  }}
+                  options={[
+                    { value: 'All', label: 'All Tickets' },
+                    { value: 'Company', label: 'Branch Tickets (To Company)' },
+                    { value: 'Super Admin', label: 'HQ Tickets (To Super Admin)' }
+                  ]}
+                  placeholder="Raised To..."
+                />
+              </div>
+            )}
+
+            {/* Filter by Priority */}
+            <div style={{ minWidth: '140px' }}>
+              <SearchableSelect
+                isCompact={true}
+                value={priorityFilter}
+                onChange={e => {
+                  setPriorityFilter(e.target.value);
+                  setCurrentPage(0);
+                }}
+                options={[
+                  { value: 'All', label: 'All Priorities' },
+                  { value: 'High', label: 'High Priority' },
+                  { value: 'Medium', label: 'Medium Priority' },
+                  { value: 'Low', label: 'Low Priority' }
+                ]}
+                placeholder="Priority..."
+              />
+            </div>
+
+            {/* Clear / Reset Filters Button */}
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                title="Reset all filters"
+                style={{
+                  height: '34px',
+                  padding: '0 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#0f172a'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#ffffff'; e.currentTarget.style.color = '#64748b'; }}
+              >
+                <RefreshCwIcon size={12} color="#64748b" />
+                <span>Reset</span>
+              </button>
+            )}
+
+            {/* Branch indicator / lock notification */}
+            {!isMainBranchLogin && (
+              <span style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#ea580c',
+                background: '#fff7ed',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid #fed7aa',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <StoreIcon size={13} color="#ea580c" />
+                <span>My Branch: {resolveTicketBranchName({ branchId: userBranchId }, allBranches)}</span>
+              </span>
+            )}
+          </div>
         </div>
-        <div className="table-responsive" style={{ overflowX: 'auto', paddingBottom: '6px' }}>
-          <table className="data-table" style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+
+        {/* 10-Column Data Table */}
+        <div className="table-responsive" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ width: '100%', minWidth: '1180px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
             <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f', color: '#ffffff' }}>
-                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', textAlign: 'center', whiteSpace: 'nowrap' }}>S.NO.</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'left', whiteSpace: 'nowrap' }}>TICKET NO.</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '34%', textAlign: 'left' }}>SUBJECT</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '14%', textAlign: 'left', whiteSpace: 'nowrap' }}>DATE</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '12%', textAlign: 'center', whiteSpace: 'nowrap' }}>PRIORITY</th>
-                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '12%', textAlign: 'center', whiteSpace: 'nowrap' }}>STATUS</th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '10%', textAlign: 'center', whiteSpace: 'nowrap' }}>ACTION</th>
+              <tr style={{ backgroundColor: '#0f172a', borderBottom: '3px solid #FF7A00', color: '#ffffff', verticalAlign: 'middle' }}>
+                <th style={{ padding: '14px 10px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px', textAlign: 'center', verticalAlign: 'middle' }}>S.NO</th>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '105px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>TICKET NO</th>
+                <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '170px', textAlign: 'left', verticalAlign: 'middle' }}>SUBJECT</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '140px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>RAISED BY</th>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>RAISED TO</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', minWidth: '150px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>BRANCH</th>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '95px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>PRIORITY</th>
+                <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '110px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>STATUS</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '115px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>LAST UPDATED</th>
+                <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: isCompanyFilterActive ? '180px' : '110px', minWidth: isCompanyFilterActive ? '180px' : '110px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>Loading tickets...</td>
+                  <td colSpan="10" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <ClockIcon size={16} color="#FF7A00" />
+                      <span>Loading support tickets...</span>
+                    </div>
+                  </td>
                 </tr>
               ) : paginatedTickets.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontSize: '14px' }}>No support tickets found for the selected branch filter.</td>
+                  <td colSpan="10" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <MessageSquareIcon size={24} color="#94a3b8" />
+                      <span style={{ fontWeight: 600 }}>No support tickets found for the selected filters.</span>
+                    </div>
+                  </td>
                 </tr>
               ) : (
                 paginatedTickets.map((ticket, index) => {
-                  const branchLabel = resolveTicketBranchName(ticket, allBranches) || 'All Branches';
-                  const isAllBranches = branchLabel.toLowerCase().includes('all branch');
+                  const branchLabel = resolveTicketBranchName(ticket, allBranches);
+                  const raisedTo = resolveTicketRaisedTo(ticket);
+                  const raisedBy = resolveTicketRaisedBy(ticket);
+
+                  const isClosed = String(ticket.status || '').toLowerCase() === 'closed';
+                  const isResolved = String(ticket.status || '').toLowerCase() === 'resolved';
+                  const isBranchTicket = raisedTo === 'Company';
+                  const isSuperAdminTicket = raisedTo === 'Super Admin';
+                  const isEscalated = Boolean(ticket.isEscalated || String(ticket.status || '').toLowerCase() === 'escalated');
+
+                  // In Company filter: Never remove Resolve or Share icons; keep all 4 icons visible and disable them when not applicable
+                  const isResolveDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isShareDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
+
+                  const resolveTitle = isResolved
+                    ? "Ticket already resolved"
+                    : isClosed
+                      ? "Ticket is closed"
+                      : (isSuperAdminTicket || isEscalated)
+                        ? "Ticket routed to Super Admin"
+                        : (ticket.status === 'Draft' ? "Update Draft / Resolve Ticket" : "Resolve Ticket (Company)");
+
+                  const shareTitle = (isEscalated || isSuperAdminTicket)
+                    ? "Ticket already escalated to Super Admin"
+                    : isResolved
+                      ? "Ticket already resolved"
+                      : isClosed
+                        ? "Ticket is closed"
+                        : "Share to Super Admin (If unable to solve)";
+
+                  // Delete action is available for all
+                  const canDeleteThisTicket = true;
+
                   return (
-                  <tr 
-                    key={ticket._id || ticket.id || index}
-                    style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <td style={{ padding: '14px 14px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                      {currentPage * limit + index + 1}
-                    </td>
-                    <td style={{ padding: '14px 18px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      {ticket.ticketNumber}
-                    </td>
-                    <td style={{ padding: '14px 18px', verticalAlign: 'middle' }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px' }}>{ticket.subject}</div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '11px', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                          {ticket.category || 'General'}
+                    <tr 
+                      key={ticket._id || ticket.id || index}
+                      style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {/* 1. S.NO */}
+                      <td style={{ padding: '14px 10px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', textAlign: 'center', verticalAlign: 'middle' }}>
+                        {currentPage * limit + index + 1}
+                      </td>
+
+                      {/* 2. Ticket No */}
+                      <td style={{ padding: '14px 12px', fontWeight: 700, fontFamily: 'monospace', color: '#0f172a', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        {ticket.ticketNumber || `#TK-${String(ticket._id || index).slice(-5).toUpperCase()}`}
+                      </td>
+
+                      {/* 3. Subject */}
+                      <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px', lineHeight: 1.35 }}>
+                            {ticket.subject}
+                          </span>
+                          {(ticket.attachmentUrl || ticket.attachment) && (
+                            <span style={{ fontSize: '10.5px', color: '#ea580c', background: '#fff7ed', border: '1px solid #fed7aa', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                              <PaperclipIcon size={10} color="#ea580c" />
+                              <span>File</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 4. Raised By */}
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <UserIcon size={13} color="#64748b" />
+                            <span>{raisedBy.name}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500, paddingLeft: '19px' }}>
+                            {raisedBy.role}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 5. Raised To */}
+                      <td style={{ padding: '14px 12px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`}>
+                          {raisedTo === 'Company' ? (
+                            <>
+                              <BuildingIcon size={11} color="#ea580c" />
+                              <span>Company</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldIcon size={11} color="#4338ca" />
+                              <span>Super Admin</span>
+                            </>
+                          )}
                         </span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '14px 16px', color: '#475569', fontSize: '12.5px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      {formatDateDMY(ticket.createdAt)}
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span className={`badge ${getPriorityClass(ticket.priority)}`}>
-                        {ticket.priority}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <span className={`badge ${getStatusClass(ticket.status)}`}>
-                        {ticket.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        {/* View & Replies Button (Icon Only) */}
-                        <button 
-                          type="button"
-                          onClick={() => handleOpenViewTicket(ticket)}
-                          title="View ticket details & replies"
-                          aria-label="View ticket details & replies"
-                          style={{ 
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: '1px solid #fed7aa', 
-                            background: '#fff7ed',
-                            color: '#ea580c', 
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            padding: 0
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.background = '#ffedd5';
-                            e.currentTarget.style.transform = 'scale(1.08)';
-                            e.currentTarget.style.borderColor = '#ea580c';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = '#fff7ed';
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.borderColor = '#fed7aa';
-                          }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </button>
+                      </td>
 
-                        {/* Edit Button (Icon Only) */}
-                        <button 
-                          type="button"
-                          onClick={() => handleOpenEdit(ticket)}
-                          title="Edit ticket"
-                          aria-label="Edit ticket"
-                          style={{ 
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: '1px solid #bae6fd', 
-                            background: '#f0f9ff',
-                            color: '#0284c7', 
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            padding: 0
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.background = '#e0f2fe';
-                            e.currentTarget.style.transform = 'scale(1.08)';
-                            e.currentTarget.style.borderColor = '#0284c7';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = '#f0f9ff';
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.borderColor = '#bae6fd';
-                          }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
+                      {/* 6. Branch */}
+                      <td style={{ padding: '14px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <StoreIcon size={13} color="#0284c7" />
+                          <span>{branchLabel}</span>
+                        </div>
+                      </td>
 
-                        {/* Delete Button (Icon Only) */}
-                        <button 
-                          type="button"
-                          onClick={() => setDeleteTicketConfirm(ticket)}
-                          title="Delete ticket"
-                          aria-label="Delete ticket"
-                          style={{ 
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '8px',
-                            border: '1px solid #fecaca', 
-                            background: '#fef2f2',
-                            color: '#dc2626', 
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            padding: 0
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.background = '#fee2e2';
-                            e.currentTarget.style.transform = 'scale(1.08)';
-                            e.currentTarget.style.borderColor = '#dc2626';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = '#fef2f2';
-                            e.currentTarget.style.transform = 'scale(1)';
-                            e.currentTarget.style.borderColor = '#fecaca';
-                          }}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      {/* 7. Priority */}
+                      <td style={{ padding: '14px 12px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${getPriorityBadgeClass(ticket.priority)}`}>
+                          {ticket.priority || 'Medium'}
+                        </span>
+                      </td>
+
+                      {/* 8. Status */}
+                      <td style={{ padding: '14px 12px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        <span className={`badge ${getStatusBadgeClass(ticket.status)}`}>
+                          {ticket.status || 'Open'}
+                        </span>
+                      </td>
+
+                      {/* 9. Last Updated */}
+                      <td style={{ padding: '14px 14px', textAlign: 'center', verticalAlign: 'middle', color: '#475569', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                        {formatDateDMY(ticket.updatedAt || ticket.createdAt)}
+                      </td>
+
+                      {/* 10. Actions: For branch filter view, show only View and Delete. For Company filter, show all options. */}
+                      <td style={{ padding: '14px 14px', textAlign: 'center', verticalAlign: 'middle', width: isCompanyFilterActive ? '180px' : '110px', minWidth: isCompanyFilterActive ? '180px' : '110px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          {/* View Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenViewTicket(ticket)}
+                            title="View ticket details"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              border: '1px solid #fed7aa',
+                              background: '#fff7ed',
+                              color: '#ea580c',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <EyeIcon size={14} color="#ea580c" />
+                          </button>
+
+                          {/* Resolve Button (Always visible in Company filter, disabled when not applicable) */}
+                          {isCompanyFilterActive && (
+                            <button
+                              type="button"
+                              onClick={isResolveDisabled ? undefined : () => handleOpenResolveModal(ticket)}
+                              disabled={isResolveDisabled}
+                              title={resolveTitle}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                border: isResolveDisabled ? '1px solid #e2e8f0' : '1px solid #bbf7d0',
+                                background: isResolveDisabled ? '#f8fafc' : '#dcfce7',
+                                color: isResolveDisabled ? '#94a3b8' : '#16a34a',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: isResolveDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isResolveDisabled ? 0.45 : 1,
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <CheckCircleIcon size={14} color={isResolveDisabled ? '#94a3b8' : '#16a34a'} />
+                            </button>
+                          )}
+
+                          {/* Share to Super Admin Button (Always visible in Company filter, disabled when not applicable) */}
+                          {isCompanyFilterActive && (
+                            <button
+                              type="button"
+                              onClick={isShareDisabled ? undefined : () => handleOpenForwardModal(ticket)}
+                              disabled={isShareDisabled}
+                              title={shareTitle}
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                border: isShareDisabled ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
+                                background: isShareDisabled ? '#f8fafc' : '#eff6ff',
+                                color: isShareDisabled ? '#94a3b8' : '#2563eb',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: isShareDisabled ? 'not-allowed' : 'pointer',
+                                opacity: isShareDisabled ? 0.45 : 1,
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <ShareIcon size={14} color={isShareDisabled ? '#94a3b8' : '#2563eb'} />
+                            </button>
+                          )}
+
+                          {/* Delete Button (Super Admin / Company Admin only) */}
+                          {canDeleteThisTicket && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTicketConfirm(ticket)}
+                              title="Delete ticket"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '8px',
+                                border: '1px solid #fecaca',
+                                background: '#fef2f2',
+                                color: '#dc2626',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <TrashIcon size={14} color="#dc2626" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -643,7 +1744,7 @@ export default function HelpSupport() {
           </table>
         </div>
 
-        {/* Pagination UI matching standard table layout */}
+        {/* Pagination Controls */}
         {totalPages > 0 && (
           <div style={{
             display: 'flex',
@@ -651,87 +1752,29 @@ export default function HelpSupport() {
             alignItems: 'center',
             padding: '16px 20px',
             background: '#ffffff',
-            borderTop: '1px solid #e5e7eb',
-            borderRadius: '0 0 12px 12px',
+            borderTop: '1px solid #e2e8f0',
             flexWrap: 'wrap',
             gap: '12px'
           }}>
-            {/* Left Info Text */}
-            <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-              Showing {totalEntries === 0 ? 0 : currentPage * limit + 1} to {Math.min((currentPage + 1) * limit, totalEntries)} of {totalEntries} entries
+            <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
+              Showing {totalEntries === 0 ? 0 : currentPage * limit + 1} to {Math.min((currentPage + 1) * limit, totalEntries)} of {totalEntries} tickets
             </div>
 
-            {/* Right Pagination Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <button
                 type="button"
+                className="btn-outline"
                 disabled={currentPage === 0}
                 onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  background: currentPage === 0 ? '#f8fafc' : '#ffffff',
-                  color: currentPage === 0 ? '#cbd5e1' : '#334155',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  cursor: currentPage === 0 ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
               >
-                Prev
+                Previous
               </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(page => {
-                  const maxVisible = 5;
-                  const current = currentPage + 1;
-                  let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
-                  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
-                  if (endPage - startPage + 1 < maxVisible) {
-                    startPage = Math.max(1, endPage - maxVisible + 1);
-                  }
-                  return page >= startPage && page <= endPage;
-                })
-                .map(page => (
-                <button
-                  key={page}
-                  type="button"
-                  onClick={() => setCurrentPage(page - 1)}
-                  style={{
-                    minWidth: '34px',
-                    height: '34px',
-                    padding: '0 8px',
-                    borderRadius: '8px',
-                    border: page === (currentPage + 1) ? 'none' : '1px solid #e2e8f0',
-                    background: page === (currentPage + 1) ? '#000000' : '#ffffff',
-                    color: page === (currentPage + 1) ? '#ffffff' : '#334155',
-                    fontSize: '0.85rem',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    boxShadow: page === (currentPage + 1) ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {page}
-                </button>
-              ))}
 
               <button
                 type="button"
+                className="btn-outline"
                 disabled={currentPage >= totalPages - 1 || totalPages === 0}
                 onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  background: (currentPage >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
-                  color: (currentPage >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
-                  fontSize: '0.82rem',
-                  fontWeight: '600',
-                  cursor: (currentPage >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
               >
                 Next
               </button>
@@ -740,500 +1783,711 @@ export default function HelpSupport() {
         )}
       </div>
 
-      {/* View Ticket Modal */}
-      <Modal 
-        isOpen={!!viewTicket} 
+      {/* TICKET DETAILS MODAL (VIEW ONLY) */}
+      <Modal
+        isOpen={!!viewTicket}
         onClose={() => setViewTicket(null)}
-        title="Ticket Details"
+        title={viewTicket ? `Ticket Details - ${viewTicket.ticketNumber || '#TK'}` : 'Ticket Details'}
         maxWidth="720px"
       >
         {viewTicket && (() => {
-          const replies = getTicketReplies(viewTicket);
-          const creatorEmail = viewTicket.createdBy?.email || (typeof viewTicket.createdBy === 'string' ? viewTicket.createdBy : '') || activeRestaurant?.email || 'mirchi@gmail.com';
-          const assignedAgent = viewTicket.assignedUser || 'Unassigned';
-          const isAssigned = assignedAgent && assignedAgent !== 'Unassigned';
-          const ticketBranchName = resolveTicketBranchName(viewTicket, allBranches) || 'All Branches';
+          const conversation = getTicketConversation(viewTicket);
+          const raisedTo = resolveTicketRaisedTo(viewTicket);
+          const raisedBy = resolveTicketRaisedBy(viewTicket);
+          const branchName = resolveTicketBranchName(viewTicket, allBranches);
+
+          // Extract Company Response & Solution Remarks
+          const companyResponse = (() => {
+            // 1. Direct fields on the ticket
+            const directRemarks = viewTicket.solutionRemarks || viewTicket.resolutionNote || viewTicket.resolutionRemarks || viewTicket.resolutionDetails || (typeof viewTicket.resolution === 'string' ? viewTicket.resolution : viewTicket.resolution?.note);
+            const directAttachment = viewTicket.resolutionAttachment || viewTicket.resolutionProof || viewTicket.solutionAttachment || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.attachment : null);
+            const directResolvedBy = viewTicket.resolvedBy || viewTicket.resolvedByName || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.by : null);
+            const directResolvedRole = viewTicket.resolvedRole || (typeof viewTicket.resolution === 'object' ? viewTicket.resolution?.role : null);
+            const directDate = viewTicket.resolvedAt || viewTicket.updatedAt;
+
+            if (directRemarks && String(directRemarks).trim().length > 0) {
+              return {
+                remarks: String(directRemarks).trim(),
+                attachment: directAttachment || null,
+                sender: directResolvedBy || 'Company Admin',
+                role: directResolvedRole || 'Company Admin',
+                status: viewTicket.status || 'Resolved',
+                date: directDate
+              };
+            }
+
+            // 2. Check replies in reverse order for company response
+            const repliesReversed = [...conversation].filter(c => c.id !== 'initial').reverse();
+            for (const r of repliesReversed) {
+              const msg = r.message || '';
+              const isCompanySender = (r.role && String(r.role).toLowerCase().includes('company')) ||
+                                      (r.sender && String(r.sender).toLowerCase().includes('company')) ||
+                                      r.isResolution || r.isInProgress || r.isDraft;
+              const hasTag = msg.startsWith('[Resolution') || msg.startsWith('[Progress Update') || msg.startsWith('[Draft Note') || msg.startsWith('[Solution');
+
+              if (hasTag || (isCompanySender && !r.isCreator)) {
+                let cleanText = msg;
+                let inferredStatus = viewTicket.status;
+                const tagMatch = msg.match(/^\[(.*?)\]:\s*(.*)$/s);
+                if (tagMatch) {
+                  cleanText = tagMatch[2];
+                  if (tagMatch[1].includes('Resolved') || tagMatch[1].includes('Resolution')) inferredStatus = 'Resolved';
+                  else if (tagMatch[1].includes('Progress')) inferredStatus = 'In Progress';
+                  else if (tagMatch[1].includes('Draft')) inferredStatus = 'Draft';
+                }
+                return {
+                  remarks: cleanText.trim(),
+                  attachment: r.attachment || null,
+                  sender: r.sender || 'Company Admin',
+                  role: r.role || 'Company Admin',
+                  status: inferredStatus || viewTicket.status,
+                  date: r.createdAt
+                };
+              }
+            }
+
+            return null;
+          })();
+
+          // Filter out the resolution reply from generic updates so it does not repeat
+          const replyUpdates = conversation.filter(c => {
+            if (c.id === 'initial') return false;
+            if (companyResponse && companyResponse.remarks) {
+              const cleanC = (c.message || '').replace(/^\[(.*?)\]:\s*/, '').trim();
+              if (cleanC === companyResponse.remarks.trim()) return false;
+            }
+            return true;
+          });
 
           return (
-          <div className="ticket-details-modal" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Header Status & Info */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1.5px solid #f1f5f9', paddingBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                  <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {viewTicket.ticketNumber}
-                  </h3>
-                  {ticketBranchName && !ticketBranchName.toLowerCase().includes('all branch') && (
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '3px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      📍 {ticketBranchName}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {/* Top Summary Header */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
+                      {viewTicket.subject}
+                    </h3>
+                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <ClockIcon size={11} color="#64748b" />
+                        <span>Created on {formatDateTimeDMY(viewTicket.createdAt)}</span>
+                      </span>
+                      <span>•</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <TagIcon size={11} color="#64748b" />
+                        <span>Category: {viewTicket.category || 'General'}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className={`badge ${getPriorityBadgeClass(viewTicket.priority)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                      {viewTicket.priority || 'Medium'} Priority
                     </span>
-                  )}
-                  {viewTicket.restaurantName && (
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569', background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px' }}>
-                      🏪 {viewTicket.restaurantName}
+                    <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                      {viewTicket.status || 'Open'}
                     </span>
-                  )}
-                  {viewTicket.isReadBySuperAdmin !== undefined && (
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: '12px',
-                      background: viewTicket.isReadBySuperAdmin ? '#ecfdf5' : '#fff7ed',
-                      color: viewTicket.isReadBySuperAdmin ? '#059669' : '#c2410c',
-                      border: viewTicket.isReadBySuperAdmin ? '1px solid #a7f3d0' : '1px solid #fed7aa',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: viewTicket.isReadBySuperAdmin ? '#10b981' : '#f97316' }}></span>
-                      {viewTicket.isReadBySuperAdmin ? 'Seen by Support' : 'Unread by Support'}
-                    </span>
-                  )}
+                  </div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginTop: '4px' }}>
-                  Created on <strong>{formatDateTimeDMY(viewTicket.createdAt)}</strong>
+
+                {/* Metadata Grid (Read Only) */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                  gap: '6px',
+                  borderTop: '1px solid #e2e8f0',
+                  paddingTop: '6px',
+                  marginTop: '1px'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised By</span>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                      <UserIcon size={11} color="#64748b" />
+                      <span>{raisedBy.name}</span>
+                    </div>
+                    <span style={{ fontSize: '10px', color: '#64748b' }}>{raisedBy.role}</span>
+                  </div>
+
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised To</span>
+                    <div style={{ marginTop: '1px' }}>
+                      <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                        {raisedTo === 'Company' ? <BuildingIcon size={10} color="#ea580c" /> : <ShieldIcon size={10} color="#4338ca" />}
+                        <span>{raisedTo}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Branch</span>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                      <StoreIcon size={11} color="#0369a1" />
+                      <span>{branchName}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Status</span>
+                    <div style={{ marginTop: '1px' }}>
+                      <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                        {viewTicket.status || 'Open'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span className={`badge ${getPriorityClass(viewTicket.priority)}`} style={{ padding: '6px 12px', fontSize: '11.5px', fontWeight: 800 }}>
-                  {viewTicket.priority} Priority
+              {/* Issue Description Card */}
+              <div style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  Issue Description
                 </span>
-                <span className={`badge ${getStatusClass(viewTicket.status)}`} style={{ padding: '6px 12px', fontSize: '11.5px', fontWeight: 800 }}>
-                  {viewTicket.status}
-                </span>
-              </div>
-            </div>
+                <p style={{ margin: 0, fontSize: '12.5px', color: '#334155', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                  {viewTicket.description || 'No additional description provided.'}
+                </p>
 
-            {/* Ticket Comprehensive Metadata Grid */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              background: '#f8fafc',
-              padding: '16px',
-              borderRadius: '12px',
-              border: '1px solid #e2e8f0'
-            }}>
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH</p>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '4px 10px', borderRadius: '6px', border: '1px solid #bae6fd', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                  📍 {ticketBranchName}
-                </span>
+                {/* Optional Attachment Preview */}
+                {Boolean(viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]) && (
+                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+                      Attached File / Screenshot
+                    </span>
+                    <a
+                      href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Click to view full attachment"
+                      style={{ display: 'inline-block' }}
+                    >
+                      <img
+                        src={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
+                        alt="Ticket Attachment"
+                        style={{
+                          maxWidth: '180px',
+                          maxHeight: '90px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    </a>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORY</p>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block' }}>
-                  🏷️ {viewTicket.category || 'Billing'}
-                </span>
-              </div>
-
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>ASSIGNED SUPPORT AGENT</p>
-                <span style={{
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  color: isAssigned ? '#0369a1' : '#64748b',
-                  background: isAssigned ? '#f0f9ff' : '#ffffff',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  border: isAssigned ? '1px solid #bae6fd' : '1px solid #e2e8f0',
-                  display: 'inline-flex',
-                  alignItems: 'center',
+              {/* ESCALATION TO SUPER ADMIN CARD */}
+              {Boolean(viewTicket.isEscalated || viewTicket.status === 'Escalated' || viewTicket.escalationReason) && (
+                <div style={{
+                  background: '#fffbeb',
+                  border: '1.5px solid #fde68a',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: '6px'
                 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                  {assignedAgent}
-                </span>
-              </div>
-
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>CREATED BY</p>
-                <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
-                  {creatorEmail}
-                </div>
-              </div>
-
-              <div>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>LAST UPDATED</p>
-                <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
-                  {formatDateTimeDMY(viewTicket.updatedAt || viewTicket.createdAt)}
-                </div>
-              </div>
-
-              {viewTicket.resolvedAt && (
-                <div>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '11px', color: '#166534', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>RESOLVED AT</p>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#166534' }}>
-                    {formatDateTimeDMY(viewTicket.resolvedAt)}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ShieldIcon size={14} color="#b45309" />
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      Escalated to Super Admin
+                    </span>
+                  </div>
+                  {viewTicket.escalationReason && (
+                    <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.4, background: '#fef3c7', padding: '6px 10px', borderRadius: '6px' }}>
+                      <strong>Reason:</strong> {viewTicket.escalationReason}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '10.5px', color: '#92400e', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {viewTicket.escalatedByName && <span><strong>Escalated By:</strong> {viewTicket.escalatedByName}</span>}
+                    {viewTicket.escalatedAt && <span><strong>Escalated At:</strong> {formatDateTimeDMY(viewTicket.escalatedAt)}</span>}
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Subject & Original Issue Description */}
-            <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  📌 Subject
-                </span>
-              </div>
-              <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                {viewTicket.subject}
-              </h4>
-
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                <span style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
-                  Description
-                </span>
-                <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                  {viewTicket.description || 'No description recorded.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Official Support Resolution Card (if resolved / resolution present) */}
-            {(viewTicket.resolution || viewTicket.status === 'Resolved') && (
-              <div style={{ background: '#f0fdf4', padding: '16px', borderRadius: '12px', border: '1.5px solid #86efac', borderLeft: '5px solid #16a34a' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                  <span style={{ fontSize: '13px', color: '#166534', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                    </svg>
-                    Official Support Resolution
-                  </span>
-                  {viewTicket.resolvedAt && (
-                    <span style={{ fontSize: '11.5px', color: '#15803d', fontWeight: 700, background: '#dcfce7', padding: '2px 8px', borderRadius: '6px' }}>
-                      Resolved on {formatDateTimeDMY(viewTicket.resolvedAt)}
-                    </span>
-                  )}
-                </div>
-                <p style={{ margin: 0, fontSize: '13.5px', color: '#14532d', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
-                  {viewTicket.resolution || 'Ticket marked as resolved by technical support.'}
-                </p>
-              </div>
-            )}
-
-            {/* Support Replies & Conversation Thread */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '12px', color: '#0f172a', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                  </svg>
-                  Support Responses ({replies.length + (viewTicket.resolution ? 1 : 0)})
-                </span>
-                {isLoadingTicketDetails && (
-                  <span style={{ fontSize: '11.5px', color: '#2563eb', fontWeight: 600 }}>Refreshing replies...</span>
-                )}
-              </div>
-
-              <div className="ticket-reply-thread">
-                {/* List of Replies */}
-                {replies.map((reply, idx) => {
-                  const isAdmin = reply.isAdmin;
-                  return (
-                    <div 
-                      key={idx} 
-                      className={`ticket-reply-card ${isAdmin ? 'admin-reply' : 'user-reply'}`}
-                    >
-                      <div className="ticket-reply-header">
-                        <span className="ticket-reply-author" style={{ color: isAdmin ? '#0369a1' : '#c2410c', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          {isAdmin ? (
+              {/* COMPANY RESPONSE & SOLUTION REMARKS CARD */}
+              {companyResponse ? (
+                <div style={{
+                  background: companyResponse.status === 'In Progress' ? '#eff6ff' : (companyResponse.status === 'Draft' ? '#fffbeb' : '#f0fdf4'),
+                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  {/* Card Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
+                        background: companyResponse.status === 'In Progress' ? '#dbeafe' : (companyResponse.status === 'Draft' ? '#fef3c7' : '#dcfce7'),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: companyResponse.status === 'In Progress' ? '#1d4ed8' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                        flexShrink: 0
+                      }}>
+                        {companyResponse.status === 'In Progress' ? (
+                          <ClockIcon size={15} color="#1d4ed8" />
+                        ) : companyResponse.status === 'Draft' ? (
+                          <FileTextIcon size={15} color="#b45309" />
+                        ) : (
+                          <CheckCircleIcon size={15} color="#15803d" />
+                        )}
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <span>Company Response & Solution Remarks</span>
+                          {isBranchFilterActive && (
+                            <span style={{
+                              fontSize: '9.5px',
+                              fontWeight: 700,
+                              background: '#ffffff',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              border: '1px solid rgba(0,0,0,0.1)',
+                              textTransform: 'none',
+                              color: '#334155'
+                            }}>
+                              Shared with Branch
+                            </span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: companyResponse.status === 'In Progress' ? '#2563eb' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexWrap: 'wrap',
+                          marginTop: '1px'
+                        }}>
+                          <span>Responded by <strong>{companyResponse.sender}</strong> ({companyResponse.role || 'Company Admin'})</span>
+                          {companyResponse.date && (
                             <>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                              </svg>
-                              {reply.sender || 'ServIQ Support Team'}
-                            </>
-                          ) : (
-                            <>
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                              </svg>
-                              {reply.sender || 'You (Restaurant)'}
+                              <span>•</span>
+                              <span>{formatDateTimeDMY(companyResponse.date)}</span>
                             </>
                           )}
-                        </span>
-                        <span className="ticket-reply-time">
-                          {formatDateTimeDMY(reply.createdAt)}
-                        </span>
-                      </div>
-                      <div className="ticket-reply-body">
-                        {reply.message}
+                        </div>
                       </div>
                     </div>
-                  );
-                })}
 
-                {/* Empty State when no replies yet */}
-                {replies.length === 0 && !viewTicket.resolution && (
+                    <span className={`badge ${getStatusBadgeClass(companyResponse.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                      {companyResponse.status}
+                    </span>
+                  </div>
+
+                  {/* Remarks Content */}
                   <div style={{
-                    padding: '24px',
-                    borderRadius: '12px',
-                    border: '1.5px dashed #cbd5e1',
-                    background: '#f8fafc',
-                    textAlign: 'center'
+                    background: '#ffffff',
+                    border: `1px solid ${companyResponse.status === 'In Progress' ? '#bfdbfe' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
+                    borderRadius: '6px',
+                    padding: '8px 12px',
+                    fontSize: '12.5px',
+                    color: '#0f172a',
+                    lineHeight: 1.45,
+                    whiteSpace: 'pre-wrap'
                   }}>
-                    <div style={{ fontSize: '26px', marginBottom: '6px' }}>⏳</div>
-                    <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#334155' }}>
-                      Awaiting Support Team Response
+                    {companyResponse.remarks}
+                  </div>
+
+                  {/* Resolution Proof / Attachment */}
+                  {companyResponse.attachment && (
+                    <div style={{
+                      paddingTop: '6px',
+                      borderTop: `1px dashed ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                        textTransform: 'uppercase',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <PaperclipIcon size={11} color="currentColor" />
+                        <span>Resolution Proof / Screenshot</span>
+                      </span>
+                      <a
+                        href={companyResponse.attachment}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Click to view full attachment"
+                        style={{ display: 'inline-block' }}
+                      >
+                        <img
+                          src={companyResponse.attachment}
+                          alt="Resolution Proof"
+                          style={{
+                            maxWidth: '180px',
+                            maxHeight: '90px',
+                            borderRadius: '6px',
+                            border: `1px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                            objectFit: 'cover',
+                            background: '#ffffff',
+                            cursor: 'pointer'
+                          }}
+                        />
+                      </a>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', lineHeight: 1.5, maxWidth: '420px', margin: '4px auto 0' }}>
-                      Our technical support team has received your ticket and is reviewing it. Their reply will appear right here.
+                  )}
+                </div>
+              ) : (
+                /* When in branch filter or branch-scoped ticket and no company response yet */
+                isBranchFilterActive && (
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px dashed #cbd5e1',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '6px',
+                      background: '#f1f5f9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b',
+                      flexShrink: 0
+                    }}>
+                      <BuildingIcon size={14} color="#64748b" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                        Awaiting Company Response
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                        Company Admin has not submitted resolution details or remarks for this branch ticket yet.
+                      </div>
                     </div>
                   </div>
-                )}
+                )
+              )}
+
+              {/* Updates & Replies History (Read Only) */}
+              {replyUpdates.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <MessageSquareIcon size={13} color="#FF7A00" />
+                      <span>Updates & Replies ({replyUpdates.length})</span>
+                    </span>
+                    {isLoadingTicketDetails && (
+                      <span style={{ fontSize: '10.5px', color: '#FF7A00', fontWeight: 600 }}>Refreshing...</span>
+                    )}
+                  </div>
+
+                  <div className="ticket-conversation-box" style={{ maxHeight: '130px', overflowY: 'auto' }}>
+                    {replyUpdates.map(msg => {
+                      const isMyRole = 
+                        (!isMainBranchLogin && msg.isCreator) || 
+                        (isCompanyAdmin && (msg.role === 'Company Admin' || msg.sender.includes('Company'))) ||
+                        (isSuperAdmin && (msg.role === 'Super Admin' || msg.sender.includes('Super')));
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`ticket-chat-message ${isMyRole ? 'sender-me' : 'sender-other'}`}
+                        >
+                          <div className="ticket-chat-header">
+                            <span className="ticket-chat-sender" style={{ color: isMyRole ? '#ea580c' : '#0369a1' }}>
+                              {isMyRole ? <UserIcon size={11} color="#ea580c" /> : <ShieldIcon size={11} color="#0369a1" />}
+                              <span>{msg.sender} ({msg.role})</span>
+                            </span>
+                            <span className="ticket-chat-time">
+                              {formatDateTimeDMY(msg.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className="ticket-chat-body" style={{ fontSize: '12px' }}>
+                            {msg.message}
+                          </div>
+
+                          {msg.attachment && (
+                            <div className="ticket-chat-attachment">
+                              <a href={msg.attachment} target="_blank" rel="noopener noreferrer" title="Click to view full image">
+                                <img src={msg.attachment} alt="Attachment" style={{ maxHeight: '80px' }} />
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div ref={chatBottomRef} />
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer (Read Only) */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '8px', marginTop: '2px' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setViewTicket(null)}
+                  style={{ padding: '6px 16px', fontSize: '12.5px' }}
+                >
+                  Close Window
+                </button>
               </div>
             </div>
-
-            {/* Modal Actions Footer */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px', borderTop: '1px solid #e5e7eb', paddingTop: '14px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setViewTicket(null)}
-                style={{ padding: '8px 24px', fontSize: '13px', fontWeight: 700, borderRadius: '8px' }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
           );
         })()}
       </Modal>
 
-      {/* Raise Ticket Modal */}
-      <Modal 
-        isOpen={showRaiseTicketModal} 
+      {/* RAISE TICKET MODAL */}
+      <Modal
+        isOpen={showRaiseTicketModal}
         onClose={() => setShowRaiseTicketModal(false)}
         title="Raise Support Ticket"
+        maxWidth="660px"
       >
-        <form onSubmit={handleRaiseTicket} className="raise-ticket-form">
-          <div className="form-group">
-            <label>Subject *</label>
-            <input 
-              type="text" 
+        <form onSubmit={handleRaiseTicket} className="raise-ticket-form" style={{ gap: '10px' }}>
+          {/* 1. Subject */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Subject *</label>
+            <input
+              type="text"
               className={errors.subject ? 'error' : ''}
               value={newTicket.subject}
-              onChange={e => setNewTicket({...newTicket, subject: e.target.value})}
-              placeholder="E.g., Printer connection issue"
+              onChange={e => {
+                setNewTicket({ ...newTicket, subject: e.target.value });
+                if (errors.subject) setErrors({ ...errors, subject: '' });
+              }}
+              placeholder="E.g., POS terminal order synchronization issue"
+              style={{ padding: '8px 12px', fontSize: '13px', height: '38px', boxSizing: 'border-box' }}
             />
             {errors.subject && <span className="error-text">{errors.subject}</span>}
           </div>
 
-          <div className="form-group">
-            <label>Branch *</label>
-            {selectedBranchId && selectedBranchId !== 'ALL' ? (
-              <div style={{
-                padding: '10px 12px',
-                background: '#f8fafc',
-                border: '1px solid #cbd5e1',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#0f172a',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <span>📍</span>
-                <span>{allBranches.find(b => String(b._id || b.id) === String(selectedBranchId))?.branchName || 'Selected Branch'}</span>
-                <span style={{ fontSize: '11px', color: '#64748b', marginLeft: 'auto' }}>(Header Filter Active)</span>
-              </div>
-            ) : (
-              <SearchableSelect 
-                value={newTicket.branchId}
-                onChange={e => setNewTicket({...newTicket, branchId: e.target.value})}
+          {/* Row 2: Branch Assignment, Category & Priority in 3 balanced columns */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {/* Branch Assignment */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>
+                <span>Branch Assignment</span>
+                {!isCompanyFilterActive && (
+                  <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 500 }}>(Assigned)</span>
+                )}
+              </label>
+              {!isCompanyFilterActive ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  border: '1.5px solid #e2e8f0',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  height: '38px',
+                  minHeight: '38px',
+                  boxSizing: 'border-box'
+                }}>
+                  <LockIcon size={13} color="#64748b" />
+                  <StoreIcon size={13} color="#ea580c" />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const targetBId = newTicket.branchId || selectedBranchId || userBranchId;
+                      const foundBranch = allBranches.find(b => 
+                        String(b._id || b.id) === String(targetBId) || 
+                        String(b.branchCode) === String(targetBId)
+                      );
+                      return foundBranch 
+                        ? (foundBranch.branchName || foundBranch.name)
+                        : (activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Spice Route Restaurant');
+                    })()}
+                  </span>
+                </div>
+              ) : (
+                <SearchableSelect
+                  value={newTicket.branchId}
+                  onChange={e => setNewTicket({ ...newTicket, branchId: e.target.value })}
+                  options={[
+                    { value: '', label: activeRestaurant?.name || 'Main Branch' },
+                    ...allBranches.map(b => ({
+                      value: b._id || b.id,
+                      label: `${b.branchName || b.name}${b.branchCode ? ` (${b.branchCode})` : ''}`
+                    }))
+                  ]}
+                  placeholder="Select Branch..."
+                />
+              )}
+            </div>
+
+            {/* Category */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Category *</label>
+              <SearchableSelect
+                value={newTicket.category}
+                onChange={e => setNewTicket({ ...newTicket, category: e.target.value })}
                 options={[
-                  { value: 'ALL', label: 'All Branches (General)' },
-                  ...allBranches.map(b => ({
-                    value: b._id || b.id,
-                    label: b.branchName || b.name || b.branchCode || 'Main Branch'
-                  }))
+                  { value: 'Billing', label: 'Billing & Payments' },
+                  { value: 'QR Scanning', label: 'QR Scanning & Ordering' },
+                  { value: 'KDS Lag', label: 'KDS / Kitchen Display' },
+                  { value: 'Menu', label: 'Menu & Pricing' },
+                  { value: 'Hardware / Printer', label: 'Hardware / Printer' },
+                  { value: 'Other', label: 'Other Technical Issues' }
                 ]}
-                placeholder="Select Branch"
+                placeholder="Select Category..."
               />
-            )}
+            </div>
+
+            {/* Priority */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Priority *</label>
+              <SearchableSelect
+                value={newTicket.priority}
+                onChange={e => setNewTicket({ ...newTicket, priority: e.target.value })}
+                options={[
+                  { value: 'Low', label: 'Low' },
+                  { value: 'Medium', label: 'Medium' },
+                  { value: 'High', label: 'High' }
+                ]}
+                placeholder="Select Priority..."
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>Category *</label>
-            <SearchableSelect 
-              value={newTicket.category}
-              onChange={e => setNewTicket({...newTicket, category: e.target.value})}
-              options={[
-                { value: 'QR Scanning', label: 'QR Scanning' },
-                { value: 'Billing', label: 'Billing' },
-                { value: 'KDS Lag', label: 'KDS Lag' },
-                { value: 'Menu', label: 'Menu' },
-                { value: 'Other', label: 'Other' }
-              ]}
-              placeholder="Select Category"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Priority</label>
-            <SearchableSelect 
-              value={newTicket.priority}
-              onChange={e => setNewTicket({...newTicket, priority: e.target.value})}
-              options={[
-                { value: 'Low', label: 'Low' },
-                { value: 'Medium', label: 'Medium' },
-                { value: 'High', label: 'High' }
-              ]}
-              placeholder="Select Priority"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Description *</label>
-            <textarea 
-              rows="4"
+          {/* 5. Description */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Description *</label>
+            <textarea
+              rows="3"
               className={errors.description ? 'error' : ''}
               value={newTicket.description}
-              onChange={e => setNewTicket({...newTicket, description: e.target.value})}
-              placeholder="Please provide details about your issue..."
+              onChange={e => {
+                setNewTicket({ ...newTicket, description: e.target.value });
+                if (errors.description) setErrors({ ...errors, description: '' });
+              }}
+              placeholder="Describe your issue with all relevant details..."
+              style={{ minHeight: '62px', maxHeight: '85px', padding: '8px 12px', fontSize: '13px', boxSizing: 'border-box', resize: 'vertical' }}
             />
             {errors.description && <span className="error-text">{errors.description}</span>}
           </div>
 
-          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-            <button type="button" className="btn btn-outline" onClick={() => setShowRaiseTicketModal(false)}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit Ticket'}
+          {/* 6. Optional Attachment Upload */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ marginBottom: '4px', fontSize: '12.5px' }}>Attachment (Optional)</label>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept="image/*,.pdf,.doc,.docx"
+              onChange={e => handleFileUpload(e, false)}
+            />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingAttachment}
+                style={{ padding: '6px 12px', fontSize: '12px', height: '34px' }}
+              >
+                <PaperclipIcon size={13} color="#475569" />
+                <span>{isUploadingAttachment ? 'Uploading...' : 'Choose Attachment'}</span>
+              </button>
+
+              {(newTicket.attachmentUrl || newTicket.attachment) && (
+                <span className="attachment-preview-tag" style={{ fontSize: '12px', padding: '4px 8px' }}>
+                  <CheckCircleIcon size={12} color="#16a34a" />
+                  <span>File attached</span>
+                  <button type="button" onClick={() => setNewTicket(prev => ({ ...prev, attachment: '', attachmentUrl: '' }))}>×</button>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Form Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => setShowRaiseTicketModal(false)}
+              style={{ padding: '7px 16px', fontSize: '13px' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isSubmitting || isUploadingAttachment}
+              style={{ padding: '7px 16px', fontSize: '13px' }}
+            >
+              <SendIcon size={13} color="#ffffff" />
+              <span>{isSubmitting ? 'Submitting...' : 'Submit Ticket'}</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Edit Ticket Modal */}
-      <Modal 
-        isOpen={!!editTicket} 
-        onClose={() => setEditTicket(null)}
-        title={`Edit Ticket ${editTicket?.ticketNumber ? `(${editTicket.ticketNumber})` : ''}`}
-      >
-        {editTicket && (
-          <form onSubmit={handleUpdateTicket} className="raise-ticket-form">
-            <div className="form-group">
-              <label>Subject *</label>
-              <input 
-                type="text" 
-                className={editErrors.subject ? 'error' : ''}
-                value={editTicket.subject}
-                onChange={e => setEditTicket({...editTicket, subject: e.target.value})}
-                placeholder="E.g., Printer connection issue"
-              />
-              {editErrors.subject && <span className="error-text">{editErrors.subject}</span>}
-            </div>
-
-            <div className="form-group">
-              <label>Branch</label>
-              <SearchableSelect 
-                value={editTicket.branchId}
-                onChange={e => setEditTicket({...editTicket, branchId: e.target.value})}
-                options={[
-                  { value: 'ALL', label: 'All Branches (General)' },
-                  ...allBranches.map(b => ({
-                    value: b._id || b.id,
-                    label: b.branchName || b.name || b.branchCode || 'Main Branch'
-                  }))
-                ]}
-                placeholder="Select Branch"
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Category *</label>
-              <SearchableSelect 
-                value={editTicket.category}
-                onChange={e => setEditTicket({...editTicket, category: e.target.value})}
-                options={[
-                  { value: 'QR Scanning', label: 'QR Scanning' },
-                  { value: 'Billing', label: 'Billing' },
-                  { value: 'KDS Lag', label: 'KDS Lag' },
-                  { value: 'Menu', label: 'Menu' },
-                  { value: 'Other', label: 'Other' }
-                ]}
-                placeholder="Select Category"
-              />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="form-group">
-                <label>Priority</label>
-                <SearchableSelect 
-                  value={editTicket.priority}
-                  onChange={e => setEditTicket({...editTicket, priority: e.target.value})}
-                  options={[
-                    { value: 'Low', label: 'Low' },
-                    { value: 'Medium', label: 'Medium' },
-                    { value: 'High', label: 'High' }
-                  ]}
-                  placeholder="Select Priority"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Status</label>
-                <SearchableSelect 
-                  value={editTicket.status}
-                  onChange={e => setEditTicket({...editTicket, status: e.target.value})}
-                  options={[
-                    { value: 'Open', label: 'Open' },
-                    { value: 'In Progress', label: 'In Progress' },
-                    { value: 'Resolved', label: 'Resolved' },
-                    { value: 'Closed', label: 'Closed' }
-                  ]}
-                  placeholder="Select Status"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>Description *</label>
-              <textarea 
-                rows="4"
-                className={editErrors.description ? 'error' : ''}
-                value={editTicket.description}
-                onChange={e => setEditTicket({...editTicket, description: e.target.value})}
-                placeholder="Please provide details about your issue..."
-              />
-              {editErrors.description && <span className="error-text">{editErrors.description}</span>}
-            </div>
-
-            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setEditTicket(null)}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving Changes...' : 'Save Changes'}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
+      {/* DELETE CONFIRMATION MODAL */}
       <Modal
         isOpen={!!deleteTicketConfirm}
         onClose={() => setDeleteTicketConfirm(null)}
         title="Confirm Delete Ticket"
       >
         {deleteTicketConfirm && (
-          <div style={{ padding: '10px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>
-              Are you sure you want to delete support ticket <strong style={{ color: '#0f172a' }}>{deleteTicketConfirm.ticketNumber}</strong> (<span style={{ color: '#64748b' }}>{deleteTicketConfirm.subject}</span>)?
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
+              Are you sure you want to permanently delete support ticket <strong style={{ color: '#0f172a' }}>{deleteTicketConfirm.ticketNumber || `#TK`}</strong>?
             </p>
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', fontSize: '13px', color: '#991b1b' }}>
-              ⚠️ This action cannot be undone. The ticket will be permanently removed.
+
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              borderRadius: '8px',
+              padding: '12px',
+              fontSize: '13px',
+              color: '#991b1b',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <XCircleIcon size={16} color="#dc2626" />
+              <span>This action cannot be undone. The ticket conversation will be permanently removed.</span>
             </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button
                 type="button"
@@ -1254,6 +2508,7 @@ export default function HelpSupport() {
                   padding: '8px 16px',
                   borderRadius: '8px',
                   fontWeight: 700,
+                  fontSize: '13px',
                   cursor: isDeleting ? 'not-allowed' : 'pointer'
                 }}
               >
@@ -1261,6 +2516,415 @@ export default function HelpSupport() {
               </button>
             </div>
           </div>
+        )}
+      </Modal>
+
+      {/* DEDICATED RESOLVE TICKET MODAL */}
+      <Modal
+        isOpen={!!resolveTicketModal}
+        onClose={() => setResolveTicketModal(null)}
+        title={resolveTicketModal ? `Update Ticket Status - ${resolveTicketModal.ticketNumber || '#TK'}` : 'Update Ticket Status'}
+        maxWidth="660px"
+      >
+        {resolveTicketModal && (
+          <form onSubmit={handleSubmitResolution} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Ticket Summary Card */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {resolveTicketModal.ticketNumber || '#TK'} • {resolveTicketModal.category || 'General'}
+                  </div>
+                  <div style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
+                    {resolveTicketModal.subject}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <span className={`badge ${getPriorityBadgeClass(resolveTicketModal.priority)}`}>
+                    {resolveTicketModal.priority || 'Medium'}
+                  </span>
+                  <span className={`badge ${getStatusBadgeClass(resolveTicketModal.status)}`}>
+                    {resolveTicketModal.status || 'Open'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Branch & Raised By row */}
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#475569', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                <div>
+                  <strong style={{ color: '#0f172a' }}>Branch:</strong> {resolveTicketBranchName(resolveTicketModal, allBranches)}
+                </div>
+                <div>
+                  <strong style={{ color: '#0f172a' }}>Raised By:</strong> {resolveTicketRaisedBy(resolveTicketModal).name} ({resolveTicketRaisedBy(resolveTicketModal).role})
+                </div>
+              </div>
+
+              {/* Original Description */}
+              {resolveTicketModal.description && (
+                <div style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  fontSize: '12.5px',
+                  color: '#334155',
+                  lineHeight: 1.5,
+                  maxHeight: '90px',
+                  overflowY: 'auto'
+                }}>
+                  <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '2px' }}>Issue Description:</div>
+                  {resolveTicketModal.description}
+                </div>
+              )}
+            </div>
+
+            {/* Resolution Status Selection */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                Update Ticket Status
+              </label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setResolutionStatus('In Progress')}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: resolutionStatus === 'In Progress' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                    background: resolutionStatus === 'In Progress' ? '#e0f2fe' : '#ffffff',
+                    color: resolutionStatus === 'In Progress' ? '#0369a1' : '#475569',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <ClockIcon size={14} color={resolutionStatus === 'In Progress' ? '#0284c7' : '#64748b'} />
+                  <span>In Progress</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolutionStatus('Draft')}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: resolutionStatus === 'Draft' ? '2px solid #475569' : '1px solid #cbd5e1',
+                    background: resolutionStatus === 'Draft' ? '#f1f5f9' : '#ffffff',
+                    color: resolutionStatus === 'Draft' ? '#0f172a' : '#475569',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <FileTextIcon size={14} color={resolutionStatus === 'Draft' ? '#0f172a' : '#64748b'} />
+                  <span>Draft</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolutionStatus('Resolved')}
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: resolutionStatus === 'Resolved' ? '2px solid #16a34a' : '1px solid #cbd5e1',
+                    background: resolutionStatus === 'Resolved' ? '#dcfce7' : '#ffffff',
+                    color: resolutionStatus === 'Resolved' ? '#15803d' : '#475569',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <CheckCircleIcon size={15} color={resolutionStatus === 'Resolved' ? '#15803d' : '#64748b'} />
+                  <span>Mark as Resolved</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Resolution Note / Solution Details */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                  {resolutionStatus === 'Draft' 
+                    ? 'Draft Notes / Remarks' 
+                    : (resolutionStatus === 'In Progress' ? 'Progress Notes & Actions Taken' : 'Resolution Details & Solution Remarks')} <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <span style={{ fontSize: '11px', color: '#64748b' }}>Shared with branch</span>
+              </div>
+              <textarea
+                rows={4}
+                value={resolutionNote}
+                onChange={e => setResolutionNote(e.target.value)}
+                placeholder={
+                  resolutionStatus === 'Draft' 
+                    ? "Add draft notes, internal findings, or preliminary instructions..." 
+                    : (resolutionStatus === 'In Progress'
+                        ? "Describe ongoing investigation, actions taken, or expected timeline for the branch..."
+                        : "Explain the solution provided, steps taken to resolve the issue, or instructions for the branch staff...")
+                }
+                required
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            {/* Attachment / Proof of Resolution */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                  Proof / Resolution Attachment (Optional)
+                </label>
+                {resolutionAttachment && (
+                  <button
+                    type="button"
+                    onClick={() => setResolutionAttachment('')}
+                    style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              {resolutionAttachment ? (
+                <div style={{
+                  padding: '8px 12px',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px'
+                }}>
+                  <PaperclipIcon size={14} color="#16a34a" />
+                  <a href={resolutionAttachment} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'underline' }}>
+                    View Attached Proof
+                  </a>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="file"
+                    ref={resolutionFileInputRef}
+                    onChange={handleResolutionFileUpload}
+                    accept="image/*,.pdf,.doc,.docx"
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => resolutionFileInputRef.current?.click()}
+                    disabled={isUploadingResolutionFile}
+                    className="btn btn-outline"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    <PaperclipIcon size={14} color="#64748b" />
+                    <span>{isUploadingResolutionFile ? 'Uploading file...' : 'Upload Screenshot / Proof'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setResolveTicketModal(null)}
+                disabled={isResolving}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isResolving || !resolutionNote.trim() || isUploadingResolutionFile}
+                style={{
+                  background: resolutionStatus === 'Draft' 
+                    ? '#475569' 
+                    : (resolutionStatus === 'In Progress' ? '#0284c7' : '#16a34a'),
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: (isResolving || !resolutionNote.trim() || isUploadingResolutionFile) ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: (isResolving || !resolutionNote.trim() || isUploadingResolutionFile) ? 0.6 : 1,
+                  boxShadow: resolutionStatus === 'Draft' 
+                    ? '0 2px 8px rgba(71, 85, 105, 0.25)' 
+                    : (resolutionStatus === 'In Progress' ? '0 2px 8px rgba(2, 132, 199, 0.25)' : '0 2px 8px rgba(22, 163, 74, 0.25)')
+                }}
+              >
+                {resolutionStatus === 'Draft' ? (
+                  <FileTextIcon size={14} color="#ffffff" />
+                ) : resolutionStatus === 'In Progress' ? (
+                  <ClockIcon size={14} color="#ffffff" />
+                ) : (
+                  <CheckCircleIcon size={14} color="#ffffff" />
+                )}
+                <span>
+                  {isResolving 
+                    ? 'Updating...' 
+                    : (resolutionStatus === 'Draft' 
+                        ? 'Save as Draft' 
+                        : (resolutionStatus === 'In Progress' ? 'Save & Mark as In Progress' : 'Save & Mark as Resolved'))}
+                </span>
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* DEDICATED SHARE / FORWARD TICKET TO SUPER ADMIN MODAL */}
+      <Modal
+        isOpen={!!forwardTicketModal}
+        onClose={() => setForwardTicketModal(null)}
+        title={forwardTicketModal ? `Share Ticket to Super Admin - ${forwardTicketModal.ticketNumber || '#TK'}` : 'Share Ticket'}
+        maxWidth="600px"
+      >
+        {forwardTicketModal && (
+          <form onSubmit={handleSubmitForward} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Info Notice Banner */}
+            <div style={{
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '10px',
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              color: '#1e40af',
+              fontSize: '12.5px',
+              lineHeight: 1.5
+            }}>
+              <ShieldIcon size={18} color="#2563eb" />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '2px', color: '#1d4ed8' }}>
+                  Forward Ticket to Super Admin
+                </div>
+                <div>
+                  This ticket from <strong>{resolveTicketBranchName(forwardTicketModal, allBranches)}</strong> will be shared directly with Super Admin with all conversation history intact.
+                </div>
+              </div>
+            </div>
+
+            {/* Ticket Preview Card */}
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 800, fontFamily: 'monospace', color: '#0f172a' }}>
+                  {forwardTicketModal.ticketNumber || '#TK'}
+                </span>
+                <span className={`badge ${getPriorityBadgeClass(forwardTicketModal.priority)}`}>
+                  {forwardTicketModal.priority || 'Medium'}
+                </span>
+              </div>
+              <div style={{ fontSize: '14.5px', fontWeight: 800, color: '#0f172a' }}>
+                {forwardTicketModal.subject}
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>
+                <strong>Branch:</strong> {resolveTicketBranchName(forwardTicketModal, allBranches)} • <strong>Raised By:</strong> {resolveTicketRaisedBy(forwardTicketModal).name}
+              </div>
+            </div>
+
+            {/* Optional Escalation Note */}
+            <div>
+              <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                Note for Super Admin (Optional)
+              </label>
+              <textarea
+                rows={3}
+                value={forwardNote}
+                onChange={e => setForwardNote(e.target.value)}
+                placeholder="Add an optional reason or remark for Super Admin (e.g., Escalating for hardware replacement or system-level support)..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setForwardTicketModal(null)}
+                disabled={isForwarding}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isForwarding}
+                style={{
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '13px',
+                  cursor: isForwarding ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
+                }}
+              >
+                <ShareIcon size={14} color="#ffffff" />
+                <span>{isForwarding ? 'Sharing...' : 'Share with Super Admin'}</span>
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>

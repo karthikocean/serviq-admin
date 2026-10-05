@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) => {
+  useEffect(() => {
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -15,27 +25,28 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
         left: 0,
         right: 0,
         bottom: 0,
-        width: '100vw',
-        height: '100vh',
+        width: '100%',
+        height: '100%',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 99999,
-        padding: '20px',
-        boxSizing: 'border-box'
+        padding: '16px',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       }}
     >
       <div 
-        className="modal-card" 
+        className="modal-card modal-card-body" 
         style={{ 
           maxWidth, 
-          width: '95%', 
-          maxHeight: '90vh', 
-          overflowY: 'auto',
-          margin: 'auto'
+          width: '100%', 
+          maxHeight: '92vh',
+          margin: 'auto',
+          boxSizing: 'border-box'
         }}
       >
-        <div className="modal-header-flex">
+        <div className="modal-header-flex" style={{ marginBottom: '12px', paddingBottom: '10px' }}>
           {title && <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{title}</h3>}
           {onClose && (
             <span 

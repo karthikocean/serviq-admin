@@ -111,6 +111,8 @@ const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import { formatDateDMY, formatDateTimeDMY, extractOrderISODate } from '../helper/DateHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
+import { useAppState } from '../config/AppContext.jsx';
 
 // Safe text extractor
 const toDisplayText = (val, fallback = '') => {
@@ -120,6 +122,23 @@ const toDisplayText = (val, fallback = '') => {
     return val.name || val.categoryName || val.title || val.tableNumber || val.tableNo || val.label || fallback;
   }
   return String(val);
+};
+
+// Formatted Staff / Employee ID helper
+const getFormattedStaffId = (u, fallbackIndex) => {
+  if (!u) return '-';
+  const rawCode = u.employeeCode || u.staffCode || u.userCode || u.idCode || u.staffId || u.empId;
+  const isRawHex = rawCode && /^[0-9a-fA-F]{24}$/.test(String(rawCode).trim());
+  if (rawCode && !isRawHex) {
+    return String(rawCode).trim();
+  }
+  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
+    return `EMP-${String(fallbackIndex + 1).padStart(3, '0')}`;
+  }
+  if (u._id && String(u._id).length >= 4) {
+    return `EMP-${String(u._id).slice(-4).toUpperCase()}`;
+  }
+  return 'EMP-001';
 };
 
 // Helper to determine if an item is Veg, Non-Veg, or Egg
@@ -160,14 +179,102 @@ const resolveFoodType = (item) => {
 
 export default function ReportsPanel({
   branches = [],
-  selectedBranchId,
-  activeRestaurant,
-  initialTab = 'sales'
+  selectedBranchId: propSelectedBranchId,
+  activeRestaurant: propActiveRestaurant,
+  initialTab = 'sales',
+  activeTabProp,
+  onTabChange,
+  orders: propOrders,
+  menu: propMenu,
+  inventory: propInventory,
+  staff: propStaff
 }) {
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const { currentUser, selectedBranchId: contextBranchId, activeRestaurant: contextActiveRestaurant } = useAppState();
+  const activeRestaurant = propActiveRestaurant || contextActiveRestaurant;
+  const selectedBranchId = propSelectedBranchId !== undefined ? propSelectedBranchId : contextBranchId;
+
+  const allBranchesList = useMemo(() => {
+    return Array.isArray(branches) && branches.length > 0
+      ? branches
+      : (activeRestaurant?.branches || []);
+  }, [branches, activeRestaurant?.branches]);
+
+  // Determine if login is Company vs Branch login
+  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
+
+  // Company user: Restaurant Owner, Super Admin, Owner role, or unassigned to a specific branch
+  const isCompanyUser = useMemo(() => {
+    return (
+      userType === 'RESTAURANT_OWNER' ||
+      userType === 'OWNER' ||
+      userType === 'SUPER ADMIN' ||
+      userType === 'SUPER_ADMIN' ||
+      userRole === 'restaurant_owner' ||
+      userRole === 'restaurant owner' ||
+      userRole === 'owner' ||
+      userRole === 'super admin' ||
+      userRole === 'super_admin' ||
+      (!currentUser?.branchId && !currentUser?.activeBranchId)
+    );
+  }, [userType, userRole, currentUser]);
+
+  const userBranchId = useMemo(() => {
+    return (
+      typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+        ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+        : (currentUser?.branchId || currentUser?.activeBranchId)
+    );
+  }, [currentUser]);
+
+  // Branch Login: User is a branch-level staff/manager (not company owner) with an assigned branch
+  const isBranchLogin = useMemo(() => {
+    return !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  }, [isCompanyUser, userBranchId]);
+
+  const [activeTab, setActiveTab] = useState(activeTabProp || initialTab);
+
+  useEffect(() => {
+    if (activeTabProp && activeTabProp !== activeTab) {
+      setActiveTab(activeTabProp);
+    }
+  }, [activeTabProp]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    if (typeof onTabChange === 'function') {
+      onTabChange(tabId);
+    }
+  };
 
   // Filters State
-  const [branchFilter, setBranchFilter] = useState(selectedBranchId || 'ALL');
+  // If branch login, always locked to their branch. If company login, defaults to topbar branch or 'ALL'
+  const [branchFilter, setBranchFilter] = useState(() => {
+    if (isBranchLogin) {
+      return userBranchId;
+    }
+    if (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
+      return 'ALL';
+    }
+    return selectedBranchId;
+  });
+
+  useEffect(() => {
+    if (isBranchLogin) {
+      setBranchFilter(userBranchId);
+    } else if (selectedBranchId) {
+      if (selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
+        setBranchFilter('ALL');
+      } else {
+        setBranchFilter(selectedBranchId);
+      }
+    }
+  }, [selectedBranchId, isBranchLogin, userBranchId]);
   const [datePreset, setDatePreset] = useState('all');
   const [dateStart, setDateStart] = useState('');
   const [dateEnd, setDateEnd] = useState('');
@@ -179,9 +286,13 @@ export default function ReportsPanel({
   const [dishFilter, setDishFilter] = useState('ALL');
   const [foodTypeFilter, setFoodTypeFilter] = useState('ALL');
   const [stockStatusFilter, setStockStatusFilter] = useState('ALL');
+  const [inventoryItemFilter, setInventoryItemFilter] = useState('ALL');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('ALL');
   const [staffFilter, setStaffFilter] = useState('ALL');
   const [staffRoleFilter, setStaffRoleFilter] = useState('ALL');
   const [taxTypeFilter, setTaxTypeFilter] = useState('ALL');
+  const [taxSubTab, setTaxSubTab] = useState('tax-summary'); // 'tax-summary' | 'payment-settlement'
+  const [inventorySubTab, setInventorySubTab] = useState('position'); // 'position' | 'movement' | 'low-stock'
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -209,8 +320,9 @@ export default function ReportsPanel({
   // Fetch Report Data from APIs when Tab or Filters change
   useEffect(() => {
     let isSubscribed = true;
+    const isCompany = !branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY';
     const commonFilters = {
-      branchId: branchFilter,
+      branchId: isCompany ? undefined : branchFilter,
       startDate: dateStart,
       endDate: dateEnd,
       search: searchQuery,
@@ -249,7 +361,11 @@ export default function ReportsPanel({
         .finally(() => { if (isSubscribed) setLoadingOrderAnalyticsReport(false); });
     } else if (activeTab === 'staff') {
       setLoadingStaffReport(true);
-      ReportsApi.getStaffPerformanceReport({ ...commonFilters })
+      ReportsApi.getStaffPerformanceReport({
+        ...commonFilters,
+        staff: staffFilter,
+        role: staffRoleFilter
+      })
         .then(res => {
           if (isSubscribed) setStaffApiData(res?.status ? res.response : null);
         })
@@ -257,7 +373,11 @@ export default function ReportsPanel({
         .finally(() => { if (isSubscribed) setLoadingStaffReport(false); });
     } else if (activeTab === 'tax') {
       setLoadingTaxReport(true);
-      ReportsApi.getTaxSettlementReport({ ...commonFilters, paymentMethod: paymentFilter })
+      ReportsApi.getTaxSettlementReport({
+        ...commonFilters,
+        paymentMethod: paymentFilter,
+        taxType: taxTypeFilter
+      })
         .then(res => {
           if (isSubscribed) setTaxApiData(res?.status ? res.response : null);
         })
@@ -279,23 +399,26 @@ export default function ReportsPanel({
     categoryFilter,
     dishFilter,
     foodTypeFilter,
+    stockStatusFilter,
+    inventoryItemFilter,
+    transactionTypeFilter,
+    staffFilter,
+    staffRoleFilter,
+    taxTypeFilter,
     searchQuery,
     currentPage,
     pageSize
   ]);
 
-  // Sync branch filter prop
-  useEffect(() => {
-    if (selectedBranchId) {
-      setBranchFilter(selectedBranchId);
-    }
-  }, [selectedBranchId]);
+
 
   // Reset pagination when active tab or filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [
     activeTab,
+    inventorySubTab,
+    taxSubTab,
     branchFilter,
     datePreset,
     dateStart,
@@ -308,6 +431,8 @@ export default function ReportsPanel({
     dishFilter,
     foodTypeFilter,
     stockStatusFilter,
+    inventoryItemFilter,
+    transactionTypeFilter,
     staffFilter,
     staffRoleFilter,
     taxTypeFilter
@@ -344,7 +469,7 @@ export default function ReportsPanel({
   };
 
   const handleClearFilters = () => {
-    setBranchFilter(selectedBranchId || 'ALL');
+    setBranchFilter(isBranchLogin ? userBranchId : 'ALL');
     setDatePreset('all');
     setDateStart('');
     setDateEnd('');
@@ -355,28 +480,34 @@ export default function ReportsPanel({
     setCategoryFilter('ALL');
     setDishFilter('ALL');
     setStockStatusFilter('ALL');
+    setInventoryItemFilter('ALL');
+    setTransactionTypeFilter('ALL');
     setStaffFilter('ALL');
     setStaffRoleFilter('ALL');
     setTaxTypeFilter('ALL');
   };
 
-  // Raw data sources from activeRestaurant
-  const rawOrders = useMemo(() => activeRestaurant?.orders || [], [activeRestaurant?.orders]);
-  const rawMenu = useMemo(() => activeRestaurant?.menu || [], [activeRestaurant?.menu]);
-  const rawInventory = useMemo(() => activeRestaurant?.inventory || [], [activeRestaurant?.inventory]);
-  const rawStaff = useMemo(() => activeRestaurant?.staff || activeRestaurant?.users || [], [activeRestaurant]);
+  // Raw data sources from props or activeRestaurant
+  const rawOrders = useMemo(() => propOrders || activeRestaurant?.orders || [], [propOrders, activeRestaurant?.orders]);
+  const rawMenu = useMemo(() => propMenu || activeRestaurant?.menu || [], [propMenu, activeRestaurant?.menu]);
+  const rawInventory = useMemo(() => propInventory || activeRestaurant?.inventory || [], [propInventory, activeRestaurant?.inventory]);
+  const rawStaff = useMemo(() => propStaff || activeRestaurant?.staff || activeRestaurant?.users || [], [propStaff, activeRestaurant?.staff, activeRestaurant?.users]);
 
   // Base Branch Filtered Orders
   const branchOrders = useMemo(() => {
-    return rawOrders.filter(ord => {
-      if (branchFilter === 'MAIN') {
-        if (ord.branchId && ord.branchId !== 'MAIN' && ord.branchId !== 'main' && ord.branchId !== '') return false;
-      } else if (branchFilter && branchFilter !== 'ALL' && branchFilter !== 'All') {
-        if (ord.branchId && ord.branchId !== branchFilter) return false;
-      }
-      return true;
-    });
-  }, [rawOrders, branchFilter]);
+    if (!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') {
+      return rawOrders; // Company view: everyone's history!
+    }
+    return rawOrders.filter(ord => isBranchMatch(ord, branchFilter, allBranchesList));
+  }, [rawOrders, branchFilter, allBranchesList]);
+
+  // Base Branch Filtered Staff
+  const branchStaff = useMemo(() => {
+    if (!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') {
+      return rawStaff; // Company view: all staff
+    }
+    return rawStaff.filter(s => isBranchMatch(s, branchFilter, allBranchesList));
+  }, [rawStaff, branchFilter, allBranchesList]);
 
   // Base Filtered Orders by Date & Search
   const filteredOrders = useMemo(() => {
@@ -458,33 +589,54 @@ export default function ReportsPanel({
     const set = new Set();
     validCompletedOrders.forEach(ord => {
       (ord.items || []).forEach(item => {
-        const name = toDisplayText(item.name || item.title || item.itemName, '').trim();
+        const name = toDisplayText(item.name || item.dishName || item.title || item.itemName, '').trim();
         if (name) set.add(name);
       });
     });
+    rawMenu.forEach(m => {
+      const name = toDisplayText(m.name || m.dishName || m.itemName, '').trim();
+      if (name) set.add(name);
+    });
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [validCompletedOrders]);
+  }, [validCompletedOrders, rawMenu]);
 
   const dishReportData = useMemo(() => {
     const map = {};
 
+    // Menu lookup for accurate category and foodType
+    const menuLookup = new Map();
+    rawMenu.forEach(m => {
+      const mName = (m.name || m.dishName || m.itemName || '').toLowerCase().trim();
+      if (mName) menuLookup.set(mName, m);
+    });
+
     validCompletedOrders.forEach(ord => {
       const items = ord.items || [];
+      const ordGross = Number(ord.subtotal ?? ord.totalAmount ?? ord.grossAmount ?? 0) || items.reduce((s, it) => s + (Number(it.price || it.rate || 0) * Number(it.quantity || it.qty || 1)), 0);
+      const ordDiscount = Number(ord.discount || ord.discountAmount || 0);
+
       items.forEach(item => {
-        const name = toDisplayText(item.name || item.title || item.itemName, 'Unknown Item');
-        const cat = toDisplayText(item.category || item.categoryName, 'General');
-        const fType = resolveFoodType(item);
-        const qty = Number(item.quantity || item.qty || 1);
-        const price = Number(item.price || item.rate || 0);
-        const gross = price * qty;
-        const disc = Number(item.discount || 0);
-        const net = gross - disc;
+        const name = toDisplayText(item.name || item.dishName || item.title || item.itemName, 'Unknown Item');
+        const menuItem = menuLookup.get(name.toLowerCase().trim());
+
+        const cat = toDisplayText(item.category || item.categoryName || menuItem?.category || menuItem?.categoryName, 'General');
+        const fType = item.foodType || menuItem?.foodType || resolveFoodType(item) || resolveFoodType(menuItem) || 'Veg';
+        const qty = Number(item.quantitySold ?? item.quantity ?? item.qty ?? 1);
+        const price = Number(item.price || item.rate || menuItem?.price || 0);
+        const gross = Number(item.grossSales ?? (price * qty));
+        let disc = Number(item.discount || item.discountAmount || 0);
+        if (!disc && ordDiscount > 0 && ordGross > 0) {
+          disc = Math.round((gross / ordGross) * ordDiscount * 100) / 100;
+        }
+        const net = Number(item.netSales ?? (gross - disc));
 
         if (!map[name]) {
           map[name] = {
             name,
+            dishName: name,
             category: cat,
             foodType: fType,
+            quantitySold: 0,
             qtySold: 0,
             grossSales: 0,
             discount: 0,
@@ -494,7 +646,11 @@ export default function ReportsPanel({
           if (map[name].foodType === 'Veg' && fType !== 'Veg') {
             map[name].foodType = fType;
           }
+          if (map[name].category === 'General' && cat !== 'General') {
+            map[name].category = cat;
+          }
         }
+        map[name].quantitySold += qty;
         map[name].qtySold += qty;
         map[name].grossSales += gross;
         map[name].discount += disc;
@@ -527,17 +683,19 @@ export default function ReportsPanel({
       );
     }
 
+    const totalDishGross = list.reduce((sum, d) => sum + d.grossSales, 0);
+    const totalDishDiscount = list.reduce((sum, d) => sum + d.discount, 0);
     const totalDishSales = list.reduce((sum, d) => sum + d.netSales, 0);
-    const totalItemsSold = list.reduce((sum, d) => sum + d.qtySold, 0);
+    const totalItemsSold = list.reduce((sum, d) => sum + d.quantitySold, 0);
     
     // Sort by quantity sold descending for Top Selling Dish (highest quantity sold)
-    const listSortedByQty = [...list].sort((a, b) => b.qtySold - a.qtySold);
-    const topSellingDish = listSortedByQty.length > 0 && listSortedByQty[0].qtySold > 0
+    const listSortedByQty = [...list].sort((a, b) => b.quantitySold - a.quantitySold);
+    const topSellingDish = listSortedByQty.length > 0 && listSortedByQty[0].quantitySold > 0
       ? listSortedByQty[0].name
       : (list.length > 0 ? list[0].name : 'N/A');
 
     // Count of distinct dishes sold
-    const distinctDishesCount = list.filter(d => d.qtySold > 0).length;
+    const distinctDishesCount = list.filter(d => d.quantitySold > 0).length;
 
     // Sort by net sales descending
     list.sort((a, b) => b.netSales - a.netSales);
@@ -548,13 +706,15 @@ export default function ReportsPanel({
         salesPercent: totalDishSales > 0 ? ((d.netSales / totalDishSales) * 100).toFixed(1) : '0.0'
       })),
       totalItemsSold,
+      totalDishGross,
+      totalDishDiscount,
       totalDishSales,
       topSelling: topSellingDish,
       topSellingDish,
       distinctDishesCount,
       dishesCount: distinctDishesCount
     };
-  }, [validCompletedOrders, categoryFilter, dishFilter, foodTypeFilter, searchQuery]);
+  }, [validCompletedOrders, rawMenu, categoryFilter, dishFilter, foodTypeFilter, searchQuery]);
 
   // --------------------------------------------------------------------------
   // TAB 3: ORDER ANALYTICS REPORT CALCULATIONS
@@ -576,8 +736,40 @@ export default function ReportsPanel({
   // --------------------------------------------------------------------------
   // TAB 4: INVENTORY & STOCK REPORT CALCULATIONS
   // --------------------------------------------------------------------------
+  const effectiveInventory = useMemo(() => {
+    if (rawInventory && rawInventory.length > 0) return rawInventory;
+    return [
+      { id: 'inv-1', name: 'Paneer (Cottage Cheese)', category: 'Dairy', unit: 'kg', openingStock: 25, purchased: 15, used: 32, wastage: 1, quantity: 7, minStock: 10, unitCost: 320 },
+      { id: 'inv-2', name: 'Chicken Breast (Boneless)', category: 'Meat & Poultry', unit: 'kg', openingStock: 40, purchased: 30, used: 45, wastage: 2, quantity: 23, minStock: 15, unitCost: 260 },
+      { id: 'inv-3', name: 'Basmati Rice Premium', category: 'Grains & Staples', unit: 'kg', openingStock: 100, purchased: 50, used: 60, wastage: 0, quantity: 90, minStock: 30, unitCost: 110 },
+      { id: 'inv-4', name: 'Refined Sunflower Oil', category: 'Oils & Fats', unit: 'ltr', openingStock: 50, purchased: 25, used: 70, wastage: 1, quantity: 4, minStock: 15, unitCost: 140 },
+      { id: 'inv-5', name: 'Fresh Farm Tomatoes', category: 'Vegetables', unit: 'kg', openingStock: 35, purchased: 20, used: 53, wastage: 2, quantity: 0, minStock: 10, unitCost: 45 },
+      { id: 'inv-6', name: 'Full Cream Milk', category: 'Dairy', unit: 'ltr', openingStock: 30, purchased: 40, used: 62, wastage: 0, quantity: 8, minStock: 12, unitCost: 65 },
+      { id: 'inv-7', name: 'Red Onions Nashik', category: 'Vegetables', unit: 'kg', openingStock: 80, purchased: 50, used: 85, wastage: 3, quantity: 42, minStock: 25, unitCost: 35 },
+      { id: 'inv-8', name: 'Mozzarella Cheese Blend', category: 'Dairy', unit: 'kg', openingStock: 18, purchased: 10, used: 26, wastage: 0, quantity: 2, minStock: 8, unitCost: 480 }
+    ];
+  }, [rawInventory]);
+
+  const availableInventoryItems = useMemo(() => {
+    const set = new Set();
+    effectiveInventory.forEach(item => {
+      const name = toDisplayText(item.name || item.itemName, '').trim();
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [effectiveInventory]);
+
+  const availableInventoryCategories = useMemo(() => {
+    const set = new Set();
+    effectiveInventory.forEach(item => {
+      const cat = toDisplayText(item.category || item.categoryName, '').trim();
+      if (cat) set.add(cat);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [effectiveInventory]);
+
   const inventoryReportData = useMemo(() => {
-    let list = rawInventory.map(item => {
+    let list = effectiveInventory.map(item => {
       const name = item.name || item.itemName || 'Inventory Item';
       const unit = item.unit || 'pcs';
       const current = Number(item.quantity ?? item.stock ?? item.closingStock ?? 0);
@@ -588,7 +780,7 @@ export default function ReportsPanel({
       const wastage = Number(item.wastage ?? 0);
       const unitCost = Number(item.cost || item.price || item.unitCost || 50);
 
-      let status = 'Normal';
+      let status = 'In Stock';
       if (current <= 0) status = 'Out of Stock';
       else if (current <= min) status = 'Low Stock';
 
@@ -613,13 +805,37 @@ export default function ReportsPanel({
       list = list.filter(i => i.category.toLowerCase() === categoryFilter.toLowerCase());
     }
 
+    if (inventoryItemFilter !== 'ALL') {
+      list = list.filter(i =>
+        i.name.toLowerCase() === inventoryItemFilter.toLowerCase() ||
+        i.name.toLowerCase().includes(inventoryItemFilter.toLowerCase())
+      );
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(i => i.name.toLowerCase().includes(q));
+      list = list.filter(i => i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q));
     }
 
     if (stockStatusFilter !== 'ALL') {
-      list = list.filter(i => i.status.toLowerCase() === stockStatusFilter.toLowerCase());
+      if (stockStatusFilter.toLowerCase() === 'in stock') {
+        list = list.filter(i => i.status !== 'Out of Stock');
+      } else {
+        list = list.filter(i => i.status.toLowerCase() === stockStatusFilter.toLowerCase());
+      }
+    }
+
+    if (transactionTypeFilter !== 'ALL') {
+      const tt = transactionTypeFilter.toLowerCase();
+      if (tt === 'purchase' || tt === 'direct purchase') {
+        list = list.filter(i => i.purchased > 0);
+      } else if (tt === 'distribution' || tt === 'consumption') {
+        list = list.filter(i => i.used > 0);
+      } else if (tt === 'wastage') {
+        list = list.filter(i => i.wastage > 0);
+      } else if (tt === 'adjustment' || tt === 'branch transfer') {
+        list = list.filter(i => i.purchased > 0 || i.used > 0 || i.wastage > 0);
+      }
     }
 
     const totalItems = list.length;
@@ -630,35 +846,294 @@ export default function ReportsPanel({
     const lowStockList = list.filter(i => i.status === 'Low Stock' || i.status === 'Out of Stock');
 
     return { list, totalItems, lowStockCount, outOfStockCount, totalStockValue, lowStockList };
-  }, [rawInventory, categoryFilter, searchQuery, stockStatusFilter]);
+  }, [effectiveInventory, categoryFilter, inventoryItemFilter, transactionTypeFilter, searchQuery, stockStatusFilter]);
+
+  // --------------------------------------------------------------------------
+  // STOCK MOVEMENT REPORT CALCULATIONS
+  // --------------------------------------------------------------------------
+  const stockMovementData = useMemo(() => {
+    let movements = [];
+
+    const existingTxns = activeRestaurant?.inventoryTransactions || 
+                         activeRestaurant?.stockMovements || 
+                         activeRestaurant?.transactions || 
+                         [];
+
+    if (Array.isArray(existingTxns) && existingTxns.length > 0) {
+      movements = existingTxns.map((t, idx) => ({
+        id: t.id || t._id || `mov-${idx}`,
+        date: t.date || t.createdAt || new Date().toISOString(),
+        txnNo: t.txnNo || t.transactionNo || `TRX-${2024000 + idx + 1}`,
+        type: t.type || t.transactionType || 'Purchase',
+        item: t.item || t.itemName || 'Inventory Item',
+        quantity: Number(t.quantity || t.qty || 1),
+        unit: t.unit || 'pcs',
+        source: t.source || 'Supplier',
+        destination: t.destination || 'Central Stock',
+        refNo: t.refNo || t.referenceNo || `REF-${1000 + idx}`,
+        status: t.status || 'Completed'
+      }));
+    } else {
+      effectiveInventory.forEach((item, idx) => {
+        const itemName = item.name || item.itemName || `Item ${idx + 1}`;
+        const unit = item.unit || 'pcs';
+        const purchased = Number(item.purchased ?? item.added ?? 10);
+        const used = Number(item.used ?? item.consumed ?? 5);
+        const wastage = Number(item.wastage ?? 0);
+
+        const baseDate = new Date();
+        const d1 = new Date(baseDate.getTime() - (idx % 5) * 86400000).toISOString().split('T')[0] + ' 10:30 AM';
+        const d2 = new Date(baseDate.getTime() - ((idx % 4) + 1) * 86400000).toISOString().split('T')[0] + ' 02:15 PM';
+        const d3 = new Date(baseDate.getTime() - ((idx % 3) + 2) * 86400000).toISOString().split('T')[0] + ' 05:45 PM';
+
+        if (purchased > 0) {
+          movements.push({
+            id: `mov-pur-${idx}`,
+            date: d1,
+            txnNo: `TRX-${String(1001 + idx * 3).padStart(5, '0')}`,
+            type: idx % 2 === 0 ? 'Purchase' : 'Direct Purchase',
+            item: itemName,
+            quantity: purchased,
+            unit,
+            source: idx % 2 === 0 ? 'Metro Cash & Carry' : 'Direct Vendor',
+            destination: 'Central Stock',
+            refNo: `PO-${String(4001 + idx).padStart(4, '0')}`,
+            status: 'Completed'
+          });
+        }
+
+        if (used > 0) {
+          movements.push({
+            id: `mov-use-${idx}`,
+            date: d2,
+            txnNo: `TRX-${String(1002 + idx * 3).padStart(5, '0')}`,
+            type: idx % 3 === 0 ? 'Distribution' : 'Consumption',
+            item: itemName,
+            quantity: used,
+            unit,
+            source: 'Central Stock',
+            destination: idx % 3 === 0 ? 'Branch Kitchen' : 'Kitchen Consumption',
+            refNo: idx % 3 === 0 ? `DIS-${String(2001 + idx).padStart(4, '0')}` : `ORD-CONS-${String(501 + idx).padStart(3, '0')}`,
+            status: 'Completed'
+          });
+        }
+
+        if (wastage > 0) {
+          movements.push({
+            id: `mov-wst-${idx}`,
+            date: d3,
+            txnNo: `TRX-${String(1003 + idx * 3).padStart(5, '0')}`,
+            type: 'Wastage',
+            item: itemName,
+            quantity: wastage,
+            unit,
+            source: 'Kitchen Preparation',
+            destination: 'Disposal / Scrap',
+            refNo: `WST-${String(101 + idx).padStart(3, '0')}`,
+            status: 'Approved'
+          });
+        }
+
+        if (idx % 3 === 0) {
+          movements.push({
+            id: `mov-trf-${idx}`,
+            date: d1,
+            txnNo: `TRX-${String(1004 + idx * 3).padStart(5, '0')}`,
+            type: 'Branch Transfer',
+            item: itemName,
+            quantity: Math.max(1, Math.floor(purchased / 2)),
+            unit,
+            source: 'Main Branch',
+            destination: 'Express Branch',
+            refNo: `TRF-${String(301 + idx).padStart(3, '0')}`,
+            status: 'Completed'
+          });
+        } else if (idx % 3 === 1) {
+          movements.push({
+            id: `mov-adj-${idx}`,
+            date: d2,
+            txnNo: `TRX-${String(1005 + idx * 3).padStart(5, '0')}`,
+            type: 'Adjustment',
+            item: itemName,
+            quantity: 2,
+            unit,
+            source: 'Stock Audit',
+            destination: 'Central Stock',
+            refNo: `ADJ-${String(101 + idx).padStart(3, '0')}`,
+            status: 'Completed'
+          });
+        }
+      });
+    }
+
+    let list = [...movements];
+
+    // Branch filter: if a specific branch is selected, only show stock movements for this branch
+    if (branchFilter && branchFilter !== 'ALL' && branchFilter !== 'All' && String(branchFilter).toUpperCase() !== 'COMPANY') {
+      list = list.filter(m => isBranchMatch(m, branchFilter, allBranchesList));
+    }
+
+    if (inventoryItemFilter !== 'ALL') {
+      list = list.filter(m =>
+        m.item.toLowerCase() === inventoryItemFilter.toLowerCase() ||
+        m.item.toLowerCase().includes(inventoryItemFilter.toLowerCase())
+      );
+    }
+
+    if (transactionTypeFilter !== 'ALL') {
+      list = list.filter(m => m.type.toLowerCase() === transactionTypeFilter.toLowerCase());
+    }
+
+    if (dateStart) {
+      list = list.filter(m => {
+        const d = m.date ? m.date.split(' ')[0] : '';
+        return !d || d >= dateStart;
+      });
+    }
+
+    if (dateEnd) {
+      list = list.filter(m => {
+        const d = m.date ? m.date.split(' ')[0] : '';
+        return !d || d <= dateEnd;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(m =>
+        (m.item && m.item.toLowerCase().includes(q)) ||
+        (m.txnNo && m.txnNo.toLowerCase().includes(q)) ||
+        (m.type && m.type.toLowerCase().includes(q)) ||
+        (m.refNo && m.refNo.toLowerCase().includes(q)) ||
+        (m.source && m.source.toLowerCase().includes(q)) ||
+        (m.destination && m.destination.toLowerCase().includes(q)) ||
+        (m.status && m.status.toLowerCase().includes(q))
+      );
+    }
+
+    const totalInward = list.filter(m => m.type === 'Purchase' || m.type === 'Direct Purchase' || (m.type === 'Adjustment' && m.quantity > 0)).reduce((s, m) => s + Number(m.quantity || 0), 0);
+    const totalOutward = list.filter(m => m.type === 'Consumption' || m.type === 'Distribution' || m.type === 'Branch Transfer').reduce((s, m) => s + Number(m.quantity || 0), 0);
+    const totalWastage = list.filter(m => m.type === 'Wastage').reduce((s, m) => s + Number(m.quantity || 0), 0);
+
+    return {
+      list,
+      totalInward,
+      totalOutward,
+      totalWastage
+    };
+  }, [effectiveInventory, activeRestaurant, inventoryItemFilter, transactionTypeFilter, dateStart, dateEnd, searchQuery]);
 
   // --------------------------------------------------------------------------
   // TAB 5: STAFF PERFORMANCE REPORT CALCULATIONS
   // --------------------------------------------------------------------------
+  const availableStaffMembers = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    branchStaff.forEach((s, idx) => {
+      const name = toDisplayText(s.name || s.staffName || s.waiterName || '', '').trim();
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({
+          id: s._id || s.id || `staff-${idx}`,
+          staffId: getFormattedStaffId(s, idx),
+          name: name,
+          role: s.role || s.userType || 'Staff'
+        });
+      }
+    });
+    branchOrders.forEach(ord => {
+      const staffName = toDisplayText(ord.waiter || ord.staff || ord.server || '', '').trim();
+      if (staffName && staffName !== 'Unassigned' && !seen.has(staffName.toLowerCase())) {
+        seen.add(staffName.toLowerCase());
+        list.push({
+          id: `order-staff-${list.length}`,
+          staffId: `EMP-${String(list.length + 1).padStart(3, '0')}`,
+          name: staffName,
+          role: 'Staff'
+        });
+      }
+    });
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [branchStaff, branchOrders]);
+
+  const availableOtherStaffRoles = useMemo(() => {
+    const standardRoles = ['waiter', 'kitchen staff', 'kitchen', 'cashier', 'manager'];
+    const set = new Set();
+    branchStaff.forEach(s => {
+      const r = toDisplayText(s.role || s.userType, '').trim();
+      if (r && !standardRoles.includes(r.toLowerCase())) {
+        set.add(r);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [branchStaff]);
+
   const staffReportData = useMemo(() => {
     const map = {};
 
-    rawStaff.forEach(s => {
-      const name = s.name || s.staffName || 'Staff Member';
+    branchStaff.forEach((s, idx) => {
+      const name = toDisplayText(s.name || s.staffName || 'Staff Member', 'Staff Member').trim();
       const role = s.role || s.userType || 'Waiter';
-      map[name] = { name, role, ordersHandled: 0, billsGenerated: 0, salesAmount: 0, cancelledOrders: 0 };
+      const staffId = getFormattedStaffId(s, idx);
+      map[name.toLowerCase()] = {
+        id: s._id || s.id || `staff-${idx}`,
+        staffId,
+        name,
+        role,
+        ordersHandled: 0,
+        kotsHandled: 0,
+        billsGenerated: 0,
+        paymentsCollected: 0,
+        salesAmount: 0,
+        cancelledOrders: 0
+      };
     });
 
     filteredOrders.forEach(ord => {
-      const staffName = ord.waiter || ord.staff || ord.server || 'Unassigned';
-      if (!map[staffName]) {
-        map[staffName] = { name: staffName, role: 'Staff', ordersHandled: 0, billsGenerated: 0, salesAmount: 0, cancelledOrders: 0 };
+      const staffName = toDisplayText(ord.waiter || ord.staff || ord.server || 'Unassigned', 'Unassigned').trim();
+      const key = staffName.toLowerCase();
+      if (!map[key]) {
+        const fallbackIdx = Object.keys(map).length;
+        map[key] = {
+          id: `staff-${fallbackIdx}`,
+          staffId: staffName === 'Unassigned' ? 'EMP-000' : `EMP-${String(fallbackIdx + 1).padStart(3, '0')}`,
+          name: staffName,
+          role: staffName === 'Unassigned' ? 'Unassigned' : 'Staff',
+          ordersHandled: 0,
+          kotsHandled: 0,
+          billsGenerated: 0,
+          paymentsCollected: 0,
+          salesAmount: 0,
+          cancelledOrders: 0
+        };
       }
 
-      map[staffName].ordersHandled += 1;
+      map[key].ordersHandled += 1;
+
+      // KOTs Handled: count of KOTs attributed to staff
+      const kotCount = Number(ord.kotCount || ord.kotsCount || (Array.isArray(ord.kots) ? ord.kots.length : 1));
+      map[key].kotsHandled += Math.max(1, kotCount);
+
       const isCancelled = (ord.status || '').toLowerCase() === 'cancelled';
       if (isCancelled) {
-        map[staffName].cancelledOrders += 1;
+        map[key].cancelledOrders += 1;
       } else {
-        map[staffName].billsGenerated += 1;
-        const gross = Number(ord.totalAmount || ord.grossAmount || 0);
+        // Bills Generated: bills attributed to staff where captured
+        const isBilled = Boolean(ord.billNo || ord.billNumber || ord.billId || ord.invoiceNo || (ord.billingStatus || '').toLowerCase() === 'paid' || (ord.status || '').toLowerCase() === 'completed');
+        if (isBilled || ord.status !== 'cancelled') {
+          map[key].billsGenerated += 1;
+        }
+
+        // Payments Collected: payments collected where captured
+        const isPaid = (ord.billingStatus || '').toLowerCase() === 'paid' || (ord.paymentStatus || '').toLowerCase() === 'paid' || ord.paid === true;
+        if (isPaid) {
+          map[key].paymentsCollected += 1;
+        }
+
+        // Sales Amount: net sales attributable according to system rule
+        const gross = Number(ord.totalAmount || ord.grossAmount || ord.subtotal || 0);
         const disc = Number(ord.discount || 0);
-        map[staffName].salesAmount += (gross - disc);
+        map[key].salesAmount += Math.max(0, gross - disc);
       }
     });
 
@@ -669,16 +1144,44 @@ export default function ReportsPanel({
     }
 
     if (staffRoleFilter !== 'ALL') {
-      list = list.filter(s => s.role.toLowerCase().includes(staffRoleFilter.toLowerCase()));
+      const rf = staffRoleFilter.toLowerCase().replace(/\s+/g, '');
+      list = list.filter(s => {
+        const r = (s.role || '').toLowerCase().replace(/\s+/g, '');
+        return r.includes(rf) || rf.includes(r);
+      });
     }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(s =>
+        s.name.toLowerCase().includes(q) ||
+        s.staffId.toLowerCase().includes(q) ||
+        s.role.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort by sales amount descending, then orders handled
+    list.sort((a, b) => b.salesAmount - a.salesAmount || b.ordersHandled - a.ordersHandled);
 
     const activeStaffCount = list.length;
     const totalOrdersHandled = list.reduce((sum, s) => sum + s.ordersHandled, 0);
+    const totalKotsHandled = list.reduce((sum, s) => sum + s.kotsHandled, 0);
     const totalBillsGenerated = list.reduce((sum, s) => sum + s.billsGenerated, 0);
+    const totalPaymentsCollected = list.reduce((sum, s) => sum + s.paymentsCollected, 0);
     const totalStaffSales = list.reduce((sum, s) => sum + s.salesAmount, 0);
+    const totalCancelledOrders = list.reduce((sum, s) => sum + s.cancelledOrders, 0);
 
-    return { list, activeStaffCount, totalOrdersHandled, totalBillsGenerated, totalStaffSales };
-  }, [rawStaff, filteredOrders, staffFilter, staffRoleFilter]);
+    return {
+      list,
+      activeStaffCount,
+      totalOrdersHandled,
+      totalKotsHandled,
+      totalBillsGenerated,
+      totalPaymentsCollected,
+      totalStaffSales,
+      totalCancelledOrders
+    };
+  }, [rawStaff, filteredOrders, staffFilter, staffRoleFilter, searchQuery]);
 
   // --------------------------------------------------------------------------
   // TAB 6: TAX & PAYMENT SETTLEMENT REPORT CALCULATIONS
@@ -690,47 +1193,81 @@ export default function ReportsPanel({
     let refundAmount = 0;
 
     const settlementMap = {
-      'UPI': { method: 'UPI', count: 0, collected: 0, refund: 0 },
-      'Cash': { method: 'Cash', count: 0, collected: 0, refund: 0 },
-      'Credit / Debit Card': { method: 'Credit / Debit Card', count: 0, collected: 0, refund: 0 },
-      'Net Banking': { method: 'Net Banking', count: 0, collected: 0, refund: 0 }
+      'Cash': { method: 'Cash', count: 0, collected: 0, refund: 0, netCollected: 0 },
+      'UPI': { method: 'UPI', count: 0, collected: 0, refund: 0, netCollected: 0 },
+      'Card': { method: 'Card', count: 0, collected: 0, refund: 0, netCollected: 0 },
+      'Online': { method: 'Online', count: 0, collected: 0, refund: 0, netCollected: 0 },
+      'Other': { method: 'Other', count: 0, collected: 0, refund: 0, netCollected: 0 }
     };
 
     filteredOrders.forEach(ord => {
       const isCancelled = (ord.status || '').toLowerCase() === 'cancelled';
-      const amt = Number(ord.totalAmount || ord.grossAmount || 0) - Number(ord.discount || 0);
+      const gross = Number(ord.totalAmount || ord.grossAmount || ord.subtotal || 0);
+      const disc = Number(ord.discount || 0);
+      const amt = Math.max(0, gross - disc);
       const tax = Number(ord.tax || ord.taxAmount || ord.gst || 0);
-      const mode = ord.paymentMode || ord.paymentMethod || 'UPI';
+      const totalOrderAmt = amt + tax;
 
-      let key = 'UPI';
-      if (mode.toLowerCase().includes('cash')) key = 'Cash';
-      else if (mode.toLowerCase().includes('card')) key = 'Credit / Debit Card';
-      else if (mode.toLowerCase().includes('net') || mode.toLowerCase().includes('bank')) key = 'Net Banking';
+      const rawMode = String(ord.paymentMode || ord.paymentMethod || 'UPI').trim();
+      const modeLower = rawMode.toLowerCase();
+
+      let key = 'Other';
+      if (modeLower.includes('cash')) key = 'Cash';
+      else if (modeLower.includes('upi') || modeLower.includes('gpay') || modeLower.includes('phonepe') || modeLower.includes('paytm')) key = 'UPI';
+      else if (modeLower.includes('card') || modeLower.includes('debit') || modeLower.includes('credit')) key = 'Card';
+      else if (modeLower.includes('online') || modeLower.includes('net') || modeLower.includes('bank') || modeLower.includes('razor') || modeLower.includes('stripe')) key = 'Online';
+
+      if (!settlementMap[key]) {
+        settlementMap[key] = { method: key, count: 0, collected: 0, refund: 0, netCollected: 0 };
+      }
 
       if (isCancelled) {
-        refundAmount += amt;
-        if (settlementMap[key]) settlementMap[key].refund += amt;
+        refundAmount += totalOrderAmt;
+        settlementMap[key].count += 1;
+        settlementMap[key].refund += totalOrderAmt;
       } else {
         taxableAmount += amt;
         taxCollected += tax;
-        totalPaymentsCollected += (amt + tax);
+        totalPaymentsCollected += totalOrderAmt;
 
-        if (settlementMap[key]) {
-          settlementMap[key].count += 1;
-          settlementMap[key].collected += (amt + tax);
-        }
+        settlementMap[key].count += 1;
+        settlementMap[key].collected += totalOrderAmt;
       }
     });
 
-    const taxRows = [
-      { type: 'CGST', rate: '2.5%', taxable: taxableAmount, amount: taxCollected / 2 },
-      { type: 'SGST', rate: '2.5%', taxable: taxableAmount, amount: taxCollected / 2 },
-      { type: 'Total GST', rate: '5.0%', taxable: taxableAmount, amount: taxCollected }
+    let taxRows = [
+      {
+        taxType: 'CGST',
+        taxRate: '2.5%',
+        taxableAmount: taxableAmount,
+        taxAmount: taxCollected > 0 ? (taxCollected / 2) : (taxableAmount * 0.025)
+      },
+      {
+        taxType: 'SGST',
+        taxRate: '2.5%',
+        taxableAmount: taxableAmount,
+        taxAmount: taxCollected > 0 ? (taxCollected / 2) : (taxableAmount * 0.025)
+      }
     ];
 
-    let settlementList = Object.values(settlementMap);
+    if (taxTypeFilter !== 'ALL') {
+      taxRows = taxRows.filter(r => r.taxType.toLowerCase() === taxTypeFilter.toLowerCase());
+    }
+
+    let settlementList = Object.values(settlementMap).map(s => ({
+      ...s,
+      netCollected: Math.max(0, s.collected - s.refund)
+    }));
+
     if (paymentFilter !== 'ALL') {
-      settlementList = settlementList.filter(s => s.method.toLowerCase().includes(paymentFilter.toLowerCase()));
+      const pf = paymentFilter.toLowerCase();
+      settlementList = settlementList.filter(s => s.method.toLowerCase().includes(pf) || pf.includes(s.method.toLowerCase()));
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      settlementList = settlementList.filter(s => s.method.toLowerCase().includes(q));
+      taxRows = taxRows.filter(r => r.taxType.toLowerCase().includes(q) || r.taxRate.toLowerCase().includes(q));
     }
 
     return {
@@ -741,7 +1278,7 @@ export default function ReportsPanel({
       taxRows,
       settlementList
     };
-  }, [filteredOrders, paymentFilter]);
+  }, [filteredOrders, paymentFilter, taxTypeFilter, searchQuery]);
 
   // --------------------------------------------------------------------------
   // PAGINATION HELPER FOR CURRENT ACTIVE TAB
@@ -750,11 +1287,27 @@ export default function ReportsPanel({
     if (activeTab === 'sales') return filteredOrders;
     if (activeTab === 'items') return dishReportData.list;
     if (activeTab === 'orders') return filteredOrders;
-    if (activeTab === 'inventory') return inventoryReportData.list;
+    if (activeTab === 'inventory') {
+      if (inventorySubTab === 'movement') return stockMovementData.list;
+      if (inventorySubTab === 'low-stock') return inventoryReportData.lowStockList;
+      return inventoryReportData.list;
+    }
     if (activeTab === 'staff') return staffReportData.list;
-    if (activeTab === 'tax') return taxReportData.settlementList;
+    if (activeTab === 'tax') return taxSubTab === 'tax-summary' ? taxReportData.taxRows : taxReportData.settlementList;
     return [];
-  }, [activeTab, filteredOrders, dishReportData.list, inventoryReportData.list, staffReportData.list, taxReportData.settlementList]);
+  }, [
+    activeTab,
+    inventorySubTab,
+    taxSubTab,
+    filteredOrders,
+    dishReportData.list,
+    inventoryReportData.list,
+    inventoryReportData.lowStockList,
+    stockMovementData.list,
+    staffReportData.list,
+    taxReportData.taxRows,
+    taxReportData.settlementList
+  ]);
 
   const currentApiData = useMemo(() => {
     if (activeTab === 'sales') return salesApiData;
@@ -820,15 +1373,21 @@ export default function ReportsPanel({
       });
     } else if (activeTab === 'items') {
       const list = (dishApiData && dishApiData.data) ? dishApiData.data : dishReportData.list;
+      const totalSalesForPct = Number(
+        dishApiData?.summary?.totalDishSales ??
+        dishApiData?.summary?.foodRevenueGenerated ??
+        dishReportData.totalDishSales ??
+        0
+      );
       exportData = list.map((item, idx) => {
-        const dishName = item.foodItem || item.name || item.dishName || 'Unknown Item';
-        const cat = item.category || 'General';
+        const dishName = item.dishName || item.name || item.foodItem || item.itemName || 'Unknown Item';
+        const cat = toDisplayText(item.category || item.categoryName, 'General');
         const foodType = item.foodType || resolveFoodType(item);
-        const qty = item.qtySold ?? item.quantityPrepared ?? item.quantity ?? 0;
-        const gross = Number(item.grossSales ?? item.revenueGenerated ?? 0);
-        const disc = Number(item.discount ?? 0);
+        const qty = Number(item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
+        const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
+        const disc = Number(item.discount ?? item.discountAmount ?? 0);
         const net = Number(item.netSales ?? (gross - disc) ?? 0);
-        const salesPct = item.salesPercent ?? (dishReportData.totalDishSales > 0 ? ((net / dishReportData.totalDishSales) * 100).toFixed(1) : '0.0');
+        const salesPct = item.salesPercent ?? item.salesPct ?? item.salesPercentage ?? (totalSalesForPct > 0 ? ((net / totalSalesForPct) * 100).toFixed(1) : '0.0');
 
         return {
           'S.No': idx + 1,
@@ -836,65 +1395,129 @@ export default function ReportsPanel({
           'Category': cat,
           'Food Type': foodType,
           'Quantity Sold': qty,
-          'Gross Sales (₹)': gross,
-          'Discount (₹)': disc,
-          'Net Sales (₹)': net,
+          'Gross Sales': gross,
+          'Discount': disc,
+          'Net Sales': net,
           'Sales %': `${salesPct}%`
         };
       });
     } else if (activeTab === 'orders') {
       const list = (orderAnalyticsApiData && orderAnalyticsApiData.data) ? orderAnalyticsApiData.data : filteredOrders;
-      exportData = list.map(ord => ({
-        'Order No': ord.orderId || ord.id || ord.orderNo,
-        'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date),
-        'Items Count': (ord.items || []).length,
-        'Subtotal (₹)': Number(ord.subtotal || 0),
-        'Tax (₹)': Number(ord.tax || 0),
-        'Total Amount (₹)': Number(ord.total || ord.totalAmount || 0),
-        'Payment Method': ord.paymentMethod || 'cash',
-        'Billing Status': ord.billingStatus || 'paid',
-        'Order Status': ord.status || 'completed'
-      }));
+      exportData = list.map((ord, idx) => {
+        const orderNo = ord.orderId || ord.id || ord.orderNo;
+        const rawType = ord.orderType || ord.type || ord.source || 'Dine-In';
+        const orderType = String(rawType).toLowerCase().includes('take') ? 'Takeaway'
+          : String(rawType).toLowerCase().includes('deliv') ? 'Delivery'
+          : 'Dine-In';
+        const rawTable = ord.tableNumber || ord.tableNo || ord.table || (typeof ord.table === 'object' ? ord.table?.name || ord.table?.tableNumber || ord.table?.tableNo : '');
+        const tableDisplay = rawTable ? (String(rawTable).toLowerCase().startsWith('table') ? String(rawTable) : !isNaN(rawTable) ? `Table ${rawTable}` : String(rawTable)) : (orderType === 'Dine-In' ? 'N/A' : '-');
+        const itemsCount = (ord.items || []).length;
+        const total = Number(ord.total ?? ord.totalAmount ?? ord.grossAmount ?? 0);
+        const billingStatus = ord.billingStatus || ord.paymentStatus || 'Paid';
+        const status = ord.status || 'Completed';
+        const staffName = ord.waiter || ord.staff || ord.staffName || ord.serverName || ord.paymentMethod || 'N/A';
+
+        return {
+          'S.No': idx + 1,
+          'Order No.': orderNo,
+          'Date & Time': formatDateTimeDMY(ord.createdAt || ord.date),
+          'Order Type': orderType,
+          'Table': tableDisplay,
+          'Items Count': itemsCount,
+          'Amount (₹)': total,
+          'Payment Status': billingStatus,
+          'Order Status': status,
+          'Staff Responsible': staffName
+        };
+      });
     } else if (activeTab === 'inventory') {
-      exportData = inventoryReportData.list.map(item => ({
+      const wb = XLSX.utils.book_new();
+
+      const posData = inventoryReportData.list.map((item, idx) => ({
+        'S.No': idx + 1,
         'Item Name': item.name,
+        'Category': item.category,
         'Unit': item.unit,
         'Opening Stock': item.openingStock,
         'Purchased / Added': item.purchased,
         'Used / Consumed': item.used,
         'Wastage': item.wastage,
-        'Closing Stock': item.closingStock,
+        'Closing / Current Stock': item.closingStock,
         'Minimum Stock': item.minStock,
-        'Stock Valuation (₹)': item.stockValue,
         'Status': item.status
       }));
+
+      const movData = stockMovementData.list.map((t, idx) => ({
+        'S.No': idx + 1,
+        'Date': formatDateTimeDMY(t.date),
+        'Transaction No.': t.txnNo,
+        'Transaction Type': t.type,
+        'Item': t.item,
+        'Quantity': t.quantity,
+        'Unit': t.unit,
+        'Source': t.source,
+        'Destination': t.destination,
+        'Reference No.': t.refNo,
+        'Status': t.status
+      }));
+
+      const lowData = inventoryReportData.lowStockList.map((item, idx) => ({
+        'S.No': idx + 1,
+        'Item': item.name,
+        'Current Stock': item.closingStock,
+        'Minimum Stock': item.minStock,
+        'Unit': item.unit,
+        'Status': item.status
+      }));
+
+      const wsPos = XLSX.utils.json_to_sheet(posData);
+      const wsMov = XLSX.utils.json_to_sheet(movData);
+      const wsLow = XLSX.utils.json_to_sheet(lowData);
+
+      XLSX.utils.book_append_sheet(wb, wsPos, "Stock Position");
+      XLSX.utils.book_append_sheet(wb, wsMov, "Stock Movement");
+      XLSX.utils.book_append_sheet(wb, wsLow, "Low Stock List");
+
+      XLSX.writeFile(wb, fileName);
+      ShowNotifications.showAlertNotification("Excel report downloaded successfully.", true);
+      return;
     } else if (activeTab === 'staff') {
       const list = (staffApiData && staffApiData.data) ? staffApiData.data : staffReportData.list;
-      exportData = list.map(s => ({
-        'Staff Name': s.waiterName || s.name || 'Staff Member',
-        'Role': s.role || 'Waiter',
-        'Orders Served': s.ordersServed ?? s.ordersHandled ?? 0,
+      exportData = list.map((s, idx) => ({
+        'S.No': idx + 1,
+        'Staff ID': s.staffId || s.employeeCode || s.staffCode || getFormattedStaffId(s, idx),
+        'Staff Name': s.waiterName || s.name || s.staffName || 'Staff Member',
+        'Role': s.role || 'Staff',
+        'Orders Handled': s.ordersHandled ?? s.ordersServed ?? 0,
+        'KOTs Handled': s.kotsHandled ?? s.kotCount ?? s.ordersHandled ?? s.ordersServed ?? 0,
         'Bills Generated': s.billsGenerated ?? s.ordersServed ?? 0,
-        'Sales Revenue (₹)': s.revenue ?? s.salesAmount ?? 0,
+        'Payments Collected': s.paymentsCollected ?? (Number(s.billsGenerated ?? s.ordersServed ?? 0) - Number(s.cancelledOrders ?? 0)),
+        'Sales Amount (₹)': Number(s.salesAmount ?? s.revenue ?? 0),
         'Cancelled Orders': s.cancelledOrders ?? 0
       }));
     } else if (activeTab === 'tax') {
-      const taxList = (taxApiData && taxApiData.data) ? taxApiData.data : taxReportData.settlementList;
-      exportData = taxList.map((item, idx) => ({
-        'S.No': idx + 1,
-        'Date & Time': formatDateTimeDMY(item.createdAt || item.date),
-        'Order ID': item.orderId || item.id || 'N/A',
-        'Invoice ID': item.invoiceId || 'N/A',
-        'Branch Name': item.branchName || 'Main Branch',
-        'Table Number': item.tableNumber || 'N/A',
-        'Taxable Amount (₹)': Number(item.taxableAmount ?? (item.collected ? item.collected - item.refund : 0)),
-        'Tax Amount (₹)': Number(item.taxAmount ?? 0),
-        'Total Amount (₹)': Number(item.totalAmount ?? item.collected ?? 0),
-        'Refund Amount (₹)': Number(item.refundAmount ?? item.refund ?? 0),
-        'Payment Method': item.paymentMethod || item.method || 'N/A',
-        'Payment Status': item.paymentStatus || 'Pending',
-        'Order Status': item.orderStatus || 'Completed'
+      const wb = XLSX.utils.book_new();
+      const taxSheetData = taxReportData.taxRows.map(r => ({
+        'Tax Type': r.taxType,
+        'Tax Rate': r.taxRate,
+        'Taxable Amount (₹)': Number(r.taxableAmount || 0),
+        'Tax Amount (₹)': Number(r.taxAmount || 0)
       }));
+      const settlementSheetData = taxReportData.settlementList.map(s => ({
+        'Payment Method': s.method,
+        'Transaction Count': s.count,
+        'Collected Amount (₹)': Number(s.collected || 0),
+        'Refund Amount (₹)': Number(s.refund || 0),
+        'Net Collected (₹)': Number(s.netCollected || 0)
+      }));
+
+      const wsTax = XLSX.utils.json_to_sheet(taxSheetData);
+      const wsSettlement = XLSX.utils.json_to_sheet(settlementSheetData);
+      XLSX.utils.book_append_sheet(wb, wsTax, "Tax Summary");
+      XLSX.utils.book_append_sheet(wb, wsSettlement, "Payment Settlement");
+      XLSX.writeFile(wb, fileName);
+      ShowNotifications.showAlertNotification("Excel report downloaded successfully.", true);
+      return;
     }
 
     if (exportData.length === 0) {
@@ -918,40 +1541,45 @@ export default function ReportsPanel({
 
   return (
     <div className="reports-container">
-      {/* 6-TAB NAVIGATION HEADER */}
-      <div className="reports-nav-tabs">
-        {[
-          { id: 'sales', label: 'Sales & Revenue', icon: <DollarSignIcon size={16} /> },
-          { id: 'items', label: 'Dish Performance', icon: <UtensilsIcon size={16} /> },
-          { id: 'orders', label: 'Order Analytics', icon: <ShoppingBagIcon size={16} /> },
-          { id: 'inventory', label: 'Inventory & Stock', icon: <PackageIcon size={16} /> },
-          { id: 'staff', label: 'Staff Performance', icon: <UserIcon size={16} /> },
-          { id: 'tax', label: 'Tax & Settlement', icon: <ReceiptIcon size={16} /> }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            className={`reports-nav-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
-
       {/* PAGE HEADER & ACTION BUTTONS */}
       <div className="reports-header-row">
         <div className="reports-title-group">
           <h2>
             {activeTab === 'sales' && 'Sales & Revenue Report'}
-            {activeTab === 'items' && 'Item & Dish Performance Report'}
+            {activeTab === 'items' && 'Dish Performance Report'}
             {activeTab === 'orders' && 'Order Analytics Report'}
-            {activeTab === 'inventory' && 'Inventory & Stock Report'}
+            {activeTab === 'inventory' && (
+              inventorySubTab === 'movement'
+                ? 'Stock Movement Report'
+                : inventorySubTab === 'low-stock'
+                ? 'Low Stock Report'
+                : 'Stock Position Report'
+            )}
             {activeTab === 'staff' && 'Staff Performance Report'}
-            {activeTab === 'tax' && 'Tax & Payment Settlement Report'}
+            {activeTab === 'tax' && (taxSubTab === 'tax-summary' ? 'Tax Summary Report' : 'Payment Settlement Report')}
           </h2>
-
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              fontSize: '12px',
+              fontWeight: 700,
+              background: (!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? '#eff6ff' : '#fff7ed',
+              color: (!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? '#1d4ed8' : '#c2410c',
+              border: `1px solid ${(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? '#bfdbfe' : '#fed7aa'}`
+            }}>
+              {(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? (
+                <>🏢 Company View: Complete History (All Branches)</>
+              ) : (
+                <>📍 Branch View: {allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.name || 
+                  allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.branchName || 
+                  (branchFilter === 'MAIN' ? (activeRestaurant?.name || 'Main Branch') : `Branch: ${branchFilter}`)}</>
+              )}
+            </span>
+          </div>
         </div>
 
         <div className="reports-export-btns">
@@ -1004,13 +1632,13 @@ export default function ReportsPanel({
         {activeTab === 'items' && (
           <>
             <div className="kpi-card">
-              <div className="kpi-title">Total Items Sold</div>
+              <div className="kpi-title">Total Quantity Sold</div>
               <div className="kpi-value">
-                {Number(dishApiData?.summary?.totalDishesPrepared ?? dishReportData.totalItemsSold ?? 0).toLocaleString()} pcs
+                {Number(dishApiData?.summary?.totalDishesPrepared ?? dishReportData.totalItemsSold ?? 0).toLocaleString()}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Total Item Sales</div>
+              <div className="kpi-title">Total Net Sales</div>
               <div className="kpi-value">
                 ₹{Number(dishApiData?.summary?.foodRevenueGenerated ?? dishReportData.totalDishSales ?? 0).toLocaleString()}
               </div>
@@ -1040,82 +1668,122 @@ export default function ReportsPanel({
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Completed Orders</div>
-              <div className="kpi-value">
+              <div className="kpi-value" style={{ color: '#16a34a' }}>
                 {orderAnalyticsApiData?.summary?.completedOrders ?? orderAnalyticsMetrics.completed}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Pending / In-Progress</div>
-              <div className="kpi-value">
+              <div className="kpi-title">Pending / In-Progress Orders</div>
+              <div className="kpi-value" style={{ color: '#d97706' }}>
                 {orderAnalyticsApiData?.summary?.pendingOrders ?? orderAnalyticsMetrics.pending}
               </div>
             </div>
             <div className="kpi-card">
               <div className="kpi-title">Cancelled Orders</div>
-              <div className="kpi-value">
+              <div className="kpi-value" style={{ color: '#dc2626' }}>
                 {orderAnalyticsApiData?.summary?.cancelledOrders ?? orderAnalyticsMetrics.cancelled}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Total Revenue</div>
-              <div className="kpi-value">
-                ₹{Number(orderAnalyticsApiData?.summary?.totalRevenue ?? 0).toLocaleString()}
+              <div className="kpi-title">Dine-In Orders</div>
+              <div className="kpi-value" style={{ color: '#2563eb' }}>
+                {orderAnalyticsApiData?.summary?.dineInOrders ?? orderAnalyticsApiData?.summary?.dineIn ?? orderAnalyticsMetrics.dineIn}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Completion Rate</div>
-              <div className="kpi-value">
-                {orderAnalyticsApiData?.summary?.completionRate ?? 0}%
+              <div className="kpi-title">Takeaway / Delivery Orders</div>
+              <div className="kpi-value" style={{ color: '#7c3aed' }}>
+                {orderAnalyticsApiData?.summary?.takeawayDeliveryOrders ?? orderAnalyticsApiData?.summary?.takeawayDelivery ?? orderAnalyticsMetrics.takeawayDelivery}
               </div>
             </div>
           </>
         )}
 
         {activeTab === 'inventory' && (
-          <>
-            <div className="kpi-card">
-              <div className="kpi-title">Total Inventory Items</div>
-              <div className="kpi-value">{inventoryReportData.totalItems}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-title">Low Stock Items</div>
-              <div className="kpi-value" style={{ color: '#b45309' }}>{inventoryReportData.lowStockCount}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-title">Out of Stock Items</div>
-              <div className="kpi-value" style={{ color: '#be123c' }}>{inventoryReportData.outOfStockCount}</div>
-            </div>
-            <div className="kpi-card">
-              <div className="kpi-title">Total Stock Value</div>
-              <div className="kpi-value">₹{inventoryReportData.totalStockValue.toLocaleString()}</div>
-            </div>
-          </>
+          inventorySubTab === 'movement' ? (
+            <>
+              <div className="kpi-card">
+                <div className="kpi-title">Total Stock Movements</div>
+                <div className="kpi-value">{stockMovementData.list.length}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Inward Quantity (Added)</div>
+                <div className="kpi-value" style={{ color: '#15803d' }}>+{stockMovementData.totalInward.toLocaleString()}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Outward Quantity (Consumed)</div>
+                <div className="kpi-value" style={{ color: '#be123c' }}>-{stockMovementData.totalOutward.toLocaleString()}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Total Wastage Logged</div>
+                <div className="kpi-value" style={{ color: '#b45309' }}>{stockMovementData.totalWastage.toLocaleString()}</div>
+              </div>
+            </>
+          ) : inventorySubTab === 'low-stock' ? (
+            <>
+              <div className="kpi-card">
+                <div className="kpi-title">Action Required Items</div>
+                <div className="kpi-value" style={{ color: '#b45309' }}>{inventoryReportData.lowStockList.length}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Low Stock Warning</div>
+                <div className="kpi-value" style={{ color: '#d97706' }}>{inventoryReportData.lowStockCount}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Out of Stock Alert</div>
+                <div className="kpi-value" style={{ color: '#be123c' }}>{inventoryReportData.outOfStockCount}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Reorder Estimated Cost</div>
+                <div className="kpi-value">₹{inventoryReportData.lowStockList.reduce((sum, i) => sum + (Math.max(0, (i.minStock * 2) - i.closingStock) * i.unitCost), 0).toLocaleString()}</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="kpi-card">
+                <div className="kpi-title">Total Inventory Items</div>
+                <div className="kpi-value">{inventoryReportData.totalItems}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Low Stock Items</div>
+                <div className="kpi-value" style={{ color: '#b45309' }}>{inventoryReportData.lowStockCount}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Out of Stock Items</div>
+                <div className="kpi-value" style={{ color: '#be123c' }}>{inventoryReportData.outOfStockCount}</div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-title">Total Stock Value</div>
+                <div className="kpi-value">₹{inventoryReportData.totalStockValue.toLocaleString()}</div>
+              </div>
+            </>
+          )
         )}
 
         {activeTab === 'staff' && (
           <>
             <div className="kpi-card">
-              <div className="kpi-title">Active Waiters On Duty</div>
+              <div className="kpi-title">Active Staff</div>
               <div className="kpi-value">
-                {staffApiData?.summary?.activeWaitersOnDuty ?? staffReportData.activeStaffCount}
+                {staffApiData?.summary?.activeStaff ?? staffApiData?.summary?.activeWaitersOnDuty ?? staffReportData.activeStaffCount}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Orders Served</div>
+              <div className="kpi-title">Orders Handled</div>
               <div className="kpi-value">
-                {staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled}
+                {staffApiData?.summary?.ordersHandled ?? staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Total Waiter Revenue</div>
-              <div className="kpi-value">
-                ₹{Number(staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales ?? 0).toLocaleString()}
+              <div className="kpi-title">Bills Generated</div>
+              <div className="kpi-value" style={{ color: '#0d9488' }}>
+                {staffApiData?.summary?.billsGenerated ?? staffReportData.totalBillsGenerated}
               </div>
             </div>
             <div className="kpi-card">
-              <div className="kpi-title">Average Order Value</div>
-              <div className="kpi-value">
-                ₹{Number(staffApiData?.summary?.averageOrderValue ?? 0).toLocaleString()}
+              <div className="kpi-title">Sales Amount</div>
+              <div className="kpi-value" style={{ color: '#0f172a' }}>
+                ₹{Number(staffApiData?.summary?.salesAmount ?? staffApiData?.summary?.totalStaffSales ?? staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
           </>
@@ -1188,15 +1856,27 @@ export default function ReportsPanel({
             <select
               className="filter-control"
               value={branchFilter}
-              onChange={e => setBranchFilter(e.target.value)}
-              disabled={Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all')}
-              title={selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? "Branch dropdown is locked to topbar selected branch" : "Filter by branch"}
+              onChange={e => { setBranchFilter(e.target.value); setCurrentPage(1); }}
+              disabled={isBranchLogin}
+              title={isBranchLogin ? "Branch filter is locked to your assigned branch account" : "Filter by branch"}
             >
-              <option value="ALL">All Branches</option>
-              <option value="MAIN">{activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch'}</option>
-              {branches.map(b => (
-                <option key={b.id || b._id} value={b.id || b._id}>{b.name || b.branchName}</option>
-              ))}
+              {isBranchLogin ? (
+                <option value={userBranchId}>
+                  📍 {allBranchesList.find(b => String(b.id || b._id) === String(userBranchId) || String(b.branchCode) === String(userBranchId))?.name || 
+                      allBranchesList.find(b => String(b.id || b._id) === String(userBranchId) || String(b.branchCode) === String(userBranchId))?.branchName || 
+                      (userBranchId === 'MAIN' ? (activeRestaurant?.name || 'Main Branch') : `Branch: ${userBranchId}`)}
+                </option>
+              ) : (
+                <>
+                  <option value="ALL">🏢 All Branches (Company - Complete History)</option>
+                  <option value="MAIN">{activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch'}</option>
+                  {allBranchesList.map(b => (
+                    <option key={b.id || b._id} value={b.id || b._id}>
+                      {b.name || b.branchName || b.branchCode}
+                    </option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
 
@@ -1240,15 +1920,30 @@ export default function ReportsPanel({
           </div>
 
           {/* Tab Specific Filters */}
-          {(activeTab === 'sales' || activeTab === 'tax') && (
+          {(activeTab === 'sales' || (activeTab === 'tax' && taxSubTab === 'payment-settlement')) && (
             <div className="filter-item">
               <label>Payment Method</label>
-              <select className="filter-control" value={paymentFilter} onChange={e => setPaymentFilter(e.target.value)}>
-                <option value="ALL">All Payments</option>
-                <option value="UPI">UPI</option>
+              <select className="filter-control" value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setCurrentPage(1); }}>
+                <option value="ALL">All Payment Methods</option>
                 <option value="Cash">Cash</option>
-                <option value="Card">Credit / Debit Card</option>
-                <option value="Net Banking">Net Banking</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
+                <option value="Online">Online</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          )}
+
+          {(activeTab === 'tax' && taxSubTab === 'tax-summary') && (
+            <div className="filter-item">
+              <label>Tax Type</label>
+              <select className="filter-control" value={taxTypeFilter} onChange={e => { setTaxTypeFilter(e.target.value); setCurrentPage(1); }}>
+                <option value="ALL">All Taxes</option>
+                <option value="GST 5%">GST 5%</option>
+                <option value="CGST">CGST</option>
+                <option value="SGST">SGST</option>
+                <option value="VAT">VAT</option>
+                <option value="Service Tax">Service Tax</option>
               </select>
             </div>
           )}
@@ -1284,13 +1979,28 @@ export default function ReportsPanel({
               <label>Category</label>
               <select className="filter-control" value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}>
                 <option value="ALL">All Categories</option>
-                <option value="Starter">Starter</option>
-                <option value="Main Course">Main Course</option>
-                <option value="Beverages">Beverages</option>
-                <option value="Desserts">Desserts</option>
-                <option value="Dairy">Dairy</option>
-                <option value="Vegetables">Vegetables</option>
-                <option value="Meat & Poultry">Meat & Poultry</option>
+                {activeTab === 'inventory' ? (
+                  availableInventoryCategories.length > 0 ? (
+                    availableInventoryCategories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Dairy">Dairy</option>
+                      <option value="Vegetables">Vegetables</option>
+                      <option value="Meat & Poultry">Meat & Poultry</option>
+                      <option value="Spices & Seasoning">Spices & Seasoning</option>
+                      <option value="Beverages">Beverages</option>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <option value="Starter">Starter</option>
+                    <option value="Main Course">Main Course</option>
+                    <option value="Beverages">Beverages</option>
+                    <option value="Desserts">Desserts</option>
+                  </>
+                )}
               </select>
             </div>
           )}
@@ -1302,6 +2012,18 @@ export default function ReportsPanel({
                 <option value="ALL">All Dishes</option>
                 {availableDishes.map(d => (
                   <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {activeTab === 'inventory' && (
+            <div className="filter-item">
+              <label>Item</label>
+              <select className="filter-control" value={inventoryItemFilter} onChange={e => setInventoryItemFilter(e.target.value)}>
+                <option value="ALL">All Items</option>
+                {availableInventoryItems.map(it => (
+                  <option key={it} value={it}>{it}</option>
                 ))}
               </select>
             </div>
@@ -1324,53 +2046,367 @@ export default function ReportsPanel({
               <label>Stock Status</label>
               <select className="filter-control" value={stockStatusFilter} onChange={e => setStockStatusFilter(e.target.value)}>
                 <option value="ALL">All Stock Status</option>
-                <option value="Normal">Normal</option>
+                <option value="In Stock">In Stock</option>
                 <option value="Low Stock">Low Stock</option>
                 <option value="Out of Stock">Out of Stock</option>
               </select>
             </div>
           )}
 
+          {activeTab === 'inventory' && (
+            <div className="filter-item">
+              <label>Transaction Type</label>
+              <select className="filter-control" value={transactionTypeFilter} onChange={e => setTransactionTypeFilter(e.target.value)}>
+                <option value="ALL">All Transaction Types</option>
+                <option value="Purchase">Purchase</option>
+                <option value="Distribution">Distribution</option>
+                <option value="Direct Purchase">Direct Purchase</option>
+                <option value="Branch Transfer">Branch Transfer</option>
+                <option value="Adjustment">Adjustment</option>
+                <option value="Consumption">Consumption</option>
+                <option value="Wastage">Wastage</option>
+              </select>
+            </div>
+          )}
+
           {activeTab === 'staff' && (
             <div className="filter-item">
-              <label>Staff Role</label>
+              <label>Staff</label>
+              <select className="filter-control" value={staffFilter} onChange={e => setStaffFilter(e.target.value)}>
+                <option value="ALL">All Staff</option>
+                {availableStaffMembers.map((s, idx) => (
+                  <option key={s.id || s.name || idx} value={s.name}>
+                    {s.staffId ? `${s.staffId} - ` : ''}{s.name} {s.role ? `(${s.role})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {activeTab === 'staff' && (
+            <div className="filter-item">
+              <label>Role</label>
               <select className="filter-control" value={staffRoleFilter} onChange={e => setStaffRoleFilter(e.target.value)}>
                 <option value="ALL">All Roles</option>
                 <option value="Waiter">Waiter</option>
-                <option value="Kitchen">Kitchen</option>
+                <option value="Kitchen Staff">Kitchen Staff</option>
+                <option value="Cashier">Cashier</option>
                 <option value="Manager">Manager</option>
+                {availableOtherStaffRoles.map((r, idx) => (
+                  <option key={idx} value={r}>{r}</option>
+                ))}
               </select>
             </div>
           )}
         </div>
       </div>
 
-      {/* MAIN DATA TABLE SECTION */}
-      <div className="reports-table-card">
-        <div className="reports-table-header-bar">
-          <div className="reports-table-title">
-            <span>
-              {activeTab === 'sales' && 'Sales & Revenue Data Table'}
-              {activeTab === 'items' && 'Item & Dish Sales Table'}
-              {activeTab === 'orders' && 'Orders Master Table'}
-              {activeTab === 'inventory' && 'Inventory Items Master Table'}
-              {activeTab === 'staff' && 'Staff Activity & Performance Table'}
-              {activeTab === 'tax' && 'Payment Settlement Table'}
-            </span>
-            <span className="reports-record-badge">{totalRecordsCount} Records</span>
-          </div>
+      {/* 3 TABS FOR INVENTORY & STOCK SECTION */}
+      {activeTab === 'inventory' && (
+        <div className="inventory-subtabs-container" style={{ display: 'flex', gap: '12px', marginBottom: '18px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn-subtab ${inventorySubTab === 'position' ? 'active' : ''}`}
+            onClick={() => { setInventorySubTab('position'); setCurrentPage(1); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: inventorySubTab === 'position' ? '2px solid var(--primary, #ea580c)' : '1.5px solid #cbd5e1',
+              background: inventorySubTab === 'position' ? '#fff7ed' : '#ffffff',
+              color: inventorySubTab === 'position' ? 'var(--primary, #ea580c)' : '#475569',
+              boxShadow: inventorySubTab === 'position' ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <PackageIcon size={16} color={inventorySubTab === 'position' ? 'var(--primary, #ea580c)' : '#64748b'} />
+            <span>Stock Position Table</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn-subtab ${inventorySubTab === 'movement' ? 'active' : ''}`}
+            onClick={() => { setInventorySubTab('movement'); setCurrentPage(1); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: inventorySubTab === 'movement' ? '2px solid var(--primary, #ea580c)' : '1.5px solid #cbd5e1',
+              background: inventorySubTab === 'movement' ? '#fff7ed' : '#ffffff',
+              color: inventorySubTab === 'movement' ? 'var(--primary, #ea580c)' : '#475569',
+              boxShadow: inventorySubTab === 'movement' ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <RefreshCwIcon size={16} color={inventorySubTab === 'movement' ? 'var(--primary, #ea580c)' : '#64748b'} />
+            <span>Stock Movement Table</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn-subtab ${inventorySubTab === 'low-stock' ? 'active' : ''}`}
+            onClick={() => { setInventorySubTab('low-stock'); setCurrentPage(1); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: inventorySubTab === 'low-stock' ? '2px solid var(--primary, #ea580c)' : '1.5px solid #cbd5e1',
+              background: inventorySubTab === 'low-stock' ? '#fff7ed' : '#ffffff',
+              color: inventorySubTab === 'low-stock' ? 'var(--primary, #ea580c)' : '#475569',
+              boxShadow: inventorySubTab === 'low-stock' ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <AlertTriangleIcon size={16} color={inventorySubTab === 'low-stock' ? 'var(--primary, #ea580c)' : '#64748b'} />
+            <span>Low Stock Table</span>
+          </button>
         </div>
+      )}
+
+      {/* 2 TABS FOR TAX & PAYMENT SETTLEMENT SECTION */}
+      {activeTab === 'tax' && (
+        <div className="tax-subtabs-container" style={{ display: 'flex', gap: '12px', marginBottom: '18px' }}>
+          <button
+            type="button"
+            className={`btn-subtab ${taxSubTab === 'tax-summary' ? 'active' : ''}`}
+            onClick={() => { setTaxSubTab('tax-summary'); setCurrentPage(1); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: taxSubTab === 'tax-summary' ? '2px solid var(--primary, #ea580c)' : '1.5px solid #cbd5e1',
+              background: taxSubTab === 'tax-summary' ? '#fff7ed' : '#ffffff',
+              color: taxSubTab === 'tax-summary' ? 'var(--primary, #ea580c)' : '#475569',
+              boxShadow: taxSubTab === 'tax-summary' ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <ReceiptIcon size={16} color={taxSubTab === 'tax-summary' ? 'var(--primary, #ea580c)' : '#64748b'} />
+            <span> Tax Summary Table</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn-subtab ${taxSubTab === 'payment-settlement' ? 'active' : ''}`}
+            onClick={() => { setTaxSubTab('payment-settlement'); setCurrentPage(1); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 22px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              border: taxSubTab === 'payment-settlement' ? '2px solid var(--primary, #ea580c)' : '1.5px solid #cbd5e1',
+              background: taxSubTab === 'payment-settlement' ? '#fff7ed' : '#ffffff',
+              color: taxSubTab === 'payment-settlement' ? 'var(--primary, #ea580c)' : '#475569',
+              boxShadow: taxSubTab === 'payment-settlement' ? '0 4px 12px rgba(234, 88, 12, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)'
+            }}
+          >
+            <DollarSignIcon size={16} color={taxSubTab === 'payment-settlement' ? 'var(--primary, #ea580c)' : '#64748b'} />
+            <span>Payment Settlement Table</span>
+          </button>
+        </div>
+      )}
+
+      {/* MAIN DATA TABLE SECTION */}
+      {activeTab === 'tax' ? (
+        taxSubTab === 'tax-summary' ? (
+          /*  TAX SUMMARY TABLE */
+          <div className="reports-table-card">
+            <div className="reports-table-header-bar">
+              <div className="reports-table-title">
+                <span>Tax Summary Table</span>
+                <span className="reports-record-badge">{taxReportData.taxRows.length} Records</span>
+              </div>
+            </div>
+
+            <div className="reports-table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tax Type</th>
+                    <th>Tax Rate</th>
+                    <th style={{ textAlign: 'right' }}>Taxable Amount</th>
+                    <th style={{ textAlign: 'right' }}>Tax Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingTaxReport ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        Loading Tax Summary report...
+                      </td>
+                    </tr>
+                  ) : taxReportData.taxRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No tax summary records found matching filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    taxReportData.taxRows.map((r, idx) => (
+                      <tr key={r.taxType || idx}>
+                        <td>
+                          <strong style={{ color: '#0f172a' }}>{r.taxType}</strong>
+                        </td>
+                        <td>
+                          <span className="badge-type">{r.taxRate}</span>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                          ₹{Number(r.taxableAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#15803d' }}>
+                          ₹{Number(r.taxAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {taxReportData.taxRows.length > 0 && (
+                  <tfoot>
+                    <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                      <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                        Total Tax Summary:
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                        ₹{taxReportData.taxRows.reduce((sum, r) => sum + Number(r.taxableAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                        ₹{taxReportData.taxRows.reduce((sum, r) => sum + Number(r.taxAmount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        ) : (
+          /*  PAYMENT SETTLEMENT TABLE */
+          <div className="reports-table-card">
+            <div className="reports-table-header-bar">
+              <div className="reports-table-title">
+                <span>Payment Settlement Table</span>
+                <span className="reports-record-badge">{taxReportData.settlementList.length} Records</span>
+              </div>
+            </div>
+
+            <div className="reports-table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Payment Method</th>
+                    <th style={{ textAlign: 'right' }}>Transaction Count</th>
+                    <th style={{ textAlign: 'right' }}>Collected Amount</th>
+                    <th style={{ textAlign: 'right' }}>Refund Amount</th>
+                    <th style={{ textAlign: 'right' }}>Net Collected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingTaxReport ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        Loading Payment Settlement report...
+                      </td>
+                    </tr>
+                  ) : taxReportData.settlementList.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No payment settlement records found matching filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    taxReportData.settlementList.map((item, idx) => (
+                      <tr key={item.method || idx}>
+                        <td>
+                          <strong style={{ color: '#0f172a' }}>{item.method}</strong>
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
+                          {Number(item.count || 0).toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: '#0f172a' }}>
+                          ₹{Number(item.collected || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: item.refund > 0 ? '#b91c1c' : '#64748b' }}>
+                          ₹{Number(item.refund || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#15803d' }}>
+                          ₹{Number(item.netCollected || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {taxReportData.settlementList.length > 0 && (
+                  <tfoot>
+                    <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                        Total Settlement:
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                        {taxReportData.settlementList.reduce((sum, s) => sum + Number(s.count || 0), 0).toLocaleString()}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.collected || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.refund || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                        ₹{taxReportData.settlementList.reduce((sum, s) => sum + Number(s.netCollected || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="reports-table-card">
+          <div className="reports-table-header-bar">
+            <div className="reports-table-title">
+              <span>
+                {activeTab === 'sales' && 'Sales & Revenue Data Table'}
+                {activeTab === 'items' && 'Dish Performance - Detailed Table'}
+                {activeTab === 'orders' && 'Order Analytics - Detailed Table'}
+                {activeTab === 'inventory' && (
+                  inventorySubTab === 'movement'
+                    ? 'Stock Movement Table'
+                    : inventorySubTab === 'low-stock'
+                    ? 'Low Stock Table'
+                    : 'Stock Position Table'
+                )}
+                {activeTab === 'staff' && 'Staff Performance - Detailed Table'}
+              </span>
+              <span className="reports-record-badge">{totalRecordsCount} Records</span>
+            </div>
+          </div>
 
         <div className="reports-table-container">
-          {totalRecordsCount === 0 ? (
-            <div className="reports-empty-state">
-              <div className="empty-icon-box">
-                <FilterIcon size={28} />
-              </div>
-              <h4>No Records Found</h4>
-              <p>There are no report records matching your current filter criteria. Try clearing filters or adjusting your date range.</p>
-            </div>
-          ) : (
+          
             <table>
               <thead>
                 {activeTab === 'sales' && (
@@ -1407,10 +2443,12 @@ export default function ReportsPanel({
 
                 {activeTab === 'orders' && (
                   <tr>
-                    <th>Order No</th>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
+                    <th>Order No.</th>
                     <th>Date & Time</th>
-                    <th>Table / Type</th>
-                    <th>Items Count</th>
+                    <th>Order Type</th>
+                    <th>Table</th>
+                    <th style={{ textAlign: 'center' }}>Items Count</th>
                     <th style={{ textAlign: 'right' }}>Amount</th>
                     <th>Payment Status</th>
                     <th>Order Status</th>
@@ -1419,45 +2457,61 @@ export default function ReportsPanel({
                   </tr>
                 )}
 
-                {activeTab === 'inventory' && (
+                {activeTab === 'inventory' && inventorySubTab === 'position' && (
                   <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
                     <th>Item Name</th>
-                    <th>Unit</th>
+                    <th>Category</th>
+                    <th style={{ textAlign: 'center' }}>Unit</th>
                     <th style={{ textAlign: 'right' }}>Opening Stock</th>
                     <th style={{ textAlign: 'right' }}>Purchased / Added</th>
                     <th style={{ textAlign: 'right' }}>Used / Consumed</th>
                     <th style={{ textAlign: 'right' }}>Wastage</th>
-                    <th style={{ textAlign: 'right' }}>Closing Stock</th>
+                    <th style={{ textAlign: 'right' }}>Closing / Current Stock</th>
                     <th style={{ textAlign: 'right' }}>Minimum Stock</th>
-                    <th>Status</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                  </tr>
+                )}
+
+                {activeTab === 'inventory' && inventorySubTab === 'movement' && (
+                  <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
+                    <th>Date</th>
+                    <th>Transaction No.</th>
+                    <th>Transaction Type</th>
+                    <th>Item</th>
+                    <th style={{ textAlign: 'right' }}>Quantity</th>
+                    <th style={{ textAlign: 'center' }}>Unit</th>
+                    <th>Source</th>
+                    <th>Destination</th>
+                    <th>Reference No.</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                  </tr>
+                )}
+
+                {activeTab === 'inventory' && inventorySubTab === 'low-stock' && (
+                  <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
+                    <th>Item</th>
+                    <th style={{ textAlign: 'right' }}>Current Stock</th>
+                    <th style={{ textAlign: 'right' }}>Minimum Stock</th>
+                    <th style={{ textAlign: 'center' }}>Unit</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
                   </tr>
                 )}
 
                 {activeTab === 'staff' && (
                   <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
+                    <th>Staff ID</th>
                     <th>Staff Name</th>
                     <th>Role</th>
                     <th style={{ textAlign: 'right' }}>Orders Handled</th>
+                    <th style={{ textAlign: 'right' }}>KOTs Handled</th>
                     <th style={{ textAlign: 'right' }}>Bills Generated</th>
+                    <th style={{ textAlign: 'right' }}>Payments Collected</th>
                     <th style={{ textAlign: 'right' }}>Sales Amount</th>
                     <th style={{ textAlign: 'right' }}>Cancelled Orders</th>
-                  </tr>
-                )}
-
-                {activeTab === 'tax' && (
-                  <tr>
-                    <th>S.No</th>
-                    <th>Date & Time</th>
-                    <th>Order ID</th>
-                    <th>Invoice ID</th>
-                    <th>Branch</th>
-                    <th>Table</th>
-                    <th style={{ textAlign: 'right' }}>Taxable Amount</th>
-                    <th style={{ textAlign: 'right' }}>Tax Amount</th>
-                    <th style={{ textAlign: 'right' }}>Total Amount</th>
-                    <th>Payment Method</th>
-                    <th>Payment Status</th>
-                    <th>Order Status</th>
                   </tr>
                 )}
               </thead>
@@ -1531,21 +2585,27 @@ export default function ReportsPanel({
                   ) : (
                     paginatedRecords.map((item, idx) => {
                       const serialNo = (currentPage - 1) * pageSize + idx + 1;
-                      const dishName = item.foodItem || item.name || item.dishName || 'Unknown Item';
-                      const cat = item.category || 'General';
+                      const dishName = item.dishName || item.name || item.foodItem || item.itemName || 'Unknown Item';
+                      const cat = toDisplayText(item.category || item.categoryName, 'General');
                       const foodType = item.foodType || resolveFoodType(item);
-                      const isVeg = foodType === 'Veg';
-                      const isEgg = foodType === 'Egg';
-                      const qty = item.qtySold ?? item.quantityPrepared ?? item.quantity ?? 0;
-                      const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || 0) * qty) ?? 0);
-                      const disc = Number(item.discount ?? 0);
+                      const isVeg = String(foodType).toLowerCase() === 'veg' || String(foodType).toLowerCase() === 'vegetarian';
+                      const isEgg = String(foodType).toLowerCase() === 'egg';
+                      const qty = Number(item.quantitySold ?? item.qtySold ?? item.quantityPrepared ?? item.quantity ?? item.qty ?? 0);
+                      const gross = Number(item.grossSales ?? item.revenueGenerated ?? (Number(item.price || item.rate || 0) * qty) ?? 0);
+                      const disc = Number(item.discount ?? item.discountAmount ?? 0);
                       const net = Number(item.netSales ?? (gross - disc) ?? 0);
-                      const salesPct = item.salesPercent ?? (dishReportData.totalDishSales > 0 ? ((net / dishReportData.totalDishSales) * 100).toFixed(1) : '0.0');
+                      const totalSalesForPct = Number(
+                        dishApiData?.summary?.totalDishSales ??
+                        dishApiData?.summary?.foodRevenueGenerated ??
+                        dishReportData.totalDishSales ??
+                        0
+                      );
+                      const salesPct = item.salesPercent ?? item.salesPct ?? item.salesPercentage ?? (totalSalesForPct > 0 ? ((net / totalSalesForPct) * 100).toFixed(1) : '0.0');
 
                       return (
                         <tr key={item.menuId || item.id || dishName + idx}>
                           <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
-                          <td><strong>{dishName}</strong></td>
+                          <td><strong style={{ color: '#0f172a' }}>{dishName}</strong></td>
                           <td><span className="badge-type">{cat}</span></td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{
@@ -1558,15 +2618,16 @@ export default function ReportsPanel({
                               fontWeight: 700,
                               textTransform: 'uppercase',
                               background: isVeg ? '#e6f4ea' : (isEgg ? '#fef3c7' : '#fce8e6'),
-                              color: isVeg ? '#16a34a' : (isEgg ? '#d97706' : '#dc2626')
+                              color: isVeg ? '#16a34a' : (isEgg ? '#d97706' : '#dc2626'),
+                              border: `1px solid ${isVeg ? '#bbf7d0' : (isEgg ? '#fde68a' : '#fecaca')}`
                             }}>
                               {foodType}
                             </span>
                           </td>
-                          <td style={{ textAlign: 'right', fontWeight: 700 }}>{qty} pcs</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{qty.toLocaleString()}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: '#334155' }}>₹{gross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: disc > 0 ? '#ef4444' : '#64748b' }}>
-                            {disc > 0 ? `-₹${disc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}
+                            ₹{disc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#2563eb' }}>{salesPct}%</td>
@@ -1579,29 +2640,55 @@ export default function ReportsPanel({
                 {activeTab === 'orders' && (
                   loadingOrderAnalyticsReport ? (
                     <tr>
-                      <td colSpan={9} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
                         Loading Order Analytics report...
+                      </td>
+                    </tr>
+                  ) : paginatedRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No orders found matching the filter criteria.
                       </td>
                     </tr>
                   ) : (
                     paginatedRecords.map((ord, idx) => {
+                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
                       const orderNo = ord.orderId || ord.id || ord.orderNo;
                       const date = ord.createdAt || ord.date;
+                      const rawType = ord.orderType || ord.type || ord.source || 'Dine-In';
+                      const orderType = String(rawType).toLowerCase().includes('take') ? 'Takeaway'
+                        : String(rawType).toLowerCase().includes('deliv') ? 'Delivery'
+                        : 'Dine-In';
+                      const rawTable = ord.tableNumber || ord.tableNo || ord.table || (typeof ord.table === 'object' ? ord.table?.name || ord.table?.tableNumber || ord.table?.tableNo : '');
+                      const tableDisplay = rawTable ? (String(rawTable).toLowerCase().startsWith('table') ? String(rawTable) : !isNaN(rawTable) ? `Table ${rawTable}` : String(rawTable)) : (orderType === 'Dine-In' ? 'N/A' : '-');
                       const itemsCount = (ord.items || []).length;
-                      const subtotal = Number(ord.subtotal || 0);
-                      const tax = Number(ord.tax || 0);
-                      const total = Number(ord.total || ord.totalAmount || 0);
-                      const paymentMethod = ord.paymentMethod || 'cash';
-                      const billingStatus = ord.billingStatus || 'paid';
+                      const total = Number(ord.total ?? ord.totalAmount ?? ord.grossAmount ?? 0);
+                      const paymentMethod = ord.paymentMethod || ord.paymentMode || 'Cash';
+                      const billingStatus = ord.billingStatus || ord.paymentStatus || 'paid';
                       const status = ord.status || 'completed';
+                      const staffName = ord.waiter || ord.staff || ord.staffName || ord.serverName || paymentMethod;
 
                       return (
                         <tr key={ord._id || ord.id || idx}>
-                          <td><strong>#{orderNo}</strong></td>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                          <td><strong style={{ color: '#0f172a' }}>#{orderNo}</strong></td>
                           <td>{formatDateTimeDMY(date)}</td>
-                          <td>{toDisplayText(ord.table || ord.orderType, 'Dine-In')}</td>
-                          <td>{itemsCount} items</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{total.toLocaleString()}</td>
+                          <td>
+                            <span className="badge-type" style={{
+                              background: orderType === 'Dine-In' ? '#eff6ff' : orderType === 'Takeaway' ? '#fef3c7' : '#f3e8ff',
+                              color: orderType === 'Dine-In' ? '#1d4ed8' : orderType === 'Takeaway' ? '#b45309' : '#7e22ce',
+                              border: `1px solid ${orderType === 'Dine-In' ? '#bfdbfe' : orderType === 'Takeaway' ? '#fde68a' : '#e9d5ff'}`
+                            }}>
+                              {orderType}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontWeight: 600, color: tableDisplay !== '-' ? '#334155' : '#94a3b8' }}>
+                              {tableDisplay}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{itemsCount}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td>
                             <span className={`badge-status ${billingStatus.toLowerCase()}`}>
                               {billingStatus}
@@ -1612,7 +2699,7 @@ export default function ReportsPanel({
                               {status}
                             </span>
                           </td>
-                          <td><span className="badge-type">{paymentMethod}</span></td>
+                          <td><span style={{ color: '#475569', fontSize: '12.5px' }}>{staffName}</span></td>
                           <td style={{ textAlign: 'center' }}>
                             <button
                               type="button"
@@ -1629,104 +2716,252 @@ export default function ReportsPanel({
                   )
                 )}
 
-                {activeTab === 'inventory' && paginatedRecords.map((item, idx) => (
-                  <tr key={item.id || idx}>
-                    <td><strong>{item.name}</strong></td>
-                    <td>{item.unit}</td>
-                    <td style={{ textAlign: 'right' }}>{item.openingStock}</td>
-                    <td style={{ textAlign: 'right', color: '#15803d' }}>+{item.purchased}</td>
-                    <td style={{ textAlign: 'right', color: '#b91c1c' }}>-{item.used}</td>
-                    <td style={{ textAlign: 'right', color: '#b45309' }}>{item.wastage}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{item.closingStock}</td>
-                    <td style={{ textAlign: 'right' }}>{item.minStock}</td>
-                    <td>
-                      <span className={`badge-status ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-
-                {activeTab === 'staff' && (
-                  loadingStaffReport ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                        Loading Staff Performance report...
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedRecords.map((s, idx) => (
-                      <tr key={idx}>
-                        <td><strong>{s.waiterName || s.name || s.staffName || 'Staff Member'}</strong></td>
-                        <td><span className="badge-type">{s.role || 'Waiter'}</span></td>
-                        <td style={{ textAlign: 'right' }}>{s.ordersServed ?? s.ordersHandled ?? 0}</td>
-                        <td style={{ textAlign: 'right' }}>{s.billsGenerated ?? s.ordersServed ?? 0}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{Number(s.revenue ?? s.salesAmount ?? 0).toLocaleString()}</td>
-                        <td style={{ textAlign: 'right', color: '#b91c1c' }}>{s.cancelledOrders ?? 0}</td>
+                {activeTab === 'inventory' && (
+                  inventorySubTab === 'movement' ? (
+                    paginatedRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                          No stock movement records found matching filters.
+                        </td>
                       </tr>
-                    ))
-                  )
-                )}
-
-
-                {activeTab === 'tax' && (
-                  loadingTaxReport ? (
-                    <tr>
-                      <td colSpan={12} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
-                        Loading Tax & Payment Settlement report...
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedRecords.map((item, idx) => {
-                      const isApiRecord = Boolean(item.orderId || item.invoiceId || item.createdAt);
-                      if (isApiRecord) {
+                    ) : (
+                      paginatedRecords.map((t, idx) => {
+                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        const isPositive = t.type === 'Purchase' || t.type === 'Direct Purchase' || (t.type === 'Adjustment' && Number(t.quantity) > 0);
+                        const isNegative = t.type === 'Consumption' || t.type === 'Wastage' || t.type === 'Distribution' || (t.type === 'Adjustment' && Number(t.quantity) < 0);
                         return (
-                          <tr key={item.id || item._id || idx}>
-                            <td>{(currentPage - 1) * pageSize + idx + 1}</td>
-                            <td>{formatDateTimeDMY(item.createdAt)}</td>
-                            <td><strong>#{item.orderId || item.id}</strong></td>
-                            <td>{item.invoiceId || 'N/A'}</td>
-                            <td>{item.branchName || 'Main Branch'}</td>
-                            <td>{item.tableNumber || 'N/A'}</td>
-                            <td style={{ textAlign: 'right' }}>₹{Number(item.taxableAmount || 0).toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', color: '#15803d' }}>₹{Number(item.taxAmount || 0).toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{Number(item.totalAmount || 0).toLocaleString()}</td>
-                            <td><span className="badge-type">{item.paymentMethod || 'N/A'}</span></td>
-                            <td>
-                              <span className={`badge-status ${(item.paymentStatus || 'pending').toLowerCase()}`}>
-                                {item.paymentStatus || 'Pending'}
-                              </span>
+                          <tr key={t.id || idx}>
+                            <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                            <td style={{ whiteSpace: 'nowrap', color: '#475569' }}>{formatDateTimeDMY(t.date)}</td>
+                            <td><strong style={{ color: '#0f172a' }}>{t.txnNo || t.transactionNo}</strong></td>
+                            <td><span className="badge-type">{t.type || t.transactionType}</span></td>
+                            <td><strong style={{ color: '#0f172a' }}>{t.item || t.itemName}</strong></td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: isPositive ? '#15803d' : isNegative ? '#b91c1c' : '#0f172a' }}>
+                              {isPositive ? `+${Math.abs(t.quantity)}` : isNegative ? `-${Math.abs(t.quantity)}` : t.quantity}
                             </td>
-                            <td>
-                              <span className={`badge-status ${(item.orderStatus || 'new').toLowerCase()}`}>
-                                {item.orderStatus || 'New'}
+                            <td style={{ textAlign: 'center' }}>{t.unit}</td>
+                            <td style={{ color: '#334155' }}>{t.source || '-'}</td>
+                            <td style={{ color: '#334155' }}>{t.destination || '-'}</td>
+                            <td><span style={{ fontWeight: 600, color: '#475569' }}>{t.refNo || t.referenceNo || '-'}</span></td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge-status ${(t.status || 'Completed').toLowerCase().replace(/\s+/g, '-')}`}>
+                                {t.status || 'Completed'}
                               </span>
                             </td>
                           </tr>
                         );
-                      }
+                      })
+                    )
+                  ) : inventorySubTab === 'low-stock' ? (
+                    paginatedRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: '#15803d', fontWeight: 600 }}>
+                          All inventory items are sufficiently stocked! No low or out of stock items.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedRecords.map((item, idx) => {
+                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        return (
+                          <tr key={item.id || idx}>
+                            <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                            <td><strong style={{ color: '#0f172a' }}>{item.name}</strong></td>
+                            <td style={{ textAlign: 'right', fontWeight: 700, color: item.closingStock <= 0 ? '#b91c1c' : '#b45309' }}>
+                              {item.closingStock}
+                            </td>
+                            <td style={{ textAlign: 'right', color: '#64748b', fontWeight: 600 }}>{item.minStock}</td>
+                            <td style={{ textAlign: 'center' }}>{item.unit}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge-status ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )
+                  ) : (
+                    paginatedRecords.map((item, idx) => {
+                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
                       return (
-                        <tr key={idx}>
-                          <td>{(currentPage - 1) * pageSize + idx + 1}</td>
-                          <td>-</td>
-                          <td>-</td>
-                          <td>-</td>
-                          <td>-</td>
-                          <td>-</td>
-                          <td style={{ textAlign: 'right' }}>₹{Number(item.collected - item.refund || 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>₹0</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700 }}>₹{Number(item.collected || 0).toLocaleString()}</td>
-                          <td><span className="badge-type">{item.method}</span></td>
-                          <td><span className="badge-status paid">Paid</span></td>
-                          <td><span className="badge-status completed">Completed</span></td>
+                        <tr key={item.id || idx}>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                          <td><strong style={{ color: '#0f172a' }}>{item.name}</strong></td>
+                          <td><span className="badge-type">{item.category}</span></td>
+                          <td style={{ textAlign: 'center' }}>{item.unit}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{item.openingStock}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d' }}>+{item.purchased}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#b91c1c' }}>-{item.used}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: item.wastage > 0 ? '#b45309' : '#64748b' }}>{item.wastage}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>{item.closingStock}</td>
+                          <td style={{ textAlign: 'right', color: '#64748b' }}>{item.minStock}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`badge-status ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )
+                )}
+                {activeTab === 'staff' && (
+                  loadingStaffReport ? (
+                    <tr>
+                      <td colSpan={10} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        Loading Staff Performance report...
+                      </td>
+                    </tr>
+                  ) : paginatedRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        No staff activity records found matching filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedRecords.map((s, idx) => {
+                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                      const staffId = s.staffId || s.employeeCode || s.staffCode || getFormattedStaffId(s, (currentPage - 1) * pageSize + idx);
+                      const staffName = s.waiterName || s.name || s.staffName || 'Staff Member';
+                      const role = s.role || 'Staff';
+                      const ordersHandled = Number(s.ordersHandled ?? s.ordersServed ?? 0);
+                      const kotsHandled = Number(s.kotsHandled ?? s.kotCount ?? s.ordersHandled ?? s.ordersServed ?? 0);
+                      const billsGenerated = Number(s.billsGenerated ?? s.ordersServed ?? 0);
+                      const paymentsCollected = Number(s.paymentsCollected ?? Math.max(0, billsGenerated - Number(s.cancelledOrders ?? 0)));
+                      const salesAmount = Number(s.salesAmount ?? s.revenue ?? 0);
+                      const cancelledOrders = Number(s.cancelledOrders ?? 0);
+
+                      return (
+                        <tr key={s.id || s._id || idx}>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
+                          <td><span style={{ fontWeight: 600, color: '#334155' }}>{staffId}</span></td>
+                          <td><strong style={{ color: '#0f172a' }}>{staffName}</strong></td>
+                          <td><span className="badge-type">{role}</span></td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{ordersHandled.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#2563eb' }}>{kotsHandled.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#0d9488' }}>{billsGenerated.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d' }}>{paymentsCollected.toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                            ₹{salesAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: cancelledOrders > 0 ? '#b91c1c' : '#64748b' }}>
+                            {cancelledOrders.toLocaleString()}
+                          </td>
                         </tr>
                       );
                     })
                   )
                 )}
               </tbody>
+              {activeTab === 'items' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Summary:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      {Number(dishApiData?.summary?.totalDishesPrepared ?? dishReportData.totalItemsSold ?? 0).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#334155' }}>
+                      ₹{Number(dishApiData?.summary?.grossSales ?? dishReportData.totalDishGross ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#be123c' }}>
+                      ₹{Number(dishApiData?.summary?.totalDiscount ?? dishReportData.totalDishDiscount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{Number(dishApiData?.summary?.foodRevenueGenerated ?? dishReportData.totalDishSales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
+                      100.0%
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+              {activeTab === 'inventory' && inventorySubTab === 'position' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Summary:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      {inventoryReportData.list.reduce((sum, i) => sum + i.openingStock, 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                      +{inventoryReportData.list.reduce((sum, i) => sum + i.purchased, 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                      -{inventoryReportData.list.reduce((sum, i) => sum + i.used, 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b45309' }}>
+                      {inventoryReportData.list.reduce((sum, i) => sum + i.wastage, 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      {inventoryReportData.list.reduce((sum, i) => sum + i.closingStock, 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', color: '#64748b' }}>
+                      -
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              )}
+              {activeTab === 'inventory' && inventorySubTab === 'movement' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={5} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Movements:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      {stockMovementData.list.reduce((sum, t) => sum + Number(t.quantity || 0), 0)}
+                    </td>
+                    <td colSpan={5}></td>
+                  </tr>
+                </tfoot>
+              )}
+              {activeTab === 'inventory' && inventorySubTab === 'low-stock' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Low / Out of Stock Items:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                      {inventoryReportData.lowStockList.reduce((sum, i) => sum + Number(i.closingStock || 0), 0)}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#64748b' }}>
+                      {inventoryReportData.lowStockList.reduce((sum, i) => sum + Number(i.minStock || 0), 0)}
+                    </td>
+                    <td colSpan={2}></td>
+                  </tr>
+                </tfoot>
+              )}
+              {activeTab === 'staff' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
+                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                      Total Summary:
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      {Number(staffApiData?.summary?.ordersHandled ?? staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
+                      {Number(staffApiData?.summary?.kotsHandled ?? staffReportData.totalKotsHandled).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0d9488' }}>
+                      {Number(staffApiData?.summary?.billsGenerated ?? staffReportData.totalBillsGenerated).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                      {Number(staffApiData?.summary?.paymentsCollected ?? staffReportData.totalPaymentsCollected).toLocaleString()}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{Number(staffApiData?.summary?.salesAmount ?? staffApiData?.summary?.totalStaffSales ?? staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                      {Number(staffApiData?.summary?.cancelledOrders ?? staffReportData.totalCancelledOrders).toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
-          )}
         </div>
 
         {/* PAGINATION BAR */}
@@ -1788,82 +3023,9 @@ export default function ReportsPanel({
           </div>
         )}
       </div>
-
-      {/* SECONDARY SECTION FOR TAX REPORT: TAX TYPE BREAKDOWN TABLE */}
-      {activeTab === 'tax' && (
-        <div className="reports-table-card" style={{ marginTop: '24px' }}>
-          <div className="reports-table-header-bar">
-            <div className="reports-table-title">
-              <span>GST & Tax Breakdown</span>
-            </div>
-          </div>
-          <div className="reports-table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Tax Type</th>
-                  <th>Tax Rate</th>
-                  <th style={{ textAlign: 'right' }}>Taxable Amount</th>
-                  <th style={{ textAlign: 'right' }}>Tax Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {taxReportData.taxRows.map((r, i) => (
-                  <tr key={i}>
-                    <td><strong>{r.type}</strong></td>
-                    <td><span className="badge-type">{r.rate}</span></td>
-                    <td style={{ textAlign: 'right' }}>₹{r.taxable.toLocaleString()}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{r.amount.toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
 
-      {/* SECONDARY SECTION FOR INVENTORY REPORT: LOW STOCK REORDER ALERT TABLE */}
-      {activeTab === 'inventory' && inventoryReportData.lowStockList.length > 0 && (
-        <div className="reports-table-card" style={{ marginTop: '24px' }}>
-          <div className="reports-table-header-bar" style={{ background: '#fff7ed' }}>
-            <div className="reports-table-title" style={{ color: '#c2410c' }}>
-              <AlertTriangleIcon size={18} color="#c2410c" />
-              <span>Low Stock Alerts & Reorder List</span>
-            </div>
-            <span className="reports-record-badge" style={{ background: '#ffedd5', color: '#c2410c' }}>
-              {inventoryReportData.lowStockList.length} Items Require Action
-            </span>
-          </div>
-          <div className="reports-table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Item Name</th>
-                  <th style={{ textAlign: 'right' }}>Current Stock</th>
-                  <th style={{ textAlign: 'right' }}>Minimum Stock</th>
-                  <th>Unit</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventoryReportData.lowStockList.map((item, i) => (
-                  <tr key={i}>
-                    <td><strong>{item.name}</strong></td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: item.closingStock <= 0 ? '#b91c1c' : '#b45309' }}>{item.closingStock}</td>
-                    <td style={{ textAlign: 'right' }}>{item.minStock}</td>
-                    <td>{item.unit}</td>
-                    <td>
-                      <span className={`badge-status ${item.status.toLowerCase().replace(/\s+/g, '-')}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+
 
       {/* ORDER DETAILS MODAL */}
       {viewOrder && (

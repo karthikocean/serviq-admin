@@ -35,6 +35,7 @@ export default function AdminLayout() {
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(false);
+  const [sidebarReportsOpen, setSidebarReportsOpen] = useState(false);
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
@@ -181,6 +182,18 @@ export default function AdminLayout() {
         ];
         return invKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
       }
+      if (moduleName === 'reports_analytics' || moduleName === 'reports') {
+        const repKeys = [
+          'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
+          'reports_inventory', 'reports_staff', 'reports_tax'
+        ];
+        return repKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
+      }
+      if (moduleName.startsWith('reports_')) {
+        return !!currentUser.role.permissions[moduleName]?.[action] ||
+               !!currentUser.role.permissions['reports_analytics']?.[action] ||
+               !!currentUser.role.permissions['reports']?.[action];
+      }
       const modulePerms = currentUser.role.permissions[moduleName] || {};
       return !!modulePerms[action];
     }
@@ -195,6 +208,19 @@ export default function AdminLayout() {
         'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
       ];
       return invKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
+    }
+    if (moduleName === 'reports_analytics' || moduleName === 'reports') {
+      const repKeys = [
+        'reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders',
+        'reports_inventory', 'reports_staff', 'reports_tax'
+      ];
+      return repKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
+    }
+    if (moduleName.startsWith('reports_')) {
+      return !!userRoleConfig.permissions?.[moduleName]?.[action] ||
+             !!userRoleConfig.permissions?.[moduleName.replace('reports_', 'report_')]?.[action] ||
+             !!userRoleConfig.permissions?.['reports_analytics']?.[action] ||
+             !!userRoleConfig.permissions?.['reports']?.[action];
     }
     const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
     return !!modulePermissions[action];
@@ -270,7 +296,17 @@ export default function AdminLayout() {
     if (p.startsWith('/staff') || p.startsWith('/waiter') || p.startsWith('/kitchen')) return 'Staff Management';
     if (p === '/billing/history') return 'Billing History';
     if (p.startsWith('/billing')) return 'Current Billing';
-    if (p.startsWith('/reports')) return 'Reports & Analytics';
+    if (p.startsWith('/reports')) {
+      const searchParams = new URLSearchParams(location.search);
+      const tab = searchParams.get('tab') || 'sales';
+      if (tab === 'sales') return 'Sales & Revenue Report';
+      if (tab === 'items') return 'Dish Performance Report';
+      if (tab === 'orders') return 'Order Analytics Report';
+      if (tab === 'inventory') return 'Inventory & Stock Report';
+      if (tab === 'staff') return 'Staff Performance Report';
+      if (tab === 'tax') return 'Tax & Settlement Report';
+      return 'Reports & Analytics';
+    }
     if (p.startsWith('/users')) return 'User Accounts';
     if (p.startsWith('/roles-permissions')) return 'Roles & Permission';
     if (p.startsWith('/settings')) return 'Restaurant Settings';
@@ -302,18 +338,23 @@ export default function AdminLayout() {
   const isReportsActive = pathname.startsWith('/reports');
   const isSettingsActive = pathname.startsWith('/settings');
 
+  const reportSearchParams = new URLSearchParams(location.search);
+  const currentReportTab = reportSearchParams.get('tab') || 'sales';
+
   // Mutual exclusion and auto-close handlers for dropdowns
   const handleCloseAllDropdowns = () => {
     setSidebarInventoryOpen(false);
     setSidebarBillingOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
   };
 
   const handleToggleInventoryDropdown = () => {
     setSidebarBillingOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
     setSidebarInventoryOpen(prev => !prev);
   };
 
@@ -321,7 +362,21 @@ export default function AdminLayout() {
     setSidebarInventoryOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
     setSidebarBillingOpen(prev => !prev);
+  };
+
+  const handleToggleReportsDropdown = () => {
+    setSidebarInventoryOpen(false);
+    setSidebarBillingOpen(false);
+    setSidebarWaiterOpen(false);
+    setSidebarKitchenOpen(false);
+    if (!isReportsActive) {
+      setSidebarReportsOpen(true);
+      navigate('/reports?tab=sales');
+    } else {
+      setSidebarReportsOpen(prev => !prev);
+    }
   };
 
   // Close dropdowns if navigating to an outside route
@@ -331,6 +386,11 @@ export default function AdminLayout() {
     }
     if (!pathname.startsWith('/billing')) {
       setSidebarBillingOpen(false);
+    }
+    if (!pathname.startsWith('/reports')) {
+      setSidebarReportsOpen(false);
+    } else {
+      setSidebarReportsOpen(true);
     }
   }, [pathname]);
 
@@ -655,15 +715,125 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 10. Reports (Unified with Waiter & Kitchen Reports) */}
+          {/* 10. Reports Dropdown with Sub-modules */}
           {isTabAllowed('reports_analytics') && (
-            <li className={`sidebar-item ${isReportsActive ? 'active' : ''}`}>
-              <Link to="/reports" onClick={handleCloseAllDropdowns}>
-                <span className="sidebar-icon-box">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                </span>
-                <span className="sidebar-item-label">Reports</span>
-              </Link>
+            <li className={`sidebar-group ${sidebarReportsOpen ? 'open' : ''}`}>
+              <div
+                className={`sidebar-item dropdown-trigger ${isReportsActive ? 'active' : ''}`}
+                onClick={handleToggleReportsDropdown}
+                style={{ cursor: 'pointer' }}
+              >
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  className="dropdown-trigger-link"
+                  style={{ display: 'flex', alignItems: 'center', width: '100%' }}
+                >
+                  <span className="sidebar-icon-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                  </span>
+                  <span className="sidebar-item-label">Reports</span>
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: sidebarReportsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </span>
+                </a>
+              </div>
+              {sidebarReportsOpen && (
+                <ul className="sidebar-submenu">
+                  {hasPermission('reports_sales', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'sales' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=sales" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <line x1="12" y1="1" x2="12" y2="23"></line>
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Sales & Revenue</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_items', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'items' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=items" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2"></path>
+                          <path d="M15 11v11"></path>
+                          <path d="M5 2v14a3 3 0 0 0 3 3h1v3"></path>
+                          <path d="M9 2v6"></path>
+                        </svg>
+                        <span>Dish Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_orders', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'orders' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=orders" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+                          <path d="M3 6h18"></path>
+                          <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        </svg>
+                        <span>Order Analytics</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_inventory', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'inventory' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=inventory" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="m7.5 4.27 9 5.15"></path>
+                          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                          <path d="m3.27 6.96 8.73 5.05 8.73-5.05"></path>
+                          <path d="M12 22.08V12"></path>
+                        </svg>
+                        <span>Inventory & Stock</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_staff', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'staff' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=staff" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>Staff Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_tax', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'tax' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=tax" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2z"></path>
+                          <line x1="8" y1="6" x2="16" y2="6"></line>
+                          <line x1="8" y1="10" x2="16" y2="10"></line>
+                          <line x1="8" y1="14" x2="12" y2="14"></line>
+                        </svg>
+                        <span>Tax & Settlement</span>
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              )}
             </li>
           )}
 

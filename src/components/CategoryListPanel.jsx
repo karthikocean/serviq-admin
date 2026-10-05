@@ -501,20 +501,49 @@ export default function CategoryListPanel({
             {/* Branch Assignment */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Branch Assignment {isRestaurantOwner && branches.length > 0 && <span style={{ color: '#ef4444' }}>*</span>}
+                Branch Assignment {branches.length > 0 && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               {(() => {
+                const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+                  ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+                  : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+                const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+                const userRole = (roleStr || '').toLowerCase().trim();
+                const userType = (userTypeStr || '').toUpperCase().trim();
+                const isCompanyUser =
+                  userType === 'RESTAURANT_OWNER' ||
+                  userType === 'OWNER' ||
+                  userType === 'SUPER ADMIN' ||
+                  userType === 'SUPER_ADMIN' ||
+                  userType === 'ADMIN' ||
+                  userRole === 'restaurant_owner' ||
+                  userRole === 'restaurant owner' ||
+                  userRole === 'owner' ||
+                  userRole === 'super admin' ||
+                  userRole === 'super_admin' ||
+                  userRole === 'admin' ||
+                  (!currentUser?.branchId && !currentUser?.activeBranchId);
+
+                const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+                  ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+                  : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
+
+                const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+                const isLocked = isBranchLogin;
+
                 const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
-                const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
-                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                  : null;
-                const currentBranchObj = headerBranchObj 
-                  || (formBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(formBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))) : null);
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
-                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                  effectiveVal = '';
+
+                let currentBranchVal = formBranchId;
+                if (isBranchLogin && userBranchId) {
+                  currentBranchVal = userBranchId;
+                } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                  currentBranchVal = '';
                 }
+
+                const currentBranchObj = currentBranchVal 
+                  ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                  : null;
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
                   { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -538,7 +567,7 @@ export default function CategoryListPanel({
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to currently selected branch.
+                        Branch is locked to your assigned branch.
                       </span>
                     )}
                     {formErrors.branchId && (

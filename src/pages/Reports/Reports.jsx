@@ -6,22 +6,29 @@ import './Reports.css';
 
 export default function Reports() {
   const { activeRestaurant, selectedBranchId } = useAppState();
-  const [searchParams] = useSearchParams();
-  const validTabs = ['sales', 'items', 'orders', 'waiter', 'kitchen', 'tax'];
+  const [searchParams, setSearchParams] = useSearchParams();
+  const validTabs = ['sales', 'items', 'orders', 'inventory', 'staff', 'tax'];
   const tabParam = searchParams.get('tab');
-  const initialTab = validTabs.includes(tabParam) ? tabParam : 'sales';
+  const mappedTab = (tabParam === 'waiter' || tabParam === 'kitchen') ? 'staff' : tabParam;
+  const activeTab = validTabs.includes(mappedTab) ? mappedTab : 'sales';
 
   if (!activeRestaurant) return null;
 
   const branches = React.useMemo(() => activeRestaurant?.branches || [], [activeRestaurant?.branches]);
 
+  const handleTabChange = (tabId) => {
+    setSearchParams({ tab: tabId });
+  };
+
   return (
     <ReportsPanel
-      key={initialTab}
+      key={activeTab}
       branches={branches}
       selectedBranchId={selectedBranchId}
       activeRestaurant={activeRestaurant}
-      initialTab={initialTab}
+      initialTab={activeTab}
+      activeTabProp={activeTab}
+      onTabChange={handleTabChange}
     />
   );
 }

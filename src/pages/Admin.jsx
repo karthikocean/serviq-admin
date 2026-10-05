@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from '../components/SearchableSelect.jsx';
 import { extractOrderISODate } from '../helper/DateHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 import OverviewPanel, { isTableOccupied } from '../components/OverviewPanel';
 import OrdersPanel from '../components/OrdersPanel';
@@ -352,6 +353,8 @@ export default function Admin() {
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarUsersOpen, setSidebarUsersOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
+  const [sidebarReportsOpen, setSidebarReportsOpen] = useState(false);
+  const [reportSubTab, setReportSubTab] = useState('sales');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
@@ -447,20 +450,22 @@ export default function Admin() {
   const { name, plan, tables = [], orders = [], menu = [], staff = [], billingData = [], kitchenLogin = { email: '', password: '' } } = activeRestaurant;
 
   // Branch-filtered data sets
-  const filteredOrders = selectedBranchId
-    ? orders.filter(o => o.branchId === selectedBranchId)
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
+
+  const filteredOrders = isBranchFiltered
+    ? orders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
     : orders;
 
-  const filteredStaff = selectedBranchId
-    ? staff.filter(s => s.branchId === selectedBranchId)
+  const filteredStaff = isBranchFiltered
+    ? staff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || []))
     : staff;
 
-  const filteredBillingData = selectedBranchId
-    ? billingData.filter(b => b.branchId === selectedBranchId)
+  const filteredBillingData = isBranchFiltered
+    ? billingData.filter(b => isBranchMatch(b, selectedBranchId, activeRestaurant?.branches || []))
     : billingData;
 
-  const filteredTables = selectedBranchId
-    ? tables.filter(t => t.branchId === selectedBranchId)
+  const filteredTables = isBranchFiltered
+    ? tables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []))
     : tables;
 
   // Filter sidebar based on role
@@ -1931,7 +1936,7 @@ export default function Admin() {
             <li className={`sidebar-group ${sidebarWaiterOpen ? 'open' : ''}`}>
               <div
                 className="sidebar-item dropdown-trigger"
-                onClick={() => { setSidebarWaiterOpen(!sidebarWaiterOpen); setSidebarKitchenOpen(false); setSidebarUsersOpen(false); }}
+                onClick={() => { setSidebarWaiterOpen(!sidebarWaiterOpen); setSidebarKitchenOpen(false); setSidebarUsersOpen(false); setSidebarBillingOpen(false); setSidebarReportsOpen(false); }}
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -1960,7 +1965,7 @@ export default function Admin() {
             <li className={`sidebar-group ${sidebarKitchenOpen ? 'open' : ''}`}>
               <div
                 className="sidebar-item dropdown-trigger"
-                onClick={() => { setSidebarKitchenOpen(!sidebarKitchenOpen); setSidebarWaiterOpen(false); setSidebarUsersOpen(false); }}
+                onClick={() => { setSidebarKitchenOpen(!sidebarKitchenOpen); setSidebarWaiterOpen(false); setSidebarUsersOpen(false); setSidebarBillingOpen(false); setSidebarReportsOpen(false); }}
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -2009,7 +2014,7 @@ export default function Admin() {
             <li className={`sidebar-group ${sidebarBillingOpen ? 'open' : ''}`}>
               <div
                 className="sidebar-item dropdown-trigger"
-                onClick={() => { setSidebarBillingOpen(!sidebarBillingOpen); setSidebarWaiterOpen(false); setSidebarKitchenOpen(false); setSidebarUsersOpen(false); }}
+                onClick={() => { setSidebarBillingOpen(!sidebarBillingOpen); setSidebarWaiterOpen(false); setSidebarKitchenOpen(false); setSidebarUsersOpen(false); setSidebarReportsOpen(false); }}
                 style={{ cursor: 'pointer' }}
               >
                 <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
@@ -2033,13 +2038,60 @@ export default function Admin() {
               )}
             </li>
           )}
-          {/* 10. Reports */}
+          {/* 10. Reports Dropdown */}
           {isTabAllowed('Reports') && (
-            <li className={`sidebar-item ${activeTab === 'Reports' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setActivePage(null); }}>
-              <a href="#" style={{ display: 'flex', alignItems: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z" /></svg>
-                Reports
-              </a>
+            <li className={`sidebar-group ${sidebarReportsOpen ? 'open' : ''}`}>
+              <div
+                className={`sidebar-item dropdown-trigger ${activeTab === 'Reports' ? 'active' : ''}`}
+                onClick={() => {
+                  setSidebarWaiterOpen(false);
+                  setSidebarKitchenOpen(false);
+                  setSidebarUsersOpen(false);
+                  setSidebarBillingOpen(false);
+                  if (activeTab !== 'Reports') {
+                    setActiveTab('Reports');
+                    setReportSubTab('sales');
+                    setActivePage(null);
+                    setSidebarReportsOpen(true);
+                  } else {
+                    setSidebarReportsOpen(prev => !prev);
+                  }
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <a href="#" onClick={e => e.preventDefault()} className="dropdown-trigger-link" style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: '12px' }}>
+                    <path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z" />
+                  </svg>
+                  Reports
+                  {sidebarReportsOpen ?
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="18 15 12 9 6 15" /></svg> :
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto' }}><polyline points="6 9 12 15 18 9" /></svg>
+                  }
+                </a>
+              </div>
+              {sidebarReportsOpen && (
+                <ul className="sidebar-submenu">
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'sales' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('sales'); setActivePage(null); }}>
+                    <a href="#">Sales & Revenue</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'items' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('items'); setActivePage(null); }}>
+                    <a href="#">Dish Performance</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'orders' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('orders'); setActivePage(null); }}>
+                    <a href="#">Order Analytics</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'inventory' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('inventory'); setActivePage(null); }}>
+                    <a href="#">Inventory & Stock</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'staff' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('staff'); setActivePage(null); }}>
+                    <a href="#">Staff Performance</a>
+                  </li>
+                  <li className={`sidebar-item ${activeTab === 'Reports' && reportSubTab === 'tax' ? 'active' : ''}`} onClick={() => { setActiveTab('Reports'); setReportSubTab('tax'); setActivePage(null); }}>
+                    <a href="#">Tax & Settlement</a>
+                  </li>
+                </ul>
+              )}
             </li>
           )}
           {/* 11. Settings */}
@@ -2378,9 +2430,15 @@ export default function Admin() {
               )}
               {activeTab === 'Reports' && (
                 <ReportsPanel
-                  orders={filteredOrders}
+                  orders={orders}
+                  staff={staff}
                   menu={menu}
+                  branches={activeRestaurant?.branches || []}
+                  selectedBranchId={selectedBranchId}
                   activeRestaurant={activeRestaurant}
+                  initialTab={reportSubTab}
+                  activeTabProp={reportSubTab}
+                  onTabChange={(newTab) => setReportSubTab(newTab)}
                 />
               )}
               {activeTab === 'Settings' && (
