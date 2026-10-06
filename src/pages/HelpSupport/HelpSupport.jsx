@@ -1549,7 +1549,7 @@ export default function HelpSupport() {
                     <tr 
                       key={ticket._id || ticket.id || index}
                       style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fff7ed'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       {/* 1. S.NO */}

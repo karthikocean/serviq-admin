@@ -54,7 +54,19 @@ export default function BillingPanel({
   setBillingPaymentMethod,
   fetchBillingData,
   selectedBranchId,
-  currentUser = {}
+  currentUser = {},
+  searchTerm: propSearchTerm,
+  setSearchTerm: propSetSearchTerm,
+  selectedTable: propSelectedTable,
+  setSelectedTable: propSetSelectedTable,
+  customerFilter: propCustomerFilter,
+  setCustomerFilter: propSetCustomerFilter,
+  selectedStaff: propSelectedStaff,
+  setSelectedStaff: propSetSelectedStaff,
+  page: propPage,
+  setPage: propSetPage,
+  limit: propLimit = 10,
+  totalItems: propTotalItems = 0
 }) {
   const [viewingBill, setViewingBill] = useState(null); // Modal for View Bill
   const [paymentModalBill, setPaymentModalBill] = useState(null); // Modal for Collect Payment
@@ -67,18 +79,33 @@ export default function BillingPanel({
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Filters State: Dining Table, Customer, Cashier/Staff, and Search
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTable, setSelectedTable] = useState('All');
-  const [customerFilter, setCustomerFilter] = useState('');
-  const [selectedStaff, setSelectedStaff] = useState('All');
+  const [localSearchTerm, setLocalSearchTerm] = useState('');
+  const searchTerm = propSearchTerm !== undefined ? propSearchTerm : localSearchTerm;
+  const setSearchTerm = propSetSearchTerm || setLocalSearchTerm;
+
+  const [localSelectedTable, setLocalSelectedTable] = useState('All');
+  const selectedTable = propSelectedTable !== undefined ? propSelectedTable : localSelectedTable;
+  const setSelectedTable = propSetSelectedTable || setLocalSelectedTable;
+
+  const [localCustomerFilter, setLocalCustomerFilter] = useState('');
+  const customerFilter = propCustomerFilter !== undefined ? propCustomerFilter : localCustomerFilter;
+  const setCustomerFilter = propSetCustomerFilter || setLocalCustomerFilter;
+
+  const [localSelectedStaff, setLocalSelectedStaff] = useState('All');
+  const selectedStaff = propSelectedStaff !== undefined ? propSelectedStaff : localSelectedStaff;
+  const setSelectedStaff = propSetSelectedStaff || setLocalSelectedStaff;
 
   // Pagination for List Table
-  const [page, setPage] = useState(0);
-  const limit = 10;
+  const [localPage, setLocalPage] = useState(0);
+  const page = propPage !== undefined ? propPage : localPage;
+  const setPage = propSetPage || setLocalPage;
+  const limit = propLimit || 10;
 
-  // Reset page when filters change
+  // Reset page when local filters change
   useEffect(() => {
-    setPage(0);
+    if (propPage === undefined) {
+      setLocalPage(0);
+    }
   }, [searchTerm, selectedTable, customerFilter, selectedStaff]);
 
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
@@ -110,21 +137,30 @@ export default function BillingPanel({
 
   // Cashier / Staff options
   const staffOptions = useMemo(() => {
-    const set = new Set();
-    displayBillingData.forEach(b => {
-      const s = b.staff || b.waiter || b.billedBy || b.waiterName;
-      if (s) set.add(String(s).trim());
-    });
+    const map = new Map();
     if (Array.isArray(activeRestaurant?.staff)) {
       activeRestaurant.staff.forEach(s => {
-        const sName = s.name || s.staffName || s.fullName;
-        if (sName) set.add(String(sName).trim());
+        const id = s._id || s.id;
+        const name = s.name || s.staffName || s.fullName || s.userName;
+        if (id && name) {
+          map.set(String(id), name);
+        } else if (name) {
+          map.set(name, name);
+        }
       });
     }
-    const sorted = Array.from(set).filter(Boolean).sort();
+    displayBillingData.forEach(b => {
+      const id = b.cashierId || b.staffId || b.waiterId;
+      const name = b.cashier || b.staff || b.waiter || b.billedBy;
+      if (id && name) {
+        map.set(String(id), String(name));
+      } else if (name && !Array.from(map.values()).includes(String(name))) {
+        map.set(String(name), String(name));
+      }
+    });
     return [
       { value: 'All', label: 'All Cashier / Staff' },
-      ...sorted.map(s => ({ value: s, label: s }))
+      ...Array.from(map.entries()).map(([value, label]) => ({ value, label }))
     ];
   }, [displayBillingData, activeRestaurant]);
 
@@ -135,7 +171,8 @@ export default function BillingPanel({
       if (selectedTable && selectedTable !== 'All') {
         const bTable = String(bill.table || bill.tableNumber || bill.tableNo || '').replace(/^Table\s*/i, '').trim().toLowerCase();
         const sTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
-        if (bTable !== sTable) return false;
+        const bTableId = String(bill.tableId || '').trim().toLowerCase();
+        if (bTable !== sTable && bTableId !== sTable) return false;
       }
 
       // 2. Customer Filter
@@ -148,8 +185,13 @@ export default function BillingPanel({
 
       // 3. Cashier / Staff Filter
       if (selectedStaff && selectedStaff !== 'All') {
-        const bStaff = (bill.staff || bill.waiter || bill.billedBy || bill.waiterName || '').trim().toLowerCase();
-        if (bStaff !== String(selectedStaff).trim().toLowerCase()) return false;
+        const itemStaffId = String(bill.cashierId || bill.staffId || bill.waiterId || '').trim();
+        const itemStaffName = String(bill.staff || bill.cashier || bill.waiter || bill.billedBy || bill.waiterName || '').trim().toLowerCase();
+        const selStaffOpt = staffOptions.find(o => o.value === selectedStaff);
+        const selLabel = (selStaffOpt?.label || selectedStaff).toLowerCase();
+        if (itemStaffId !== selectedStaff && itemStaffName !== String(selectedStaff).toLowerCase() && itemStaffName !== selLabel) {
+          return false;
+        }
       }
 
       // 4. Search Term
@@ -158,17 +200,20 @@ export default function BillingPanel({
         const matchesBill = (bill.billNo || bill.billNumber || '').toLowerCase().includes(q);
         const matchesOrd = (bill.orderId || '').toLowerCase().includes(q);
         const matchesTab = (bill.table || '').toLowerCase().includes(q) || `table ${bill.table}`.toLowerCase().includes(q);
-        const matchesStaff = (bill.staff || bill.waiter || bill.billedBy || '').toLowerCase().includes(q);
-        const matchesCust = (bill.customerName || '').toLowerCase().includes(q);
+        const matchesStaff = (bill.staff || bill.cashier || bill.waiter || bill.billedBy || '').toLowerCase().includes(q);
+        const matchesCust = (bill.customerName || '').toLowerCase().includes(q) || (bill.customerPhone || '').toLowerCase().includes(q);
         if (!matchesBill && !matchesOrd && !matchesTab && !matchesStaff && !matchesCust) return false;
       }
 
       return true;
     });
-  }, [displayBillingData, selectedTable, customerFilter, selectedStaff, searchTerm]);
+  }, [displayBillingData, selectedTable, customerFilter, selectedStaff, searchTerm, staffOptions]);
 
-  const paginatedBills = filteredBills.slice(page * limit, (page + 1) * limit);
-  const totalPages = Math.max(1, Math.ceil(filteredBills.length / limit));
+  const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
+  const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
+  const paginatedBills = displayBillingData.length > limit
+    ? filteredBills.slice(page * limit, (page + 1) * limit)
+    : filteredBills;
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
@@ -225,7 +270,7 @@ export default function BillingPanel({
         balanceAmount: 0,
         paymentMethod: payMethod,
         referenceNumber: payRefNo,
-        invoiceNo: `INV/25-26/${String(Math.floor(10000 + Math.random() * 90000))}`,
+        invoiceNo: paymentModalBill.invoiceNo || paymentModalBill.billNo || paymentModalBill.id || '-',
         billedBy: staffName,
         paidAt: new Date().toISOString()
       };
@@ -259,33 +304,33 @@ export default function BillingPanel({
 
   // Modern Tax Invoice HTML Generator (matching Admin theme and screenshot design)
   const generateTaxInvoiceHtml = (invoice) => {
-    const rawItems = (invoice.items && invoice.items.length > 0) ? invoice.items : [
-      { hsn: '996331', name: 'Paneer Butter Masala', qty: 1, rate: 280, amount: 280 },
-      { hsn: '996331', name: 'Butter Naan', qty: 3, rate: 45, amount: 135 },
-      { hsn: '996331', name: 'Veg Biryani', qty: 1, rate: 220, amount: 220 }
-    ];
-    const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
-    const cgst = parseFloat((subtotal * 0.025).toFixed(2));
-    const sgst = parseFloat((subtotal * 0.025).toFixed(2));
-    const total = (subtotal + cgst + sgst).toFixed(2);
-    const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.id || `INV/25-26/${String(Math.floor(10000 + Math.random() * 90000))}`;
-    const tableNo = String(invoice.table || invoice.tableNumber || '12').replace(/^Table\s*/i, '');
+    const rawItems = (invoice.items && Array.isArray(invoice.items) && invoice.items.length > 0) ? invoice.items : [];
+    const subtotal = invoice.subtotal != null ? Number(invoice.subtotal) : rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
+    const cgst = invoice.cgst != null ? Number(invoice.cgst) : (invoice.tax != null ? Number(invoice.tax) / 2 : parseFloat((subtotal * 0.025).toFixed(2)));
+    const sgst = invoice.sgst != null ? Number(invoice.sgst) : (invoice.tax != null ? Number(invoice.tax) / 2 : parseFloat((subtotal * 0.025).toFixed(2)));
+    const total = invoice.billAmount != null ? Number(invoice.billAmount).toFixed(2) : (subtotal + cgst + sgst).toFixed(2);
+    const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.billNo || invoice.id || '-';
+    const tableNo = String(invoice.table || invoice.tableNumber || '-').replace(/^Table\s*/i, '');
     const payMethodStr = invoice.paymentMethod || payMethod || 'UPI';
 
-    const d = invoice.createdAt || invoice.date ? new Date(invoice.createdAt || invoice.date) : new Date();
+    const d = invoice.createdAt || invoice.date || invoice.billDateTime ? new Date(invoice.createdAt || invoice.date || invoice.billDateTime) : new Date();
     const dateObj = isNaN(d.getTime()) ? new Date() : d;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const dateStr = `${String(dateObj.getDate()).padStart(2, '0')}-${months[dateObj.getMonth()]}-${dateObj.getFullYear()}`;
 
-    const itemsHtml = rawItems.map(it => `
+    const itemsHtml = rawItems.length > 0 ? rawItems.map(it => `
       <tr style="border-bottom: 1px solid #f1f5f9;">
-        <td style="padding: 10px 14px; text-align: left; font-size: 13px; color: #475569;">${it.hsn || '996331'}</td>
+        <td style="padding: 10px 14px; text-align: left; font-size: 13px; color: #475569;">${it.hsn || '-'}</td>
         <td style="padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 600; color: #0f172a;">${it.name || 'Item'}</td>
         <td style="padding: 10px 10px; text-align: center; font-size: 13px; color: #0f172a;">${it.qty || 1}</td>
         <td style="padding: 10px 14px; text-align: right; font-size: 13px; color: #0f172a; font-variant-numeric: tabular-nums;">${Number(it.rate || it.price || 0).toFixed(2)}</td>
         <td style="padding: 10px 14px; text-align: right; font-size: 13px; font-weight: 600; color: #0f172a; font-variant-numeric: tabular-nums;">${Number(it.amount || ((it.qty || 1) * (it.rate || it.price || 0))).toFixed(2)}</td>
       </tr>
-    `).join('');
+    `).join('') : `
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <td colspan="5" style="padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">No items recorded</td>
+      </tr>
+    `;
 
     return `
       <!DOCTYPE html>
@@ -637,43 +682,49 @@ export default function BillingPanel({
             <tbody>
               {paginatedBills.map((bill, index) => {
                 const isPaid = (bill.status || bill.paymentStatus || '').toLowerCase() === 'paid';
-                const billNo = bill.billNo || bill.billNumber || `B-${1040 + page * limit + index + 1}`;
+                const billNo = bill.billNo || bill.billNumber || '-';
                 const rawItems = bill.items || [];
-                const subtotal = rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
-                const tax = subtotal * 0.05;
-                const billAmount = Number(bill.total || bill.amount) || (subtotal + tax);
+                const subtotal = bill.subtotal !== undefined ? Number(bill.subtotal) : rawItems.reduce((acc, curr) => acc + (Number(curr.amount) || ((Number(curr.qty || 1)) * (Number(curr.rate || curr.price || 0)))), 0);
+                const tax = bill.tax !== undefined ? Number(bill.tax) : subtotal * 0.05;
+                const billAmount = Number(bill.billAmount ?? bill.total ?? bill.amount) || (subtotal + tax);
                 const paidAmount = isPaid ? billAmount : (Number(bill.paidAmount) || 0);
-                const balanceAmount = Math.max(0, billAmount - paidAmount);
+                const balanceAmount = bill.balanceAmount !== undefined ? Number(bill.balanceAmount) : Math.max(0, billAmount - paidAmount);
 
-                const dateStr = bill.date || formatDateDMY(bill.createdAt || new Date());
-                const timeStr = bill.time || (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:45 PM');
+                const dateStr = bill.date || formatDateDMY(bill.billDateTime || bill.createdAt || new Date());
+                const timeStr = bill.time || (bill.billDateTime ? new Date(bill.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'));
 
                 const currentBill = {
                   ...bill,
                   billNo,
+                  subtotal,
+                  tax,
+                  discount: Number(bill.discount || 0),
+                  billAmount,
                   total: billAmount,
                   items: rawItems,
-                  orderId: bill.orderId || `ORD-${100 + index}`,
+                  orderId: bill.orderId || bill.order_id || '-',
                   orderType: bill.orderType || 'Dine-In',
-                  table: bill.table || 'Table 1',
+                  table: bill.table || (bill.tableNo ? `Table ${bill.tableNo}` : '-'),
                   date: dateStr,
                   time: timeStr,
                   paidAmount,
                   balanceAmount,
                   status: isPaid ? 'Paid' : (bill.status || 'Unpaid'),
-                  paymentStatus: isPaid ? 'Paid' : (bill.paymentStatus || 'Unpaid')
+                  paymentStatus: isPaid ? 'Paid' : (bill.paymentStatus || 'Unpaid'),
+                  cashier: bill.cashier || bill.staff || '-',
+                  staff: bill.cashier || bill.staff || '-'
                 };
 
                 return (
                   <tr key={bill.tableId || bill._id || index}>
                     <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
-                      {page * limit + index + 1}
+                      {bill.sNo || (page * limit + index + 1)}
                     </td>
                     <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
                       {billNo}
                     </td>
                     <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
-                      {bill.orderId || `ORD-${100 + index}`}
+                      {bill.orderId || bill.order_id || '-'}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, background: '#eff6ff', color: '#2563eb' }}>
@@ -681,7 +732,7 @@ export default function BillingPanel({
                       </span>
                     </td>
                     <td style={{ textAlign: 'center', fontWeight: 700, color: '#ea580c', fontSize: '13px' }}>
-                      {bill.table ? (bill.table.includes('Table') ? bill.table : `Table ${bill.table}`) : 'Table 12'}
+                      {bill.table ? (String(bill.table).includes('Table') ? bill.table : `Table ${bill.table}`) : (bill.tableNo ? `Table ${bill.tableNo}` : '-')}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', lineHeight: 1.2 }}>{dateStr}</div>
@@ -858,7 +909,7 @@ export default function BillingPanel({
           boxSizing: 'border-box'
         }}>
           <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredBills.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredBills.length)} of {filteredBills.length} bills
+            Showing {totalBillsCount === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalBillsCount)} of {totalBillsCount} bills
           </span>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button

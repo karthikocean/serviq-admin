@@ -357,10 +357,12 @@ export default function KitchenReportsPanel({
                 paginatedKitchenReports.map(ord => {
                   const kitchenStaffName = ord.kitchenStaff || ord.chef || ord.preparedBy || 'Kitchen';
                   const priority = getOrderPriority(ord);
+                  const kotId = ord.kotNo || ord.kotId || (ord.kot ? `KOT-${ord.kot}` : (ord.id ? (String(ord.id).startsWith('KOT-') ? ord.id : `KOT-${ord.id}`) : '-'));
+                  const ordIdDisplay = ord.orderId || (ord.id ? (String(ord.id).startsWith('#') ? ord.id : (String(ord.id).startsWith('ORD-') ? `#${ord.id}` : `#ORD-${ord.id}`)) : '-');
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '13px' }}>KOT-{ord.id}</td>
-                      <td style={{ padding: '12px 14px', fontWeight: 600, fontFamily: 'monospace', fontSize: '13px' }}>#ORD-{ord.id}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '13px' }}>{kotId}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 600, fontFamily: 'monospace', fontSize: '13px' }}>{ordIdDisplay}</td>
                       <td style={{ padding: '12px 14px', maxWidth: '240px' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                           {(Array.isArray(ord.items) ? ord.items : (Array.isArray(ord.orderItems) ? ord.orderItems : [])).map((it, i) => (

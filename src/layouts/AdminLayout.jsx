@@ -108,9 +108,16 @@ export default function AdminLayout() {
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||
+    userType === 'COMPANY' ||
+    userType === 'COMPANY_ADMIN' ||
     userRoleUpper === 'RESTAURANT_OWNER' || 
     userRoleUpper === 'OWNER' || 
-    userRoleUpper === 'SUPER ADMIN';
+    userRoleUpper === 'SUPER ADMIN' ||
+    userRoleUpper === 'ADMIN' ||
+    userRoleUpper === 'COMPANY' ||
+    userRoleUpper === 'COMPANY_ADMIN' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
 
   // Verify if current user has Admin access allowed or restricted
   const resolveAdminAccessFlag = (obj) => {
@@ -170,20 +177,25 @@ export default function AdminLayout() {
       return false;
     }
 
-    // 2. Branch & Plans Management: restricted to Restaurant Owner only
+    // 2. Branch & Plans Management: restricted to Restaurant Owner / Company / Admin
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches'
     ) {
-      const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || selectedBranchId === '';
-      return isRestaurantOwner && isAllBranches;
+      const isAllOrCompany = 
+        !selectedBranchId || 
+        selectedBranchId === 'ALL' || 
+        selectedBranchId === 'All' || 
+        selectedBranchId === '' || 
+        String(selectedBranchId).toUpperCase() === 'COMPANY';
+      return (isRestaurantOwner || hasPermission('branch-management', 'view')) && isAllOrCompany;
     }
 
     if (
       permissionKey === 'plans-management' || 
       permissionKey === 'plans'
     ) {
-      return isRestaurantOwner;
+      return isRestaurantOwner || hasPermission('plans-management', 'view');
     }
 
     return hasPermission(permissionKey, 'view');

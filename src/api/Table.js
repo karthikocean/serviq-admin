@@ -53,9 +53,6 @@ class MemberApi {
 
   async createTable(data) {
     try {
-      const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
-      const isMock = token && token.startsWith("mock_");
-
       const response = await apiClient.post("/tables", data);
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(

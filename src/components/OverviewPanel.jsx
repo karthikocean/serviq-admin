@@ -187,11 +187,18 @@ export default function OverviewPanel({
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||
+    userType === 'COMPANY' ||
+    userType === 'COMPANY_ADMIN' ||
     userRole === 'restaurant_owner' || 
     userRole === 'restaurant owner' || 
     userRole === 'owner' || 
     userRole === 'super admin' || 
-    userRole === 'super_admin';
+    userRole === 'super_admin' ||
+    userRole === 'admin' ||
+    userRole === 'company' ||
+    userRole === 'company_admin' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
   const isAdmin = isRestaurantOwner || userRole === 'admin' || userType === 'ADMIN';
 
   const isSpecificBranch = Boolean(
@@ -1095,9 +1102,9 @@ export default function OverviewPanel({
                   return list.slice(0, 5).map((ord, idx) => {
                     const itemSummary = ord.itemsSummary || (ord.items || []).map(i => `${i.name || i.title} x ${i.quantity || i.qty || 1}`).join(', ') || 'Items';
                     const branchInfo = branches.find(b => isBranchMatch(b, ord.branchId || ord.branch || ord.restaurantBranchId, branches));
-                    const branchCode = ord.branch?.code || ord.branchCode || (branchInfo ? branchInfo.branchCode : (ord.branchId ? String(ord.branchId).slice(-6).toUpperCase() : 'BR-001'));
-                    const tableDisplay = ord.tableNumber || ord.tableName || (ord.table ? `Table ${ord.table}` : 'Takeaway');
-                    const orderIdDisplay = ord.orderId || (ord.id ? `#${ord.id}` : `#ORD-${idx + 1}`);
+                    const branchCode = ord.branch?.code || ord.branchCode || (branchInfo ? branchInfo.branchCode : (ord.branchId ? String(ord.branchId).slice(-6).toUpperCase() : '-'));
+                    const tableDisplay = ord.tableNumber || ord.tableName || (ord.table ? `Table ${ord.table}` : '-');
+                    const orderIdDisplay = ord.orderId || (ord.id ? (String(ord.id).startsWith('#') ? ord.id : `#${ord.id}`) : '-');
 
                     return (
                       <tr key={ord.id || ord._id || ord.orderId || idx} style={{ borderBottom: '1px solid var(--border)' }}>

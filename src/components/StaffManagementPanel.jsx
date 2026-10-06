@@ -9,6 +9,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -78,18 +79,18 @@ const TableAssignIcon = ({ size = 16, color = 'currentColor' }) => (
 
 const getFormattedStaffId = (u, fallbackIndex) => {
   if (!u) return '-';
-  const rawCode = u.employeeCode || u.staffCode || u.userCode || u.idCode;
+  const rawCode = u.employeeCode || u.staffCode || u.userCode || u.idCode || u.staffId || u.empId;
   const isRawHex = rawCode && /^[0-9a-fA-F]{24}$/.test(String(rawCode).trim());
   if (rawCode && !isRawHex) {
     return String(rawCode).trim();
   }
-  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
-    return `EMP-${String(fallbackIndex + 1).padStart(3, '0')}`;
-  }
   if (u._id && String(u._id).length >= 4) {
     return `EMP-${String(u._id).slice(-4).toUpperCase()}`;
   }
-  return 'EMP-001';
+  if (u.id && String(u.id).length >= 4) {
+    return `EMP-${String(u.id).slice(-4).toUpperCase()}`;
+  }
+  return '-';
 };
 
 export default function StaffManagementPanel({
@@ -325,20 +326,14 @@ export default function StaffManagementPanel({
   const filteredUsers = apiUsers.filter(u => {
     // 1a. Selected Header Branch filter
     if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
-      const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
-      const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
-      const effectiveStaffBranch = uBranchId || uBranch;
-      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(activeFilteredBranchId) && effectiveStaffBranch !== 'ALL') {
+      if (!isBranchMatch(u, activeFilteredBranchId, apiBranches)) {
         return false;
       }
     }
 
     // 1b. Company Login Branch Filter
     if (isCompanyLogin && branchFilter && branchFilter !== 'All') {
-      const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
-      const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
-      const effectiveStaffBranch = uBranchId || uBranch;
-      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(branchFilter)) {
+      if (!isBranchMatch(u, branchFilter, apiBranches)) {
         return false;
       }
     }

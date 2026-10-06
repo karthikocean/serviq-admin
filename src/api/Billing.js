@@ -4,31 +4,77 @@ import ShowNotifications from "../helper/ShowNotifications.js";
 class BillingApi {
   async getBillingHistory(filters = {}) {
     try {
-      const cleanParams = { limit: 10, page: 0 };
+      const cleanParams = {};
+
+      if (filters.branchId && filters.branchId !== 'All' && filters.branchId !== 'ALL' && String(filters.branchId).toUpperCase() !== 'COMPANY') {
+        cleanParams.branchId = filters.branchId;
+      }
+
+      const searchVal = filters.search || filters.searchTerm || filters.searchQuery;
+      if (searchVal && String(searchVal).trim()) {
+        cleanParams.search = String(searchVal).trim();
+      }
+
+      const tableVal = filters.tableId || filters.table;
+      if (tableVal && tableVal !== 'All' && tableVal !== 'ALL') {
+        cleanParams.tableId = tableVal;
+      }
+
+      const customerVal = filters.customer || filters.customerFilter;
+      if (customerVal && String(customerVal).trim()) {
+        cleanParams.customer = String(customerVal).trim();
+      }
+
+      const cashierVal = filters.cashierId || filters.cashier || filters.staffId;
+      if (cashierVal && cashierVal !== 'All' && cashierVal !== 'ALL') {
+        cleanParams.cashierId = cashierVal;
+      }
+
+      if (filters.dateRange && filters.dateRange !== 'All' && filters.dateRange !== 'ALL') {
+        cleanParams.dateRange = String(filters.dateRange).trim().toUpperCase().replace(/\s+/g, '_');
+      }
+
+      const startDateVal = filters.startDate || filters.dateStart || filters.fromDate || filters.customStartDate;
+      if (startDateVal) cleanParams.startDate = startDateVal;
+
+      const endDateVal = filters.endDate || filters.dateEnd || filters.toDate || filters.customEndDate;
+      if (endDateVal) cleanParams.endDate = endDateVal;
+
+      const pm = filters.paymentMethod || filters.paymentMode;
+      if (pm && pm !== 'All' && pm !== 'ALL') {
+        cleanParams.paymentMethod = String(pm).toUpperCase();
+      }
+
+      const ps = filters.paymentStatus || filters.status;
+      if (ps && ps !== 'All' && ps !== 'ALL') {
+        cleanParams.paymentStatus = String(ps).toUpperCase();
+      } else if (!cleanParams.paymentStatus) {
+        cleanParams.paymentStatus = 'PAID';
+      }
+
+      cleanParams.orderType = filters.orderType || 'DINE_IN';
+
+      // 1-based page index
+      const pageNum = filters.page !== undefined ? Number(filters.page) : 1;
+      cleanParams.page = pageNum < 1 ? 1 : pageNum;
+
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
+      cleanParams.sortBy = filters.sortBy || 'createdAt';
+      cleanParams.sortOrder = filters.sortOrder || 'desc';
+
+      if (filters.isExport) cleanParams.isExport = filters.isExport;
+      if (filters.limit === 0 || filters.limit === '0') cleanParams.limit = 0;
+
+      // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
-        const val = filters[key];
-        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
-          cleanParams[key] = val;
+        if (!['branchId', 'search', 'searchTerm', 'searchQuery', 'tableId', 'table', 'customer', 'customerFilter', 'cashierId', 'cashier', 'staffId', 'dateRange', 'startDate', 'endDate', 'dateStart', 'dateEnd', 'fromDate', 'toDate', 'customStartDate', 'customEndDate', 'paymentMethod', 'paymentMode', 'paymentStatus', 'status', 'orderType', 'page', 'limit', 'sortBy', 'sortOrder', 'isExport', 'selectedTable', 'selectedStaff', 'selectedPayment'].includes(key)) {
+          const val = filters[key];
+          if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
+            cleanParams[key] = val;
+          }
         }
       });
-      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
-      if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
-      if (filters.paymentMethod && !cleanParams.paymentMethod && filters.paymentMethod !== 'All' && filters.paymentMethod !== 'ALL') cleanParams.paymentMethod = filters.paymentMethod;
-      if (filters.status && !cleanParams.status && filters.status !== 'All' && filters.status !== 'ALL') cleanParams.status = filters.status;
-      if (filters.branchId && !cleanParams.branchId && filters.branchId !== 'All' && filters.branchId !== 'ALL') cleanParams.branchId = filters.branchId;
-      if (filters.dateStart && !cleanParams.startDate) cleanParams.startDate = filters.dateStart;
-      if (filters.dateEnd && !cleanParams.endDate) cleanParams.endDate = filters.dateEnd;
-      if (filters.fromDate && !cleanParams.startDate) cleanParams.startDate = filters.fromDate;
-      if (filters.toDate && !cleanParams.endDate) cleanParams.endDate = filters.toDate;
-      if (filters.customStartDate && !cleanParams.startDate) cleanParams.startDate = filters.customStartDate;
-      if (filters.customEndDate && !cleanParams.endDate) cleanParams.endDate = filters.customEndDate;
 
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
-      }
-      if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
-      }
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/history${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
@@ -50,17 +96,56 @@ class BillingApi {
     }
   }
 
-  async getActiveTables(filters = {}) {
+  async getCurrentBilling(filters = {}) {
     try {
       const cleanParams = {};
+
+      if (filters.branchId && filters.branchId !== 'All' && filters.branchId !== 'ALL' && String(filters.branchId).toUpperCase() !== 'COMPANY') {
+        cleanParams.branchId = filters.branchId;
+      }
+
+      const searchVal = filters.search || filters.searchTerm || filters.searchQuery;
+      if (searchVal && String(searchVal).trim()) {
+        cleanParams.search = String(searchVal).trim();
+      }
+
+      const tableVal = filters.tableId || filters.table;
+      if (tableVal && tableVal !== 'All' && tableVal !== 'ALL') {
+        cleanParams.tableId = tableVal;
+      }
+
+      const customerVal = filters.customer || filters.customerFilter;
+      if (customerVal && String(customerVal).trim()) {
+        cleanParams.customer = String(customerVal).trim();
+      }
+
+      const cashierVal = filters.cashierId || filters.cashier || filters.staffId;
+      if (cashierVal && cashierVal !== 'All' && cashierVal !== 'ALL') {
+        cleanParams.cashierId = cashierVal;
+      }
+
+      cleanParams.orderType = filters.orderType || 'DINE_IN';
+
+      // 1-based page index
+      const pageNum = filters.page !== undefined ? Number(filters.page) : 1;
+      cleanParams.page = pageNum < 1 ? 1 : pageNum;
+
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
+      cleanParams.sortBy = filters.sortBy || 'createdAt';
+      cleanParams.sortOrder = filters.sortOrder || 'desc';
+
+      // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
-        const val = filters[key];
-        if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined') {
-          cleanParams[key] = val;
+        if (!['branchId', 'search', 'searchTerm', 'searchQuery', 'tableId', 'table', 'customer', 'customerFilter', 'cashierId', 'cashier', 'staffId', 'orderType', 'page', 'limit', 'sortBy', 'sortOrder', 'selectedTable', 'selectedStaff'].includes(key)) {
+          const val = filters[key];
+          if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
+            cleanParams[key] = val;
+          }
         }
       });
+
       const queryParams = new URLSearchParams(cleanParams).toString();
-      const url = `/billing/active-tables${queryParams ? `?${queryParams}` : ''}`;
+      const url = `/billing/current${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
@@ -69,13 +154,17 @@ class BillingApi {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
-        "Failed to fetch active tables.";
-      console.warn("BillingApi getActiveTables note:", errorMessage);
+        "Failed to fetch current billing.";
+      console.warn("BillingApi getCurrentBilling note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,
       };
     }
+  }
+
+  async getActiveTables(filters = {}) {
+    return this.getCurrentBilling(filters);
   }
 
   async processTablePayment(payload) {

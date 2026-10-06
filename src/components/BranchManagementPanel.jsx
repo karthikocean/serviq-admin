@@ -1154,9 +1154,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
       }
-      const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
-      const isMock = token && token.startsWith("mock_");
-
       let res;
       try {
         res = await BranchApi.createBranch(payload);
@@ -1164,10 +1161,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         console.warn("BranchApi create error:", createErr);
       }
 
-      if (res?.status || res?.isFallback || isMock) {
-        const createdData = res?.response?.data || res?.response || {};
+      if (res?.status || res?.data?.success || res?.success) {
+        const createdData = res?.response?.data || res?.response || res?.data || {};
         const branchDoc = createdData?.branch || createdData?.data?.branch || createdData;
-        const createdId = branchDoc?._id || branchDoc?.id || createdData?._id || createdData?.id || `BR-${Date.now()}`;
+        const createdId = branchDoc?._id || branchDoc?.id || createdData?._id || createdData?.id;
 
         // Create manager user if manager details were provided
         if (managerVal && emailStr) {
@@ -1234,23 +1231,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             mobileNumber: 'This mobile number is already registered to another branch/user.'
           }));
         } else {
-          // If server failed unexpectedly or had network disconnect, fallback to local branch creation smoothly
-          const fallbackId = `BR-${Date.now()}`;
-          const newBranchObj = {
-            ...payload,
-            id: fallbackId,
-            _id: fallbackId,
-            branchManager: managerVal,
-            managerName: managerVal
-          };
-          setApiBranches(prev => [...(prev || []), newBranchObj]);
-          const restIdForState = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || 'mirchi';
-          if (addBranch) {
-            addBranch(restIdForState, newBranchObj);
-          }
-          ShowNotifications.showAlertNotification("Branch Created Successfully!", true);
-          await fetchBranches();
-          setActiveView('list');
+          ShowNotifications.showAlertNotification(res?.message || res?.response?.message || "Failed to create branch. Please try again.", false);
         }
       }
     }
@@ -1392,8 +1373,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     });
 
     const mappedOrders = branchOrdersRaw.map((ord, idx) => {
-      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : `#ORD-${String(idx + 1).padStart(3, '0')}`);
-      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || 'Table 1';
+      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '-');
+      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || '-';
       const itemsStr = Array.isArray(ord.items)
         ? ord.items.map(i => `${i.quantity || i.qty || 1}x ${i.name || i.menuItem?.name || 'Item'}`).join(', ')
         : (typeof ord.items === 'string' ? ord.items : 'Items Ordered');

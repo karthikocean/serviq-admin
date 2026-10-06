@@ -306,27 +306,9 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   return false;
 };
 
-export const DEFAULT_INVENTORY_CATEGORIES = [
-  { id: "INV-CAT-001", name: "Dairy", description: "Milk, butter, paneer, cream, yogurt", status: "AVAILABLE" },
-  { id: "INV-CAT-002", name: "Grains & Rice", description: "Basmati rice, wheat flour, grains, pulses", status: "AVAILABLE" },
-  { id: "INV-CAT-003", name: "Oils & Ghee", description: "Cooking oil, mustard oil, pure desi ghee", status: "AVAILABLE" },
-  { id: "INV-CAT-004", name: "Meat & Poultry", description: "Fresh chicken, mutton, seafood", status: "AVAILABLE" },
-  { id: "INV-CAT-005", name: "Vegetables", description: "Farm fresh onions, tomatoes, potatoes, herbs", status: "AVAILABLE" },
-  { id: "INV-CAT-006", name: "Spices & Condiments", description: "Cardamom, clove, whole & ground spices", status: "AVAILABLE" },
-  { id: "INV-CAT-007", name: "Beverages", description: "Tea leaves, coffee beans, syrups, juices", status: "AVAILABLE" },
-  { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
-];
+export const DEFAULT_INVENTORY_CATEGORIES = [];
 
-export const KNOWN_RESTAURANT_MAP = {
-  'test@gmail.com': 'Spice Route Restaurat',
-  'alice@gmail.com': 'AZ',
-  'test2@gmail.com': 'test',
-  'saravana@gmail.com': 'Saravana Bhavan',
-  'gayusmr5@gmail.com': 'Copper kitchen',
-  'mirchi@gmail.com': 'Mirchi',
-  'eee@gmail.com': 'eee',
-  'tttt@gmail.com': 'test'
-};
+export const KNOWN_RESTAURANT_MAP = {};
 
 export const extractRestaurantFromToken = (token) => {
   if (!token || typeof token !== 'string') return null;

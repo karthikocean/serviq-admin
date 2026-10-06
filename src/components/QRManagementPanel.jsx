@@ -3,6 +3,7 @@ import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import GenerateQRModal from './GenerateQRModal';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 const PrintIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -52,17 +53,16 @@ export default function QRManagementPanel({
   const [showGenerateModal, setShowGenerateModal] = useState(false);
 
   const rawQrCodes = activeRestaurant.qrCodes || [];
-  const scopedQrCodes = selectedBranchId
-    ? rawQrCodes.filter(q => q.branchId === selectedBranchId)
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
+  const scopedQrCodes = isBranchFiltered
+    ? rawQrCodes.filter(q => isBranchMatch(q, selectedBranchId, activeRestaurant.branches || []))
     : rawQrCodes;
-  const tables = activeRestaurant.tables || [];
+  const tables = isBranchFiltered
+    ? (activeRestaurant.tables || []).filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant.branches || []))
+    : (activeRestaurant.tables || []);
 
-  // Default display items
-  const displayQrs = scopedQrCodes.length > 0 ? scopedQrCodes : [
-    { id: "6a8bff25e04c3475c4894348", _id: "6a8bff25e04c3475c4894348", tableId: "T-01", branchId: "BR-001", createdAt: "2024-10-24" },
-    { id: "6a8bff25e04c3475c4894349", _id: "6a8bff25e04c3475c4894349", tableId: "T-02", branchId: "BR-001", createdAt: "2024-10-24" },
-    { id: "6a8bff25e04c3475c489434a", _id: "6a8bff25e04c3475c489434a", tableId: "T-03", branchId: "BR-002", createdAt: "2024-10-24" }
-  ];
+  // Display QR codes (no dummy fallback — only show real data)
+  const displayQrs = scopedQrCodes;
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '24/10/2024';

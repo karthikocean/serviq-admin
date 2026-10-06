@@ -21,15 +21,22 @@ export default function PlansManagement() {
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||
+    userType === 'COMPANY' ||
+    userType === 'COMPANY_ADMIN' ||
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+    userRoleLower === 'super_admin' ||
+    userRoleLower === 'admin' ||
+    userRoleLower === 'company' ||
+    userRoleLower === 'company_admin' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
 
-  // Strict check: Only Restaurant Owner can access plans management
-  if (!isRestaurantOwner) {
-    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner only.", false);
+  // Strict check: Only Restaurant Owner / Company can access plans management
+  if (!isRestaurantOwner && !hasPermission('plans-management', 'view')) {
+    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner / Company Admin.", false);
     return <Navigate to="/dashboard" replace />;
   }
 

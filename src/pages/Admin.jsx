@@ -484,19 +484,31 @@ export default function Admin() {
       userTypeUpper === 'OWNER' || 
       userTypeUpper === 'SUPER ADMIN' || 
       userTypeUpper === 'SUPER_ADMIN' || 
+      userTypeUpper === 'ADMIN' ||
+      userTypeUpper === 'COMPANY' ||
+      userTypeUpper === 'COMPANY_ADMIN' ||
       userRoleLower === 'restaurant_owner' || 
       userRoleLower === 'restaurant owner' || 
       userRoleLower === 'owner' || 
       userRoleLower === 'super admin' || 
-      userRoleLower === 'super_admin';
+      userRoleLower === 'super_admin' ||
+      userRoleLower === 'admin' ||
+      userRoleLower === 'company' ||
+      userRoleLower === 'company_admin' ||
+      (!currentUser?.branchId && !currentUser?.activeBranchId);
 
     if (tab === 'branch-management' || tab === 'branches') {
-      const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || selectedBranchId === '';
-      return isOwner && isAllBranches;
+      const isAllBranches = 
+        !selectedBranchId || 
+        selectedBranchId === 'ALL' || 
+        selectedBranchId === 'All' || 
+        selectedBranchId === '' || 
+        String(selectedBranchId).toUpperCase() === 'COMPANY';
+      return (isOwner || role === 'Admin' || hasPermission('branch-management', 'view')) && isAllBranches;
     }
 
     if (tab === 'plans-management' || tab === 'plans') {
-      return isOwner;
+      return isOwner || role === 'Admin' || hasPermission('plans-management', 'view');
     }
 
     if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || isOwner) {

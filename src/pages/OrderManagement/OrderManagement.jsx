@@ -82,11 +82,6 @@ export default function OrderManagement() {
         }
       }
 
-      // 3. If still empty, fallback to activeRestaurant.orders if available
-      if (fetchedOrders.length === 0 && Array.isArray(activeRestaurant?.orders) && activeRestaurant.orders.length > 0) {
-        fetchedOrders = activeRestaurant.orders;
-      }
-
       setApiOrders(fetchedOrders);
 
       if (paginationInfo && paginationInfo.totalOrders) {

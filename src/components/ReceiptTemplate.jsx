@@ -9,49 +9,37 @@ export const formatReceiptNum = (val) => {
 
 // Normalize data from any bill, invoice, or order object
 export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
-  const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Sriganda Palace';
-  const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || 'Service Rd, T K Reddy Layout, Annaiah Reddy Layout, Banaswadi, Bengaluru, Karnataka 560043';
-  const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '29ADDPR8125K1Z2';
+  const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || '';
+  const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '';
+  const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '';
 
   // Customer Name
   const rawCust = bill.customerName || bill.customer?.name || bill.clientName || bill.order?.customerName || bill.order?.customer?.name || '';
   const custName = (rawCust && String(rawCust).trim()) ? String(rawCust).trim() : 'Guest';
 
   // Table
-  const rawTable = bill.table || bill.tableNumber || bill.tableNo || (typeof bill.tableId === 'object' ? (bill.tableId?.tableNumber || bill.tableId?.tableNo) : bill.tableId) || '1';
-  const tableNo = String(rawTable).replace(/^Table\s*/i, '').trim() || '1';
+  const rawTable = bill.table || bill.tableNumber || bill.tableNo || (typeof bill.tableId === 'object' ? (bill.tableId?.tableNumber || bill.tableId?.tableNo) : bill.tableId) || '-';
+  const tableNo = String(rawTable).replace(/^Table\s*/i, '').trim() || '-';
 
   // Identify whether this is an Invoice or Bill
-  const isInvoice = Boolean(bill.invoiceNo || bill.invoiceNumber);
-  const displayNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.billNumber || (bill.id ? `B-${bill.id}` : (bill._id ? `B-${String(bill._id).slice(-4)}` : 'B-1041'));
-  const invNo = String(displayNo).replace(/^INV[\/-]*/i, '').replace(/^B[\/-]*/i, '').trim() || '1041';
+  const isInvoice = Boolean(bill.invoiceId || bill.invoiceNo || bill.invoiceNumber);
+  const displayNo = bill.invoiceId || bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.billNumber || bill.id || bill._id || '-';
+  const invNo = String(displayNo).replace(/^INV[\/-]*/i, '').replace(/^B[\/-]*/i, '').trim() || displayNo;
   const docTitle = `${isInvoice ? 'Invoice' : 'Bill'} - ${displayNo}`;
 
   // Date & Time
-  const d = bill.createdAt || bill.date || bill.createdDate || bill.timestamp || new Date();
+  const d = bill.billDateTime || bill.createdAt || bill.date || bill.createdDate || bill.timestamp || new Date();
   const dateObj = new Date(d);
   const isValidDate = !isNaN(dateObj.getTime());
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const dateStr = isValidDate ? `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}` : '5 Oct 2026';
-  const timeStr = bill.time || (isValidDate ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '12:30');
+  const dateStr = isValidDate ? `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}` : '-';
+  const timeStr = bill.time || (isValidDate ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '-');
 
   // Items
   const candidateItems = bill.items || bill.order?.items || bill.orderItems || [];
-  const billTotalNum = Number(bill.total || bill.amount || bill.billAmount || bill.totalAmount || 0);
+  const billTotalNum = Number(bill.billAmount || bill.totalAmount || bill.total || bill.amount || 0);
 
-  let rawItems = (Array.isArray(candidateItems) && candidateItems.length > 0) ? candidateItems : null;
-  if (!rawItems) {
-    if (billTotalNum > 0) {
-      const baseAmt = parseFloat((billTotalNum / 1.05).toFixed(2));
-      rawItems = [
-        { name: 'Restaurant Dining Food Items', qty: 1, rate: baseAmt, amount: baseAmt }
-      ];
-    } else {
-      rawItems = [
-        { name: 'Chicken Biriyani', qty: 1, rate: 120, amount: 120 }
-      ];
-    }
-  }
+  let rawItems = (Array.isArray(candidateItems) && candidateItems.length > 0) ? candidateItems : [];
 
   const items = rawItems.map(it => {
     const name = it.name || it.itemName || it.dishName || 'Item';
@@ -61,9 +49,10 @@ export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
     return { name, qty, rate, amount };
   });
 
-  const subtotal = items.reduce((acc, it) => acc + it.amount, 0);
-  const cgst = bill.cgst !== undefined ? Number(bill.cgst) : parseFloat((subtotal * 0.025).toFixed(2));
-  const sgst = bill.sgst !== undefined ? Number(bill.sgst) : parseFloat((subtotal * 0.025).toFixed(2));
+  const subtotal = bill.subtotal !== undefined ? Number(bill.subtotal) : items.reduce((acc, it) => acc + it.amount, 0);
+  const taxTotal = bill.tax !== undefined ? Number(bill.tax) : (subtotal * 0.05);
+  const cgst = bill.cgst !== undefined ? Number(bill.cgst) : parseFloat((taxTotal / 2).toFixed(2));
+  const sgst = bill.sgst !== undefined ? Number(bill.sgst) : parseFloat((taxTotal / 2).toFixed(2));
   const total = billTotalNum > 0
     ? billTotalNum
     : parseFloat((subtotal + cgst + sgst).toFixed(2));
@@ -97,14 +86,18 @@ export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
 // Standalone HTML Generator for Window.Print and Download (Pure Black & White Real Bill UI)
 export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
   const r = normalizeReceiptData(data, activeRestaurant);
-  const itemsHtml = r.items.map(it => `
+  const itemsHtml = r.items.length > 0 ? r.items.map(it => `
     <tr>
       <td style="padding: 5px 0; text-align: left; font-weight: 600; color: #000000; vertical-align: top;">${it.name}</td>
       <td style="padding: 5px 0; text-align: right; color: #000000; vertical-align: top;">₹${formatReceiptNum(it.rate)}</td>
       <td style="padding: 5px 0; text-align: center; color: #000000; vertical-align: top;">${it.qty}</td>
       <td style="padding: 5px 0; text-align: right; font-weight: 700; color: #000000; vertical-align: top;">₹${formatReceiptNum(it.amount)}</td>
     </tr>
-  `).join('');
+  `).join('') : `
+    <tr>
+      <td colspan="4" style="padding: 10px 0; text-align: center; color: #666; font-size: 11px;">No items recorded</td>
+    </tr>
+  `;
 
   return `<!DOCTYPE html>
 <html>
@@ -439,22 +432,30 @@ export const ReceiptCard = ({
           </tr>
         </thead>
         <tbody style={{ background: 'transparent' }}>
-          {r.items.map((it, idx) => (
-            <tr key={idx} style={{ background: 'transparent' }}>
-              <td style={{ padding: '5px 0', textAlign: 'left', fontWeight: 600, color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
-                {it.name}
-              </td>
-              <td style={{ padding: '5px 0', textAlign: 'right', color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
-                ₹{formatReceiptNum(it.rate)}
-              </td>
-              <td style={{ padding: '5px 0', textAlign: 'center', color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
-                {it.qty}
-              </td>
-              <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 700, color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
-                ₹{formatReceiptNum(it.amount)}
+          {r.items.length > 0 ? (
+            r.items.map((it, idx) => (
+              <tr key={idx} style={{ background: 'transparent' }}>
+                <td style={{ padding: '5px 0', textAlign: 'left', fontWeight: 600, color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
+                  {it.name}
+                </td>
+                <td style={{ padding: '5px 0', textAlign: 'right', color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
+                  ₹{formatReceiptNum(it.rate)}
+                </td>
+                <td style={{ padding: '5px 0', textAlign: 'center', color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
+                  {it.qty}
+                </td>
+                <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 700, color: '#000000', verticalAlign: 'top', background: 'transparent', border: 'none' }}>
+                  ₹{formatReceiptNum(it.amount)}
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr style={{ background: 'transparent' }}>
+              <td colSpan={4} style={{ padding: '10px 0', textAlign: 'center', color: '#666', fontSize: '11px', background: 'transparent', border: 'none' }}>
+                No items recorded
               </td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
 
