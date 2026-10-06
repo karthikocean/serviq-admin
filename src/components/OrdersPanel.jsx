@@ -7,7 +7,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import { generateReceiptHtml } from './ReceiptTemplate.jsx';
+import { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -557,14 +557,9 @@ export default function OrdersPanel({
     return 'Unassigned';
   };
 
-  // Helper for Printing KOT (Kitchen Order Ticket)
+  // Helper for Printing KOT (Kitchen Order Ticket - Centered Popup Window)
   const handlePrintKOT = (ord) => {
     if (!ord) return;
-    const popup = window.open('', '_blank', 'width=420,height=600');
-    if (!popup) {
-      ShowNotifications.showAlertNotification('Popup blocker enabled. Please allow popups to print KOT.', false);
-      return;
-    }
 
     const rawId = ord.orderId || ord.id || (ord._id ? String(ord._id).slice(-5).toUpperCase() : '1042');
     const orderIdStr = String(rawId).startsWith('ORD-') ? String(rawId) : (String(rawId).startsWith('#ORD-') ? String(rawId).replace('#', '') : `ORD-${rawId}`);
@@ -582,7 +577,14 @@ export default function OrdersPanel({
       <head>
         <title>KOT - ${kotNoStr}</title>
         <style>
+          @page { size: portrait; margin: 4mm; }
+          * { box-sizing: border-box; }
           body { font-family: 'Courier New', Courier, monospace; width: 280px; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+          @media print {
+            html, body { width: 100% !important; margin: 0 !important; padding: 4px !important; display: flex !important; justify-content: center !important; }
+            .kot-container { width: 280px !important; max-width: 280px !important; margin: 0 auto !important; }
+            @page { size: portrait; margin: 4mm; }
+          }
           .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
           .title { font-size: 16px; font-weight: bold; margin: 0; }
           .subtitle { font-size: 12px; font-weight: bold; margin-top: 2px; }
@@ -627,27 +629,25 @@ export default function OrdersPanel({
         ${ord.notes ? `<div style="margin-top: 8px; font-size: 11px; border-top: 1px dotted #000; padding-top: 4px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
         <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
         <script>
-          window.onload = function() { window.print(); };
+          window.onload = function() {
+            setTimeout(function() { window.print(); }, 100);
+          };
+          window.onafterprint = function() {
+            try { window.close(); } catch(e) {}
+          };
         </script>
       </body>
       </html>
     `;
 
-    popup.document.write(html);
-    popup.document.close();
+    openCenteredPrintWindow(html, `KOT - ${kotNoStr}`, 460, 680);
   };
 
-  // Helper for Printing Bill (Exact Thermal Receipt UI)
+  // Helper for Printing Bill (Exact Thermal Receipt UI - Centered Popup Window)
   const handlePrintBill = (ord) => {
     if (!ord) return;
-    const popup = window.open('', '_blank', 'width=450,height=650');
-    if (!popup) {
-      ShowNotifications.showAlertNotification('Popup blocker enabled. Please allow popups to print Bill.', false);
-      return;
-    }
     const html = generateReceiptHtml(ord, activeRestaurant);
-    popup.document.write(html);
-    popup.document.close();
+    openCenteredPrintWindow(html, `Print Bill - ${ord?.billNo || ord?.id || 'Doc'}`, 480, 700);
   };
 
   // Extract menu items from activeRestaurant
@@ -1988,16 +1988,44 @@ export default function OrdersPanel({
                   </label>
                   {(() => {
                     const allBranchesList = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
-                    const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
-                    const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                      ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                      : null;
-                    const currentBranchObj = headerBranchObj 
-                      || (modalSelectedBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(modalSelectedBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(modalSelectedBranchId))) : null);
-                    let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (modalSelectedBranchId || '');
-                    if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                      effectiveVal = '';
+                    const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
+                      ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+                      : (typeof currentUser?.role === 'string' ? currentUser.role : '');
+                    const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+                    const userRole = (roleStr || '').toLowerCase().trim();
+                    const userType = (userTypeStr || '').toUpperCase().trim();
+                    const isCompanyUser =
+                      userType === 'RESTAURANT_OWNER' ||
+                      userType === 'OWNER' ||
+                      userType === 'SUPER ADMIN' ||
+                      userType === 'SUPER_ADMIN' ||
+                      userType === 'ADMIN' ||
+                      userRole === 'restaurant_owner' ||
+                      userRole === 'restaurant owner' ||
+                      userRole === 'owner' ||
+                      userRole === 'super admin' ||
+                      userRole === 'super_admin' ||
+                      userRole === 'admin' ||
+                      (!currentUser?.branchId && !currentUser?.activeBranchId);
+
+                    const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+                      ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+                      : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
+
+                    const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+                    const isLocked = isBranchLogin;
+
+                    let currentBranchVal = modalSelectedBranchId;
+                    if (isBranchLogin && userBranchId) {
+                      currentBranchVal = userBranchId;
+                    } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                      currentBranchVal = '';
                     }
+
+                    const currentBranchObj = currentBranchVal 
+                      ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                      : null;
+                    let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                     const branchOptions = [
                       { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -2018,7 +2046,7 @@ export default function OrdersPanel({
                         />
                         {isLocked && (
                           <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                            Branch is locked to currently selected branch.
+                            Branch is locked to your assigned branch.
                           </span>
                         )}
                       </div>
@@ -4486,11 +4514,11 @@ export default function OrdersPanel({
                 <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                     <thead>
-                      <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                        <th style={{ textAlign: 'left', padding: '10px 14px', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Item</th>
-                        <th style={{ textAlign: 'center', padding: '10px 14px', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qty</th>
-                        <th style={{ textAlign: 'right', padding: '10px 14px', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Price</th>
-                        <th style={{ textAlign: 'right', padding: '10px 14px', fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total</th>
+                      <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                        <th style={{ textAlign: 'left', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Item</th>
+                        <th style={{ textAlign: 'center', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Qty</th>
+                        <th style={{ textAlign: 'right', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Price</th>
+                        <th style={{ textAlign: 'right', padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5077,7 +5105,7 @@ export default function OrdersPanel({
                 <div style={{ overflowX: 'auto', maxHeight: '220px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '650px' }}>
                     <thead>
-                      <tr style={{ background: '#000000', color: '#ffffff', borderBottom: '2px solid #ff5a1f' }}>
+                      <tr style={{ background: '#f95e10', color: '#ffffff' }}>
                         <th style={{ padding: '8px 10px', textAlign: 'center', width: '45px', color: '#ffffff' }}>S.No</th>
                         <th style={{ padding: '8px 10px', textAlign: 'left', color: '#ffffff' }}>Item</th>
                         <th style={{ padding: '8px 10px', textAlign: 'center', width: '90px', color: '#ffffff' }}>Quantity</th>

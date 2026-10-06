@@ -9,6 +9,7 @@ import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
 import SubscriptionApi from '../api/Subscription.js';
+import RoleApi from '../api/Role.js';
 import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
@@ -153,6 +154,158 @@ export const DEFAULT_ROLES = {
   }
 };
 
+export const checkHasPermission = (currentUser, activeRestaurant, moduleName, action = 'view') => {
+  if (!currentUser) return false;
+
+  const userTypeUpper = (currentUser.userType || '').toUpperCase().trim();
+  const roleObj = typeof currentUser.role === 'object' && currentUser.role !== null ? currentUser.role :
+                  typeof currentUser.roleId === 'object' && currentUser.roleId !== null ? currentUser.roleId : null;
+  const roleNameStr = roleObj?.roleName || roleObj?.name || (typeof currentUser.role === 'string' ? currentUser.role : '') || '';
+  const roleUpper = roleNameStr.toUpperCase().trim();
+
+  const isRestaurantOwner = 
+    userTypeUpper === 'RESTAURANT_OWNER' || 
+    userTypeUpper === 'OWNER' || 
+    userTypeUpper === 'SUPER ADMIN' || 
+    userTypeUpper === 'SUPER_ADMIN' || 
+    roleUpper === 'RESTAURANT_OWNER' || 
+    roleUpper === 'OWNER' || 
+    roleUpper === 'SUPER ADMIN';
+
+  // Restaurant Owner & Super Admin always have 100% full access to all modules and all actions
+  if (isRestaurantOwner) return true;
+
+  // Branch management & Plans management are strictly for Restaurant Owners only
+  if (
+    moduleName === 'branch-management' || 
+    moduleName === 'branch_management' || 
+    moduleName === 'branches' || 
+    moduleName === 'plans-management' || 
+    moduleName === 'plans_subscription' || 
+    moduleName === 'plans_management' || 
+    moduleName === 'plans'
+  ) {
+    return isRestaurantOwner;
+  }
+
+  // Check explicit admin access flag
+  const adminAccessFlag = currentUser.adminAccess ?? currentUser.isAdminAccess ?? roleObj?.adminAccess ?? roleObj?.isAdminAccess;
+  if (adminAccessFlag === false) return false;
+
+  // Extract embedded permissions object
+  const permissions = roleObj?.permissions || currentUser.permissions || null;
+
+  // Map module aliases to check interchangeable alias keys
+  const getNormalizedKeys = (key) => {
+    switch (key) {
+      case 'dashboard': case 'overview':
+        return ['dashboard', 'overview'];
+      case 'roles-permissions': case 'roles_permissions': case 'roles':
+        return ['roles_permissions', 'roles-permissions', 'roles'];
+      case 'branch-management': case 'branch_management': case 'branches':
+        return ['branch_management', 'branch-management', 'branches'];
+      case 'plans-management': case 'plans_subscription': case 'plans_management': case 'plans':
+        return ['plans_subscription', 'plans_management', 'plans-management', 'plans'];
+      case 'tables': case 'table':
+        return ['tables', 'table'];
+      case 'menu':
+        return ['menu'];
+      case 'orders': case 'order':
+        return ['orders', 'order'];
+      case 'staff': case 'staff_management': case 'waiter': case 'kitchen':
+        return ['staff_management', 'staff', 'waiter', 'kitchen'];
+      case 'users': case 'user_accounts':
+        return ['user_accounts', 'users'];
+      case 'billing_current':
+        return ['billing_current'];
+      case 'billing_history':
+        return ['billing_history'];
+      case 'help-support': case 'help_support': case 'help':
+        return ['help_support', 'help-support', 'help'];
+      case 'settings':
+        return ['settings'];
+      case 'inventory_distribution': case 'inventory_stock_distribution':
+        return ['inventory_distribution', 'inventory_stock_distribution'];
+      default:
+        return [key];
+    }
+  };
+
+  if (permissions && typeof permissions === 'object' && Object.keys(permissions).length > 0) {
+    // 1. Group checks for parent navigation modules:
+    // Only return true if AT LEAST ONE child submodule is permitted for this action!
+    if (moduleName === 'inventory') {
+      const invSubKeys = [
+        'inventory_items', 'inventory_central_stock', 'inventory_purchases',
+        'inventory_branch_requests', 'inventory_distribution', 'inventory_stock_distribution',
+        'inventory_transactions', 'inventory_my_stock', 'inventory_stock_request',
+        'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt'
+      ];
+      const hasAnyChild = invSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['inventory'] && permissions['inventory'][action] !== undefined) {
+        return Boolean(permissions['inventory'][action]);
+      }
+      return false;
+    }
+
+    if (moduleName === 'billing' || moduleName === 'billing_payments') {
+      const billSubKeys = ['billing_current', 'billing_history'];
+      const hasAnyChild = billSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['billing'] && permissions['billing'][action] !== undefined) {
+        return Boolean(permissions['billing'][action]);
+      }
+      return false;
+    }
+
+    if (moduleName === 'reports' || moduleName === 'reports_analytics') {
+      const repSubKeys = [
+        'reports_sales', 'reports_items', 'reports_orders',
+        'reports_inventory', 'reports_staff', 'reports_tax'
+      ];
+      const hasAnyChild = repSubKeys.some(k => permissions[k] && Boolean(permissions[k][action]));
+      if (hasAnyChild) return true;
+      if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
+        return Boolean(permissions['reports_analytics'][action]);
+      }
+      if (permissions['reports'] && permissions['reports'][action] !== undefined) {
+        return Boolean(permissions['reports'][action]);
+      }
+      return false;
+    }
+
+    // 2. Direct key matching for individual modules & submodules
+    const keysToCheck = getNormalizedKeys(moduleName);
+    for (const k of keysToCheck) {
+      if (permissions[k] !== undefined && permissions[k] !== null) {
+        const modPerm = permissions[k];
+        if (typeof modPerm === 'object' && modPerm[action] !== undefined) {
+          return Boolean(modPerm[action]);
+        }
+      }
+    }
+
+    // Role permissions are explicitly defined, so anything not explicitly granted is strictly false
+    return false;
+  }
+
+  // Fallback to activeRestaurant.roles or DEFAULT_ROLES ONLY IF permissions object is completely absent
+  const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
+  const userRoleConfig = rolesConfig[roleNameStr] || rolesConfig[currentUser.userType] || DEFAULT_ROLES[roleNameStr] || DEFAULT_ROLES[currentUser.userType] || { permissions: {} };
+
+  if (userRoleConfig?.permissions) {
+    const keysToCheck = getNormalizedKeys(moduleName);
+    for (const k of keysToCheck) {
+      if (userRoleConfig.permissions[k] && userRoleConfig.permissions[k][action] !== undefined) {
+        return Boolean(userRoleConfig.permissions[k][action]);
+      }
+    }
+  }
+
+  return false;
+};
+
 export const DEFAULT_INVENTORY_CATEGORIES = [
   { id: "INV-CAT-001", name: "Dairy", description: "Milk, butter, paneer, cream, yogurt", status: "AVAILABLE" },
   { id: "INV-CAT-002", name: "Grains & Rice", description: "Basmati rice, wheat flour, grains, pulses", status: "AVAILABLE" },
@@ -188,6 +341,7 @@ export const extractRestaurantFromToken = (token) => {
           (typeof payload.restaurant === 'object' ? (payload.restaurant?.restaurantName || payload.restaurant?.name) : null) ||
           (typeof payload.restaurant === 'string' && !/^[0-9a-fA-F]{24}$/.test(payload.restaurant) ? payload.restaurant : null) ||
           null
+          
         );
       }
     }
@@ -258,6 +412,17 @@ export const AppProvider = ({ children }) => {
     } catch (e) {}
     return 'COMPANY';
   });
+
+  // Synchronize selectedBranchId to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (selectedBranchId) {
+        sessionStorage.setItem('selectedBranchId', String(selectedBranchId));
+      } else {
+        sessionStorage.setItem('selectedBranchId', '');
+      }
+    } catch (e) {}
+  }, [selectedBranchId]);
 
   // Synchronize currentUser to sessionStorage whenever it changes
   useEffect(() => {
@@ -1069,6 +1234,108 @@ export const AppProvider = ({ children }) => {
           return null;
         }
 
+        // Verify admin access for current user profile
+        const profUserType = (profileData.userType || '').toUpperCase().trim();
+        let profRoleObj = (typeof profileData.role === 'object' && profileData.role !== null) ? profileData.role :
+                            (typeof profileData.roleId === 'object' && profileData.roleId !== null) ? profileData.roleId : null;
+
+        const roleIdToLookup = (typeof profileData.roleId === 'string' && profileData.roleId) || 
+                               (typeof profileData.role === 'string' && profileData.role) ||
+                               profRoleObj?._id || profRoleObj?.id;
+
+        if ((!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) && roleIdToLookup) {
+          try {
+            if (/^[0-9a-fA-F]{24}$/.test(roleIdToLookup)) {
+              const rRes = await RoleApi.getRoleById(roleIdToLookup);
+              if (rRes && rRes.status && rRes.response) {
+                profRoleObj = rRes.response?.data || rRes.response;
+              }
+            }
+            if (!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) {
+              const listRes = await RoleApi.getRoles({ limit: 100 });
+              if (listRes && listRes.status && listRes.response) {
+                const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
+                if (Array.isArray(rolesList)) {
+                  profRoleObj = rolesList.find(r => 
+                    String(r._id) === String(roleIdToLookup) || 
+                    String(r.id) === String(roleIdToLookup) ||
+                    String(r.roleName || '').trim().toLowerCase() === String(roleIdToLookup).trim().toLowerCase()
+                  );
+                }
+              }
+            }
+          } catch (err) {
+            console.warn("Could not fetch role in fetchProfile:", err);
+          }
+        }
+
+        const profRoleStr = profRoleObj?.roleName || profRoleObj?.name || (typeof profileData.role === 'string' ? profileData.role : '') || '';
+        const profRoleUpper = profRoleStr.toUpperCase().trim();
+        const profRoleLower = profRoleStr.toLowerCase().trim();
+
+        const isOwnerAccount = 
+          profUserType === 'RESTAURANT_OWNER' || 
+          profUserType === 'OWNER' || 
+          profUserType === 'SUPER ADMIN' || 
+          profUserType === 'SUPER_ADMIN' || 
+          profRoleUpper === 'RESTAURANT_OWNER' || 
+          profRoleUpper === 'OWNER' || 
+          profRoleUpper === 'SUPER ADMIN';
+
+        const resolveAdminAccessFlag = (obj) => {
+          if (!obj || typeof obj !== 'object') return undefined;
+          if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+            return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+          }
+          if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+            return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+          }
+          if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+            return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+          }
+          return undefined;
+        };
+
+        let profAdminAccess = 
+          resolveAdminAccessFlag(profileData) ??
+          resolveAdminAccessFlag(profRoleObj) ??
+          resolveAdminAccessFlag(typeof profileData.role === 'object' ? profileData.role : null) ??
+          resolveAdminAccessFlag(typeof profileData.roleId === 'object' ? profileData.roleId : null);
+
+        if (profAdminAccess === undefined) {
+          if (isOwnerAccount) {
+            profAdminAccess = true;
+          } else {
+            profAdminAccess = !(
+              profRoleLower.includes('waiter') ||
+              profRoleLower.includes('kitchen') ||
+              profRoleLower.includes('chef') ||
+              profRoleLower.includes('cook') ||
+              profRoleLower.includes('server') ||
+              profRoleLower.includes('steward') ||
+              profUserType === 'STATION' ||
+              profUserType === 'WAITER' ||
+              profUserType === 'KITCHEN'
+            );
+          }
+        }
+
+        if (profAdminAccess === false) {
+          const deniedMsg = "Access Denied: You do not have admin access to access the Admin Panel.";
+          sessionStorage.setItem("deactivatedToast", deniedMsg);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(deniedMsg, false);
+          }
+          return null;
+        }
+
         setCurrentUser(prevUser => {
           const profileSub = profileData.subscription || restObj?.subscription;
           const prevSub = prevUser?.subscription;
@@ -1086,6 +1353,24 @@ export const AppProvider = ({ children }) => {
 
           const livePlan = prevUser?.plan || prevSub?.planName || profileData.plan || profileSub?.planName || restObj?.plan || 'Standard';
 
+          // Preserve populated role permissions
+          let resolvedPermissions = 
+            (profRoleObj?.permissions && Object.keys(profRoleObj.permissions).length > 0) ? profRoleObj.permissions :
+            (typeof profileData.role === 'object' && profileData.role?.permissions && Object.keys(profileData.role.permissions).length > 0) ? profileData.role.permissions :
+            (typeof profileData.roleId === 'object' && profileData.roleId?.permissions && Object.keys(profileData.roleId.permissions).length > 0) ? profileData.roleId.permissions :
+            (typeof prevUser?.role === 'object' && prevUser?.role?.permissions && Object.keys(prevUser.role.permissions).length > 0) ? prevUser.role.permissions :
+            (typeof prevUser?.roleId === 'object' && prevUser?.roleId?.permissions && Object.keys(prevUser.roleId.permissions).length > 0) ? prevUser.roleId.permissions :
+            (prevUser?.permissions && Object.keys(prevUser.permissions).length > 0) ? prevUser.permissions :
+            {};
+
+          let finalRole = profRoleObj || profileData.role || prevUser?.role;
+          if (finalRole && typeof finalRole === 'object') {
+            finalRole = {
+              ...finalRole,
+              permissions: resolvedPermissions
+            };
+          }
+
           const updatedUser = {
             ...(prevUser || {}),
             ...profileData,
@@ -1096,6 +1381,10 @@ export const AppProvider = ({ children }) => {
             phoneNumber: profileData.phoneNumber || prevUser?.phoneNumber,
             profileImage: profileData.profileImage || prevUser?.profileImage,
             userType: profileData.userType || prevUser?.userType,
+            role: finalRole,
+            roleId: finalRole || profileData.roleId || prevUser?.roleId,
+            permissions: resolvedPermissions,
+            adminAccess: profAdminAccess,
             restaurantId: profileData.restaurantId || prevUser?.restaurantId,
             plan: livePlan,
             subscription: mergedSub,
@@ -1222,57 +1511,104 @@ export const AppProvider = ({ children }) => {
             };
           }
 
-          const userTypeUpper = (apiUser.userType || '').toUpperCase();
-          const roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
+          const userTypeUpper = (apiUser.userType || '').toUpperCase().trim();
+          let roleObj = (typeof apiUser.role === 'object' && apiUser.role !== null) ? apiUser.role : 
                           (typeof apiUser.roleId === 'object' && apiUser.roleId !== null) ? apiUser.roleId : null;
+
+          const roleIdentifier = (typeof apiUser.roleId === 'string' && apiUser.roleId) ? apiUser.roleId : 
+                                 (typeof apiUser.role === 'string' && apiUser.role) ? apiUser.role : 
+                                 roleObj?._id || roleObj?.id;
+
+          // Temporarily set token in sessionStorage so RoleApi calls are authenticated
+          sessionStorage.setItem("userToken", token);
+          sessionStorage.setItem("token", token);
+
+          if ((!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) && roleIdentifier) {
+            try {
+              if (/^[0-9a-fA-F]{24}$/.test(roleIdentifier)) {
+                const rRes = await RoleApi.getRoleById(roleIdentifier);
+                if (rRes && rRes.status && rRes.response) {
+                  roleObj = rRes.response?.data || rRes.response;
+                }
+              }
+              if (!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) {
+                const listRes = await RoleApi.getRoles({ limit: 100 });
+                if (listRes && listRes.status && listRes.response) {
+                  const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
+                  if (Array.isArray(rolesList)) {
+                    roleObj = rolesList.find(r => 
+                      String(r._id) === String(roleIdentifier) || 
+                      String(r.id) === String(roleIdentifier) ||
+                      String(r.roleName || '').trim().toLowerCase() === String(roleIdentifier).trim().toLowerCase()
+                    );
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("Could not fetch role in login:", err);
+            }
+          }
+
           const roleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
-          const roleUpper = roleStr.toUpperCase();
+          const roleUpper = roleStr.toUpperCase().trim();
           const roleLower = roleStr.toLowerCase().trim();
-          const emailLower = cleanEmail.toLowerCase().trim();
 
           const isRestaurantOwner = 
             userTypeUpper === 'RESTAURANT_OWNER' || 
             userTypeUpper === 'OWNER' || 
             userTypeUpper === 'SUPER ADMIN' || 
             userTypeUpper === 'SUPER_ADMIN' ||
-            userTypeUpper === 'ADMIN' ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
-            roleUpper === 'OWNER' ||
-            roleUpper === 'ADMIN' ||
-            roleLower === 'admin' ||
-            String(apiUser.name || '').toLowerCase().includes('admin') ||
-            emailLower.includes('admin');
+            roleUpper === 'OWNER';
 
           const isManagerOrBranchAdmin = 
             userTypeUpper === 'BRANCH_ADMIN' ||
             userTypeUpper === 'BRANCH ADMIN' ||
             userTypeUpper === 'MANAGER' ||
             roleLower.includes('manager') ||
-            roleLower.includes('admin') ||
             roleLower.includes('supervisor');
 
           // Check dynamic Role Admin Access setting
-          const hasExplicitAdminAccess = roleObj ? (roleObj.adminAccess ?? roleObj.isAdminAccess) : undefined;
-          let isRestrictedFromAdmin = false;
+          const resolveAdminAccessFlag = (obj) => {
+            if (!obj || typeof obj !== 'object') return undefined;
+            if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+              return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+            }
+            if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+              return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+            }
+            if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+              return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+            }
+            return undefined;
+          };
 
-          if (!isRestaurantOwner) {
-            if (hasExplicitAdminAccess !== undefined) {
-              isRestrictedFromAdmin = !hasExplicitAdminAccess;
+          let hasExplicitAdminAccess = 
+            resolveAdminAccessFlag(apiUser) ??
+            resolveAdminAccessFlag(roleObj) ??
+            resolveAdminAccessFlag(typeof apiUser.role === 'object' ? apiUser.role : null) ??
+            resolveAdminAccessFlag(typeof apiUser.roleId === 'object' ? apiUser.roleId : null);
+
+          if (hasExplicitAdminAccess === undefined) {
+            if (isRestaurantOwner) {
+              hasExplicitAdminAccess = true;
             } else {
-              isRestrictedFromAdmin = !isManagerOrBranchAdmin && (
+              const isNonAdminStaff = 
                 roleLower.includes('waiter') ||
                 roleLower.includes('kitchen') ||
                 roleLower.includes('chef') ||
                 roleLower.includes('cook') ||
                 roleLower.includes('server') ||
                 roleLower.includes('steward') ||
-                userTypeUpper === 'STATION'
-              );
+                userTypeUpper === 'STATION' ||
+                userTypeUpper === 'WAITER' ||
+                userTypeUpper === 'KITCHEN';
+              hasExplicitAdminAccess = !isNonAdminStaff;
             }
           }
 
-          if (isRestrictedFromAdmin) {
+          if (hasExplicitAdminAccess === false) {
             sessionStorage.removeItem("userToken");
             sessionStorage.removeItem("token");
             sessionStorage.removeItem("currentUser");
@@ -1281,7 +1617,7 @@ export const AppProvider = ({ children }) => {
             setCurrentUser(null);
             return {
               success: false,
-              error: "Access Denied: This role is restricted from accessing the Admin panel."
+              error: "Access Denied: You do not have admin access to log into the Admin panel."
             };
           }
 
@@ -1323,8 +1659,10 @@ export const AppProvider = ({ children }) => {
             email: apiUser.email || cleanEmail,
             phoneNumber: apiUser.phoneNumber || '',
             userType: apiUser.userType || (isRestaurantOwner ? 'RESTAURANT_OWNER' : (isManagerOrBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF')),
-            role: resolvedRole,
-            roleId: apiUser.roleId || apiUser.role,
+            role: roleObj || resolvedRole,
+            roleId: apiUser.roleId || roleObj?._id || apiUser.role,
+            permissions: roleObj?.permissions || apiUser.permissions || {},
+            adminAccess: hasExplicitAdminAccess,
             restaurantId: apiUser.restaurantId || (typeof apiUser._id === 'string' ? apiUser._id : currentRestaurantId) || 'rest-1',
             plan: apiUser.plan || apiUser.subscription?.planName || 'Standard',
             subscription: apiUser.subscription || null,
@@ -2797,6 +3135,9 @@ export const AppProvider = ({ children }) => {
         deleteReductionRecord,
         addInventoryCategory,
         updateInventoryCategory,
+        hasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
+        checkHasPermission: (moduleName, action = 'view') => checkHasPermission(currentUser, activeRestaurant, moduleName, action),
+        setCurrentUser,
         deleteInventoryCategory
       }}
     >

@@ -83,7 +83,14 @@ export default function InventoryCategoryPanel() {
     userRoleLower === 'owner' ||
     userRoleLower === 'super admin' ||
     userRoleLower === 'restaurant_owner' ||
-    userRoleLower === 'restaurant owner';
+    userRoleLower === 'restaurant owner' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
+
+  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
+
+  const isBranchLogin = !isRestaurantOwner && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
 
   // API State
   const [categories, setCategories] = useState([]);
@@ -458,16 +465,19 @@ export default function InventoryCategoryPanel() {
               </label>
               {(() => {
                 const allBranchesList = (liveBranches && liveBranches.length > 0) ? liveBranches : (branches && branches.length > 0 ? branches : (activeRestaurant?.branches || []));
-                const isLocked = !isRestaurantOwner || (selectedBranchId && selectedBranchId !== 'ALL');
-                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                  : null;
-                const currentBranchObj = headerBranchObj 
-                  || (formBranchId ? (allBranchesList.find(b => String(b._id || b.id) === String(formBranchId)) || allBranchesList.find(b => String(b.branchCode) === String(formBranchId))) : null);
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (formBranchId || '');
-                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                  effectiveVal = '';
+                const isLocked = isBranchLogin;
+
+                let currentBranchVal = formBranchId;
+                if (isBranchLogin && userBranchId) {
+                  currentBranchVal = userBranchId;
+                } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                  currentBranchVal = '';
                 }
+
+                const currentBranchObj = currentBranchVal 
+                  ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                  : null;
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
                   { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -491,7 +501,7 @@ export default function InventoryCategoryPanel() {
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to currently selected branch.
+                        Branch is locked to your assigned branch.
                       </span>
                     )}
                     {formErrors.branchId && (
@@ -738,23 +748,23 @@ export default function InventoryCategoryPanel() {
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ background: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>
+              <tr style={{ background: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', width: '70px' }}>
                   S.NO
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   CATEGORY NAME
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   DESCRIPTION
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   STOCK ITEMS
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '14px 20px', fontSize: '12px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                <th style={{ padding: '14px 20px', fontSize: '11px', fontWeight: '700', color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   ACTIONS
                 </th>
               </tr>

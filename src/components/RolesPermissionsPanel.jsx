@@ -52,6 +52,15 @@ const BILLING_SUBMODULES = [
   { id: 'billing_history', name: 'Billing History', parentId: 'billing' }
 ];
 
+const REPORTS_SUBMODULES = [
+  { id: 'reports_sales', name: 'Sales & Revenue Report', parentId: 'reports_analytics', aliases: ['reports_sales', 'report_sales', 'sales_report'] },
+  { id: 'reports_items', name: 'Dish Performance Report', parentId: 'reports_analytics', aliases: ['reports_items', 'report_items', 'dish_performance', 'item_performance'] },
+  { id: 'reports_orders', name: 'Order Analytics Report', parentId: 'reports_analytics', aliases: ['reports_orders', 'report_orders', 'order_analytics'] },
+  { id: 'reports_inventory', name: 'Inventory & Stock Report', parentId: 'reports_analytics', aliases: ['reports_inventory', 'report_inventory', 'inventory_report'] },
+  { id: 'reports_staff', name: 'Staff Performance Report', parentId: 'reports_analytics', aliases: ['reports_staff', 'report_staff', 'staff_report', 'waiter_reports', 'kitchen_reports'] },
+  { id: 'reports_tax', name: 'Tax & Settlement Report', parentId: 'reports_analytics', aliases: ['reports_tax', 'report_tax', 'tax_report', 'payment_settlement'] }
+];
+
 const COMPANY_INVENTORY_MODULES = [
   { id: 'inventory_items', name: 'Inventory Items', parentId: 'inventory' },
   { id: 'inventory_central_stock', name: 'Central Stock', parentId: 'inventory' },
@@ -82,7 +91,7 @@ const getSlidebarModules = (isCompany) => [
   { id: 'orders', name: 'Order management' },
   { id: 'staff_management', name: 'Staff Management', aliases: ['user_accounts'] },
   ...BILLING_SUBMODULES,
-  { id: 'reports_analytics', name: 'Reports', aliases: ['reports'] },
+  ...REPORTS_SUBMODULES,
   { id: 'help_support', name: 'Help & Support' },
   { id: 'settings', name: 'Settings' }
 ];
@@ -103,13 +112,14 @@ const ALL_MODULES = [
   { id: 'user_accounts', name: 'User Accounts' },
   { id: 'billing', name: 'Billing', isParent: true, aliases: ['billing_payments'] },
   ...BILLING_SUBMODULES,
-  { id: 'reports_analytics', name: 'Reports', aliases: ['reports'] },
+  { id: 'reports_analytics', name: 'Reports', isParent: true, aliases: ['reports'] },
+  ...REPORTS_SUBMODULES,
   { id: 'help_support', name: 'Help & Support' },
   { id: 'settings', name: 'Settings' }
 ];
 
 export default function RolesPermissionsPanel() {
-  const { selectedBranchId } = useAppState();
+  const { selectedBranchId, hasPermission, currentUser, setCurrentUser, fetchProfile } = useAppState();
 
   const isCompany = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
   const visibleModules = useMemo(() => getSlidebarModules(isCompany), [isCompany]);
@@ -198,8 +208,9 @@ export default function RolesPermissionsPanel() {
       } else if (m.aliases && m.aliases.some(a => existingPerms[a])) {
         const found = m.aliases.find(a => existingPerms[a]);
         basePermissions[m.id] = { ...existingPerms[found] };
-      } else if (m.parentId && existingPerms[m.parentId]) {
-        basePermissions[m.id] = { ...existingPerms[m.parentId] };
+      } else if (m.parentId && (existingPerms[m.parentId] || (m.parentId === 'reports_analytics' && existingPerms['reports']))) {
+        const parentObj = existingPerms[m.parentId] || existingPerms['reports'];
+        basePermissions[m.id] = { ...parentObj };
       } else {
         basePermissions[m.id] = { view: false, add: false, edit: false, delete: false };
       }
@@ -215,6 +226,12 @@ export default function RolesPermissionsPanel() {
       const anyBill = BILLING_SUBMODULES.some(c => basePermissions[c.id]?.[act]) || !!basePermissions['billing']?.[act];
       if (!basePermissions['billing']) basePermissions['billing'] = { view: false, add: false, edit: false, delete: false };
       basePermissions['billing'][act] = anyBill;
+
+      const anyReport = REPORTS_SUBMODULES.some(c => basePermissions[c.id]?.[act]) || !!basePermissions['reports_analytics']?.[act] || !!basePermissions['reports']?.[act];
+      if (!basePermissions['reports_analytics']) basePermissions['reports_analytics'] = { view: false, add: false, edit: false, delete: false };
+      basePermissions['reports_analytics'][act] = anyReport;
+      if (!basePermissions['reports']) basePermissions['reports'] = { view: false, add: false, edit: false, delete: false };
+      basePermissions['reports'][act] = anyReport;
     });
 
     setPermissionsState(basePermissions);
@@ -244,16 +261,22 @@ export default function RolesPermissionsPanel() {
     const isTargetOwner = isOwnerRole(trimmedRoleName);
     const finalPermissions = { ...permissionsState };
 
-    // Keep parent 'inventory' and 'billing' permission in sync with submodules
+    // Keep parent 'inventory', 'billing', and 'reports' permission in sync with submodules
     const invKeys = [...COMPANY_INVENTORY_MODULES, ...BRANCH_INVENTORY_MODULES].map(m => m.id);
     ['view', 'add', 'edit', 'delete'].forEach(act => {
-      const anyInv = invKeys.some(k => finalPermissions[k]?.[act]) || !!finalPermissions['inventory']?.[act];
+      const anyInv = invKeys.some(k => Boolean(finalPermissions[k]?.[act]));
       if (!finalPermissions['inventory']) finalPermissions['inventory'] = {};
       finalPermissions['inventory'][act] = anyInv;
 
-      const anyBill = BILLING_SUBMODULES.some(m => finalPermissions[m.id]?.[act]) || !!finalPermissions['billing']?.[act];
+      const anyBill = BILLING_SUBMODULES.some(m => Boolean(finalPermissions[m.id]?.[act]));
       if (!finalPermissions['billing']) finalPermissions['billing'] = {};
       finalPermissions['billing'][act] = anyBill;
+
+      const anyReport = REPORTS_SUBMODULES.some(m => Boolean(finalPermissions[m.id]?.[act]));
+      if (!finalPermissions['reports_analytics']) finalPermissions['reports_analytics'] = {};
+      finalPermissions['reports_analytics'][act] = anyReport;
+      if (!finalPermissions['reports']) finalPermissions['reports'] = {};
+      finalPermissions['reports'][act] = anyReport;
     });
     finalPermissions['billing_payments'] = { ...finalPermissions['billing'] };
 
@@ -274,6 +297,9 @@ export default function RolesPermissionsPanel() {
     if (res.status) {
       setViewState('list');
       fetchRoles();
+      if (typeof fetchProfile === 'function') {
+        fetchProfile();
+      }
     }
   };
 
@@ -307,6 +333,19 @@ export default function RolesPermissionsPanel() {
         next['billing_payments'] = {
           ...(next['billing_payments'] || {}),
           [action]: anyBillActive
+        };
+      }
+
+      // If a reports submodule is toggled, keep reports parent permission updated
+      if (REPORTS_SUBMODULES.some(c => c.id === moduleId)) {
+        const anyReportActive = REPORTS_SUBMODULES.some(c => (c.id === moduleId ? currentVal : !!next[c.id]?.[action]));
+        next['reports_analytics'] = {
+          ...(next['reports_analytics'] || {}),
+          [action]: anyReportActive
+        };
+        next['reports'] = {
+          ...(next['reports'] || {}),
+          [action]: anyReportActive
         };
       }
 
@@ -405,8 +444,7 @@ export default function RolesPermissionsPanel() {
                 justifyContent: 'center',
                 padding: '6px 14px',
                 background: '#ffffff',
-                border: '1.5px solid #cbd5e1',
-                borderRadius: '8px',
+              
                 marginTop: '19px'
               }}>
                 <label style={{
@@ -444,13 +482,13 @@ export default function RolesPermissionsPanel() {
           <div style={{ overflowX: 'auto', paddingBottom: '4px' }}>
             <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'center' }}>
               <thead>
-                <tr style={{ backgroundColor: '#000000', color: '#ffffff', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', width: '42%' }}>MODULES</th>
+                <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', width: '42%', color: '#ffffff' }}>MODULES</th>
                   {['view', 'add', 'edit', 'delete'].map(action => {
                     const allColChecked = visibleModules.length > 0 && visibleModules.every(m => permissionsState[m.id]?.[action]);
 
                     return (
-                      <th key={action} style={{ padding: '9px 12px', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                      <th key={action} style={{ padding: '9px 12px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.4px', color: '#ffffff' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span>{action}</span>
                           <input
@@ -548,9 +586,10 @@ export default function RolesPermissionsPanel() {
             Roles & Permissions
           </h2>
 
-          <button
-            type="button"
-            onClick={handleAddRole}
+          {hasPermission('roles-permissions', 'add') && (
+            <button
+              type="button"
+              onClick={handleAddRole}
               style={{
                 background: '#000000',
                 color: '#ffffff',
@@ -571,26 +610,27 @@ export default function RolesPermissionsPanel() {
             >
               + Add Role
             </button>
+          )}
           </div>
 
         {/* Roles List Table - Compact Layout */}
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '4px' }}>
           <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '60px' }}>
                   S.NO
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ROLE NAME
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ADMIN ACCESS
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   STATUS
                 </th>
-                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '9px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -694,28 +734,30 @@ export default function RolesPermissionsPanel() {
                         >
                           <PowerIcon size={14} color={role.isActive ? '#059669' : '#dc2626'} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEditRole(role)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '5px',
-                            borderRadius: '5px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          title="Edit Role"
-                        >
-                          <PencilIcon size={15} />
-                        </button>
-                        {!role.isDefault && (
+                        {hasPermission('roles-permissions', 'edit') && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditRole(role)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '5px',
+                              borderRadius: '5px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                            title="Edit Role"
+                          >
+                            <PencilIcon size={15} />
+                          </button>
+                        )}
+                        {!role.isDefault && hasPermission('roles-permissions', 'delete') && (
                           <button
                             type="button"
                             onClick={() => handleDeleteRole(role)}

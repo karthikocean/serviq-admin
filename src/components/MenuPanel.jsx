@@ -64,7 +64,7 @@ export default function MenuPanel({
   currency = '₹',
   refreshTrigger
 }) {
-  const { activeRestaurant, updateMenuCategories, selectedBranchId } = useAppState();
+  const { activeRestaurant, updateMenuCategories, selectedBranchId, hasPermission } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -240,15 +240,17 @@ export default function MenuPanel({
               <SettingsIcon size={14} />
               Manage Categories
             </button>
-            <button
-              type="button"
-              className="btn btn-black"
-              style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 700, border: 'none', background: 'var(--primary)', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              onClick={openAddMenuModal}
-            >
-              <PlusIcon size={14} />
-              Add Menu Item
-            </button>
+            {hasPermission('menu', 'add') && (
+              <button
+                type="button"
+                className="btn btn-black"
+                style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 700, border: 'none', background: 'var(--primary)', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={openAddMenuModal}
+              >
+                <PlusIcon size={14} />
+                Add Menu Item
+              </button>
+            )}
           </div>
         </div>
 
@@ -285,7 +287,7 @@ export default function MenuPanel({
       </div>
 
       {/* SINGLE UNIFIED FULL-WIDTH TABLE LIST VIEW */}
-      <div className="menu-table-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', maxHeight: 'none', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
+      <div className="menu-table-wrapper" style={{ overflowX: 'auto', overflowY: 'visible', maxHeight: 'none', position: 'relative', borderRadius: '10px', border: '1px solid #e2e8f0', background: '#ffffff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <table className="menu-items-table" style={{ width: '100%', minWidth: '1300px', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
           <thead>
             <tr>
@@ -441,26 +443,30 @@ export default function MenuPanel({
                       >
                         <EyeIcon size={16} />
                       </button>
-                      <button
-                        type="button"
-                        title="Edit Item"
-                        style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                        onClick={() => openEditMenuModal(item)}
-                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                      >
-                        <PencilIcon size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        title="Delete Item"
-                        style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                        onClick={() => handleDeleteMenu(item._id || item.id)}
-                        onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
-                      >
-                        <TrashIcon size={16} />
-                      </button>
+                      {hasPermission('menu', 'edit') && (
+                        <button
+                          type="button"
+                          title="Edit Item"
+                          style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                          onClick={() => openEditMenuModal(item)}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                        >
+                          <PencilIcon size={16} />
+                        </button>
+                      )}
+                      {hasPermission('menu', 'delete') && (
+                        <button
+                          type="button"
+                          title="Delete Item"
+                          style={{ background: 'transparent', border: 'none', color: '#ea4335', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                          onClick={() => handleDeleteMenu(item._id || item.id)}
+                          onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#ea4335'}
+                        >
+                          <TrashIcon size={16} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

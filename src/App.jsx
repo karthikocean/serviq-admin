@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AdminLayout from './layouts/AdminLayout';
 import Login from './pages/Login';
@@ -25,6 +25,74 @@ import Settings from './pages/Settings/Settings';
 import HelpSupport from './pages/HelpSupport/HelpSupport';
 
 export default function App() {
+  // Prevent space button from working in any search box across the application
+  useEffect(() => {
+    const isSearchTarget = (target) => {
+      if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) {
+        return false;
+      }
+      const type = (target.type || '').toLowerCase();
+      const placeholder = (target.placeholder || '').toLowerCase();
+      const className = (target.className || '').toString().toLowerCase();
+      const name = (target.name || '').toLowerCase();
+      const id = (target.id || '').toLowerCase();
+      const ariaLabel = (target.getAttribute('aria-label') || '').toLowerCase();
+
+      return (
+        type === 'search' ||
+        target.dataset?.search === 'true' ||
+        placeholder.includes('search') ||
+        placeholder.includes('filter') ||
+        placeholder.includes('bill no') ||
+        placeholder.includes('order id') ||
+        className.includes('search') ||
+        name.includes('search') ||
+        id.includes('search') ||
+        ariaLabel.includes('search') ||
+        Boolean(target.closest('[class*="search" i], [id*="search" i], .ticket-search-box, .search-box, .search-wrapper'))
+      );
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === ' ' || e.code === 'Space' || e.keyCode === 32) {
+        if (isSearchTarget(e.target)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    const handleBeforeInput = (e) => {
+      if (e.data && /\s/.test(e.data)) {
+        if (isSearchTarget(e.target)) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleInput = (e) => {
+      const target = e.target;
+      if (isSearchTarget(target)) {
+        if (target.value && /\s/.test(target.value)) {
+          const cleanVal = target.value.replace(/\s+/g, '');
+          if (target.value !== cleanVal) {
+            target.value = cleanVal;
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('beforeinput', handleBeforeInput, true);
+    window.addEventListener('input', handleInput, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('beforeinput', handleBeforeInput, true);
+      window.removeEventListener('input', handleInput, true);
+    };
+  }, []);
   return (
     <div className="app-container">
       <Routes>

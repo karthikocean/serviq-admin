@@ -89,22 +89,34 @@ class ReportsApi {
       if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') {
         cleanParams.branchId = filters.branchId;
       }
-      if (filters.startDate) cleanParams.startDate = filters.startDate;
-      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.startDate || filters.dateStart || filters.fromDate) {
+        cleanParams.startDate = filters.startDate || filters.dateStart || filters.fromDate;
+      }
+      if (filters.endDate || filters.dateEnd || filters.toDate) {
+        cleanParams.endDate = filters.endDate || filters.dateEnd || filters.toDate;
+      }
       if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') {
         cleanParams.paymentMethod = filters.paymentMethod;
       }
-      if (filters.search) cleanParams.search = filters.search;
-      if (filters.page !== undefined) cleanParams.page = filters.page;
-      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+      if (filters.taxType && filters.taxType !== 'ALL' && filters.taxType !== 'All') {
+        cleanParams.taxType = filters.taxType;
+      }
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal) cleanParams.search = searchVal;
+      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
+      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/tax-settlement${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       
       if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       return {
         status: false,
@@ -120,6 +132,7 @@ class ReportsApi {
       if (filters.startDate) cleanParams.startDate = filters.startDate;
       if (filters.endDate) cleanParams.endDate = filters.endDate;
       if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') cleanParams.paymentMethod = filters.paymentMethod;
+      if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
       if (filters.search) cleanParams.search = filters.search;
       if (filters.page !== undefined) cleanParams.page = filters.page;
       if (filters.limit !== undefined) cleanParams.limit = filters.limit;
@@ -128,8 +141,12 @@ class ReportsApi {
       const url = `/reports/sales-revenue${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       return { status: false, response: error?.response?.data || error };
     }
@@ -139,21 +156,27 @@ class ReportsApi {
     try {
       const cleanParams = {};
       if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
-      if (filters.startDate) cleanParams.startDate = filters.startDate;
-      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.startDate || filters.dateStart || filters.fromDate) cleanParams.startDate = filters.startDate || filters.dateStart || filters.fromDate;
+      if (filters.endDate || filters.dateEnd || filters.toDate) cleanParams.endDate = filters.endDate || filters.dateEnd || filters.toDate;
       if (filters.category && filters.category !== 'ALL' && filters.category !== 'All') cleanParams.category = filters.category;
       if (filters.dish && filters.dish !== 'ALL' && filters.dish !== 'All') cleanParams.dish = filters.dish;
       if (filters.foodType && filters.foodType !== 'ALL' && filters.foodType !== 'All') cleanParams.foodType = filters.foodType;
-      if (filters.search) cleanParams.search = filters.search;
-      if (filters.page !== undefined) cleanParams.page = filters.page;
-      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+      if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal) cleanParams.search = searchVal;
+      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
+      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/dish-performance${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       return { status: false, response: error?.response?.data || error };
     }
@@ -163,20 +186,54 @@ class ReportsApi {
     try {
       const cleanParams = {};
       if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
-      if (filters.startDate) cleanParams.startDate = filters.startDate;
-      if (filters.endDate) cleanParams.endDate = filters.endDate;
+      if (filters.startDate || filters.dateStart || filters.fromDate) cleanParams.startDate = filters.startDate || filters.dateStart || filters.fromDate;
+      if (filters.endDate || filters.dateEnd || filters.toDate) cleanParams.endDate = filters.endDate || filters.dateEnd || filters.toDate;
       if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
       if (filters.orderStatus && filters.orderStatus !== 'ALL' && filters.orderStatus !== 'All') cleanParams.orderStatus = filters.orderStatus;
-      if (filters.search) cleanParams.search = filters.search;
-      if (filters.page !== undefined) cleanParams.page = filters.page;
-      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal) cleanParams.search = searchVal;
+      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
+      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/order-analytics${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
+    } catch (error) {
+      return { status: false, response: error?.response?.data || error };
+    }
+  }
+
+  async getInventoryStockReport(filters = {}) {
+    try {
+      const cleanParams = {};
+      if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
+      if (filters.startDate || filters.dateStart || filters.fromDate) cleanParams.startDate = filters.startDate || filters.dateStart || filters.fromDate;
+      if (filters.endDate || filters.dateEnd || filters.toDate) cleanParams.endDate = filters.endDate || filters.dateEnd || filters.toDate;
+      if (filters.category && filters.category !== 'ALL' && filters.category !== 'All') cleanParams.category = filters.category;
+      if (filters.item && filters.item !== 'ALL' && filters.item !== 'All') cleanParams.item = filters.item;
+      if (filters.stockStatus && filters.stockStatus !== 'ALL' && filters.stockStatus !== 'All') cleanParams.stockStatus = filters.stockStatus;
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal) cleanParams.search = searchVal;
+      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
+      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+
+      const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/reports/inventory-stock${queryParams ? `?${queryParams}` : ''}`;
+      const response = await apiClient.get(url);
+      if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
+        return { status: true, response: response.data };
+      }
+      return { status: false, response: response?.data };
     } catch (error) {
       return { status: false, response: error?.response?.data || error };
     }
@@ -186,18 +243,25 @@ class ReportsApi {
     try {
       const cleanParams = {};
       if (filters.branchId && filters.branchId !== 'ALL' && filters.branchId !== 'All') cleanParams.branchId = filters.branchId;
-      if (filters.startDate) cleanParams.startDate = filters.startDate;
-      if (filters.endDate) cleanParams.endDate = filters.endDate;
-      if (filters.search) cleanParams.search = filters.search;
-      if (filters.page !== undefined) cleanParams.page = filters.page;
-      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+      if (filters.startDate || filters.dateStart || filters.fromDate) cleanParams.startDate = filters.startDate || filters.dateStart || filters.fromDate;
+      if (filters.endDate || filters.dateEnd || filters.toDate) cleanParams.endDate = filters.endDate || filters.dateEnd || filters.toDate;
+      if (filters.staff && filters.staff !== 'ALL' && filters.staff !== 'All') cleanParams.staff = filters.staff;
+      if (filters.role && filters.role !== 'ALL' && filters.role !== 'All') cleanParams.role = filters.role;
+      const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
+      if (searchVal) cleanParams.search = searchVal;
+      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
+      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/staff-performance${queryParams ? `?${queryParams}` : ''}`;
       const response = await apiClient.get(url);
       if (response.status === 200 || response.status === 201) {
+        if (response.data && response.data.success === false) {
+          return { status: false, response: response.data };
+        }
         return { status: true, response: response.data };
       }
+      return { status: false, response: response?.data };
     } catch (error) {
       return { status: false, response: error?.response?.data || error };
     }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAppState } from '../config/AppContext';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 
@@ -40,6 +41,7 @@ export default function WaiterListPanel({
   handleOpenAssignTablesModal,
   setActivePage
 }) {
+  const { hasPermission } = useAppState();
   const [waiterToDelete, setWaiterToDelete] = useState(null);
   const [page, setPage] = useState(0);
   const limit = 10;
@@ -143,26 +145,28 @@ export default function WaiterListPanel({
               Assign Tables
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => openAddStaffModal ? openAddStaffModal('Waiter') : (setActivePage && setActivePage('staff-form'))}
-            style={{
-              background: '#ff5a1f',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: 700,
-              borderRadius: '8px',
-              padding: '10px 18px',
-              fontSize: '13px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
-              transition: 'all 0.15s ease'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
-            onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
-          >
-            Add Waiter
-          </button>
+          {hasPermission('staff', 'add') && (
+            <button
+              type="button"
+              onClick={() => openAddStaffModal ? openAddStaffModal('Waiter') : (setActivePage && setActivePage('staff-form'))}
+              style={{
+                background: '#ff5a1f',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                borderRadius: '8px',
+                padding: '10px 18px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
+              onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
+            >
+              Add Waiter
+            </button>
+          )}
         </div>
       </div>
 
@@ -178,32 +182,32 @@ export default function WaiterListPanel({
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO.
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   WAITER NAME
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   PHONE NUMBER
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   EMAIL ADDRESS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ASSIGNED TABLES
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   ACTIVE ORDERS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>
                   COMPLETED ORDERS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', width: '130px' }}>
                   DUTY STATUS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -338,27 +342,29 @@ export default function WaiterListPanel({
 
                     {/* ACTIONS */}
                     <td style={{ padding: '16px 18px', textAlign: 'right' }}>
-                      <button 
-                        type="button"
-                        onClick={() => openEditStaffModal ? openEditStaffModal(w.raw || w) : null}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#64748b',
-                          cursor: 'pointer',
-                          padding: '6px',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                        title="Edit Waiter"
-                      >
-                        <PencilIcon size={16} />
-                      </button>
+                      {hasPermission('staff', 'edit') && (
+                        <button 
+                          type="button"
+                          onClick={() => openEditStaffModal ? openEditStaffModal(w.raw || w) : null}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64748b',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                          title="Edit Waiter"
+                        >
+                          <PencilIcon size={16} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

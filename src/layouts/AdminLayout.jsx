@@ -13,7 +13,8 @@ export default function AdminLayout() {
     activeRestaurant,
     logout,
     selectedBranchId,
-    fetchProfile
+    fetchProfile,
+    hasPermission
   } = useAppState();
 
   const location = useLocation();
@@ -35,6 +36,7 @@ export default function AdminLayout() {
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
   const [sidebarInventoryOpen, setSidebarInventoryOpen] = useState(false);
+  const [sidebarReportsOpen, setSidebarReportsOpen] = useState(false);
   const isHelpSupportActive = location.pathname.startsWith('/help-support');
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
@@ -94,111 +96,65 @@ export default function AdminLayout() {
   const restaurantName = activeRestaurant?.name || 'Serviq';
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null ? (currentUser?.role?.roleName || currentUser?.role?.name) : (currentUser?.role || '');
   const role = roleStr || 'Admin';
-  const userType = (currentUser?.userType || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
+  const userType = (currentUser?.userType || roleStr || '').toUpperCase().trim();
+  const userRoleStr = (typeof currentUser?.role === 'object' && currentUser?.role !== null)
+    ? (currentUser.role.roleName || currentUser.role.name || '')
+    : (currentUser?.role || roleStr || '');
+  const userRoleLower = userRoleStr.toLowerCase().trim();
+  const userRoleUpper = userRoleStr.toUpperCase().trim();
 
   const isRestaurantOwner = 
     userType === 'RESTAURANT_OWNER' || 
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' || 
-    userType === 'ADMINISTRATOR' || 
-    userRoleLower === 'restaurant_owner' || 
-    userRoleLower === 'restaurant owner' || 
-    userRoleLower === 'owner' || 
-    userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin' ||
-    userRoleLower === 'administrator' ||
-    String(currentUser?.name || '').toLowerCase().includes('admin') ||
-    String(currentUser?.email || '').toLowerCase().includes('admin');
+    userRoleUpper === 'RESTAURANT_OWNER' || 
+    userRoleUpper === 'OWNER' || 
+    userRoleUpper === 'SUPER ADMIN';
 
-  const isBranchAdmin = 
-    userType === 'BRANCH_ADMIN' || 
-    userType === 'BRANCH ADMIN' || 
-    userType === 'MANAGER' ||
-    userRoleLower.includes('manager') || 
-    userRoleLower.includes('admin') ||
-    userRoleLower.includes('supervisor');
+  // Verify if current user has Admin access allowed or restricted
+  const resolveAdminAccessFlag = (obj) => {
+    if (!obj || typeof obj !== 'object') return undefined;
+    if (obj.adminAccess !== undefined && obj.adminAccess !== null) {
+      return String(obj.adminAccess) === 'true' || obj.adminAccess === true || obj.adminAccess === 1;
+    }
+    if (obj.isAdminAccess !== undefined && obj.isAdminAccess !== null) {
+      return String(obj.isAdminAccess) === 'true' || obj.isAdminAccess === true || obj.isAdminAccess === 1;
+    }
+    if (obj.isAdmin !== undefined && obj.isAdmin !== null) {
+      return String(obj.isAdmin) === 'true' || obj.isAdmin === true || obj.isAdmin === 1;
+    }
+    return undefined;
+  };
 
-  // Verify if current user's role has Admin access allowed or restricted
-  const userRoleObj = typeof currentUser?.role === 'object' && currentUser?.role !== null ? currentUser.role : null;
-  const hasExplicitAdminAccess = userRoleObj ? (userRoleObj.adminAccess ?? userRoleObj.isAdminAccess) : undefined;
+  const hasExplicitAdminAccess = 
+    resolveAdminAccessFlag(currentUser) ?? 
+    resolveAdminAccessFlag(currentUser?.role) ?? 
+    resolveAdminAccessFlag(currentUser?.roleId);
 
-  const isRestrictedFromAdmin = 
-    !isRestaurantOwner &&
-    (
-      hasExplicitAdminAccess !== undefined
-        ? !hasExplicitAdminAccess
-        : (
-            !isBranchAdmin &&
-            (
-              userRoleLower.includes('waiter') ||
-              userRoleLower.includes('kitchen') ||
-              userRoleLower.includes('chef') ||
-              userRoleLower.includes('cook') ||
-              userRoleLower.includes('server') ||
-              userRoleLower.includes('steward') ||
-              userType === 'STATION'
-            )
-          )
-    );
+  let isRestrictedFromAdmin = false;
+  if (hasExplicitAdminAccess !== undefined) {
+    isRestrictedFromAdmin = !hasExplicitAdminAccess;
+  } else if (!isRestaurantOwner) {
+    isRestrictedFromAdmin = 
+      (
+        userRoleLower.includes('waiter') ||
+        userRoleLower.includes('kitchen') ||
+        userRoleLower.includes('chef') ||
+        userRoleLower.includes('cook') ||
+        userRoleLower.includes('server') ||
+        userRoleLower.includes('steward') ||
+        userType === 'STATION' ||
+        userType === 'WAITER' ||
+        userType === 'KITCHEN'
+      );
+  }
 
   if (isRestrictedFromAdmin) {
-    ShowNotifications.showAlertNotification("Access Denied: This role is restricted from accessing the Admin Panel.", false);
+    ShowNotifications.showAlertNotification("Access Denied: You do not have admin access to access the Admin Panel.", false);
     handleLogout();
     return <Navigate to="/login" replace />;
   }
-
-  const isAdmin = 
-    isRestaurantOwner ||
-    userType === 'ADMIN' || 
-    userRoleLower === 'admin';
-
-  // Permission checks
-  const hasPermission = (moduleName, action = 'view') => {
-    // Branch management and Plans management are strictly ONLY accessible to Restaurant Owner
-    if (
-      moduleName === 'branch-management' || 
-      moduleName === 'branches' || 
-      moduleName === 'plans-management' || 
-      moduleName === 'plans'
-    ) {
-      return isRestaurantOwner;
-    }
-
-    if (isAdmin) return true;
-
-    // Use the permissions object directly embedded in the user's role if it exists
-    if (typeof currentUser?.role === 'object' && currentUser?.role?.permissions) {
-      if (moduleName === 'inventory') {
-        const invKeys = [
-          'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
-          'inventory_branch_requests', 'inventory_my_stock', 'inventory_stock_request',
-          'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt',
-          'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
-        ];
-        return invKeys.some(k => !!currentUser.role.permissions[k]?.[action]);
-      }
-      const modulePerms = currentUser.role.permissions[moduleName] || {};
-      return !!modulePerms[action];
-    }
-
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || rolesConfig[currentUser?.userType] || DEFAULT_ROLES[role] || DEFAULT_ROLES[currentUser?.userType] || { permissions: {} };
-    if (moduleName === 'inventory') {
-      const invKeys = [
-        'inventory', 'inventory_items', 'inventory_central_stock', 'inventory_purchases',
-        'inventory_branch_requests', 'inventory_my_stock', 'inventory_stock_request',
-        'inventory_branch_transfer', 'inventory_direct_purchase', 'inventory_stock_receipt',
-        'inventory_transactions', 'inventory_vendors', 'inventory_categories', 'stock_reduction'
-      ];
-      return invKeys.some(k => !!userRoleConfig.permissions?.[k]?.[action]);
-    }
-    const modulePermissions = userRoleConfig.permissions?.[moduleName] || {};
-    return !!modulePermissions[action];
-  };
 
   const rawSubPlanName = activeRestaurant?.subscription?.planName || 
     activeRestaurant?.plan || 
@@ -210,13 +166,11 @@ export default function AdminLayout() {
 
   const isTabAllowed = (permissionKey) => {
     // 1. Subscription Plan Module Gate:
-    // Only modules allowed by the current active plan are shown in sidebar
     if (!isModuleAllowedForPlan(permissionKey, activeRestaurant || currentSubPlan)) {
       return false;
     }
 
     // 2. Branch & Plans Management: restricted to Restaurant Owner only
-    // Branch Management is strictly shown ONLY when "All Branches" is selected
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches'
@@ -232,10 +186,110 @@ export default function AdminLayout() {
       return isRestaurantOwner;
     }
 
-    if (isAdmin || currentUser?.userType === 'BRANCH_ADMIN') return true;
-
     return hasPermission(permissionKey, 'view');
   };
+
+  const getFirstAllowedReportTab = () => {
+    if (hasPermission('reports_sales', 'view')) return 'sales';
+    if (hasPermission('reports_items', 'view')) return 'items';
+    if (hasPermission('reports_orders', 'view')) return 'orders';
+    if (hasPermission('reports_inventory', 'view')) return 'inventory';
+    if (hasPermission('reports_staff', 'view')) return 'staff';
+    if (hasPermission('reports_tax', 'view')) return 'tax';
+    return 'sales';
+  };
+
+  const getModuleForPath = (pathname) => {
+    if (pathname === '/' || pathname === '/dashboard' || pathname === '/overview') return 'dashboard';
+    if (pathname.startsWith('/roles-permissions')) return 'roles-permissions';
+    if (pathname.startsWith('/branch-management') || pathname.startsWith('/branches')) return 'branch-management';
+    if (pathname.startsWith('/plans-management') || pathname.startsWith('/plans')) return 'plans-management';
+    if (pathname.startsWith('/tables')) return 'tables';
+    if (pathname.startsWith('/menu')) return 'menu';
+
+    // Inventory sub-routes
+    if (pathname === '/inventory/items') return 'inventory_items';
+    if (pathname === '/inventory/central-stock') return 'inventory_central_stock';
+    if (pathname === '/inventory/purchases') return 'inventory_purchases';
+    if (pathname === '/inventory/branch-requests') return 'inventory_branch_requests';
+    if (pathname === '/inventory/distribution' || pathname === '/inventory/stock-distribution') return 'inventory_distribution';
+    if (pathname === '/inventory/my-stock') return 'inventory_my_stock';
+    if (pathname === '/inventory/stock-request') return 'inventory_stock_request';
+    if (pathname === '/inventory/branch-transfer') return 'inventory_branch_transfer';
+    if (pathname === '/inventory/direct-purchase') return 'inventory_direct_purchase';
+    if (pathname === '/inventory/stock-receipt') return 'inventory_stock_receipt';
+    if (pathname === '/inventory/transactions') return 'inventory_transactions';
+    if (pathname.startsWith('/inventory')) return 'inventory';
+
+    if (pathname.startsWith('/orders')) return 'orders';
+    if (pathname.startsWith('/staff') || pathname.startsWith('/waiter') || pathname.startsWith('/kitchen')) return 'staff_management';
+    if (pathname.startsWith('/users')) return 'users';
+
+    // Billing sub-routes
+    if (pathname === '/billing/history') return 'billing_history';
+    if (pathname.startsWith('/billing')) return 'billing_current';
+
+    // Reports sub-routes
+    if (pathname.startsWith('/reports')) {
+      const searchParams = new URLSearchParams(location.search);
+      const tab = searchParams.get('tab') || 'sales';
+      if (tab === 'sales') return 'reports_sales';
+      if (tab === 'items') return 'reports_items';
+      if (tab === 'orders') return 'reports_orders';
+      if (tab === 'inventory') return 'reports_inventory';
+      if (tab === 'staff') return 'reports_staff';
+      if (tab === 'tax') return 'reports_tax';
+      return 'reports_analytics';
+    }
+
+    if (pathname.startsWith('/settings')) return 'settings';
+    if (pathname.startsWith('/help-support')) return 'help_support';
+    return null;
+  };
+
+  const getFirstAllowedRoute = () => {
+    if (isTabAllowed('dashboard')) return '/dashboard';
+    if (isTabAllowed('roles-permissions')) return '/roles-permissions';
+    if (isTabAllowed('branch-management')) return '/branch-management';
+    if (isTabAllowed('plans-management')) return '/plans-management';
+    if (isTabAllowed('tables')) return '/tables';
+    if (isTabAllowed('menu')) return '/menu';
+    if (isTabAllowed('inventory')) {
+      const isComp = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
+      if (isComp) {
+        if (hasPermission('inventory_items', 'view')) return '/inventory/items';
+        if (hasPermission('inventory_central_stock', 'view')) return '/inventory/central-stock';
+        if (hasPermission('inventory_purchases', 'view')) return '/inventory/purchases';
+        if (hasPermission('inventory_branch_requests', 'view')) return '/inventory/branch-requests';
+        if (hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view')) return '/inventory/distribution';
+        if (hasPermission('inventory_transactions', 'view')) return '/inventory/transactions';
+      } else {
+        if (hasPermission('inventory_my_stock', 'view')) return '/inventory/my-stock';
+        if (hasPermission('inventory_stock_request', 'view')) return '/inventory/stock-request';
+        if (hasPermission('inventory_branch_transfer', 'view')) return '/inventory/branch-transfer';
+        if (hasPermission('inventory_direct_purchase', 'view')) return '/inventory/direct-purchase';
+        if (hasPermission('inventory_stock_receipt', 'view')) return '/inventory/stock-receipt';
+        if (hasPermission('inventory_transactions', 'view')) return '/inventory/transactions';
+      }
+      return '/inventory';
+    }
+    if (isTabAllowed('orders')) return '/orders';
+    if (isTabAllowed('staff_management')) return '/staff';
+    if (isTabAllowed('billing')) {
+      if (hasPermission('billing_current', 'view')) return '/billing';
+      if (hasPermission('billing_history', 'view')) return '/billing/history';
+      return '/billing';
+    }
+    if (isTabAllowed('reports_analytics')) {
+      return `/reports?tab=${getFirstAllowedReportTab()}`;
+    }
+    if (isTabAllowed('help_support')) return '/help-support';
+    if (isTabAllowed('settings')) return '/settings';
+    return null;
+  };
+
+  const activeModule = getModuleForPath(location.pathname);
+  const isCurrentPageAllowed = activeModule ? isTabAllowed(activeModule) : true;
 
   // Dynamic Route Titles
   const getRouteTitle = () => {
@@ -270,7 +324,17 @@ export default function AdminLayout() {
     if (p.startsWith('/staff') || p.startsWith('/waiter') || p.startsWith('/kitchen')) return 'Staff Management';
     if (p === '/billing/history') return 'Billing History';
     if (p.startsWith('/billing')) return 'Current Billing';
-    if (p.startsWith('/reports')) return 'Reports & Analytics';
+    if (p.startsWith('/reports')) {
+      const searchParams = new URLSearchParams(location.search);
+      const tab = searchParams.get('tab') || 'sales';
+      if (tab === 'sales') return 'Sales & Revenue Report';
+      if (tab === 'items') return 'Dish Performance Report';
+      if (tab === 'orders') return 'Order Analytics Report';
+      if (tab === 'inventory') return 'Inventory & Stock Report';
+      if (tab === 'staff') return 'Staff Performance Report';
+      if (tab === 'tax') return 'Tax & Settlement Report';
+      return 'Reports & Analytics';
+    }
     if (p.startsWith('/users')) return 'User Accounts';
     if (p.startsWith('/roles-permissions')) return 'Roles & Permission';
     if (p.startsWith('/settings')) return 'Restaurant Settings';
@@ -302,18 +366,23 @@ export default function AdminLayout() {
   const isReportsActive = pathname.startsWith('/reports');
   const isSettingsActive = pathname.startsWith('/settings');
 
+  const reportSearchParams = new URLSearchParams(location.search);
+  const currentReportTab = reportSearchParams.get('tab') || 'sales';
+
   // Mutual exclusion and auto-close handlers for dropdowns
   const handleCloseAllDropdowns = () => {
     setSidebarInventoryOpen(false);
     setSidebarBillingOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
   };
 
   const handleToggleInventoryDropdown = () => {
     setSidebarBillingOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
     setSidebarInventoryOpen(prev => !prev);
   };
 
@@ -321,7 +390,21 @@ export default function AdminLayout() {
     setSidebarInventoryOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
+    setSidebarReportsOpen(false);
     setSidebarBillingOpen(prev => !prev);
+  };
+
+  const handleToggleReportsDropdown = () => {
+    setSidebarInventoryOpen(false);
+    setSidebarBillingOpen(false);
+    setSidebarWaiterOpen(false);
+    setSidebarKitchenOpen(false);
+    if (!isReportsActive) {
+      setSidebarReportsOpen(true);
+      navigate(`/reports?tab=${getFirstAllowedReportTab()}`);
+    } else {
+      setSidebarReportsOpen(prev => !prev);
+    }
   };
 
   // Close dropdowns if navigating to an outside route
@@ -332,13 +415,19 @@ export default function AdminLayout() {
     if (!pathname.startsWith('/billing')) {
       setSidebarBillingOpen(false);
     }
+    if (!pathname.startsWith('/reports')) {
+      setSidebarReportsOpen(false);
+    } else {
+      setSidebarReportsOpen(true);
+    }
   }, [pathname]);
 
   const isCurrentPremium = String(currentSubPlan).toLowerCase().includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
 
   // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
   if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
-    return <Navigate to="/dashboard" replace />;
+    const fallback = getFirstAllowedRoute() || '/dashboard';
+    return <Navigate to={fallback} replace />;
   }
 
   // Protect Plan-Gated Routes:
@@ -352,6 +441,14 @@ export default function AdminLayout() {
   if (isStaffActive && !isModuleAllowedForPlan('staff_management', activeRestaurant || currentSubPlan)) {
     ShowNotifications.showAlertNotification("Staff Management is not included in the Basic Plan. Please upgrade your subscription to access this module.", false);
     return <Navigate to="/plans-management" replace />;
+  }
+
+  // 3. Permission-Gated Pages: If a user navigates to an unpermitted route, redirect to their first allowed module
+  if (!isCurrentPageAllowed) {
+    const fallbackRoute = getFirstAllowedRoute();
+    if (fallbackRoute && fallbackRoute !== pathname) {
+      return <Navigate to={fallbackRoute} replace />;
+    }
   }
 
   return (
@@ -475,7 +572,7 @@ export default function AdminLayout() {
                 <ul className="sidebar-submenu">
                   {(String(selectedBranchId || '').toUpperCase() === 'COMPANY') ? (
                     <>
-                      {(hasPermission('inventory_items', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_items', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/items' || location.pathname === '/inventory' ? 'active' : ''}`}>
                           <Link to="/inventory/items" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
@@ -483,7 +580,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_central_stock', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_central_stock', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/central-stock' ? 'active' : ''}`}>
                           <Link to="/inventory/central-stock" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M3 21h18"></path><path d="M5 21V7l8-4v14"></path><path d="M19 21V11l-6-3"></path></svg>
@@ -491,7 +588,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_purchases', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_purchases', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/purchases' ? 'active' : ''}`}>
                           <Link to="/inventory/purchases" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
@@ -499,7 +596,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_branch_requests', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_branch_requests', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/branch-requests' ? 'active' : ''}`}>
                           <Link to="/inventory/branch-requests" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -507,7 +604,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view') || hasPermission('inventory', 'view')) && (
+                      {(hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view')) && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/distribution' || location.pathname === '/inventory/stock-distribution' ? 'active' : ''}`}>
                           <Link to="/inventory/distribution" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M16 3h5v5"></path><path d="M4 20L21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path></svg>
@@ -515,7 +612,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_transactions', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_transactions', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/transactions' ? 'active' : ''}`}>
                           <Link to="/inventory/transactions" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -526,7 +623,7 @@ export default function AdminLayout() {
                     </>
                   ) : (
                     <>
-                      {(hasPermission('inventory_my_stock', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_my_stock', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/my-stock' || location.pathname === '/inventory' ? 'active' : ''}`}>
                           <Link to="/inventory/my-stock" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M3 21h18"></path><path d="M9 8h1"></path><path d="M9 12h1"></path><path d="M9 16h1"></path><path d="M14 8h1"></path><path d="M14 12h1"></path><path d="M14 16h1"></path><path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16"></path></svg>
@@ -534,7 +631,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_stock_request', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_stock_request', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/stock-request' ? 'active' : ''}`}>
                           <Link to="/inventory/stock-request" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
@@ -542,7 +639,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_branch_transfer', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_branch_transfer', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/branch-transfer' ? 'active' : ''}`}>
                           <Link to="/inventory/branch-transfer" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
@@ -550,7 +647,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_direct_purchase', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_direct_purchase', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/direct-purchase' ? 'active' : ''}`}>
                           <Link to="/inventory/direct-purchase" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
@@ -558,7 +655,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_stock_receipt', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_stock_receipt', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/stock-receipt' ? 'active' : ''}`}>
                           <Link to="/inventory/stock-receipt" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -566,7 +663,7 @@ export default function AdminLayout() {
                           </Link>
                         </li>
                       )}
-                      {(hasPermission('inventory_transactions', 'view') || hasPermission('inventory', 'view')) && (
+                      {hasPermission('inventory_transactions', 'view') && (
                         <li className={`sidebar-item ${location.pathname === '/inventory/transactions' ? 'active' : ''}`}>
                           <Link to="/inventory/transactions" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -640,35 +737,149 @@ export default function AdminLayout() {
               </div>
               {sidebarBillingOpen && (
                 <ul className="sidebar-submenu">
-                  <li className={`sidebar-item ${pathname === '/billing' ? 'active' : ''}`}>
-                    <Link to="/billing">
-                      <span>Current Billing</span>
-                    </Link>
-                  </li>
-                  <li className={`sidebar-item ${pathname === '/billing/history' ? 'active' : ''}`}>
-                    <Link to="/billing/history">
-                      <span>Billing History</span>
-                    </Link>
-                  </li>
+                  {hasPermission('billing_current', 'view') && (
+                    <li className={`sidebar-item ${pathname === '/billing' ? 'active' : ''}`}>
+                      <Link to="/billing">
+                        <span>Current Billing</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('billing_history', 'view') && (
+                    <li className={`sidebar-item ${pathname === '/billing/history' ? 'active' : ''}`}>
+                      <Link to="/billing/history">
+                        <span>Billing History</span>
+                      </Link>
+                    </li>
+                  )}
                 </ul>
               )}
             </li>
           )}
 
-          {/* 10. Reports (Unified with Waiter & Kitchen Reports) */}
+          {/* 10. Reports Dropdown with Sub-modules */}
           {isTabAllowed('reports_analytics') && (
-            <li className={`sidebar-item ${isReportsActive ? 'active' : ''}`}>
-              <Link to="/reports" onClick={handleCloseAllDropdowns}>
-                <span className="sidebar-icon-box">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                </span>
-                <span className="sidebar-item-label">Reports</span>
-              </Link>
+            <li className={`sidebar-group ${sidebarReportsOpen ? 'open' : ''}`}>
+              <div
+                className={`sidebar-item dropdown-trigger ${isReportsActive ? 'active' : ''}`}
+                onClick={handleToggleReportsDropdown}
+                style={{ cursor: 'pointer' }}
+              >
+                <a
+                  href="#"
+                  onClick={(e) => e.preventDefault()}
+                  className="dropdown-trigger-link"
+                  style={{ display: 'flex', alignItems: 'center', width: '100%' }}
+                >
+                  <span className="sidebar-icon-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="20" x2="18" y2="10"></line>
+                      <line x1="12" y1="20" x2="12" y2="4"></line>
+                      <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                  </span>
+                  <span className="sidebar-item-label">Reports</span>
+                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: sidebarReportsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease'
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </span>
+                </a>
+              </div>
+              {sidebarReportsOpen && (
+                <ul className="sidebar-submenu">
+                  {hasPermission('reports_sales', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'sales' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=sales" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <line x1="12" y1="1" x2="12" y2="23"></line>
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Sales & Revenue</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_items', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'items' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=items" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M18 2v6a3 3 0 0 1-3 3 3 3 0 0 1-3-3V2"></path>
+                          <path d="M15 11v11"></path>
+                          <path d="M5 2v14a3 3 0 0 0 3 3h1v3"></path>
+                          <path d="M9 2v6"></path>
+                        </svg>
+                        <span>Dish Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_orders', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'orders' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=orders" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+                          <path d="M3 6h18"></path>
+                          <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        </svg>
+                        <span>Order Analytics</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_inventory', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'inventory' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=inventory" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="m7.5 4.27 9 5.15"></path>
+                          <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                          <path d="m3.27 6.96 8.73 5.05 8.73-5.05"></path>
+                          <path d="M12 22.08V12"></path>
+                        </svg>
+                        <span>Inventory & Stock</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_staff', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'staff' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=staff" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>Staff Performance</span>
+                      </Link>
+                    </li>
+                  )}
+                  {hasPermission('reports_tax', 'view') && (
+                    <li className={`sidebar-item ${isReportsActive && currentReportTab === 'tax' ? 'active' : ''}`}>
+                      <Link to="/reports?tab=tax" style={{ display: 'flex', alignItems: 'center' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}>
+                          <path d="M4 2v20l2-2 2 2 2-2 2 2 2-2 2 2 2-2 2 2V2z"></path>
+                          <line x1="8" y1="6" x2="16" y2="6"></line>
+                          <line x1="8" y1="10" x2="16" y2="10"></line>
+                          <line x1="8" y1="14" x2="12" y2="14"></line>
+                        </svg>
+                        <span>Tax & Settlement</span>
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              )}
             </li>
           )}
 
           {/* 11. Help & Support */}
-          {(isAdmin || currentUser?.userType === 'BRANCH_ADMIN') && (
+          {isTabAllowed('help_support') && (
             <li className={`sidebar-item ${isHelpSupportActive ? 'active' : ''}`}>
               <Link to="/help-support" onClick={handleCloseAllDropdowns}>
                 <span className="sidebar-icon-box">
@@ -892,7 +1103,52 @@ export default function AdminLayout() {
 
         {/* CONTENT BODY */}
         <div className="content-body">
-          <Outlet />
+          {!isCurrentPageAllowed ? (
+            <div style={{
+              padding: '60px 20px',
+              textAlign: 'center',
+              background: '#ffffff',
+              borderRadius: '16px',
+              margin: '24px',
+              boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05)',
+              border: '1px solid #fee2e2'
+            }}>
+              <div style={{
+                width: '72px',
+                height: '72px',
+                borderRadius: '50%',
+                background: '#fef2f2',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+                fontSize: '32px'
+              }}>
+                🚫
+              </div>
+              <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#18181b', marginBottom: '8px' }}>
+                Access Denied
+              </h2>
+              <p style={{ fontSize: '15px', color: '#71717a', maxWidth: '460px', margin: '0 auto 24px' }}>
+                You do not have permission to view or access this module. Please contact your restaurant owner or system administrator if you require access.
+              </p>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="btn btn-primary"
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          ) : (
+            <Outlet />
+          )}
         </div>
       </main>
 

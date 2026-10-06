@@ -20,10 +20,28 @@ export default function TableFormPage() {
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
-  const isAdminOrOwner = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
-  const isBranchLocked = !isAdminOrOwner;
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
+  const isCompanyUser =
+    userType === 'RESTAURANT_OWNER' ||
+    userType === 'OWNER' ||
+    userType === 'SUPER ADMIN' ||
+    userType === 'SUPER_ADMIN' ||
+    userType === 'ADMIN' ||
+    userRole === 'restaurant_owner' ||
+    userRole === 'restaurant owner' ||
+    userRole === 'owner' ||
+    userRole === 'super admin' ||
+    userRole === 'super_admin' ||
+    userRole === 'admin' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
+
+  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
+
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  const isBranchLocked = isBranchLogin;
 
   const [branches, setBranches] = useState(() => activeRestaurant?.branches || []);
   const [allRoles, setAllRoles] = useState([]);
@@ -38,7 +56,11 @@ export default function TableFormPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Get default branch from context
-  const defaultBranchId = currentUser?.activeBranchId || currentUser?.branchId || (selectedBranchId !== 'ALL' ? selectedBranchId : '');
+  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
+    ? selectedBranchId
+    : '';
+
+  const defaultBranchId = isBranchLogin ? userBranchId : cleanSelectedBranch;
 
   const [form, setForm] = useState({
     id: tableId ? (tableId.startsWith('T-') ? tableId : `T-${tableId}`) : '',
@@ -474,16 +496,19 @@ export default function TableFormPage() {
               </label>
               {(() => {
                 const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
-                const isLocked = !isAdminOrOwner || (selectedBranchId && selectedBranchId !== 'ALL');
-                const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                  ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                  : null;
-                const currentBranchObj = headerBranchObj 
-                  || (form.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(form.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(form.branchId))) : null);
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (form.branchId || '');
-                if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                  effectiveVal = '';
+                const isLocked = isBranchLogin;
+
+                let currentBranchVal = form.branchId;
+                if (isBranchLogin && userBranchId) {
+                  currentBranchVal = userBranchId;
+                } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                  currentBranchVal = '';
                 }
+
+                const currentBranchObj = currentBranchVal 
+                  ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                  : null;
+                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
                   { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -504,7 +529,7 @@ export default function TableFormPage() {
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to currently selected branch.
+                        Branch is locked to your assigned branch.
                       </span>
                     )}
                   </div>

@@ -62,17 +62,20 @@ const DownloadIcon = ({ size = 14, color = 'currentColor' }) => (
 );
 
 export default function UserListPanel() {
-  const { currentUser, selectedBranchId } = useAppState();
+  const { currentUser, selectedBranchId, hasPermission } = useAppState();
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
+  const userRole = (roleStr || '').toLowerCase().trim();
+  const userType = (userTypeStr || '').toUpperCase().trim();
   const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isCompanyUser = isAdmin || (!currentUser?.branchId && !currentUser?.activeBranchId);
   const currentBranchId = typeof currentUser?.branchId === 'object' ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : currentUser?.branchId;
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL';
+  const userBranchId = currentBranchId || currentUser?.activeBranchId || '';
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || String(selectedBranchId).toUpperCase() === 'COMPANY';
   const activeFilteredBranchId = !isAllBranches
     ? selectedBranchId
     : (!isAdmin && currentBranchId ? currentBranchId : null);
@@ -517,16 +520,19 @@ export default function UserListPanel() {
                 </label>
                 {(() => {
                   const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                  const isLocked = !isAdmin || (selectedBranchId && selectedBranchId !== 'ALL');
-                  const headerBranchObj = (selectedBranchId && selectedBranchId !== 'ALL')
-                    ? allBranchesList.find(b => String(b._id || b.id) === String(selectedBranchId) || String(b.branchCode) === String(selectedBranchId))
-                    : null;
-                  const currentBranchObj = headerBranchObj 
-                    || (userForm.branchId ? (allBranchesList.find(b => String(b._id || b.id) === String(userForm.branchId)) || allBranchesList.find(b => String(b.branchCode) === String(userForm.branchId))) : null);
-                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (userForm.branchId || '');
-                  if (effectiveVal === 'ALL' || effectiveVal === 'all' || effectiveVal === 'MAIN' || effectiveVal === 'main') {
-                    effectiveVal = '';
+                  const isLocked = isBranchLogin;
+
+                  let currentBranchVal = userForm.branchId;
+                  if (isBranchLogin && userBranchId) {
+                    currentBranchVal = userBranchId;
+                  } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
+                    currentBranchVal = '';
                   }
+
+                  const currentBranchObj = currentBranchVal
+                    ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
+                    : null;
+                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                   const branchOptions = [
                     { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
@@ -550,7 +556,7 @@ export default function UserListPanel() {
                       />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                          Branch is locked to currently selected branch.
+                          Branch is locked to your assigned branch.
                         </span>
                       )}
                     </>
@@ -779,29 +785,31 @@ export default function UserListPanel() {
             >
               <DownloadIcon size={14} /> Export CSV
             </button>
-            <button 
-              type="button" 
-              onClick={openAddUser}
-              style={{
-                background: '#000000',
-                color: '#ffffff',
-                border: 'none',
-                padding: '10px 22px',
-                borderRadius: '8px',
-                fontSize: '14px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                transition: 'all 0.15s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
-              onMouseLeave={e => e.currentTarget.style.background = '#000000'}
-            >
-              + Create User
-            </button>
+            {hasPermission('users', 'add') && (
+              <button 
+                type="button" 
+                onClick={openAddUser}
+                style={{
+                  background: '#000000',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '10px 22px',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  transition: 'all 0.15s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#1e293b'}
+                onMouseLeave={e => e.currentTarget.style.background = '#000000'}
+              >
+                + Create User
+              </button>
+            )}
           </div>
         </div>
 
@@ -865,32 +873,32 @@ export default function UserListPanel() {
           </div>
         </div>
 
-        <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
+        <div className="table-responsive" style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px' }}>
           <table style={{ width: '100%', minWidth: '1150px', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f95e10', padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', width: '50px' }}>
                   S.NO.
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   FULL NAME
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   BRANCH ASSIGNMENT
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   EMAIL ADDRESS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   PHONE NUMBER
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ACCESS ROLE
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   ACCOUNT STATUS
                 </th>
-                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
+                <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>
                   ACTIONS
                 </th>
               </tr>
@@ -1004,27 +1012,29 @@ export default function UserListPanel() {
                         >
                           <EyeIcon size={16} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditUser(user)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          title="Edit User"
-                        >
-                          <PencilIcon size={16} />
-                        </button>
+                        {hasPermission('users', 'edit') && (
+                          <button
+                            type="button"
+                            onClick={() => openEditUser(user)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                            title="Edit User"
+                          >
+                            <PencilIcon size={16} />
+                          </button>
+                        )}
                         <button
                         title="Change Password"
                         onClick={() => {
@@ -1053,21 +1063,23 @@ export default function UserListPanel() {
                       >
                         <KeyIcon />
                       </button>
-                      <button
-                          type="button"
-                          onClick={() => setUserToDelete(user)}
-                          title="Delete User"
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid #fee2e2',
-                            borderRadius: '6px',
-                            padding: '6px',
-                            cursor: 'pointer',
-                            color: '#dc2626'
-                          }}
-                        >
-                          <TrashIcon size={14} />
-                        </button>
+                      {hasPermission('users', 'delete') && (
+                        <button
+                            type="button"
+                            onClick={() => setUserToDelete(user)}
+                            title="Delete User"
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid #fee2e2',
+                              borderRadius: '6px',
+                              padding: '6px',
+                              cursor: 'pointer',
+                              color: '#dc2626'
+                            }}
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                      )}
                       </div>
                     </td>
                   </tr>

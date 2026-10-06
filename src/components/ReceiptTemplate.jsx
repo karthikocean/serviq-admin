@@ -15,32 +15,43 @@ export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
 
   // Customer Name
   const rawCust = bill.customerName || bill.customer?.name || bill.clientName || bill.order?.customerName || bill.order?.customer?.name || '';
-  const custName = (rawCust && String(rawCust).trim()) ? String(rawCust).trim() : 'Siva Shankar';
+  const custName = (rawCust && String(rawCust).trim()) ? String(rawCust).trim() : 'Guest';
 
   // Table
-  const rawTable = bill.table || bill.tableNumber || bill.tableNo || (typeof bill.tableId === 'object' ? (bill.tableId?.tableNumber || bill.tableId?.tableNo) : bill.tableId) || '37';
-  const tableNo = String(rawTable).replace(/^Table\s*/i, '').trim() || '37';
+  const rawTable = bill.table || bill.tableNumber || bill.tableNo || (typeof bill.tableId === 'object' ? (bill.tableId?.tableNumber || bill.tableId?.tableNo) : bill.tableId) || '1';
+  const tableNo = String(rawTable).replace(/^Table\s*/i, '').trim() || '1';
 
-  // Invoice / Bill No
-  const rawInv = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.billNumber || bill.id || bill._id || '7767';
-  const invNo = String(rawInv).replace(/^INV[\/-]*/i, '').replace(/^B[\/-]*/i, '').trim() || '7767';
+  // Identify whether this is an Invoice or Bill
+  const isInvoice = Boolean(bill.invoiceNo || bill.invoiceNumber);
+  const displayNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.billNumber || (bill.id ? `B-${bill.id}` : (bill._id ? `B-${String(bill._id).slice(-4)}` : 'B-1041'));
+  const invNo = String(displayNo).replace(/^INV[\/-]*/i, '').replace(/^B[\/-]*/i, '').trim() || '1041';
+  const docTitle = `${isInvoice ? 'Invoice' : 'Bill'} - ${displayNo}`;
 
   // Date & Time
   const d = bill.createdAt || bill.date || bill.createdDate || bill.timestamp || new Date();
   const dateObj = new Date(d);
   const isValidDate = !isNaN(dateObj.getTime());
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const dateStr = isValidDate ? `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}` : '16 May 2024';
-  const timeStr = bill.time || (isValidDate ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '21:18');
+  const dateStr = isValidDate ? `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}` : '5 Oct 2026';
+  const timeStr = bill.time || (isValidDate ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : '12:30');
 
   // Items
   const candidateItems = bill.items || bill.order?.items || bill.orderItems || [];
-  const rawItems = Array.isArray(candidateItems) && candidateItems.length > 0 ? candidateItems : [
-    { name: 'Mutton biriyani', qty: 4, rate: 400, amount: 1600 },
-    { name: 'Tandoori Roti', qty: 5, rate: 30, amount: 150 },
-    { name: 'Chilly chicken', qty: 2, rate: 250, amount: 500 },
-    { name: 'Chicken pepper', qty: 3, rate: 250, amount: 750 }
-  ];
+  const billTotalNum = Number(bill.total || bill.amount || bill.billAmount || bill.totalAmount || 0);
+
+  let rawItems = (Array.isArray(candidateItems) && candidateItems.length > 0) ? candidateItems : null;
+  if (!rawItems) {
+    if (billTotalNum > 0) {
+      const baseAmt = parseFloat((billTotalNum / 1.05).toFixed(2));
+      rawItems = [
+        { name: 'Restaurant Dining Food Items', qty: 1, rate: baseAmt, amount: baseAmt }
+      ];
+    } else {
+      rawItems = [
+        { name: 'Chicken Biriyani', qty: 1, rate: 120, amount: 120 }
+      ];
+    }
+  }
 
   const items = rawItems.map(it => {
     const name = it.name || it.itemName || it.dishName || 'Item';
@@ -53,11 +64,9 @@ export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
   const subtotal = items.reduce((acc, it) => acc + it.amount, 0);
   const cgst = bill.cgst !== undefined ? Number(bill.cgst) : parseFloat((subtotal * 0.025).toFixed(2));
   const sgst = bill.sgst !== undefined ? Number(bill.sgst) : parseFloat((subtotal * 0.025).toFixed(2));
-  const total = (bill.total !== undefined && Number(bill.total) > 0)
-    ? Number(bill.total)
-    : (bill.amount !== undefined && Number(bill.amount) > 0
-      ? Number(bill.amount)
-      : parseFloat((subtotal + cgst + sgst).toFixed(2)));
+  const total = billTotalNum > 0
+    ? billTotalNum
+    : parseFloat((subtotal + cgst + sgst).toFixed(2));
 
   const payMode = bill.paymentMethod || bill.paymentMode || bill.payMode || 'Cash';
   const isPaid = (bill.status || bill.paymentStatus || '').toLowerCase() === 'paid';
@@ -69,6 +78,9 @@ export const normalizeReceiptData = (bill = {}, activeRestaurant = {}) => {
     custName,
     tableNo,
     invNo,
+    displayNo,
+    isInvoice,
+    docTitle,
     dateStr,
     timeStr,
     items,
@@ -97,11 +109,15 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>Receipt - ${r.invNo}</title>
+  <title>${r.docTitle}</title>
   <meta charset="utf-8" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    @page {
+      size: portrait;
+      margin: 4mm;
+    }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #ffffff;
@@ -110,15 +126,37 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
       display: flex;
       justify-content: center;
       font-size: 12.5px;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     @media print {
-      body { padding: 0; background: transparent; }
-      .receipt-box { box-shadow: none !important; border: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; }
-      @page { margin: 4mm; size: auto; }
+      html, body {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        display: flex !important;
+        justify-content: center !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .receipt-box {
+        box-shadow: none !important;
+        border: none !important;
+        width: 320px !important;
+        max-width: 320px !important;
+        min-width: 320px !important;
+        margin: 0 auto !important;
+        padding: 4px 6px !important;
+      }
+      @page {
+        size: portrait;
+        margin: 4mm;
+      }
     }
     .receipt-box {
       width: 100%;
-      max-width: 360px;
+      max-width: 340px;
       background: #ffffff;
       padding: 12px 16px;
       color: #000000;
@@ -182,14 +220,14 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
     <!-- RECEIPT divider -->
     <div class="receipt-divider">
       <div class="line"></div>
-      <span>RECEIPT</span>
+      <span>${r.isInvoice ? 'INVOICE' : 'RECEIPT'}</span>
       <div class="line"></div>
     </div>
 
     <!-- Metadata -->
     <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #000000; margin-bottom: 3px;">
       <span>Name: <strong style="color: #000000; font-weight: 700;">${r.custName}</strong></span>
-      <span>Invoice No: <strong style="color: #000000; font-weight: 700;">${r.invNo}</strong></span>
+      <span>${r.isInvoice ? 'Invoice No:' : 'Bill No:'} <strong style="color: #000000; font-weight: 700;">${r.displayNo}</strong></span>
     </div>
     <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #000000;">
       <span>Table: <strong style="color: #000000; font-weight: 700;">#${r.tableNo}</strong></span>
@@ -256,10 +294,52 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
     <div class="dashed-line" style="margin: 8px 0 12px 0;"></div>
   </div>
   <script>
-    window.onload = function() { window.print(); };
+    function triggerPrint() {
+      window.focus();
+      setTimeout(function() {
+        window.print();
+      }, 200);
+    }
+    if (document.readyState === 'complete') {
+      triggerPrint();
+    } else {
+      window.addEventListener('load', triggerPrint);
+    }
+    window.onafterprint = function() {
+      try { window.close(); } catch(e) {}
+    };
   </script>
 </body>
 </html>`;
+};
+
+// Opens a print popup window centered on the user's active screen/browser
+export const openCenteredPrintWindow = (htmlContent, title = 'Print', width = 480, height = 700) => {
+  const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window.screenX || 0);
+  const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window.screenY || 0);
+
+  const screenW = window.outerWidth || window.innerWidth || (window.screen ? window.screen.width : 1280);
+  const screenH = window.outerHeight || window.innerHeight || (window.screen ? window.screen.height : 800);
+
+  const left = Math.max(0, Math.round(dualScreenLeft + (screenW - width) / 2));
+  const top = Math.max(0, Math.round(dualScreenTop + (screenH - height) / 2));
+
+  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+
+  const printWin = window.open('', '_blank', features);
+  if (printWin) {
+    try {
+      printWin.document.title = title;
+    } catch (e) {}
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+    try {
+      printWin.document.title = title;
+      printWin.focus();
+    } catch (e) {}
+  }
+  return printWin;
 };
 
 // React UI Component for Dialog / Modal Display (Pure Black & White Real Bill UI)

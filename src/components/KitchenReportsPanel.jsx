@@ -647,11 +647,11 @@ export default function KitchenReportsPanel({
             <div style={{ overflowX: 'auto', border: '1.5px solid var(--border)', borderRadius: '8px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '1.5px solid var(--border)' }}>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>DISH NAME</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>CATEGORY</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>QTY</th>
-                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>PRIORITY</th>
+                  <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>DISH NAME</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>CATEGORY</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>QTY</th>
+                    <th style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, color: '#ffffff' }}>PRIORITY</th>
                   </tr>
                 </thead>
                 <tbody>

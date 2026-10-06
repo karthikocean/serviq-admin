@@ -130,19 +130,25 @@ export default function BranchSearchDropdown() {
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // Restaurant Owner / Super Admin ONLY can switch branches freely and default to All Branches (HQ)
-  const isRestaurantOwner =
+  // Restaurant Owner / Super Admin / Company user can switch branches freely
+  const isCompanyUser =
     userType === 'RESTAURANT_OWNER' ||
     userType === 'OWNER' ||
     userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
+    userType === 'SUPER_ADMIN' || 
+    userType === 'ADMIN' ||     
     userRole === 'restaurant_owner' ||
     userRole === 'restaurant owner' ||
     userRole === 'owner' ||
     userRole === 'super admin' ||
-    userRole === 'super_admin';
+    userRole === 'super_admin' ||
+    userRole === 'admin' ||
+    (!currentUser?.branchId && !currentUser?.activeBranchId);
+  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
+    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
+    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
 
-  const isBranchLocked = !isRestaurantOwner;
+  const isBranchLocked = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
 
   // Automatically lock branch ONLY if user is a branch manager or branch-scoped staff (non-owner)
   useEffect(() => {
@@ -189,6 +195,13 @@ export default function BranchSearchDropdown() {
   const handleSelectBranch = (branchId) => {
     if (isBranchLocked) return;
     setSelectedBranchId(branchId);
+    try {
+      if (branchId) {
+        sessionStorage.setItem('selectedBranchId', String(branchId));
+      } else {
+        sessionStorage.setItem('selectedBranchId', '');
+      }
+    } catch (e) {}
     setIsOpen(false);
     setSearchQuery('');
   };

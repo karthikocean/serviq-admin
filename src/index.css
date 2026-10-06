@@ -1566,7 +1566,10 @@ div[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
 .custom-table thead,
 .panel-view table thead,
 table thead {
-  background: #000000;
+  background: #f8fafc;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
 }
 
 .menu-items-table thead tr,
@@ -1575,8 +1578,8 @@ table thead {
 .custom-table thead tr,
 .panel-view table thead tr,
 table thead tr {
-  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
-  border-bottom: 3px solid #ff5a1f !important;
+  background: #f8fafc !important;
+  border-bottom: 2px solid #e2e8f0 !important;
 }
 
 .menu-items-table thead th,
@@ -1585,18 +1588,21 @@ table thead tr {
 .custom-table thead th,
 .panel-view table thead th,
 table thead th {
-  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
-  color: #ffffff !important;
-  padding: 14px 16px !important;
-  font-weight: 800 !important;
-  font-size: 11px !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  padding: 13px 14px !important;
+  font-weight: 700 !important;
+  font-size: 11.5px !important;
   text-transform: uppercase !important;
-  border-bottom: 3px solid #ff5a1f !important;
+  border-bottom: 2px solid #e2e8f0 !important;
   border-top: none !important;
   border-left: none !important;
   border-right: none !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-  letter-spacing: 0.6px !important;
+  box-shadow: none !important;
+  letter-spacing: 0.5px !important;
   white-space: nowrap !important;
   vertical-align: middle !important;
 }
@@ -3458,31 +3464,31 @@ body.dark-theme .dining-table-card.active {
   background-color: var(--bg-secondary);
   border: 1px solid #e2e8f0;
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 18px 24px;
   width: 100%;
   max-width: 420px;
   box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.04);
   animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--text-main);
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.modal-card::-webkit-scrollbar {
-  width: 5px;
+.modal-card,
+.modal-card-body,
+.modal-card *,
+.modal-overlay * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-.modal-card::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.modal-card::-webkit-scrollbar-thumb {
-  background: #cbd5e1 !important;
-  border-radius: 4px;
-}
-
-.modal-card::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8 !important;
+.modal-card::-webkit-scrollbar,
+.modal-card-body::-webkit-scrollbar,
+.modal-card *::-webkit-scrollbar,
+.modal-overlay *::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
 }
 
 .modal-header-flex {
@@ -4588,90 +4594,238 @@ body.dark-theme .branch-option-subtext {
   pointer-events: none;
 }
 
-/* Universal Table Header Seamless Styling - Prevents white gaps and border bleeding */
+/* ========================================================
+   GLOBAL UNIFIED TABLE DESIGN SYSTEM (SERVIQ ADMIN)
+   Clean, light, consistent SaaS table styling without internal vertical scrollbars
+   ======================================================== */
+
 .menu-table-wrapper,
 .table-responsive,
 .admin-table-container,
 .table-container,
-.feed-table-wrapper {
-  background-color: #000000 !important;
+.feed-table-wrapper,
+.orders-table-responsive,
+.billing-table-responsive,
+.reports-table-container,
+.orders-table-wrapper,
+.orders-table-container,
+.reports-table-card > .reports-table-container,
+.orders-table-card > .orders-table-responsive,
+div:has(> table.data-table),
+div:has(> table.admin-table),
+div:has(> table.menu-items-table),
+div:has(> table.orders-table),
+div:has(> table.billing-table),
+div:has(> table.feed-table),
+div:has(> table[style*="minWidth"]),
+div:has(> table[style*="min-width"]) {
+  width: 100%;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  max-height: none !important;
+  position: relative !important;
+  background-color: #ffffff !important;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  -webkit-overflow-scrolling: touch;
 }
 
-.menu-items-table,
-.admin-table,
-.data-table,
-.custom-table,
-.panel-view table,
-.feed-table,
+/* Modal and popup table containers only */
+.modal-card-body div:has(> table),
+.modal-body div:has(> table),
+.modal-overlay div:has(> table),
+[class*="modal"] div:has(> table) {
+  max-height: 440px !important;
+  overflow-y: auto !important;
+}
+
+.table-responsive::-webkit-scrollbar,
+.menu-table-wrapper::-webkit-scrollbar,
+.orders-table-responsive::-webkit-scrollbar,
+.billing-table-responsive::-webkit-scrollbar,
+.reports-table-container::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track,
+.menu-table-wrapper::-webkit-scrollbar-track,
+.orders-table-responsive::-webkit-scrollbar-track,
+.billing-table-responsive::-webkit-scrollbar-track,
+.reports-table-container::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.table-responsive::-webkit-scrollbar-thumb,
+.menu-table-wrapper::-webkit-scrollbar-thumb,
+.orders-table-responsive::-webkit-scrollbar-thumb,
+.billing-table-responsive::-webkit-scrollbar-thumb,
+.reports-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Tables base */
 table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
   background-color: #ffffff;
 }
 
+/* Clean, #f95e10 Table Headers */
+table:not(.real-bill-receipt-card table) thead,
 .menu-items-table thead,
 .admin-table thead,
 .data-table thead,
 .custom-table thead,
 .panel-view table thead,
-.feed-table thead,
-table thead {
-  background-color: #000000 !important;
-  background: #000000 !important;
+.orders-table thead,
+.billing-table thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
 }
 
+table:not(.real-bill-receipt-card table) thead tr,
 .menu-items-table thead tr,
 .admin-table thead tr,
 .data-table thead tr,
 .custom-table thead tr,
 .panel-view table thead tr,
-.feed-table thead tr,
-table thead tr {
-  background-color: #000000 !important;
-  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
-  border-bottom: 3px solid #ff5a1f !important;
+.orders-table thead tr,
+.billing-table thead tr {
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
+  border-bottom: none !important;
+  height: 48px;
 }
 
+table:not(.real-bill-receipt-card table) thead th,
 .menu-items-table thead th,
 .admin-table thead th,
 .data-table thead th,
 .custom-table thead th,
 .panel-view table thead th,
-.feed-table thead th,
-table thead th {
-  background-color: #000000 !important;
-  background: linear-gradient(180deg, #18181b 0%, #000000 100%) !important;
+.orders-table thead th,
+.billing-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  font-size: 11.5px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
   border-top: none !important;
   border-left: none !important;
   border-right: none !important;
-  border-bottom: 3px solid #ff5a1f !important;
-  box-sizing: border-box !important;
-}
-
-
-/* Seamless Universal Table Headers */
-table {
-  border-collapse: collapse !important;
-  border-spacing: 0 !important;
-}
-
-table thead, .menu-items-table thead, .admin-table thead, .data-table thead, .custom-table thead, .panel-view table thead {
-  background-color: #000000 !important;
-}
-
-table thead tr, .menu-items-table thead tr, .admin-table thead tr, .data-table thead tr, .custom-table thead tr, .panel-view table thead tr {
-  background-color: #000000 !important;
-  border-bottom: 3px solid #ff5a1f !important;
-}
-
-table thead th, .menu-items-table thead th, .admin-table thead th, .data-table thead th, .custom-table thead th, .panel-view table thead th {
-  background: #000000 !important;
-  background-color: #000000 !important;
-  border-top: none !important;
-  border-left: none !important;
-  border-right: none !important;
-  border-bottom: 3px solid #ff5a1f !important;
-  border-spacing: 0 !important;
-  outline: none !important;
+  border-bottom: none !important;
   box-shadow: none !important;
+  white-space: nowrap !important;
+  padding: 13px 14px !important;
+  vertical-align: middle !important;
+}
+
+table:not(.real-bill-receipt-card table) thead th *,
+.menu-items-table thead th *,
+.admin-table thead th *,
+.data-table thead th *,
+.custom-table thead th *,
+.panel-view table thead th *,
+.orders-table thead th *,
+.billing-table thead th * {
+  color: #ffffff !important;
+}
+
+/* Help & Support tickets table header matching theme */
+.help-support-container table thead th,
+.data-table thead th {
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
+  color: #ffffff !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+/* Sticky columns in thead */
+table:not(.real-bill-receipt-card table) thead th.sticky-col-1,
+table:not(.real-bill-receipt-card table) thead th.sticky-col-2,
+table:not(.real-bill-receipt-card table) thead th.sticky-col-3,
+table:not(.real-bill-receipt-card table) thead th.sticky-col-action,
+.orders-sticky-actions-header,
+.sticky-actions-header {
+  position: sticky !important;
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
+  color: #ffffff !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+.sticky-col-1 {
+  left: 0 !important;
+  z-index: 15 !important;
+}
+
+.sticky-col-2 {
+  left: 70px !important;
+  z-index: 15 !important;
+}
+
+.sticky-col-3 {
+  left: 150px !important;
+  z-index: 15 !important;
+}
+
+.sticky-col-action,
+.orders-sticky-actions-cell,
+.orders-sticky-actions-header,
+.sticky-actions-header {
+  right: 0 !important;
+  z-index: 15 !important;
+}
+
+/* Sticky columns in tbody */
+table:not(.real-bill-receipt-card table) tbody td.sticky-col-1,
+table:not(.real-bill-receipt-card table) tbody td.sticky-col-2,
+table:not(.real-bill-receipt-card table) tbody td.sticky-col-3,
+table:not(.real-bill-receipt-card table) tbody td.sticky-col-action,
+table:not(.real-bill-receipt-card table) tbody td.orders-sticky-actions-cell {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+}
+
+table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-1,
+table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-2,
+table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-3,
+table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-action,
+table:not(.real-bill-receipt-card table) tbody tr:hover td.orders-sticky-actions-cell {
+  background-color: #fff7ed !important;
+}
+
+/* Unified Table Body & Rows */
+table:not(.real-bill-receipt-card table) tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  background-color: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+table:not(.real-bill-receipt-card table) tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+table:not(.real-bill-receipt-card table) td {
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  vertical-align: middle;
+  color: #1e293b;
 }
 
 /* Real Thermal Bill Receipt - Strict Black & White UI */
@@ -4729,4 +4883,5 @@ table thead th, .menu-items-table thead th, .admin-table thead th, .data-table t
 .real-bill-receipt-card::-webkit-scrollbar-thumb {
   background: #cbd5e1 !important;
 }
+
 

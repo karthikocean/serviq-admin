@@ -60,7 +60,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     upgradeRestaurantPlan,
     purchaseExtraBranchSlots,
     toggleSubscriptionAutoRenew,
-    currentUser
+    currentUser,
+    hasPermission: contextHasPermission
   } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
@@ -75,21 +76,14 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||
     userRoleLower === 'restaurant_owner' || 
     userRoleLower === 'restaurant owner' || 
     userRoleLower === 'owner' || 
     userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin' ||
-    userRoleLower === 'admin';
+    userRoleLower === 'super_admin';
 
   const role = roleStr || 'Admin';
-  const hasPermission = hasPermissionProp || ((moduleName, action = 'view') => {
-    if (isRestaurantOwner) return true;
-    const rolesConfig = activeRestaurant?.roles || DEFAULT_ROLES;
-    const userRoleConfig = rolesConfig[role] || DEFAULT_ROLES[role] || { permissions: {} };
-    return !!userRoleConfig.permissions?.[moduleName]?.[action];
-  });
+  const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
 
   if (!isRestaurantOwner) {
     return (
@@ -1409,15 +1403,15 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ width: '100%', overflowX: 'auto', borderRadius: '14px' }}>
             <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead>
-                <tr style={{ backgroundColor: '#000000', borderBottom: '3px solid #ff5a1f' }}>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Recharge Date</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Invoice #</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '200px' }}>Plan & Recharge Item</th>
-                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Type</th>
-                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Payment Method</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '120px' }}>Amount Paid</th>
-                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '100px' }}>Status</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 800, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '120px' }}>Action</th>
+                <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Recharge Date</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '130px' }}>Invoice #</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '200px' }}>Plan & Recharge Item</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '110px' }}>Type</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '140px' }}>Payment Method</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left', minWidth: '120px' }}>Amount Paid</th>
+                  <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '100px' }}>Status</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center', minWidth: '120px' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -2084,10 +2078,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           title="Plans Management"
           maxWidth="1140px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '10px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px 0 8px 0' }}>
 
             {/* 3 PLAN COMPARISON CARDS */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '22px', alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '18px', alignItems: 'stretch' }}>
               {plansList.map(plan => {
                 const planClean = (plan.name || plan.planName || plan.id || '').toLowerCase().replace(/\s*plan$/i, '').trim();
                 const currentClean = (cleanPlanSlug || '').toLowerCase().replace(/\s*plan$/i, '').trim();
@@ -2116,7 +2110,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       background: '#ffffff',
                       borderRadius: '16px',
                       border: isCurrentPlan ? '2px solid var(--primary)' : '1.5px solid #eef2f6',
-                      padding: '28px 24px 22px 24px',
+                      padding: '20px 20px 18px 20px',
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
@@ -2125,7 +2119,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       transition: 'transform 0.15s, box-shadow 0.15s'
                     }}
                   >
-                    <div>
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                       {/* Top Row: Title */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2141,7 +2135,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
 
                       {/* Active Status Badge */}
-                      <div style={{ marginTop: '8px' }}>
+                      <div style={{ marginTop: '6px' }}>
                         <span style={{
                           display: 'inline-block',
                           padding: '3px 9px',
@@ -2157,13 +2151,13 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
 
                       {/* Tagline Description */}
-                      <p style={{ fontSize: '12.5px', color: '#64748b', margin: '14px 0 18px 0', lineHeight: 1.5, minHeight: '38px' }}>
+                      <p style={{ fontSize: '12px', color: '#64748b', margin: '8px 0 12px 0', lineHeight: 1.45, minHeight: '34px' }}>
                         {plan.tagline}
                       </p>
 
                       {/* Billing Cycle & Rate Selector Dropdown */}
-                      <div style={{ marginBottom: '14px' }}>
-                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '6px' }}>
+                      <div style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '5px' }}>
                           BILLING CYCLE & RATE
                         </label>
                         <div style={{ position: 'relative' }}>
@@ -2172,11 +2166,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                             onChange={(e) => setSelectedPlanCycles(prev => ({ ...prev, [plan.id]: e.target.value }))}
                             style={{
                               width: '100%',
-                              padding: '10px 36px 10px 14px',
+                              padding: '9px 34px 9px 12px',
                               borderRadius: '8px',
                               border: '1.5px solid #cbd5e1',
                               background: '#f8fafc',
-                              fontSize: '13px',
+                              fontSize: '12.5px',
                               fontWeight: 700,
                               color: '#0f172a',
                               outline: 'none',
@@ -2204,23 +2198,23 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       </div>
 
                       {/* Max Branches */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px' }}>
                           MAX BRANCHES
                         </span>
-                        <span style={{ fontSize: '16px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
+                        <span style={{ fontSize: '15px', fontWeight: 800, color: '#ea580c', fontFamily: "'Outfit', sans-serif" }}>
                           {plan.maxBranches} Outlets
                         </span>
                       </div>
 
                       {/* Includes Features Section */}
-                      <div style={{ marginTop: '18px' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '14px' }}>
+                      <div style={{ marginTop: '14px', flex: 1 }}>
+                        <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: '10px' }}>
                           INCLUDES FEATURES:
                         </div>
-                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {plan.features.map((feat, fIdx) => (
-                            <li key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                            <li key={fIdx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px' }}>
                               {feat.included ? (
                                 <>
                                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -2244,7 +2238,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     </div>
 
                     {/* Bottom Action Button: Renew Current Plan vs Switch to this Plan */}
-                    <div style={{ marginTop: '26px' }}>
+                    <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
                       {isCurrentPlan ? (
                         <button
                           type="button"

@@ -120,12 +120,12 @@ export default function SearchableSelect({
       return normalizedOptions.find(opt => String(opt.value) === String(value.value)) || value;
     }
     let match = normalizedOptions.find(opt => String(opt.value) === String(value));
-    if (!match && (value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main')) {
-      match = normalizedOptions.find(opt => opt.value === '' || opt.value === 'MAIN' || opt.value === 'ALL');
+    if (!match && (value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main' || value === 'COMPANY' || value === 'company')) {
+      match = normalizedOptions.find(opt => opt.value === '' || opt.value === 'MAIN' || opt.value === 'ALL' || opt.value === 'COMPANY');
     }
     if (match) return match;
 
-    if (value === '' || value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main') return null;
+    if (value === '' || value === 'ALL' || value === 'all' || value === 'MAIN' || value === 'main' || value === 'COMPANY' || value === 'company') return null;
 
     // Guard against showing raw 24-char ObjectId hex string to users
     const strVal = String(value);
