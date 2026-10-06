@@ -1827,6 +1827,7 @@ export default function StaffManagementPanel({
                   <td style={{ padding: '12px 12px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '3px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       {/* View */}
+                      {hasPermission('staff', 'view') && (
                       <button
                         type="button"
                         title="View Staff Details"
@@ -1844,6 +1845,7 @@ export default function StaffManagementPanel({
                       >
                         <EyeIcon size={15} />
                       </button>
+                      )}
 
                       {/* Edit */}
                       {hasPermission('staff', 'edit') && (
@@ -1867,6 +1869,7 @@ export default function StaffManagementPanel({
                       )}
 
                       {/* Assign Tables (Only for Waiters) */}
+                      {hasPermission('staff', 'edit') && (
                       <button
                         type="button"
                         disabled={!isWaiter}
@@ -1890,8 +1893,10 @@ export default function StaffManagementPanel({
                       >
                         <TableAssignIcon size={15} />
                       </button>
+                      )}
 
                       {/* Reset Password */}
+                      {hasPermission('staff', 'edit') && (
                       <button
                         type="button"
                         title="Reset Password"
@@ -1918,8 +1923,10 @@ export default function StaffManagementPanel({
                       >
                         <KeyIcon size={15} />
                       </button>
+                      )}
 
                       {/* Activate / Deactivate Toggle */}
+                      {hasPermission('staff', 'edit') && (
                       <button
                         type="button"
                         title={isStaffActive ? "Deactivate Account" : "Activate Account"}
@@ -1940,6 +1947,7 @@ export default function StaffManagementPanel({
                       >
                         {isStaffActive ? 'Deactivate' : 'Activate'}
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>

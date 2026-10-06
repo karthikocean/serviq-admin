@@ -8,6 +8,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import { useAppState } from '../config/AppContext';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -216,6 +217,7 @@ export default function OrdersPanel({
   totalCount: propTotalCount,
   currentUser = null
 }) {
+  const { hasPermission } = useAppState();
   const [internalPage, setInternalPage] = useState(0);
   const page = propPage !== undefined ? propPage : internalPage;
   const limit = propLimit || 10;
@@ -326,8 +328,8 @@ export default function OrdersPanel({
       try {
         const res = await BranchApi.getBranches({ limit: 10 });
         if (res && res.status && res.response) {
-          const branchArray = Array.isArray(res.response) 
-            ? res.response 
+          const branchArray = Array.isArray(res.response)
+            ? res.response
             : (Array.isArray(res.response.data) ? res.response.data : (res.response.branches || []));
           if (Array.isArray(branchArray)) {
             setApiBranches(branchArray.map(b => ({
@@ -502,7 +504,7 @@ export default function OrdersPanel({
     const rawWaiterId = typeof ord.waiterId === 'string' ? ord.waiterId : (ord.staffId || ord.staff);
     if (rawWaiterId && rawWaiterId !== 'Unassigned' && rawWaiterId !== 'null') {
       const foundStaff = effectiveStaffList.find(s => String(s._id || s.id) === String(rawWaiterId) || String(s.name).toLowerCase() === String(rawWaiterId).toLowerCase()) ||
-                         allWaiters.find(w => String(w.id || w._id) === String(rawWaiterId) || String(w.name).toLowerCase() === String(rawWaiterId).toLowerCase());
+        allWaiters.find(w => String(w.id || w._id) === String(rawWaiterId) || String(w.name).toLowerCase() === String(rawWaiterId).toLowerCase());
       if (foundStaff && foundStaff.name) return foundStaff.name;
     }
 
@@ -545,7 +547,7 @@ export default function OrdersPanel({
       }
       if (matchingTable.assignedWaiterId) {
         const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchingTable.assignedWaiterId)) ||
-                      allWaiters.find(w => String(w.id || w._id) === String(matchingTable.assignedWaiterId));
+          allWaiters.find(w => String(w.id || w._id) === String(matchingTable.assignedWaiterId));
         if (found && found.name) return found.name;
       }
       if (matchingTable.assignedWaiter && typeof matchingTable.assignedWaiter === 'string' && matchingTable.assignedWaiter !== 'Unassigned') {
@@ -692,9 +694,9 @@ export default function OrdersPanel({
   const isTableOccupied = (tableIdentifier, tablesList = apiTables) => {
     if (!tableIdentifier) return false;
     const cleanId = String(tableIdentifier).trim().toLowerCase();
-    
+
     // Check if table in tablesList has status 'occupied'
-    const tableObj = (tablesList || []).find(t => 
+    const tableObj = (tablesList || []).find(t =>
       String(t._id || t.id || '').toLowerCase() === cleanId ||
       String(t.tableNumber || t.tableNo || t.name || '').trim().toLowerCase() === cleanId
     );
@@ -809,10 +811,10 @@ export default function OrdersPanel({
           const allArr = Array.isArray(allD)
             ? allD
             : (Array.isArray(allD?.data)
-                ? allD.data
-                : (Array.isArray(allD?.data?.items)
-                    ? allD.data.items
-                    : (Array.isArray(allD?.items) ? allD.items : [])));
+              ? allD.data
+              : (Array.isArray(allD?.data?.items)
+                ? allD.data.items
+                : (Array.isArray(allD?.items) ? allD.items : [])));
           if (allArr.length > 0) {
             if (fetchedMenuItems.length === 0 || (!isBranchFiltered && allArr.length > fetchedMenuItems.length)) {
               fetchedMenuItems = allArr;
@@ -866,7 +868,7 @@ export default function OrdersPanel({
             else if (Array.isArray(fcd?.data)) fetchedCategories = fcd.data;
             else if (Array.isArray(fcd?.data?.categories)) fetchedCategories = fcd.data.categories;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
       setApiCategories(fetchedCategories);
 
@@ -884,10 +886,10 @@ export default function OrdersPanel({
 
       // Find first available table if possible
       const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
-      const firstTable = availableT 
+      const firstTable = availableT
         ? (availableT.tableNumber || availableT.tableNo || availableT.name)
         : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
-      
+
       setNewOrderTable(firstTable);
 
       let staffListToUse = staff;
@@ -993,7 +995,7 @@ export default function OrdersPanel({
     }
     const foundItem = displayMenuItems.find(i => String(i._id || i.id || i.name) === String(selectedMenuItemInput)) ||
       filteredMenuItems.find(i => String(i._id || i.id || i.name) === String(selectedMenuItemInput));
-    
+
     if (!foundItem) {
       ShowNotifications.showAlertNotification("Selected menu item not found.", false);
       return;
@@ -1247,14 +1249,14 @@ export default function OrdersPanel({
     // 1. Robust table matching for Dine-In
     const matchedTable = newOrderType === 'Dine-In'
       ? (apiTables.find(t =>
-          (t._id && String(t._id) === String(newOrderTable)) ||
-          (t.id && String(t.id) === String(newOrderTable)) ||
-          (t.tableNumber !== undefined && String(t.tableNumber).trim() === String(newOrderTable).trim()) ||
-          (t.tableNo !== undefined && String(t.tableNo).trim() === String(newOrderTable).trim()) ||
-          (t.name && String(t.name).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ||
-          (t.tableNumber !== undefined && `TBL-${String(t.tableNumber).padStart(3, '0')}`.toLowerCase() === String(newOrderTable).toLowerCase()) ||
-          (t.tableNumber !== undefined && `Table ${t.tableNumber}`.toLowerCase() === String(newOrderTable).toLowerCase())
-        ) || (apiTables.length > 0 ? apiTables[0] : null))
+        (t._id && String(t._id) === String(newOrderTable)) ||
+        (t.id && String(t.id) === String(newOrderTable)) ||
+        (t.tableNumber !== undefined && String(t.tableNumber).trim() === String(newOrderTable).trim()) ||
+        (t.tableNo !== undefined && String(t.tableNo).trim() === String(newOrderTable).trim()) ||
+        (t.name && String(t.name).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ||
+        (t.tableNumber !== undefined && `TBL-${String(t.tableNumber).padStart(3, '0')}`.toLowerCase() === String(newOrderTable).toLowerCase()) ||
+        (t.tableNumber !== undefined && `Table ${t.tableNumber}`.toLowerCase() === String(newOrderTable).toLowerCase())
+      ) || (apiTables.length > 0 ? apiTables[0] : null))
       : null;
 
     // 2. Waiter matching ONLY for Dine-In
@@ -1460,12 +1462,12 @@ export default function OrdersPanel({
     setEditOrderItems(
       Array.isArray(ord.items)
         ? ord.items.map(it => ({
-            _id: it.menuId || it._id || it.id || '',
-            name: it.name,
-            price: Number(it.price) || 0,
-            qty: Number(it.qty) || 1,
-            status: it.status || ord.status || 'new'
-          }))
+          _id: it.menuId || it._id || it.id || '',
+          name: it.name,
+          price: Number(it.price) || 0,
+          qty: Number(it.qty) || 1,
+          status: it.status || ord.status || 'new'
+        }))
         : []
     );
     setEditSearchQuery('');
@@ -1877,7 +1879,7 @@ export default function OrdersPanel({
               ←
             </button>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-           
+
               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif" }}>
                 Create Order – Redesign
               </h2>
@@ -1905,7 +1907,7 @@ export default function OrdersPanel({
         }}>
           {/* LEFT COLUMN: ORDER INFORMATION + ADD DISHES */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
+
             {/* CARD 1: ORDER INFORMATION */}
             <div style={{
               background: '#ffffff',
@@ -2022,7 +2024,7 @@ export default function OrdersPanel({
                       currentBranchVal = '';
                     }
 
-                    const currentBranchObj = currentBranchVal 
+                    const currentBranchObj = currentBranchVal
                       ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                       : null;
                     let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
@@ -2248,50 +2250,54 @@ export default function OrdersPanel({
                           <span>Table {newOrderTable} currently has an active order (#{activeOrd.orderId || activeOrd.id || (activeOrd._id ? String(activeOrd._id).slice(-6).toUpperCase() : '1')})</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
-                              handleOpenAppendModal(activeOrd, itemsToCarry);
-                            }}
-                            style={{
-                              background: '#ea580c',
-                              color: '#ffffff',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              fontSize: '11.5px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <PlusIcon size={12} color="#ffffff" /> Add Items to Order
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsCreateOrderModalOpen(false);
-                              handleOpenEditOrder(activeOrd);
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              color: '#ea580c',
-                              border: '1px solid #fed7aa',
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              fontSize: '11.5px',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <PencilIcon size={12} color="#ea580c" /> Edit Order
-                          </button>
+                          {hasPermission('orders', 'edit') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const itemsToCarry = newOrderItems.length > 0 ? [...newOrderItems] : [];
+                                handleOpenAppendModal(activeOrd, itemsToCarry);
+                              }}
+                              style={{
+                                background: '#ea580c',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <PlusIcon size={12} color="#ffffff" /> Add Items to Order
+                            </button>
+                          )}
+                          {hasPermission('orders', 'edit') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCreateOrderModalOpen(false);
+                                handleOpenEditOrder(activeOrd);
+                              }}
+                              style={{
+                                background: '#ffffff',
+                                color: '#ea580c',
+                                border: '1px solid #fed7aa',
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                fontSize: '11.5px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <PencilIcon size={12} color="#ea580c" /> Edit Order
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -3198,7 +3204,7 @@ export default function OrdersPanel({
                           tblWaiter = matchedTable.assignedWaiter.name;
                         } else if (matchedTable.assignedWaiterId) {
                           const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchedTable.assignedWaiterId)) ||
-                                        allWaiters.find(w => String(w.id || w._id) === String(matchedTable.assignedWaiterId));
+                            allWaiters.find(w => String(w.id || w._id) === String(matchedTable.assignedWaiterId));
                           if (found && found.name) tblWaiter = found.name;
                         } else if (typeof matchedTable.assignedWaiter === 'string' && matchedTable.assignedWaiter !== 'Unassigned') {
                           const found = effectiveStaffList.find(s => String(s._id || s.id) === String(matchedTable.assignedWaiter) || String(s.name).toLowerCase() === String(matchedTable.assignedWaiter).toLowerCase());
@@ -3697,32 +3703,34 @@ export default function OrdersPanel({
                 {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={handleOpenCreateOrderModal}
-              style={{
-                background: '#ff5a1f',
-                color: '#ffffff',
-                border: 'none',
-                padding: '7px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
-                transition: 'all 0.15s ease'
-              }}
-              title="Create a new customer order"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              <span>Create Order</span>
-            </button>
+            {hasPermission('orders', 'add') && (
+              <button
+                type="button"
+                onClick={handleOpenCreateOrderModal}
+                style={{
+                  background: '#ff5a1f',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+                  transition: 'all 0.15s ease'
+                }}
+                title="Create a new customer order"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Create Order</span>
+              </button>
+            )}
           </div>
 
           <div className="orders-filter-container">
@@ -3809,9 +3817,9 @@ export default function OrdersPanel({
                     { value: 'All', label: 'All Tables' },
                     ...(apiTables.length > 0
                       ? apiTables.map(t => ({
-                          value: t.tableNumber || t.tableNo || t.name,
-                          label: `Table ${t.tableNumber || t.tableNo || t.name}`
-                        }))
+                        value: t.tableNumber || t.tableNo || t.name,
+                        label: `Table ${t.tableNumber || t.tableNo || t.name}`
+                      }))
                       : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
                   ]}
                   placeholder="Select Table..."
@@ -3933,296 +3941,255 @@ export default function OrdersPanel({
                   <th style={{ width: '180px', minWidth: '180px', textAlign: 'center' }} className="orders-sticky-actions-header">ACTIONS</th>
                 </tr>
               </thead>
-            <tbody>
-              {paginatedOrders.map((ord, index) => {
-                let totalItemsCount = 0;
-                let itemsListDetail = '';
+              <tbody>
+                {paginatedOrders.map((ord, index) => {
+                  let totalItemsCount = 0;
+                  let itemsListDetail = '';
 
-                if (Array.isArray(ord.items) && ord.items.length > 0) {
-                  totalItemsCount = ord.items.reduce((sum, it) => sum + (Number(it.qty || it.quantity || it.count || 1) || 1), 0);
-                  itemsListDetail = ord.items.map(it => `${it.name || 'Item'} (x${it.qty || it.quantity || 1})`).join(', ');
-                } else if (typeof ord.items === 'string' && ord.items.trim()) {
-                  itemsListDetail = ord.items;
-                  totalItemsCount = ord.items.split(',').length || 1;
-                } else if (ord.itemsSummary) {
-                  itemsListDetail = ord.itemsSummary;
-                  totalItemsCount = ord.totalItems || ord.itemCount || (ord.itemsSummary.split(',').length || 1);
-                } else if (ord.totalItems || ord.itemCount || ord.itemsCount) {
-                  totalItemsCount = Number(ord.totalItems || ord.itemCount || ord.itemsCount) || 1;
-                  itemsListDetail = `${totalItemsCount} Items`;
-                }
+                  if (Array.isArray(ord.items) && ord.items.length > 0) {
+                    totalItemsCount = ord.items.reduce((sum, it) => sum + (Number(it.qty || it.quantity || it.count || 1) || 1), 0);
+                    itemsListDetail = ord.items.map(it => `${it.name || 'Item'} (x${it.qty || it.quantity || 1})`).join(', ');
+                  } else if (typeof ord.items === 'string' && ord.items.trim()) {
+                    itemsListDetail = ord.items;
+                    totalItemsCount = ord.items.split(',').length || 1;
+                  } else if (ord.itemsSummary) {
+                    itemsListDetail = ord.itemsSummary;
+                    totalItemsCount = ord.totalItems || ord.itemCount || (ord.itemsSummary.split(',').length || 1);
+                  } else if (ord.totalItems || ord.itemCount || ord.itemsCount) {
+                    totalItemsCount = Number(ord.totalItems || ord.itemCount || ord.itemsCount) || 1;
+                    itemsListDetail = `${totalItemsCount} Items`;
+                  }
 
-                const itemSummary = (
-                  <div
-                    title={itemsListDetail || `${totalItemsCount} Items`}
-                    style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}
-                  >
-                    {totalItemsCount} Items
-                  </div>
-                );
+                  const itemSummary = (
+                    <div
+                      title={itemsListDetail || `${totalItemsCount} Items`}
+                      style={{ background: '#f8fafc', padding: '6px 12px', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'inline-block', fontWeight: 600, fontSize: '12px', color: '#334155', whiteSpace: 'nowrap' }}
+                    >
+                      {totalItemsCount} Items
+                    </div>
+                  );
 
-                const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
-                const status = (ord.status || 'new').toLowerCase();
-                const orderTypeVal = ord.orderType || 'Dine-In';
-                const waiterName = getResolvedWaiterName(ord);
-                const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || (orderTypeVal === 'Dine-In' ? '01' : '-');
+                  const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
+                  const status = (ord.status || 'new').toLowerCase();
+                  const orderTypeVal = ord.orderType || 'Dine-In';
+                  const waiterName = getResolvedWaiterName(ord);
+                  const tableName = ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || (orderTypeVal === 'Dine-In' ? '01' : '-');
 
-                let displayId = ord.orderId || ord.id || String(index);
-                if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
+                  let displayId = ord.orderId || ord.id || String(index);
+                  if (displayId.startsWith('ORD-')) displayId = displayId.replace('ORD-', '');
 
-                const parsedDate = ord.createdAt ? new Date(ord.createdAt) : null;
-                const formattedDate = parsedDate && !isNaN(parsedDate) ? formatDateDMY(parsedDate) : '-';
-                const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
-                const timeAgoStr = ord.createdAt ? (() => {
-                  const diffMin = Math.floor((new Date() - new Date(ord.createdAt)) / 60000);
-                  if (diffMin < 1) return 'Just now';
-                  if (diffMin > 60) return `${Math.floor(diffMin / 60)} hr ago`;
-                  return `${diffMin} min ago`;
-                })() : (ord.timeAgo || '5 min ago');
+                  const parsedDate = ord.createdAt ? new Date(ord.createdAt) : null;
+                  const formattedDate = parsedDate && !isNaN(parsedDate) ? formatDateDMY(parsedDate) : '-';
+                  const timeStr = ord.time || (ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
+                  const timeAgoStr = ord.createdAt ? (() => {
+                    const diffMin = Math.floor((new Date() - new Date(ord.createdAt)) / 60000);
+                    if (diffMin < 1) return 'Just now';
+                    if (diffMin > 60) return `${Math.floor(diffMin / 60)} hr ago`;
+                    return `${diffMin} min ago`;
+                  })() : (ord.timeAgo || '5 min ago');
 
-                return (
-                  <tr
-                    key={ord.id || index}
-                    style={{
-                      borderBottom: index < paginatedOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s',
-                      backgroundColor: '#ffffff'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
-                  >
-                    {/* 1. S.NO */}
-                    <td style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
-                      {page * limit + index + 1}
-                    </td>
+                  return (
+                    <tr
+                      key={ord.id || index}
+                      style={{
+                        borderBottom: index < paginatedOrders.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        transition: 'background 0.15s',
+                        backgroundColor: '#ffffff'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                    >
+                      {/* 1. S.NO */}
+                      <td style={{ textAlign: 'center', fontSize: '11px', fontWeight: 600, color: '#64748b' }}>
+                        {page * limit + index + 1}
+                      </td>
 
-                    {/* 2. ORDER ID */}
-                    <td style={{ textAlign: 'center', fontWeight: 800, color: '#0f172a', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                      #ORD-{displayId}
-                    </td>
+                      {/* 2. ORDER ID */}
+                      <td style={{ textAlign: 'center', fontWeight: 800, color: '#0f172a', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                        #ORD-{displayId}
+                      </td>
 
-                    {/* 3. ORDER TYPE */}
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '3px 8px',
-                        borderRadius: '5px',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        backgroundColor: orderTypeVal === 'Dine-In' ? '#eff6ff' : (orderTypeVal === 'Delivery' ? '#fdf4ff' : '#fff7ed'),
-                        color: orderTypeVal === 'Dine-In' ? '#2563eb' : (orderTypeVal === 'Delivery' ? '#c026d3' : '#ea580c')
-                      }}>
-                        {orderTypeVal}
-                      </span>
-                    </td>
-
-                    {/* 4. TABLE */}
-                    <td style={{ textAlign: 'center', paddingRight: '14px' }}>
-                      {orderTypeVal === 'Dine-In' ? (
+                      {/* 3. ORDER TYPE */}
+                      <td style={{ textAlign: 'center' }}>
                         <span style={{
                           display: 'inline-block',
-                          backgroundColor: '#fff7ed',
-                          color: '#ea580c',
                           padding: '3px 8px',
                           borderRadius: '5px',
-                          fontSize: '11px',
-                          fontWeight: 700
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          backgroundColor: orderTypeVal === 'Dine-In' ? '#eff6ff' : (orderTypeVal === 'Delivery' ? '#fdf4ff' : '#fff7ed'),
+                          color: orderTypeVal === 'Dine-In' ? '#2563eb' : (orderTypeVal === 'Delivery' ? '#c026d3' : '#ea580c')
                         }}>
-                          Table {tableName}
+                          {orderTypeVal}
                         </span>
-                      ) : (
-                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* 5. ITEMS */}
-                    <td style={{ textAlign: 'center', paddingLeft: '14px' }}>
-                      <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
-                        {itemSummary}
-                      </div>
-                    </td>
-
-                    {/* 6. ORDER DATE */}
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
-                        {formattedDate}
-                      </div>
-                    </td>
-
-                    {/* 7. ORDER TIME / ELAPSED */}
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, lineHeight: 1.2 }}>
-                        {timeStr}
-                      </div>
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#ea580c', marginTop: '2px', lineHeight: 1.2 }}>
-                        {timeAgoStr}
-                      </div>
-                    </td>
-
-                    {/* 8. ASSIGNED WAITER */}
-                    <td style={{ textAlign: 'center' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        {(ord.orderType && ord.orderType !== 'Dine-In') ? (
-                          <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>-</span>
-                        ) : waiterName && waiterName !== 'Unassigned' && waiterName !== '-' ? (
-                          <>
-                            <UserIcon size={14} color="#0f172a" />
-                            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
-                              {waiterName}
-                            </span>
-                          </>
+                      {/* 4. TABLE */}
+                      <td style={{ textAlign: 'center', paddingRight: '14px' }}>
+                        {orderTypeVal === 'Dine-In' ? (
+                          <span style={{
+                            display: 'inline-block',
+                            backgroundColor: '#fff7ed',
+                            color: '#ea580c',
+                            padding: '3px 8px',
+                            borderRadius: '5px',
+                            fontSize: '11px',
+                            fontWeight: 700
+                          }}>
+                            Table {tableName}
+                          </span>
                         ) : (
-                          <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
-                            Unassigned
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>
+                        )}
+                      </td>
+
+                      {/* 5. ITEMS */}
+                      <td style={{ textAlign: 'center', paddingLeft: '14px' }}>
+                        <div style={{ display: 'inline-flex', justifyContent: 'center' }}>
+                          {itemSummary}
+                        </div>
+                      </td>
+
+                      {/* 6. ORDER DATE */}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#475569', fontWeight: 600 }}>
+                          {formattedDate}
+                        </div>
+                      </td>
+
+                      {/* 7. ORDER TIME / ELAPSED */}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, lineHeight: 1.2 }}>
+                          {timeStr}
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#ea580c', marginTop: '2px', lineHeight: 1.2 }}>
+                          {timeAgoStr}
+                        </div>
+                      </td>
+
+                      {/* 8. ASSIGNED WAITER */}
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          {(ord.orderType && ord.orderType !== 'Dine-In') ? (
+                            <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>-</span>
+                          ) : waiterName && waiterName !== 'Unassigned' && waiterName !== '-' ? (
+                            <>
+                              <UserIcon size={14} color="#0f172a" />
+                              <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                                {waiterName}
+                              </span>
+                            </>
+                          ) : (
+                            <span style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 9. AMOUNT */}
+                      <td style={{ textAlign: 'center', fontWeight: 800, color: '#0f172a', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
+                        ₹{parseFloat(ord.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+
+                      {/* 10. PAYMENT STATUS */}
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '3px 8px',
+                          borderRadius: '5px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          backgroundColor: isPaid ? '#dcfce7' : '#fef2f2',
+                          color: isPaid ? '#16a34a' : '#ef4444'
+                        }}>
+                          {isPaid ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </td>
+
+                      {/* 11. ORDER STATUS */}
+                      <td style={{ textAlign: 'center' }}>
+                        {status === 'preparing' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }}>
+                            Preparing
                           </span>
                         )}
-                      </div>
-                    </td>
+                        {status === 'completed' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                            Completed
+                          </span>
+                        )}
+                        {status === 'served' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
+                            Served
+                          </span>
+                        )}
+                        {status === 'ready' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}>
+                            Ready
+                          </span>
+                        )}
+                        {status === 'cancelled' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                            Cancelled
+                          </span>
+                        )}
+                        {status === 'new' && (
+                          <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                            New
+                          </span>
+                        )}
+                      </td>
 
-                    {/* 9. AMOUNT */}
-                    <td style={{ textAlign: 'center', fontWeight: 800, color: '#0f172a', fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
-                      ₹{parseFloat(ord.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </td>
+                      {/* 12. ACTIONS: View(Print Bill), Edit, Send to Kitchen, Print KOT, Cancel (Icon Only) */}
+                      <td style={{ textAlign: 'center' }} className="orders-sticky-actions-cell">
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', flexWrap: 'nowrap' }}>
 
-                    {/* 10. PAYMENT STATUS */}
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '3px 8px',
-                        borderRadius: '5px',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        backgroundColor: isPaid ? '#dcfce7' : '#fef2f2',
-                        color: isPaid ? '#16a34a' : '#ef4444'
-                      }}>
-                        {isPaid ? 'Paid' : 'Unpaid'}
-                      </span>
-                    </td>
+                          {/* View Order Details */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setViewingOrder(ord);
+                            }}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              color: '#2563eb',
+                              cursor: 'pointer',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                              boxSizing: 'border-box',
+                              transition: 'all 0.15s ease'
+                            }}
+                            title="View Order Details"
+                          >
+                            <EyeIcon size={13} color="#2563eb" />
+                          </button>
 
-                    {/* 11. ORDER STATUS */}
-                    <td style={{ textAlign: 'center' }}>
-                      {status === 'preparing' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#ffedd5', color: '#c2410c', border: '1px solid #fed7aa' }}>
-                          Preparing
-                        </span>
-                      )}
-                      {status === 'completed' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0' }}>
-                          Completed
-                        </span>
-                      )}
-                      {status === 'served' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' }}>
-                          Served
-                        </span>
-                      )}
-                      {status === 'ready' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}>
-                          Ready
-                        </span>
-                      )}
-                      {status === 'cancelled' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                          Cancelled
-                        </span>
-                      )}
-                      {status === 'new' && (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '10px', fontSize: '10px', fontWeight: 700, background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
-                          New
-                        </span>
-                      )}
-                    </td>
-
-                    {/* 12. ACTIONS: View(Print Bill), Edit, Send to Kitchen, Print KOT, Cancel (Icon Only) */}
-                    <td style={{ textAlign: 'center' }} className="orders-sticky-actions-cell">
-                      <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', flexWrap: 'nowrap' }}>
-
-                        {/* View Order Details */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setViewingOrder(ord);
-                          }}
-                          style={{
-                            width: '28px',
-                            height: '28px',
-                            background: '#eff6ff',
-                            border: '1px solid #bfdbfe',
-                            color: '#2563eb',
-                            cursor: 'pointer',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            boxSizing: 'border-box',
-                            transition: 'all 0.15s ease'
-                          }}
-                          title="View Order Details"
-                        >
-                          <EyeIcon size={13} color="#2563eb" />
-                        </button>
-
-                        {/* Edit */}
-                        <button
-                          type="button"
-                          disabled={isPaid}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!isPaid) handleOpenEditOrder(ord);
-                          }}
-                          style={{
-                            width: '28px',
-                            height: '28px',
-                            background: isPaid ? '#f8fafc' : '#ffffff',
-                            border: isPaid ? '1px solid #e2e8f0' : '1px solid #cbd5e1',
-                            color: isPaid ? '#94a3b8' : '#334155',
-                            cursor: isPaid ? 'not-allowed' : 'pointer',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            boxSizing: 'border-box',
-                            transition: 'all 0.15s ease'
-                          }}
-                          title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
-                        >
-                          <PencilIcon size={12} color={isPaid ? "#94a3b8" : "#334155"} />
-                        </button>
-
-                        {/* Send to Kitchen */}
-                        {(() => {
-                          const isKitchenDisabled = status === 'completed' || status === 'cancelled';
-                          const kitchenTitle = status === 'completed'
-                            ? "Completed orders cannot be sent to kitchen"
-                            : status === 'cancelled'
-                            ? "Cancelled orders cannot be sent to kitchen"
-                            : status === 'new'
-                            ? "Send order to Kitchen"
-                            : `Update Kitchen status (${status})`;
-
-                          return (
+                          {/* Edit */}
+                          {hasPermission('orders', 'edit') && (
                             <button
                               type="button"
-                              disabled={isKitchenDisabled}
+                              disabled={isPaid}
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                if (!isKitchenDisabled) {
-                                  handleOrderStatusUpdate(ord._id || ord.id, ord.status || 'new', ord.branchId);
-                                }
+                                if (!isPaid) handleOpenEditOrder(ord);
                               }}
                               style={{
                                 width: '28px',
                                 height: '28px',
-                                background: isKitchenDisabled ? '#f8fafc' : '#fff7ed',
-                                border: isKitchenDisabled ? '1px solid #e2e8f0' : '1px solid #fed7aa',
-                                color: isKitchenDisabled ? '#94a3b8' : '#ea580c',
-                                cursor: isKitchenDisabled ? 'not-allowed' : 'pointer',
+                                background: isPaid ? '#f8fafc' : '#ffffff',
+                                border: isPaid ? '1px solid #e2e8f0' : '1px solid #cbd5e1',
+                                color: isPaid ? '#94a3b8' : '#334155',
+                                cursor: isPaid ? 'not-allowed' : 'pointer',
                                 borderRadius: '6px',
                                 display: 'inline-flex',
                                 alignItems: 'center',
@@ -4231,99 +4198,142 @@ export default function OrdersPanel({
                                 boxSizing: 'border-box',
                                 transition: 'all 0.15s ease'
                               }}
-                              title={kitchenTitle}
+                              title={isPaid ? "Paid orders cannot be edited" : "Edit Order"}
                             >
-                              <PlayIcon size={11} color={isKitchenDisabled ? "#94a3b8" : "#ea580c"} />
+                              <PencilIcon size={12} color={isPaid ? "#94a3b8" : "#334155"} />
                             </button>
-                          );
-                        })()}
+                          )}
 
-                        {/* Print KOT */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handlePrintKOT(ord);
-                          }}
-                          style={{
-                            width: '28px',
-                            height: '28px',
-                            background: '#f0fdf4',
-                            border: '1px solid #bbf7d0',
-                            color: '#16a34a',
-                            cursor: 'pointer',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            boxSizing: 'border-box',
-                            transition: 'all 0.15s ease'
-                          }}
-                          title="Print Kitchen Order Ticket (KOT)"
-                        >
-                          <PrintIcon size={12} color="#16a34a" />
-                        </button>
+                          {/* Send to Kitchen */}
+                          {(() => {
+                            const isKitchenDisabled = status === 'completed' || status === 'cancelled';
+                            const kitchenTitle = status === 'completed'
+                              ? "Completed orders cannot be sent to kitchen"
+                              : status === 'cancelled'
+                                ? "Cancelled orders cannot be sent to kitchen"
+                                : status === 'new'
+                                  ? "Send order to Kitchen"
+                                  : `Update Kitchen status (${status})`;
 
-                        {/* Cancel */}
-                        {(() => {
-                          const isCancelDisabled = status === 'completed' || status === 'cancelled' || isPaid;
-                          const cancelTitle = status === 'completed'
-                            ? "Completed orders cannot be cancelled"
-                            : status === 'cancelled'
-                            ? "Order is already cancelled"
-                            : isPaid
-                            ? "Paid orders cannot be cancelled"
-                            : "Cancel Order";
+                            return (
+                              <button
+                                type="button"
+                                disabled={isKitchenDisabled}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (!isKitchenDisabled) {
+                                    handleOrderStatusUpdate(ord._id || ord.id, ord.status || 'new', ord.branchId);
+                                  }
+                                }}
+                                style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  background: isKitchenDisabled ? '#f8fafc' : '#fff7ed',
+                                  border: isKitchenDisabled ? '1px solid #e2e8f0' : '1px solid #fed7aa',
+                                  color: isKitchenDisabled ? '#94a3b8' : '#ea580c',
+                                  cursor: isKitchenDisabled ? 'not-allowed' : 'pointer',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                  boxSizing: 'border-box',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                title={kitchenTitle}
+                              >
+                                <PlayIcon size={11} color={isKitchenDisabled ? "#94a3b8" : "#ea580c"} />
+                              </button>
+                            );
+                          })()}
 
-                          return (
-                            <button
-                              type="button"
-                              disabled={isCancelDisabled}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (!isCancelDisabled) setOrderToDelete(ord);
-                              }}
-                              style={{
-                                width: '28px',
-                                height: '28px',
-                                background: isCancelDisabled ? '#f8fafc' : '#fef2f2',
-                                border: isCancelDisabled ? '1px solid #e2e8f0' : '1px solid #fecaca',
-                                color: isCancelDisabled ? '#94a3b8' : '#dc2626',
-                                cursor: isCancelDisabled ? 'not-allowed' : 'pointer',
-                                borderRadius: '6px',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: 0,
-                                boxSizing: 'border-box',
-                                transition: 'all 0.15s ease'
-                              }}
-                              title={cancelTitle}
-                            >
-                              <TrashIcon size={12} color={isCancelDisabled ? "#94a3b8" : "#dc2626"} />
-                            </button>
-                          );
-                        })()}
+                          {/* Print KOT */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handlePrintKOT(ord);
+                            }}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              background: '#f0fdf4',
+                              border: '1px solid #bbf7d0',
+                              color: '#16a34a',
+                              cursor: 'pointer',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                              boxSizing: 'border-box',
+                              transition: 'all 0.15s ease'
+                            }}
+                            title="Print Kitchen Order Ticket (KOT)"
+                          >
+                            <PrintIcon size={12} color="#16a34a" />
+                          </button>
 
-                      </div>
+                          {/* Cancel */}
+                          {hasPermission('orders', 'delete') && (() => {
+                            const isCancelDisabled = status === 'completed' || status === 'cancelled' || isPaid;
+                            const cancelTitle = status === 'completed'
+                              ? "Completed orders cannot be cancelled"
+                              : status === 'cancelled'
+                                ? "Order is already cancelled"
+                                : isPaid
+                                  ? "Paid orders cannot be cancelled"
+                                  : "Cancel Order";
+
+                            return (
+                              <button
+                                type="button"
+                                disabled={isCancelDisabled}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (!isCancelDisabled) setOrderToDelete(ord);
+                                }}
+                                style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  background: isCancelDisabled ? '#f8fafc' : '#fef2f2',
+                                  border: isCancelDisabled ? '1px solid #e2e8f0' : '1px solid #fecaca',
+                                  color: isCancelDisabled ? '#94a3b8' : '#dc2626',
+                                  cursor: isCancelDisabled ? 'not-allowed' : 'pointer',
+                                  borderRadius: '6px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: 0,
+                                  boxSizing: 'border-box',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                title={cancelTitle}
+                              >
+                                <TrashIcon size={12} color={isCancelDisabled ? "#94a3b8" : "#dc2626"} />
+                              </button>
+                            );
+                          })()}
+
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {paginatedOrders.length === 0 && (
+                  <tr>
+                    <td colSpan="13" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
+                      No orders found matching the filter "{orderFilter}".
                     </td>
                   </tr>
-                );
-              })}
-
-              {paginatedOrders.length === 0 && (
-                <tr>
-                  <td colSpan="13" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
-                    No orders found matching the filter "{orderFilter}".
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
 
           {/* PAGINATION UI */}
           {(effectiveTotalCount > 0) && (
@@ -4478,20 +4488,20 @@ export default function OrdersPanel({
                     textTransform: 'capitalize',
                     background:
                       orderStatus === 'completed' ? '#dcfce7' :
-                      orderStatus === 'served' ? '#e0f2fe' :
-                      orderStatus === 'ready' ? '#f1f5f9' :
-                      orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
+                        orderStatus === 'served' ? '#e0f2fe' :
+                          orderStatus === 'ready' ? '#f1f5f9' :
+                            orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
                     color:
                       orderStatus === 'completed' ? '#15803d' :
-                      orderStatus === 'served' ? '#0369a1' :
-                      orderStatus === 'ready' ? '#334155' :
-                      orderStatus === 'preparing' ? '#c2410c' : '#b45309',
+                        orderStatus === 'served' ? '#0369a1' :
+                          orderStatus === 'ready' ? '#334155' :
+                            orderStatus === 'preparing' ? '#c2410c' : '#b45309',
                     border: '1px solid',
                     borderColor:
                       orderStatus === 'completed' ? '#bbf7d0' :
-                      orderStatus === 'served' ? '#bae6fd' :
-                      orderStatus === 'ready' ? '#cbd5e1' :
-                      orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+                        orderStatus === 'served' ? '#bae6fd' :
+                          orderStatus === 'ready' ? '#cbd5e1' :
+                            orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
                   }}>
                     ● {orderStatus}
                   </span>
@@ -4702,7 +4712,7 @@ export default function OrdersPanel({
                     type="text"
                     value={(() => {
                       const branchSource = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
-                      const bObj = branchSource.find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId)) 
+                      const bObj = branchSource.find(b => String(b._id || b.id) === String(modalSelectedBranchId || selectedBranchId))
                         || branchSource[0];
                       return bObj ? `${bObj.branchName || bObj.name || 'Branch'}${bObj.branchCode ? ` (${bObj.branchCode})` : ''}` : 'Branch';
                     })()}

@@ -48,8 +48,10 @@ export default function BillingHistoryPanel({
   limit,
   totalItems,
   summary,
-  activeRestaurant = {}
+  activeRestaurant = {},
+  hasPermission
 }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('billing_history', 'view') : true;
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
@@ -518,6 +520,7 @@ export default function BillingHistoryPanel({
                           <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
                             <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                               {/* 1. View Invoice (Icon without text) */}
+                              {canView && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedInvoice(invoice)}
@@ -539,6 +542,7 @@ export default function BillingHistoryPanel({
                               >
                                 <EyeIcon size={15} color="var(--primary)" />
                               </button>
+                              )}
 
                               {/* 2. Print Invoice (Icon without text) */}
                               <button

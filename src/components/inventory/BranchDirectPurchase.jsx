@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
-export default function BranchDirectPurchase({ purchases, items: initialItems, onSaveDirectPurchase, onDeletePurchase }) {
+export default function BranchDirectPurchase({ purchases, items: initialItems, onSaveDirectPurchase, onDeletePurchase, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'add') : true;
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'view') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'delete') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -466,6 +469,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
           </div>
         </div>
 
+        {canAdd && (
         <button
           type="button"
           onClick={() => { setViewState('ADD'); setPurErrors({}); }}
@@ -487,6 +491,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
           <PlusIcon size={15} />
           <span>Add Direct Purchase</span>
         </button>
+        )}
       </div>
 
       <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '4px' }}>
@@ -570,6 +575,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => { setSelectedPurchase(p); setViewState('VIEW_DETAIL'); }}
@@ -583,6 +589,8 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         >
                           <EyeIcon size={15} color="#2563eb" />
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => onDeletePurchase(p)}
@@ -596,6 +604,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         >
                           <TrashIcon size={15} color="#dc2626" />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

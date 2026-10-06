@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
-export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem }) {
+export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'add') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'edit') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'delete') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [totalItemsCount, setTotalItemsCount] = useState(initialItems?.length || 0);
   const [loading, setLoading] = useState(false);
@@ -448,6 +451,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           </div>
         </div>
 
+        {canAdd && (
         <button
           type="button"
           onClick={handleOpenAdd}
@@ -469,6 +473,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           <PlusIcon size={15} />
           <span>Add Inventory Item</span>
         </button>
+        )}
       </div>
 
       {/* Table */}
@@ -541,6 +546,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      {canEdit && (
                       <button
                         type="button"
                         onClick={() => handleOpenEdit(item)}
@@ -554,6 +560,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                       >
                         <PencilIcon size={14} />
                       </button>
+                      )}
+                      {canDelete && (
                       <button
                         type="button"
                         onClick={() => handleDelete(item)}
@@ -567,6 +575,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                       >
                         <TrashIcon size={14} />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -3329,6 +3329,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {/* 9. Actions */}
                   <td style={{ padding: '14px 12px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      {hasPermission('branch-management', 'view') && (
                       <button
                         type="button"
                         title="View Details"
@@ -3339,6 +3340,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       >
                         <EyeIcon size={14} />
                       </button>
+                      )}
 
                       {hasPermission('branch-management', 'edit') && (
                         <button

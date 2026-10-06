@@ -295,6 +295,7 @@ export default function WaiterListPanel({
                     <td style={{ padding: '16px 18px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <button
                         type="button"
+                        disabled={!hasPermission('staff', 'edit')}
                         onClick={() => {
                           const nextStatus = isActive ? 'Off Duty' : 'On Duty';
                           if (updateStaff && activeRestaurant?.id) {
@@ -304,7 +305,7 @@ export default function WaiterListPanel({
                             });
                           }
                         }}
-                        title="Click to toggle duty status"
+                        title={hasPermission('staff', 'edit') ? "Click to toggle duty status" : "Permission required to change duty status"}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -318,7 +319,8 @@ export default function WaiterListPanel({
                           color: isActive ? '#166534' : '#64748b',
                           background: isActive ? '#dcfce7' : '#f1f5f9',
                           border: isActive ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
-                          cursor: 'pointer',
+                          cursor: hasPermission('staff', 'edit') ? 'pointer' : 'not-allowed',
+                          opacity: hasPermission('staff', 'edit') ? 1 : 0.7,
                           width: '105px',
                           minWidth: '105px',
                           whiteSpace: 'nowrap',

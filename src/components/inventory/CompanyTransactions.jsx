@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
-export default function CompanyTransactions({ transactions = [] }) {
+export default function CompanyTransactions({ transactions = [], hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_transactions', 'view') : true;
   const [searchTerm, setSearchTerm] = useState('');
   const [txnTypeFilter, setTxnTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -302,6 +303,7 @@ export default function CompanyTransactions({ transactions = [] }) {
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    {canView && (
                     <button
                       type="button"
                       onClick={() => setSelectedTxn(t)}
@@ -315,6 +317,7 @@ export default function CompanyTransactions({ transactions = [] }) {
                     >
                       <EyeIcon size={15} color="#2563eb" />
                     </button>
+                    )}
                   </td>
                 </tr>
               ))

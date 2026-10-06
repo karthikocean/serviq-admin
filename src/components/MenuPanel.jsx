@@ -433,6 +433,7 @@ export default function MenuPanel({
                   {/* 9. Actions */}
                   <td className="sticky-col-action" style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {hasPermission('menu', 'view') && (
                       <button
                         type="button"
                         title="View Details"
@@ -443,6 +444,7 @@ export default function MenuPanel({
                       >
                         <EyeIcon size={16} />
                       </button>
+                      )}
                       {hasPermission('menu', 'edit') && (
                         <button
                           type="button"

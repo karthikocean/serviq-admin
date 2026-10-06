@@ -31,7 +31,7 @@ const INITIAL_RECEIPTS = [];
 const INITIAL_TRANSACTIONS = [];
 
 export default function InventoryPanel() {
-  const { selectedBranchId } = useAppState();
+  const { selectedBranchId, hasPermission } = useAppState();
   const location = useLocation();
 
   const isCompanySelected = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
@@ -430,6 +430,7 @@ export default function InventoryPanel() {
               items={items}
               onSaveItem={handleSaveCompanyItem}
               onDeleteItem={handleDeleteCompanyItem}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -437,6 +438,7 @@ export default function InventoryPanel() {
             <CompanyCentralStock
               items={items}
               onUpdateStock={handleUpdateCentralStock}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -446,6 +448,7 @@ export default function InventoryPanel() {
               items={items}
               onSavePurchase={handleSaveCompanyPurchase}
               onDeletePurchase={handleDeleteCompanyPurchase}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -459,18 +462,21 @@ export default function InventoryPanel() {
               onApprove={handleApproveRequest}
               onReject={handleRejectRequest}
               onDistribute={handleDistributeRequest}
+              hasPermission={hasPermission}
             />
           )}
 
           {(currentPath === '/inventory/distribution' || currentPath === '/inventory/stock-distribution') && (
             <CompanyStockDistribution
               distributions={distributions}
+              hasPermission={hasPermission}
             />
           )}
 
           {currentPath === '/inventory/transactions' && (
             <CompanyTransactions
               transactions={transactions}
+              hasPermission={hasPermission}
             />
           )}
         </>
@@ -480,6 +486,7 @@ export default function InventoryPanel() {
             <BranchMyStock
               items={items}
               onUpdateBranchStock={handleUpdateBranchStock}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -488,6 +495,7 @@ export default function InventoryPanel() {
               requests={branchRequests}
               items={items}
               onSaveStockRequest={handleSaveStockRequest}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -496,6 +504,7 @@ export default function InventoryPanel() {
               transfers={transfers}
               items={items}
               onSaveTransfer={handleSaveTransfer}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -505,6 +514,7 @@ export default function InventoryPanel() {
               items={items}
               onSaveDirectPurchase={handleSaveDirectPurchase}
               onDeletePurchase={handleDeleteCompanyPurchase}
+              hasPermission={hasPermission}
             />
           )}
 
@@ -516,12 +526,14 @@ export default function InventoryPanel() {
               items={items}
               onSaveReceipt={handleSaveReceipt}
               onDeleteReceipt={handleDeleteReceipt}
+              hasPermission={hasPermission}
             />
           )}
 
           {currentPath === '/inventory/transactions' && (
             <BranchTransactions
               transactions={transactions}
+              hasPermission={hasPermission}
             />
           )}
         </>

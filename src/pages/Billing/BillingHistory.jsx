@@ -7,7 +7,7 @@ import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
 
 export default function BillingHistory() {
-  const { activeRestaurant, selectedBranchId } = useAppState();
+  const { activeRestaurant, selectedBranchId, hasPermission } = useAppState();
 
   // States
   const [searchTerm, setSearchTerm] = useState('');
@@ -449,6 +449,7 @@ export default function BillingHistory() {
       totalItems={totalItems || filteredHistory.length}
       summary={summary}
       activeRestaurant={activeRestaurant}
+      hasPermission={hasPermission}
     />
   );
 }

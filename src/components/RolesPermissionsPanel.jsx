@@ -709,6 +709,7 @@ export default function RolesPermissionsPanel() {
                     <td style={{ padding: '8px 14px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                         {/* Status Toggle Icon */}
+                        {hasPermission('roles-permissions', 'edit') && (
                         <button
                           type="button"
                           onClick={() => handleToggleRoleStatus(role)}
@@ -734,6 +735,7 @@ export default function RolesPermissionsPanel() {
                         >
                           <PowerIcon size={14} color={role.isActive ? '#059669' : '#dc2626'} />
                         </button>
+                        )}
                         {hasPermission('roles-permissions', 'edit') && (
                           <button
                             type="button"

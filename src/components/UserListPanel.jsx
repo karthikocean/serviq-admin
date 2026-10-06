@@ -147,8 +147,8 @@ export default function UserListPanel() {
 
     try {
       const serverRoles = await RoleApi.getRoles();
-      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data) 
-        ? serverRoles.response.data 
+      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data)
+        ? serverRoles.response.data
         : (Array.isArray(serverRoles?.response) ? serverRoles.response : []);
       const sMatch = sRoles.find(r => {
         const id = r._id || r.id;
@@ -177,10 +177,10 @@ export default function UserListPanel() {
   const fetchData = async () => {
     setIsLoading(true);
     const [usersRes, branchesRes, rolesRes] = await Promise.all([
-      UserApi.getUsers({ 
-        page, 
-        limit, 
-        search: searchQuery, 
+      UserApi.getUsers({
+        page,
+        limit,
+        search: searchQuery,
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
         statusFilter: statusFilter === 'All' ? '' : statusFilter,
         branchId: activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined
@@ -733,15 +733,15 @@ export default function UserListPanel() {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-              <button 
-                type="button" 
-                onClick={() => setViewState('list')} 
+              <button
+                type="button"
+                onClick={() => setViewState('list')}
                 style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 700, borderRadius: '8px', padding: '10px 24px', fontSize: '14px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 style={{ background: '#ff5a1f', border: 'none', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
               >
                 {editingUserId ? 'Save Changes' : 'Create User'}
@@ -786,8 +786,8 @@ export default function UserListPanel() {
               <DownloadIcon size={14} /> Export CSV
             </button>
             {hasPermission('users', 'add') && (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={openAddUser}
                 style={{
                   background: '#000000',
@@ -910,7 +910,7 @@ export default function UserListPanel() {
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
                 const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
                 const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
-                
+
                 let roleBadgeStyle = {
                   display: 'inline-block',
                   padding: '4px 12px',
@@ -1036,35 +1036,35 @@ export default function UserListPanel() {
                           </button>
                         )}
                         <button
-                        title="Change Password"
-                        onClick={() => {
-                          setChangePasswordUserId(user);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setPasswordError('');
-                          setConfirmPasswordError('');
-                          setShowNewPassword(false);
-                          setShowConfirmPassword(false);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '6px',
-                          color: '#eab308',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: '6px',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        <KeyIcon />
-                      </button>
-                      {hasPermission('users', 'delete') && (
-                        <button
+                          title="Change Password"
+                          onClick={() => {
+                            setChangePasswordUserId(user);
+                            setNewPassword('');
+                            setConfirmPassword('');
+                            setPasswordError('');
+                            setConfirmPasswordError('');
+                            setShowNewPassword(false);
+                            setShowConfirmPassword(false);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            color: '#eab308',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '6px',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        >
+                          <KeyIcon />
+                        </button>
+                        {hasPermission('users', 'delete') && (
+                          <button
                             type="button"
                             onClick={() => setUserToDelete(user)}
                             title="Delete User"
@@ -1079,7 +1079,7 @@ export default function UserListPanel() {
                           >
                             <TrashIcon size={14} />
                           </button>
-                      )}
+                        )}
                       </div>
                     </td>
                   </tr>

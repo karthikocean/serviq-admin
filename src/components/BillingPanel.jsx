@@ -55,6 +55,7 @@ export default function BillingPanel({
   fetchBillingData,
   selectedBranchId,
   currentUser = {},
+  hasPermission,
   searchTerm: propSearchTerm,
   setSearchTerm: propSetSearchTerm,
   selectedTable: propSelectedTable,
@@ -68,6 +69,8 @@ export default function BillingPanel({
   limit: propLimit = 10,
   totalItems: propTotalItems = 0
 }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('billing_current', 'view') : true;
+  const canEdit = typeof hasPermission === 'function' ? (hasPermission('billing_current', 'edit') || hasPermission('billing_current', 'add')) : true;
   const [viewingBill, setViewingBill] = useState(null); // Modal for View Bill
   const [paymentModalBill, setPaymentModalBill] = useState(null); // Modal for Collect Payment
   const [invoiceModalBill, setInvoiceModalBill] = useState(null); // Modal for Tax Invoice
@@ -764,6 +767,7 @@ export default function BillingPanel({
                     <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
                       <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                         {/* 1. View Bill (Icon without text) */}
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => setViewingBill(currentBill)}
@@ -785,6 +789,7 @@ export default function BillingPanel({
                         >
                           <EyeIcon size={15} color="#334155" />
                         </button>
+                        )}
 
                         {!isPaid ? (
                           <>
@@ -811,6 +816,7 @@ export default function BillingPanel({
                               <PrinterIcon size={15} color="#2563eb" />
                             </button>
                             {/* 3. Collect Payment (Icon without text) */}
+                            {canEdit && (
                             <button
                               type="button"
                               onClick={() => handleOpenCollectPayment(currentBill)}
@@ -832,6 +838,7 @@ export default function BillingPanel({
                             >
                               <CreditCardIcon size={15} color="#ffffff" />
                             </button>
+                            )}
                           </>
                         ) : (
                           <>
