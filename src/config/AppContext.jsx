@@ -175,6 +175,11 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   // Restaurant Owner & Super Admin always have 100% full access to all modules and all actions
   if (isRestaurantOwner) return true;
 
+  // Block permission immediately if assigned role is inactive
+  if (roleObj && (roleObj.isActive === false || String(roleObj.status || '').toLowerCase() === 'inactive')) {
+    return false;
+  }
+
   // Branch management & Plans management are strictly for Restaurant Owners only
   if (
     moduleName === 'branch-management' || 
@@ -1221,30 +1226,46 @@ export const AppProvider = ({ children }) => {
         let profRoleObj = (typeof profileData.role === 'object' && profileData.role !== null) ? profileData.role :
                             (typeof profileData.roleId === 'object' && profileData.roleId !== null) ? profileData.roleId : null;
 
+        const initialRoleName = profRoleObj?.roleName || profRoleObj?.name || (typeof profileData.role === 'string' ? profileData.role : '') || '';
+        const initialRoleUpper = initialRoleName.toUpperCase().trim();
+
+        const isOwnerAccount = 
+          profUserType === 'RESTAURANT_OWNER' || 
+          profUserType === 'OWNER' || 
+          profUserType === 'SUPER ADMIN' || 
+          profUserType === 'SUPER_ADMIN' || 
+          initialRoleUpper === 'RESTAURANT_OWNER' || 
+          initialRoleUpper === 'OWNER' || 
+          initialRoleUpper === 'SUPER ADMIN';
+
         const roleIdToLookup = (typeof profileData.roleId === 'string' && profileData.roleId) || 
                                (typeof profileData.role === 'string' && profileData.role) ||
                                profRoleObj?._id || profRoleObj?.id;
 
-        if ((!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) && roleIdToLookup) {
+        if (roleIdToLookup && !isOwnerAccount) {
           try {
+            let liveRole = null;
             if (/^[0-9a-fA-F]{24}$/.test(roleIdToLookup)) {
               const rRes = await RoleApi.getRoleById(roleIdToLookup);
               if (rRes && rRes.status && rRes.response) {
-                profRoleObj = rRes.response?.data || rRes.response;
+                liveRole = rRes.response?.data || rRes.response;
               }
             }
-            if (!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) {
+            if (!liveRole) {
               const listRes = await RoleApi.getRoles({ limit: 100 });
               if (listRes && listRes.status && listRes.response) {
                 const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                 if (Array.isArray(rolesList)) {
-                  profRoleObj = rolesList.find(r => 
+                  liveRole = rolesList.find(r => 
                     String(r._id) === String(roleIdToLookup) || 
                     String(r.id) === String(roleIdToLookup) ||
                     String(r.roleName || '').trim().toLowerCase() === String(roleIdToLookup).trim().toLowerCase()
                   );
                 }
               }
+            }
+            if (liveRole) {
+              profRoleObj = { ...(profRoleObj || {}), ...liveRole };
             }
           } catch (err) {
             console.warn("Could not fetch role in fetchProfile:", err);
@@ -1255,14 +1276,32 @@ export const AppProvider = ({ children }) => {
         const profRoleUpper = profRoleStr.toUpperCase().trim();
         const profRoleLower = profRoleStr.toLowerCase().trim();
 
-        const isOwnerAccount = 
-          profUserType === 'RESTAURANT_OWNER' || 
-          profUserType === 'OWNER' || 
-          profUserType === 'SUPER ADMIN' || 
-          profUserType === 'SUPER_ADMIN' || 
+        const isEffectiveOwner = isOwnerAccount || 
           profRoleUpper === 'RESTAURANT_OWNER' || 
           profRoleUpper === 'OWNER' || 
           profRoleUpper === 'SUPER ADMIN';
+
+        // Revoke access if user's assigned role is inactive on authorization check
+        const isRoleInactive = 
+          !isEffectiveOwner && 
+          profRoleObj && 
+          (profRoleObj.isActive === false || String(profRoleObj.status || '').toLowerCase() === 'inactive');
+
+        if (isRoleInactive) {
+          const inactiveRoleMsg = "Your assigned role is currently inactive. Please contact your administrator.";
+          sessionStorage.setItem("deactivatedToast", inactiveRoleMsg);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(inactiveRoleMsg, false);
+          }
+          return null;
+        }
 
         const resolveAdminAccessFlag = (obj) => {
           if (!obj || typeof obj !== 'object') return undefined;
@@ -1508,20 +1547,33 @@ export const AppProvider = ({ children }) => {
           sessionStorage.setItem("userToken", token);
           sessionStorage.setItem("token", token);
 
-          if ((!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) && roleIdentifier) {
+          const initialRoleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
+          const initialRoleUpper = initialRoleStr.toUpperCase().trim();
+
+          const isRestaurantOwner = 
+            userTypeUpper === 'RESTAURANT_OWNER' || 
+            userTypeUpper === 'OWNER' || 
+            userTypeUpper === 'SUPER ADMIN' || 
+            userTypeUpper === 'SUPER_ADMIN' || 
+            initialRoleUpper === 'SUPER ADMIN' || 
+            initialRoleUpper === 'RESTAURANT_OWNER' || 
+            initialRoleUpper === 'OWNER';
+
+          if (roleIdentifier && !isRestaurantOwner) {
             try {
+              let liveRole = null;
               if (/^[0-9a-fA-F]{24}$/.test(roleIdentifier)) {
                 const rRes = await RoleApi.getRoleById(roleIdentifier);
                 if (rRes && rRes.status && rRes.response) {
-                  roleObj = rRes.response?.data || rRes.response;
+                  liveRole = rRes.response?.data || rRes.response;
                 }
               }
-              if (!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) {
+              if (!liveRole) {
                 const listRes = await RoleApi.getRoles({ limit: 100 });
                 if (listRes && listRes.status && listRes.response) {
                   const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                   if (Array.isArray(rolesList)) {
-                    roleObj = rolesList.find(r => 
+                    liveRole = rolesList.find(r => 
                       String(r._id) === String(roleIdentifier) || 
                       String(r.id) === String(roleIdentifier) ||
                       String(r.roleName || '').trim().toLowerCase() === String(roleIdentifier).trim().toLowerCase()
@@ -1529,23 +1581,41 @@ export const AppProvider = ({ children }) => {
                   }
                 }
               }
+              if (liveRole) {
+                roleObj = { ...(roleObj || {}), ...liveRole };
+              }
             } catch (err) {
               console.warn("Could not fetch role in login:", err);
             }
           }
 
-          const roleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
+          const roleStr = roleObj?.roleName || roleObj?.name || initialRoleStr;
           const roleUpper = roleStr.toUpperCase().trim();
           const roleLower = roleStr.toLowerCase().trim();
 
-          const isRestaurantOwner = 
-            userTypeUpper === 'RESTAURANT_OWNER' || 
-            userTypeUpper === 'OWNER' || 
-            userTypeUpper === 'SUPER ADMIN' || 
-            userTypeUpper === 'SUPER_ADMIN' ||
+          const isEffectiveOwner = isRestaurantOwner ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
             roleUpper === 'OWNER';
+
+          // Block login if role is inactive
+          const isRoleInactive = 
+            !isEffectiveOwner && 
+            roleObj && 
+            (roleObj.isActive === false || String(roleObj.status || '').toLowerCase() === 'inactive');
+
+          if (isRoleInactive) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Your assigned role is currently inactive. Please contact your administrator."
+            };
+          }
 
           const isManagerOrBranchAdmin = 
             userTypeUpper === 'BRANCH_ADMIN' ||
