@@ -108,16 +108,9 @@ export default function AdminLayout() {
     userType === 'OWNER' || 
     userType === 'SUPER ADMIN' || 
     userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||
-    userType === 'COMPANY' ||
-    userType === 'COMPANY_ADMIN' ||
     userRoleUpper === 'RESTAURANT_OWNER' || 
     userRoleUpper === 'OWNER' || 
-    userRoleUpper === 'SUPER ADMIN' ||
-    userRoleUpper === 'ADMIN' ||
-    userRoleUpper === 'COMPANY' ||
-    userRoleUpper === 'COMPANY_ADMIN' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
+    userRoleUpper === 'SUPER ADMIN';
 
   // Verify if current user has Admin access allowed or restricted
   const resolveAdminAccessFlag = (obj) => {

@@ -231,15 +231,17 @@ export default function MenuPanel({
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              onClick={handleOpenCategoriesModal}
-            >
-              <SettingsIcon size={14} />
-              Manage Categories
-            </button>
+            {(hasPermission('menu', 'edit') || hasPermission('menu', 'add')) && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={handleOpenCategoriesModal}
+              >
+                <SettingsIcon size={14} />
+                Manage Categories
+              </button>
+            )}
             {hasPermission('menu', 'add') && (
               <button
                 type="button"

@@ -475,30 +475,32 @@ export default function TablesPanel({
 
         {/* Header Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={handleBatchPrint}
-            style={{
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 700,
-              color: '#0f172a',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              transition: 'all 0.15s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-            onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-            title="Batch print all QR codes"
-          >
-            <PrintIcon size={14} color="#0f172a" /> Print All QR Codes
-          </button>
+          {checkPermission('tables', 'view') && (
+            <button
+              type="button"
+              onClick={handleBatchPrint}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                padding: '9px 16px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 700,
+                color: '#0f172a',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+              onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+              title="Batch print all QR codes"
+            >
+              <PrintIcon size={14} color="#0f172a" /> Print All QR Codes
+            </button>
+          )}
 
           {checkPermission('tables', 'add') && (
             <button

@@ -292,6 +292,7 @@ export default function StaffManagementPanel({
     }
 
     // Also merge any local staff from activeRestaurant
+    
     const localStaffPool = [
       ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
       ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
@@ -314,6 +315,7 @@ export default function StaffManagementPanel({
     const syncedList = list.map(u => {
       const uId = String(u._id || u.id || '').trim();
       const uEmail = String(u.email || '').toLowerCase().trim();
+      const uStatusStr = String(u.status || '').toLowerCase().trim();
 
       const isKnownInactive = 
         (uId && storedInactiveIds.map(String).includes(uId)) ||
@@ -323,7 +325,14 @@ export default function StaffManagementPanel({
         storedStatuses[uId]?.isActive === false ||
         storedStatuses[uEmail]?.isActive === false ||
         storedStatuses[uId]?.active === false ||
-        storedStatuses[uEmail]?.active === false;
+        storedStatuses[uEmail]?.active === false ||
+        uStatusStr === 'inactive' ||
+        uStatusStr === 'disabled' ||
+        uStatusStr === 'deactivated' ||
+        u.isActive === false ||
+        String(u.isActive) === 'false' ||
+        u.isActive === 0 ||
+        u.active === false;
 
       const isKnownActive = 
         storedStatuses[uId]?.status === 'Active' ||
@@ -339,7 +348,7 @@ export default function StaffManagementPanel({
       if (isKnownActive && !isKnownInactive) {
         return { ...u, status: 'Active', isActive: true, active: true };
       }
-      return u;
+      return { ...u, status: 'Active', isActive: true, active: true };
     });
 
     setApiUsers(syncedList);
@@ -392,7 +401,16 @@ export default function StaffManagementPanel({
 
     // 3. Status filter
     if (statusFilter && statusFilter !== 'All') {
-      const isActive = u.isActive !== undefined ? Boolean(u.isActive) : (u.status !== 'Inactive' && u.status !== 'Off Duty');
+      const uStatusStr = String(u.status || '').toLowerCase().trim();
+      const isActive = !(
+        uStatusStr === 'inactive' || 
+        uStatusStr === 'disabled' || 
+        uStatusStr === 'deactivated' || 
+        u.isActive === false || 
+        String(u.isActive) === 'false' || 
+        u.isActive === 0 || 
+        u.active === false
+      );
       if (statusFilter === 'Active' && !isActive) return false;
       if (statusFilter === 'Inactive' && isActive) return false;
     }
@@ -496,6 +514,7 @@ export default function StaffManagementPanel({
 
     const uId = String(user._id || user.id || '').trim();
     const uEmail = String(user.email || '').toLowerCase().trim();
+    const uStatusStr = String(user.status || '').toLowerCase().trim();
     const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
     const storedStatuses = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
     const isInactive = 
@@ -504,8 +523,13 @@ export default function StaffManagementPanel({
       storedStatuses[uEmail]?.status === 'Inactive' ||
       storedStatuses[uId]?.isActive === false ||
       storedStatuses[uEmail]?.isActive === false ||
+      uStatusStr === 'inactive' ||
+      uStatusStr === 'disabled' ||
+      uStatusStr === 'deactivated' ||
       user.isActive === false ||
-      String(user.status || '').toLowerCase().trim() === 'inactive';
+      String(user.isActive) === 'false' ||
+      user.isActive === 0 ||
+      user.active === false;
 
     setUserForm({
       employeeCode: empCode,
@@ -839,6 +863,7 @@ export default function StaffManagementPanel({
     const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
     const storedStatuses = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
 
+    const uStatusStr = String(user.status || '').toLowerCase().trim();
     const isCurrentlyInactive = 
       (uId && storedInactiveIds.map(String).includes(uId)) ||
       (uEmail && storedInactiveEmails.includes(uEmail)) ||
@@ -846,8 +871,13 @@ export default function StaffManagementPanel({
       storedStatuses[uEmail]?.status === 'Inactive' ||
       storedStatuses[uId]?.isActive === false ||
       storedStatuses[uEmail]?.isActive === false ||
+      uStatusStr === 'inactive' ||
+      uStatusStr === 'disabled' ||
+      uStatusStr === 'deactivated' ||
       user.isActive === false ||
-      String(user.status || '').toLowerCase().trim() === 'inactive';
+      String(user.isActive) === 'false' ||
+      user.isActive === 0 ||
+      user.active === false;
 
     const nextStatus = isCurrentlyInactive ? 'Active' : 'Inactive';
     const nextIsActive = isCurrentlyInactive;
@@ -1082,7 +1112,16 @@ export default function StaffManagementPanel({
       const isKitchen = uRole.toLowerCase().includes('kitchen');
       const branchObj = u.branchId?.branchName ? u.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
       const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
-      const isStaffActive = u.isActive !== undefined ? Boolean(u.isActive) : (u.status !== 'Inactive');
+      const uStatusStr = String(u.status || '').toLowerCase().trim();
+      const isStaffActive = !(
+        uStatusStr === 'inactive' || 
+        uStatusStr === 'disabled' || 
+        uStatusStr === 'deactivated' || 
+        u.isActive === false || 
+        String(u.isActive) === 'false' || 
+        u.isActive === 0 || 
+        u.active === false
+      );
       return [
         `"${u.name}"`,
         `"${uBranch}"`,
@@ -1533,56 +1572,61 @@ export default function StaffManagementPanel({
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => {
-              setKitchenForm({ branchId: apiBranches[0]?._id || '', email: '', password: '' });
-              setKitchenFormErrors({});
-              setShowKitchenModal(true);
-            }}
-            style={{
-              padding: '9px 16px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px',
-              background: '#fff'
-            }}
-          >
-            <KeyIcon size={15} color="#ea580c" />
-            Kitchen Station Settings
-          </button>
+          {hasPermission('staff', 'edit') && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setKitchenForm({ branchId: apiBranches[0]?._id || '', email: '', password: '' });
+                setKitchenFormErrors({});
+                setShowKitchenModal(true);
+              }}
+              style={{
+                padding: '9px 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '8px',
+                background: '#fff'
+              }}
+            >
+              <KeyIcon size={15} color="#ea580c" />
+              Kitchen Station Settings
+            </button>
+          )}
 
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => openAssignTablesModal()}
-            style={{
-              padding: '9px 16px',
-              fontSize: '13px',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              borderRadius: '8px',
-              background: '#fff'
-            }}
-          >
-           
-            Assign Tables
-          </button>
+          {hasPermission('staff', 'edit') && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => openAssignTablesModal()}
+              style={{
+                padding: '9px 16px',
+                fontSize: '13px',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                borderRadius: '8px',
+                background: '#fff'
+              }}
+            >
+              Assign Tables
+            </button>
+          )}
 
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={handleExportCSV}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600, borderRadius: '8px' }}
-          >
-            <DownloadIcon size={14} /> Export CSV
-          </button>
+          {hasPermission('staff', 'view') && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleExportCSV}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600, borderRadius: '8px' }}
+            >
+              <DownloadIcon size={14} /> Export CSV
+            </button>
+          )}
 
           {hasPermission('staff', 'add') && (
             <button
@@ -1809,7 +1853,7 @@ export default function StaffManagementPanel({
                 user.userType === 'RESTAURANT_OWNER' ||
                 String(user.role || '').toLowerCase().includes('manager') ||
                 String(user.designation || '').toLowerCase().includes('manager');
-              const canChangeDuty = !isManager || isCompanyUser || isCompanyScope;
+              const canChangeDuty = hasPermission('staff', 'edit') && (!isManager || isCompanyUser || isCompanyScope);
               const isOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
               const uIdStr = String(user._id || user.id || '');
               const uEmailStr = String(user.email || '').toLowerCase().trim();
@@ -1817,13 +1861,21 @@ export default function StaffManagementPanel({
               const storedInactiveEmailsList = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
               const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
 
+              const uStatusStr = String(user.status || '').toLowerCase().trim();
               const isStaffInactiveLocal = 
-                (uIdStr && storedInactiveIdsList.includes(uIdStr)) ||
+                (uIdStr && storedInactiveIdsList.map(String).includes(uIdStr)) ||
                 (uEmailStr && storedInactiveEmailsList.includes(uEmailStr)) ||
                 storedStatusesMap[uIdStr]?.status === 'Inactive' ||
                 storedStatusesMap[uEmailStr]?.status === 'Inactive' ||
                 storedStatusesMap[uIdStr]?.isActive === false ||
-                storedStatusesMap[uEmailStr]?.isActive === false;
+                storedStatusesMap[uEmailStr]?.isActive === false ||
+                uStatusStr === 'inactive' ||
+                uStatusStr === 'disabled' ||
+                uStatusStr === 'deactivated' ||
+                user.isActive === false ||
+                String(user.isActive) === 'false' ||
+                user.isActive === 0 ||
+                user.active === false;
 
               const isStaffActiveLocal = 
                 storedStatusesMap[uIdStr]?.status === 'Active' ||
@@ -1835,7 +1887,7 @@ export default function StaffManagementPanel({
                 ? false 
                 : isStaffActiveLocal 
                   ? true 
-                  : (user.isActive !== undefined ? (String(user.isActive) === 'true' || user.isActive === true || user.isActive === 1) : (String(user.status || '').toLowerCase().trim() !== 'inactive'));
+                  : (uStatusStr === 'active' || user.isActive === true);
               const assignedTables = isWaiter ? apiTables
                 .filter(t => {
                   const assigned = resolveTableAssignedWaiter(t, apiUsers);

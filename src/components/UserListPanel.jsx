@@ -639,8 +639,7 @@ export default function UserListPanel() {
                   Phone Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="text"
-                  maxLength={10}
+                  type="text"                  maxLength={10}
                   inputMode="numeric"
                   value={userForm.phone}
                   onChange={e => {
@@ -800,14 +799,16 @@ export default function UserListPanel() {
             </h2>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={handleExportCSV}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600 }}
-            >
-              <DownloadIcon size={14} /> Export CSV
-            </button>
+            {hasPermission('users', 'view') && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleExportCSV}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600 }}
+              >
+                <DownloadIcon size={14} /> Export CSV
+              </button>
+            )}
             {hasPermission('users', 'add') && (
               <button
                 type="button"
@@ -1014,27 +1015,29 @@ export default function UserListPanel() {
                     </td>
                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setViewingUser(user)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#0284c7',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-                          title="View User Details"
-                        >
-                          <EyeIcon size={16} />
-                        </button>
+                        {hasPermission('users', 'view') && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingUser(user)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#0284c7',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            title="View User Details"
+                          >
+                            <EyeIcon size={16} />
+                          </button>
+                        )}
                         {hasPermission('users', 'edit') && (
                           <button
                             type="button"
@@ -1058,34 +1061,36 @@ export default function UserListPanel() {
                             <PencilIcon size={16} />
                           </button>
                         )}
-                        <button
-                          title="Change Password"
-                          onClick={() => {
-                            setChangePasswordUserId(user);
-                            setNewPassword('');
-                            setConfirmPassword('');
-                            setPasswordError('');
-                            setConfirmPasswordError('');
-                            setShowNewPassword(false);
-                            setShowConfirmPassword(false);
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            color: '#eab308',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: '6px',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                        >
-                          <KeyIcon />
-                        </button>
+                        {hasPermission('users', 'edit') && (
+                          <button
+                            title="Change Password"
+                            onClick={() => {
+                              setChangePasswordUserId(user);
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setPasswordError('');
+                              setConfirmPasswordError('');
+                              setShowNewPassword(false);
+                              setShowConfirmPassword(false);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              color: '#eab308',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '6px',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                          >
+                            <KeyIcon />
+                          </button>
+                        )}
                         {hasPermission('users', 'delete') && (
                           <button
                             type="button"

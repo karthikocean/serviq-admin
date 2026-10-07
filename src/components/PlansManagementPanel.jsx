@@ -1095,19 +1095,19 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-
-
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => {
-              setExtraSlotsToAdd(1);
-              setIsExtraBranchModalOpen(true);
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a', background: '#ffffff' }}
-          >
-            <BuildingIcon size={16} /> + Buy Addons
-          </button>
+          {(hasPermission('plans-management', 'add') || hasPermission('plans-management', 'edit')) && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setExtraSlotsToAdd(1);
+                setIsExtraBranchModalOpen(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 700, borderColor: '#cbd5e1', color: '#0f172a', background: '#ffffff' }}
+            >
+              <BuildingIcon size={16} /> + Buy Addons
+            </button>
+          )}
         </div>
       </div>
 
@@ -1136,31 +1136,33 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               <span>Start: <strong style={{ color: '#0f172a' }}>{startDateFormatted}</strong></span>
               <span>Valid Till: <strong style={{ color: '#0f172a' }}>{validityFormatted}</strong></span>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setUpgradeBillingCycle(currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
-                setIsUpgradeModalOpen(true);
-              }}
-              style={{
-                width: '100%',
-                marginTop: '10px',
-                padding: '7px 10px',
-                borderRadius: '8px',
-                border: '1.5px solid var(--primary)',
-                background: 'var(--primary-light)',
-                color: 'var(--primary)',
-                fontSize: '11px',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '5px'
-              }}
-            >
-              ⚡ Renew / Upgrade Plan
-            </button>
+            {(hasPermission('plans-management', 'edit') || hasPermission('plans-management', 'add')) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setUpgradeBillingCycle(currentBillingCycle.toLowerCase().includes('annual') ? 'annual' : 'monthly');
+                  setIsUpgradeModalOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '10px',
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  border: '1.5px solid var(--primary)',
+                  background: 'var(--primary-light)',
+                  color: 'var(--primary)',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px'
+                }}
+              >
+                ⚡ Renew / Upgrade Plan
+              </button>
+            )}
           </div>
         </div>
 
@@ -1280,22 +1282,37 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
           <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
             <span style={{ fontSize: '10px', color: '#0f172a', fontWeight: 600 }}>Auto-Renew:</span>
-            <button
-              type="button"
-              onClick={handleToggleAutoRenew}
-              style={{
-                border: 'none',
-                background: isAutoRenewActive ? '#dcfce7' : '#fee2e2',
-                color: isAutoRenewActive ? '#15803d' : '#b91c1c',
-                padding: '3px 8px',
-                borderRadius: '16px',
-                fontSize: '10px',
-                fontWeight: 800,
-                cursor: 'pointer'
-              }}
-            >
-              {isAutoRenewActive ? '✓ Enabled' : '✕ Disabled'}
-            </button>
+            {hasPermission('plans-management', 'edit') ? (
+              <button
+                type="button"
+                onClick={handleToggleAutoRenew}
+                style={{
+                  border: 'none',
+                  background: isAutoRenewActive ? '#dcfce7' : '#fee2e2',
+                  color: isAutoRenewActive ? '#15803d' : '#b91c1c',
+                  padding: '3px 8px',
+                  borderRadius: '16px',
+                  fontSize: '10px',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                {isAutoRenewActive ? '✓ Enabled' : '✕ Disabled'}
+              </button>
+            ) : (
+              <span
+                style={{
+                  background: isAutoRenewActive ? '#dcfce7' : '#fee2e2',
+                  color: isAutoRenewActive ? '#15803d' : '#b91c1c',
+                  padding: '3px 8px',
+                  borderRadius: '16px',
+                  fontSize: '10px',
+                  fontWeight: 800
+                }}
+              >
+                {isAutoRenewActive ? '✓ Enabled' : '✕ Disabled'}
+              </span>
+            )}
           </div>
         </div>
 

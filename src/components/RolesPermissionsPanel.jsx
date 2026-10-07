@@ -257,6 +257,12 @@ export default function RolesPermissionsPanel() {
       basePermissions['reports'][act] = anyReport;
     });
 
+    if (basePermissions['staff_management']) {
+      basePermissions['user_accounts'] = { ...basePermissions['staff_management'] };
+      basePermissions['staff'] = { ...basePermissions['staff_management'] };
+      basePermissions['users'] = { ...basePermissions['staff_management'] };
+    }
+
     setPermissionsState(basePermissions);
     setViewState('edit');
   };
@@ -302,6 +308,11 @@ export default function RolesPermissionsPanel() {
       finalPermissions['reports'][act] = anyReport;
     });
     finalPermissions['billing_payments'] = { ...finalPermissions['billing'] };
+    if (finalPermissions['staff_management']) {
+      finalPermissions['user_accounts'] = { ...finalPermissions['staff_management'] };
+      finalPermissions['staff'] = { ...finalPermissions['staff_management'] };
+      finalPermissions['users'] = { ...finalPermissions['staff_management'] };
+    }
 
     const rolePayload = {
       roleName: trimmedRoleName,
@@ -335,6 +346,15 @@ export default function RolesPermissionsPanel() {
         ...(next[moduleId] || {}),
         [action]: currentVal
       };
+
+      // If staff_management or user_accounts is toggled, sync all user/staff modules
+      if (moduleId === 'staff_management' || moduleId === 'user_accounts' || moduleId === 'staff' || moduleId === 'users') {
+        const staffObj = { ...(next['staff_management'] || {}), [action]: currentVal };
+        next['staff_management'] = staffObj;
+        next['user_accounts'] = staffObj;
+        next['staff'] = staffObj;
+        next['users'] = staffObj;
+      }
 
       // If an inventory submodule is toggled, keep inventory parent permission updated
       const allInvChildren = [...COMPANY_INVENTORY_MODULES, ...BRANCH_INVENTORY_MODULES];

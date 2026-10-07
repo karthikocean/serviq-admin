@@ -299,8 +299,11 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
     for (const k of keysToCheck) {
       if (permissions[k] !== undefined && permissions[k] !== null) {
         const modPerm = permissions[k];
-        if (typeof modPerm === 'object' && modPerm[action] !== undefined) {
+        if (typeof modPerm === 'object') {
           return Boolean(modPerm[action]);
+        }
+        if (typeof modPerm === 'boolean') {
+          return action === 'view' ? modPerm : false;
         }
       }
     }
@@ -316,8 +319,14 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   if (userRoleConfig?.permissions) {
     const keysToCheck = getNormalizedKeys(moduleName);
     for (const k of keysToCheck) {
-      if (userRoleConfig.permissions[k] && userRoleConfig.permissions[k][action] !== undefined) {
-        return Boolean(userRoleConfig.permissions[k][action]);
+      if (userRoleConfig.permissions[k] !== undefined && userRoleConfig.permissions[k] !== null) {
+        const modPerm = userRoleConfig.permissions[k];
+        if (typeof modPerm === 'object') {
+          return Boolean(modPerm[action]);
+        }
+        if (typeof modPerm === 'boolean') {
+          return action === 'view' ? modPerm : false;
+        }
       }
     }
   }
@@ -353,8 +362,10 @@ export const extractRestaurantFromToken = (token) => {
 const loadSavedUser = () => {
   
   try {
-    // Clear any legacy localStorage items
-    localStorage.clear();
+    // Clean up legacy auth keys only, do NOT clear entire localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('currentUser');
   } catch (e) {}
 
   try {

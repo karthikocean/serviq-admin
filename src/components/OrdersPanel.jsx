@@ -4146,32 +4146,34 @@ export default function OrdersPanel({
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', flexWrap: 'nowrap' }}>
 
                           {/* View Order Details */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setViewingOrder(ord);
-                            }}
-                            style={{
-                              width: '28px',
-                              height: '28px',
-                              background: '#eff6ff',
-                              border: '1px solid #bfdbfe',
-                              color: '#2563eb',
-                              cursor: 'pointer',
-                              borderRadius: '6px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: 0,
-                              boxSizing: 'border-box',
-                              transition: 'all 0.15s ease'
-                            }}
-                            title="View Order Details"
-                          >
-                            <EyeIcon size={13} color="#2563eb" />
-                          </button>
+                          {hasPermission('orders', 'view') && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setViewingOrder(ord);
+                              }}
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                color: '#2563eb',
+                                cursor: 'pointer',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                boxSizing: 'border-box',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title="View Order Details"
+                            >
+                              <EyeIcon size={13} color="#2563eb" />
+                            </button>
+                          )}
 
                           {/* Edit */}
                           {hasPermission('orders', 'edit') && (
@@ -4205,7 +4207,7 @@ export default function OrdersPanel({
                           )}
 
                           {/* Send to Kitchen */}
-                          {(() => {
+                          {hasPermission('orders', 'edit') && (() => {
                             const isKitchenDisabled = status === 'completed' || status === 'cancelled';
                             const kitchenTitle = status === 'completed'
                               ? "Completed orders cannot be sent to kitchen"
@@ -4249,32 +4251,34 @@ export default function OrdersPanel({
                           })()}
 
                           {/* Print KOT */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handlePrintKOT(ord);
-                            }}
-                            style={{
-                              width: '28px',
-                              height: '28px',
-                              background: '#f0fdf4',
-                              border: '1px solid #bbf7d0',
-                              color: '#16a34a',
-                              cursor: 'pointer',
-                              borderRadius: '6px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              padding: 0,
-                              boxSizing: 'border-box',
-                              transition: 'all 0.15s ease'
-                            }}
-                            title="Print Kitchen Order Ticket (KOT)"
-                          >
-                            <PrintIcon size={12} color="#16a34a" />
-                          </button>
+                          {hasPermission('orders', 'view') && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handlePrintKOT(ord);
+                              }}
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                color: '#16a34a',
+                                cursor: 'pointer',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                boxSizing: 'border-box',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title="Print Kitchen Order Ticket (KOT)"
+                            >
+                              <PrintIcon size={12} color="#16a34a" />
+                            </button>
+                          )}
 
                           {/* Cancel */}
                           {hasPermission('orders', 'delete') && (() => {

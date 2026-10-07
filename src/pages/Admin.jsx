@@ -477,44 +477,44 @@ export default function Admin() {
       : (typeof currentUser?.role === 'string' ? currentUser.role : '');
     const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-    const userTypeUpper = (userTypeStr || userRoleStr || '').toUpperCase();
-    const userRoleLower = (userRoleStr || '').toLowerCase();
+    const userTypeUpper = (userTypeStr || '').toUpperCase().trim();
+    const roleUpper = (userRoleStr || (typeof role === 'string' ? role : '')).toUpperCase().trim();
+
+    // STRICT OWNER CHECK: Only true restaurant/platform owners bypass permissions
     const isOwner = 
       userTypeUpper === 'RESTAURANT_OWNER' || 
       userTypeUpper === 'OWNER' || 
       userTypeUpper === 'SUPER ADMIN' || 
       userTypeUpper === 'SUPER_ADMIN' || 
-      userTypeUpper === 'ADMIN' ||
-      userTypeUpper === 'COMPANY' ||
-      userTypeUpper === 'COMPANY_ADMIN' ||
-      userRoleLower === 'restaurant_owner' || 
-      userRoleLower === 'restaurant owner' || 
-      userRoleLower === 'owner' || 
-      userRoleLower === 'super admin' || 
-      userRoleLower === 'super_admin' ||
-      userRoleLower === 'admin' ||
-      userRoleLower === 'company' ||
-      userRoleLower === 'company_admin' ||
-      (!currentUser?.branchId && !currentUser?.activeBranchId);
+      roleUpper === 'RESTAURANT_OWNER' || 
+      roleUpper === 'OWNER' || 
+      roleUpper === 'SUPER ADMIN';
+
+    if (isOwner) {
+      return true;
+    }
+
+    if (tab === 'overview' || tab === 'dashboard') {
+      return hasPermission('dashboard', 'view');
+    }
 
     if (tab === 'branch-management' || tab === 'branches') {
-      return isOwner || role === 'Admin' || hasPermission('branch-management', 'view');
+      return hasPermission('branch-management', 'view');
     }
 
     if (tab === 'plans-management' || tab === 'plans') {
-      return isOwner || role === 'Admin' || hasPermission('plans-management', 'view');
-    }
-
-    if (role === 'Admin' || currentUser?.userType === 'BRANCH_ADMIN' || isOwner) {
-      return true;
+      return hasPermission('plans-management', 'view');
     }
 
     let moduleName = tab;
     if (tab === 'qr-code-config') moduleName = 'tables';
-    if (tab === 'waiter-list' || tab === 'waiter-reports') moduleName = 'waiter';
-    if (tab === 'kitchen-list' || tab === 'kitchen-reports') moduleName = 'kitchen';
+    if (tab === 'waiter-list' || tab === 'waiter-reports') moduleName = 'staff';
+    if (tab === 'kitchen-list' || tab === 'kitchen-reports') moduleName = 'staff';
     if (tab === 'users') moduleName = 'users';
     if (tab === 'roles-permissions') moduleName = 'roles-permissions';
+    if (tab === 'billing-history') moduleName = 'billing';
+    if (tab === 'Reports') moduleName = 'reports_analytics';
+    if (tab === 'Settings') moduleName = 'settings';
 
     if (role === 'Waiter' && tab === 'kitchen-list') {
       return ['Premium', 'Enterprise'].includes(plan) && hasPermission(moduleName, 'view');
