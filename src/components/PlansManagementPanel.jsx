@@ -85,7 +85,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
 
-  if (!isRestaurantOwner) {
+  if (!isRestaurantOwner && !hasPermission('plans-management', 'view')) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
@@ -95,7 +95,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           Access Denied
         </h2>
         <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-          Plans & Subscription Management is strictly restricted to the <strong>Restaurant Owner</strong> only. Other roles do not have permission to view or manage subscription plans.
+          You do not have permission to view or manage subscription plans.
         </p>
         <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
           Return to Dashboard

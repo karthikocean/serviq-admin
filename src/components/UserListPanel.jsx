@@ -322,12 +322,15 @@ export default function UserListPanel() {
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
 
+    const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
       roleId: resolvedRoleId,
       branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
+      isActive: isStatusActive,
+      active: isStatusActive,
       phoneNumber: userForm.phone.trim(),
     };
 
@@ -344,6 +347,26 @@ export default function UserListPanel() {
     }
 
     if (res.status) {
+      const savedUserId = editingUserId || res.response?.data?._id || res.response?.data?.id;
+      try {
+        const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+        const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+        const uId = String(savedUserId || '');
+        const uEmail = (userForm.email || '').toLowerCase().trim();
+
+        if (!isStatusActive) {
+          if (uId && !storedInactiveIds.includes(uId)) storedInactiveIds.push(uId);
+          if (uEmail && !storedInactiveEmails.includes(uEmail)) storedInactiveEmails.push(uEmail);
+        } else {
+          const idIdx = storedInactiveIds.indexOf(uId);
+          if (idIdx > -1) storedInactiveIds.splice(idIdx, 1);
+          const emailIdx = storedInactiveEmails.indexOf(uEmail);
+          if (emailIdx > -1) storedInactiveEmails.splice(emailIdx, 1);
+        }
+        localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
+        localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
+      } catch (e) {}
+
       setViewState('list');
       fetchData();
     }

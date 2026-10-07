@@ -255,8 +255,11 @@ export default function Login() {
         if (rawErr.includes('role') && (rawErr.includes('inactive') || rawErr.includes('deactivat'))) {
           errorMsg = res?.error || 'Your assigned role is currently inactive. Please contact your administrator.';
           setFormErrors({ email: false, password: true });
-        } else if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('deactivat') || rawErr.includes('contact support')) {
+        } else if (rawErr.includes('restaurant') && (rawErr.includes('inactive') || rawErr.includes('deactivat'))) {
           errorMsg = res?.error || 'Your restaurant account has been deactivated. Please contact the Super Admin.';
+          setFormErrors({ email: false, password: true });
+        } else if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('deactivat') || rawErr.includes('contact support') || rawErr.includes('account')) {
+          errorMsg = res?.error || 'Your account is currently inactive. Please contact your administrator.';
           setFormErrors({ email: false, password: true });
         } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted') || rawErr.includes('waiter') || rawErr.includes('kitchen')) {
           errorMsg = res?.error || 'Access Denied: Staff members (Waiters, Kitchen staff) are not permitted to log into the Admin Panel.';
@@ -283,8 +286,11 @@ export default function Login() {
       if (rawErr.includes('role') && (rawErr.includes('inactive') || rawErr.includes('deactivat'))) {
         errorMsg = err.message || 'Your assigned role is currently inactive. Please contact your administrator.';
         setFormErrors({ email: false, password: true });
-      } else if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('restaurant') || rawErr.includes('deactivat') || rawErr.includes('contact support')) {
+      } else if (rawErr.includes('restaurant') && (rawErr.includes('inactive') || rawErr.includes('deactivat'))) {
         errorMsg = err.message || 'Your restaurant account has been deactivated. Please contact the Super Admin.';
+        setFormErrors({ email: false, password: true });
+      } else if (rawErr.includes('inactive') || rawErr.includes('disabled') || rawErr.includes('suspended') || rawErr.includes('deactivat') || rawErr.includes('contact support') || rawErr.includes('account')) {
+        errorMsg = err.message || 'Your account is currently inactive. Please contact your administrator.';
         setFormErrors({ email: false, password: true });
       } else if (rawErr.includes('access denied') || rawErr.includes('staff') || rawErr.includes('not permitted')) {
         errorMsg = err.message || 'Access Denied: Staff members are not permitted to log into the Admin Panel.';

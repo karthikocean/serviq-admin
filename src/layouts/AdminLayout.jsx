@@ -177,18 +177,12 @@ export default function AdminLayout() {
       return false;
     }
 
-    // 2. Branch & Plans Management: restricted to Restaurant Owner / Company / Admin
+    // 2. Branch & Plans Management:
     if (
       permissionKey === 'branch-management' || 
       permissionKey === 'branches'
     ) {
-      const isAllOrCompany = 
-        !selectedBranchId || 
-        selectedBranchId === 'ALL' || 
-        selectedBranchId === 'All' || 
-        selectedBranchId === '' || 
-        String(selectedBranchId).toUpperCase() === 'COMPANY';
-      return (isRestaurantOwner || hasPermission('branch-management', 'view')) && isAllOrCompany;
+      return isRestaurantOwner || hasPermission('branch-management', 'view');
     }
 
     if (
@@ -436,11 +430,6 @@ export default function AdminLayout() {
 
   const isCurrentPremium = String(currentSubPlan).toLowerCase().includes('premium') || (activeRestaurant?.subscription?.planId || '').includes('premium');
 
-  // Protect restricted routes: ONLY Restaurant Owner can access Branch & Plans Management
-  if ((isBranchActive || isPlansActive) && !isRestaurantOwner) {
-    const fallback = getFirstAllowedRoute() || '/dashboard';
-    return <Navigate to={fallback} replace />;
-  }
 
   // Protect Plan-Gated Routes:
   // 1. Inventory Management: Only Premium / Enterprise (Disabled for Basic & Standard)

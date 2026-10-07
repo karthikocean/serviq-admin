@@ -498,13 +498,7 @@ export default function Admin() {
       (!currentUser?.branchId && !currentUser?.activeBranchId);
 
     if (tab === 'branch-management' || tab === 'branches') {
-      const isAllBranches = 
-        !selectedBranchId || 
-        selectedBranchId === 'ALL' || 
-        selectedBranchId === 'All' || 
-        selectedBranchId === '' || 
-        String(selectedBranchId).toUpperCase() === 'COMPANY';
-      return (isOwner || role === 'Admin' || hasPermission('branch-management', 'view')) && isAllBranches;
+      return isOwner || role === 'Admin' || hasPermission('branch-management', 'view');
     }
 
     if (tab === 'plans-management' || tab === 'plans') {
