@@ -4,7 +4,10 @@ import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, PencilIcon, filterInputStyle,
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
 
-export default function CompanyPurchases({ purchases: initialPurchases, items: initialItems, onSavePurchase, onDeletePurchase }) {
+export default function CompanyPurchases({ purchases: initialPurchases, items: initialItems, onSavePurchase, onDeletePurchase, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'add') : true;
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'view') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'delete') : true;
   const navigate = useNavigate();
   const [purchasesList, setPurchasesList] = useState(initialPurchases || []);
   const [itemsList, setItemsList] = useState(initialItems || []);
@@ -741,6 +744,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             <span>Vendors ({vendorsList.length})</span>
           </button>
 
+          {canAdd && (
           <button
             type="button"
             onClick={() => {
@@ -778,6 +782,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             <PlusIcon size={15} />
             <span>Record New Purchase</span>
           </button>
+          )}
         </div>
 
         {/* ROW 2: Full Width Search & Filter Controls */}
@@ -953,6 +958,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => { setSelectedPurchase(p); setViewState('VIEW_PURCHASE'); }}
@@ -966,6 +972,8 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                         >
                           <EyeIcon size={15} />
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDelete(p)}
@@ -979,6 +987,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                         >
                           <TrashIcon size={15} />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

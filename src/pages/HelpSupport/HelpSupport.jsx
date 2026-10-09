@@ -383,7 +383,7 @@ export default function HelpSupport() {
     }
 
     return activeRestaurant?.name || 'Main Branch';
-  }, [activeRestaurant]);
+  }, [activeRestaurant?.name]);
 
   // Resolving Raised To: 'Company' or 'Super Admin'
   const resolveTicketRaisedTo = useCallback((ticket) => {
@@ -411,7 +411,7 @@ export default function HelpSupport() {
     }
     // In restaurant company portal, tickets default to Company unless explicitly raised/escalated to Super Admin
     return 'Company';
-  }, [activeRestaurant]);
+  }, [activeRestaurant?.name]);
 
   // Resolving Raised By: Name, Email & Role
   const resolveTicketRaisedBy = useCallback((ticket) => {
@@ -465,6 +465,12 @@ export default function HelpSupport() {
     setPersistedCounts(counts);
   }, [isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
 
+  // Keep a stable ref to updateCountsFromTickets so fetchTickets is not recreated
+  const updateCountsRef = useRef(updateCountsFromTickets);
+  useEffect(() => {
+    updateCountsRef.current = updateCountsFromTickets;
+  }, [updateCountsFromTickets]);
+
   // Fetch status counts across all tickets for the active scope
   const fetchStatusCounts = useCallback(async () => {
     try {
@@ -476,15 +482,17 @@ export default function HelpSupport() {
       }
       const data = await ticketApi.getTickets(countParams);
       const list = (data && data.status && Array.isArray(data.data)) ? data.data : (Array.isArray(data) ? data : []);
-      updateCountsFromTickets(list);
+      if (updateCountsRef.current) {
+        updateCountsRef.current(list);
+      }
     } catch (err) {
       console.warn("Failed to fetch status counts:", err);
     }
-  }, [isMainBranchLogin, userBranchId, selectedBranchId, updateCountsFromTickets]);
+  }, [isMainBranchLogin, userBranchId, selectedBranchId]);
 
   // Fetch Tickets calling list API with active filters
-  const fetchTickets = useCallback(async () => {
-    setIsLoading(true);
+  const fetchTickets = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     try {
       const params = {};
       // If login is not a main branch, filter by their branch
@@ -519,20 +527,20 @@ export default function HelpSupport() {
         const list = Array.isArray(data.data) ? data.data : [];
         setTickets(list);
         if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
-          updateCountsFromTickets(list);
+          if (updateCountsRef.current) updateCountsRef.current(list);
         }
       } else if (Array.isArray(data)) {
         setTickets(data);
         if (statusFilter === 'All' && !debouncedSearch && priorityFilter === 'All' && targetFilter === 'All') {
-          updateCountsFromTickets(data);
+          if (updateCountsRef.current) updateCountsRef.current(data);
         }
       }
     } catch (e) {
       console.warn("Failed to fetch tickets:", e);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
-  }, [isMainBranchLogin, userBranchId, selectedBranchId, statusFilter, priorityFilter, targetFilter, debouncedSearch, updateCountsFromTickets]);
+  }, [isMainBranchLogin, userBranchId, selectedBranchId, statusFilter, priorityFilter, targetFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchBranches();
@@ -542,9 +550,13 @@ export default function HelpSupport() {
     fetchStatusCounts();
   }, [fetchStatusCounts]);
 
+  // Reset pagination to page 0 only when active filter inputs change
   useEffect(() => {
     setCurrentPage(0);
-    fetchTickets();
+  }, [statusFilter, priorityFilter, targetFilter, debouncedSearch, selectedBranchId]);
+
+  useEffect(() => {
+    fetchTickets(true);
   }, [fetchTickets]);
 
   // Role-Based Visibility & Filters
@@ -864,9 +876,11 @@ export default function HelpSupport() {
   }, [viewTicket]);
 
   // Auto-open ticket from Notification click
+  const handledNotificationTicketIdRef = useRef(null);
   useEffect(() => {
     const targetTicketId = searchParams.get('ticketId') || searchParams.get('viewTicketId') || location.state?.ticketId;
-    if (targetTicketId) {
+    if (targetTicketId && handledNotificationTicketIdRef.current !== String(targetTicketId)) {
+      handledNotificationTicketIdRef.current = String(targetTicketId);
       const existing = tickets.find(t => String(t._id || t.id) === String(targetTicketId) || String(t.ticketNumber) === String(targetTicketId));
       if (existing) {
         handleOpenViewTicket(existing);
@@ -1549,7 +1563,7 @@ export default function HelpSupport() {
                     <tr 
                       key={ticket._id || ticket.id || index}
                       style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s ease' }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fff7ed'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
                       {/* 1. S.NO */}
@@ -1640,7 +1654,11 @@ export default function HelpSupport() {
                           {/* View Button */}
                           <button
                             type="button"
-                            onClick={() => handleOpenViewTicket(ticket)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleOpenViewTicket(ticket);
+                            }}
                             title="View ticket details"
                             style={{
                               width: '32px',
@@ -1787,8 +1805,8 @@ export default function HelpSupport() {
       <Modal
         isOpen={!!viewTicket}
         onClose={() => setViewTicket(null)}
-        title={viewTicket ? `Ticket Details - ${viewTicket.ticketNumber || '#TK'}` : 'Ticket Details'}
-        maxWidth="720px"
+        title={viewTicket ? `Ticket Details • ${viewTicket.ticketNumber || '#TK'}` : 'Ticket Details'}
+        maxWidth="740px"
       >
         {viewTicket && (() => {
           const conversation = getTicketConversation(viewTicket);
@@ -1860,88 +1878,163 @@ export default function HelpSupport() {
           });
 
           return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Top Summary Header */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', color: '#0f172a' }}>
+              {/* Top Summary Header Card */}
               <div style={{
-                background: '#f8fafc',
+                background: '#ffffff',
                 border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '10px 14px',
+                borderRadius: '12px',
+                padding: '16px 18px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px'
+                gap: '12px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>
-                      {viewTicket.subject}
-                    </h3>
-                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <ClockIcon size={11} color="#64748b" />
-                        <span>Created on {formatDateTimeDMY(viewTicket.createdAt)}</span>
-                      </span>
-                      <span>•</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <TagIcon size={11} color="#64748b" />
-                        <span>Category: {viewTicket.category || 'General'}</span>
-                      </span>
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontFamily: 'monospace',
+                      fontWeight: 800,
+                      fontSize: '13px',
+                      background: '#fff7ed',
+                      color: '#ea580c',
+                      border: '1px solid #fed7aa',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      letterSpacing: '0.5px'
+                    }}>
+                      {viewTicket.ticketNumber || '#TK'}
+                    </span>
+                    <span style={{
+                      fontSize: '11.5px',
+                      color: '#475569',
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <TagIcon size={12} color="#64748b" />
+                      <span>Category: {viewTicket.category || 'General'}</span>
+                    </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className={`badge ${getPriorityBadgeClass(viewTicket.priority)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                  {/* Badges: Priority + Only ONE Single Status */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className={`badge ${getPriorityBadgeClass(viewTicket.priority)}`} style={{ fontSize: '11px', padding: '4px 10px' }}>
                       {viewTicket.priority || 'Medium'} Priority
                     </span>
-                    <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
+                    <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '11.5px', padding: '4px 12px', fontWeight: 700 }}>
                       {viewTicket.status || 'Open'}
                     </span>
                   </div>
                 </div>
 
-                {/* Metadata Grid (Read Only) */}
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a', lineHeight: 1.4 }}>
+                    {viewTicket.subject}
+                  </h3>
+                  <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                    <ClockIcon size={12} color="#94a3b8" />
+                    <span>Raised on {formatDateTimeDMY(viewTicket.createdAt)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata 4-Column Grid: Raised By, Routed To, Branch, Last Activity (NO DUPLICATE STATUS) */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '10px'
+              }}>
+                {/* 1. Raised By */}
                 <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                  gap: '6px',
-                  borderTop: '1px solid #e2e8f0',
-                  paddingTop: '6px',
-                  marginTop: '1px'
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
                 }}>
-                  <div>
-                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised By</span>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-                      <UserIcon size={11} color="#64748b" />
-                      <span>{raisedBy.name}</span>
-                    </div>
-                    <span style={{ fontSize: '10px', color: '#64748b' }}>{raisedBy.role}</span>
+                  <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <UserIcon size={12} color="#ea580c" />
+                    <span>Raised By</span>
                   </div>
-
-                  <div>
-                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Raised To</span>
-                    <div style={{ marginTop: '1px' }}>
-                      <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
-                        {raisedTo === 'Company' ? <BuildingIcon size={10} color="#ea580c" /> : <ShieldIcon size={10} color="#4338ca" />}
-                        <span>{raisedTo}</span>
-                      </span>
-                    </div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {raisedBy.name}
                   </div>
-
-                  <div>
-                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Branch</span>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-                      <StoreIcon size={11} color="#0369a1" />
-                      <span>{branchName}</span>
-                    </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                    {raisedBy.role}
                   </div>
+                </div>
 
-                  <div>
-                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Status</span>
-                    <div style={{ marginTop: '1px' }}>
-                      <span className={`badge ${getStatusBadgeClass(viewTicket.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
-                        {viewTicket.status || 'Open'}
-                      </span>
-                    </div>
+                {/* 2. Routed To */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    {raisedTo === 'Company' ? <BuildingIcon size={12} color="#ea580c" /> : <ShieldIcon size={12} color="#4338ca" />}
+                    <span>Routed To</span>
+                  </div>
+                  <div style={{ marginTop: '2px' }}>
+                    <span className={`badge ${raisedTo === 'Company' ? 'badge-target-company' : 'badge-target-superadmin'}`} style={{ fontSize: '11px', padding: '3px 9px' }}>
+                      {raisedTo === 'Company' ? <BuildingIcon size={11} color="#ea580c" /> : <ShieldIcon size={11} color="#4338ca" />}
+                      <span>{raisedTo}</span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Branch */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <StoreIcon size={12} color="#0284c7" />
+                    <span>Branch</span>
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {branchName}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                    Restaurant Branch
+                  </div>
+                </div>
+
+                {/* 4. Last Updated */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <ClockIcon size={12} color="#64748b" />
+                    <span>Last Activity</span>
+                  </div>
+                  <div style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
+                    {formatDateTimeDMY(viewTicket.updatedAt || viewTicket.createdAt)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
+                    Ticket History
                   </div>
                 </div>
               </div>
@@ -1950,44 +2043,75 @@ export default function HelpSupport() {
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '10px 14px',
+                borderRadius: '12px',
+                padding: '16px 18px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '4px'
+                gap: '8px'
               }}>
-                <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                  Issue Description
-                </span>
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#334155', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  <FileTextIcon size={14} color="#ea580c" />
+                  <span style={{ fontSize: '11.5px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Issue Description
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  color: '#334155',
+                  lineHeight: 1.6,
+                  whiteSpace: 'pre-wrap',
+                  background: '#f8fafc',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #f1f5f9'
+                }}>
                   {viewTicket.description || 'No additional description provided.'}
-                </p>
+                </div>
 
                 {/* Optional Attachment Preview */}
                 {Boolean(viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]) && (
-                  <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
-                      Attached File / Screenshot
+                  <div style={{ marginTop: '4px', paddingTop: '10px', borderTop: '1px dashed #e2e8f0' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
+                      <PaperclipIcon size={12} color="#ea580c" />
+                      <span>Attached Screenshot / Document</span>
                     </span>
-                    <a
-                      href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Click to view full attachment"
-                      style={{ display: 'inline-block' }}
-                    >
-                      <img
-                        src={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
-                        alt="Ticket Attachment"
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <a
+                        href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Click to view full image in new tab"
                         style={{
-                          maxWidth: '180px',
-                          maxHeight: '90px',
-                          borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
-                          objectFit: 'cover'
+                          display: 'inline-block',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          border: '1.5px solid #fed7aa',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
                         }}
-                      />
-                    </a>
+                      >
+                        <img
+                          src={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
+                          alt="Ticket Attachment"
+                          style={{
+                            maxWidth: '220px',
+                            maxHeight: '110px',
+                            display: 'block',
+                            objectFit: 'cover'
+                          }}
+                        />
+                      </a>
+                      <a
+                        href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-outline"
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        <EyeIcon size={13} color="#ea580c" />
+                        <span>Open Full Size</span>
+                      </a>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1997,24 +2121,24 @@ export default function HelpSupport() {
                 <div style={{
                   background: '#fffbeb',
                   border: '1.5px solid #fde68a',
-                  borderRadius: '10px',
-                  padding: '10px 14px',
+                  borderRadius: '12px',
+                  padding: '14px 18px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '6px'
+                  gap: '8px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <ShieldIcon size={14} color="#b45309" />
-                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldIcon size={16} color="#b45309" />
+                    <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                       Escalated to Super Admin
                     </span>
                   </div>
                   {viewTicket.escalationReason && (
-                    <div style={{ fontSize: '12px', color: '#78350f', lineHeight: 1.4, background: '#fef3c7', padding: '6px 10px', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '12.5px', color: '#78350f', lineHeight: 1.5, background: '#fef3c7', padding: '8px 12px', borderRadius: '8px', border: '1px solid #fde68a' }}>
                       <strong>Reason:</strong> {viewTicket.escalationReason}
                     </div>
                   )}
-                  <div style={{ fontSize: '10.5px', color: '#92400e', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: '11.5px', color: '#92400e', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     {viewTicket.escalatedByName && <span><strong>Escalated By:</strong> {viewTicket.escalatedByName}</span>}
                     {viewTicket.escalatedAt && <span><strong>Escalated At:</strong> {formatDateTimeDMY(viewTicket.escalatedAt)}</span>}
                   </div>
@@ -2024,21 +2148,20 @@ export default function HelpSupport() {
               {/* COMPANY RESPONSE & SOLUTION REMARKS CARD */}
               {companyResponse ? (
                 <div style={{
-                  background: companyResponse.status === 'In Progress' ? '#eff6ff' : (companyResponse.status === 'Draft' ? '#fffbeb' : '#f0fdf4'),
-                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
-                  borderRadius: '10px',
-                  padding: '10px 14px',
+                  background: companyResponse.status === 'In Progress' ? '#f0f9ff' : (companyResponse.status === 'Draft' ? '#fffbeb' : '#f0fdf4'),
+                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#bae6fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
+                  borderRadius: '12px',
+                  padding: '16px 18px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px'
+                  gap: '10px'
                 }}>
-                  {/* Card Header */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <div style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '6px',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
                         background: companyResponse.status === 'In Progress' ? '#dbeafe' : (companyResponse.status === 'Draft' ? '#fef3c7' : '#dcfce7'),
                         display: 'flex',
                         alignItems: 'center',
@@ -2047,16 +2170,16 @@ export default function HelpSupport() {
                         flexShrink: 0
                       }}>
                         {companyResponse.status === 'In Progress' ? (
-                          <ClockIcon size={15} color="#1d4ed8" />
+                          <ClockIcon size={16} color="#1d4ed8" />
                         ) : companyResponse.status === 'Draft' ? (
-                          <FileTextIcon size={15} color="#b45309" />
+                          <FileTextIcon size={16} color="#b45309" />
                         ) : (
-                          <CheckCircleIcon size={15} color="#15803d" />
+                          <CheckCircleIcon size={16} color="#15803d" />
                         )}
                       </div>
                       <div>
                         <div style={{
-                          fontSize: '12px',
+                          fontSize: '12.5px',
                           fontWeight: 800,
                           color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
                           textTransform: 'uppercase',
@@ -2068,10 +2191,10 @@ export default function HelpSupport() {
                           <span>Company Response & Solution Remarks</span>
                           {isBranchFilterActive && (
                             <span style={{
-                              fontSize: '9.5px',
+                              fontSize: '10px',
                               fontWeight: 700,
                               background: '#ffffff',
-                              padding: '1px 5px',
+                              padding: '2px 6px',
                               borderRadius: '4px',
                               border: '1px solid rgba(0,0,0,0.1)',
                               textTransform: 'none',
@@ -2082,13 +2205,13 @@ export default function HelpSupport() {
                           )}
                         </div>
                         <div style={{
-                          fontSize: '11px',
+                          fontSize: '11.5px',
                           color: companyResponse.status === 'In Progress' ? '#2563eb' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
                           flexWrap: 'wrap',
-                          marginTop: '1px'
+                          marginTop: '2px'
                         }}>
                           <span>Responded by <strong>{companyResponse.sender}</strong> ({companyResponse.role || 'Company Admin'})</span>
                           {companyResponse.date && (
@@ -2100,21 +2223,17 @@ export default function HelpSupport() {
                         </div>
                       </div>
                     </div>
-
-                    <span className={`badge ${getStatusBadgeClass(companyResponse.status)}`} style={{ fontSize: '10.5px', padding: '2px 8px' }}>
-                      {companyResponse.status}
-                    </span>
                   </div>
 
                   {/* Remarks Content */}
                   <div style={{
                     background: '#ffffff',
                     border: `1px solid ${companyResponse.status === 'In Progress' ? '#bfdbfe' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    fontSize: '12.5px',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    fontSize: '13px',
                     color: '#0f172a',
-                    lineHeight: 1.45,
+                    lineHeight: 1.55,
                     whiteSpace: 'pre-wrap'
                   }}>
                     {companyResponse.remarks}
@@ -2123,64 +2242,77 @@ export default function HelpSupport() {
                   {/* Resolution Proof / Attachment */}
                   {companyResponse.attachment && (
                     <div style={{
-                      paddingTop: '6px',
+                      paddingTop: '8px',
                       borderTop: `1px dashed ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '4px'
+                      gap: '6px'
                     }}>
                       <span style={{
-                        fontSize: '10px',
+                        fontSize: '10.5px',
                         fontWeight: 700,
                         color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
                         textTransform: 'uppercase',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '5px'
                       }}>
-                        <PaperclipIcon size={11} color="currentColor" />
+                        <PaperclipIcon size={12} color="currentColor" />
                         <span>Resolution Proof / Screenshot</span>
                       </span>
-                      <a
-                        href={companyResponse.attachment}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Click to view full attachment"
-                        style={{ display: 'inline-block' }}
-                      >
-                        <img
-                          src={companyResponse.attachment}
-                          alt="Resolution Proof"
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <a
+                          href={companyResponse.attachment}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Click to view full attachment"
                           style={{
-                            maxWidth: '180px',
-                            maxHeight: '90px',
-                            borderRadius: '6px',
-                            border: `1px solid ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
-                            objectFit: 'cover',
-                            background: '#ffffff',
-                            cursor: 'pointer'
+                            display: 'inline-block',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            border: '1px solid #cbd5e1'
                           }}
-                        />
-                      </a>
+                        >
+                          <img
+                            src={companyResponse.attachment}
+                            alt="Resolution Proof"
+                            style={{
+                              maxWidth: '200px',
+                              maxHeight: '100px',
+                              display: 'block',
+                              objectFit: 'cover'
+                            }}
+                          />
+                        </a>
+                        <a
+                          href={companyResponse.attachment}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-outline"
+                          style={{ fontSize: '12px', padding: '6px 12px' }}
+                        >
+                          <EyeIcon size={13} color="currentColor" />
+                          <span>View Proof</span>
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
               ) : (
-                /* When in branch filter or branch-scoped ticket and no company response yet */
                 isBranchFilterActive && (
                   <div style={{
                     background: '#f8fafc',
                     border: '1px dashed #cbd5e1',
-                    borderRadius: '10px',
-                    padding: '10px 14px',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px'
+                    gap: '12px'
                   }}>
                     <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '6px',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
                       background: '#f1f5f9',
                       display: 'flex',
                       alignItems: 'center',
@@ -2188,13 +2320,13 @@ export default function HelpSupport() {
                       color: '#64748b',
                       flexShrink: 0
                     }}>
-                      <BuildingIcon size={14} color="#64748b" />
+                      <BuildingIcon size={16} color="#64748b" />
                     </div>
                     <div>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#475569' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>
                         Awaiting Company Response
                       </div>
-                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                      <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
                         Company Admin has not submitted resolution details or remarks for this branch ticket yet.
                       </div>
                     </div>
@@ -2202,20 +2334,17 @@ export default function HelpSupport() {
                 )
               )}
 
-              {/* Updates & Replies History (Read Only) */}
+              {/* Updates & Replies History */}
               {replyUpdates.length > 0 && (
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      <MessageSquareIcon size={13} color="#FF7A00" />
-                      <span>Updates & Replies ({replyUpdates.length})</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '12.5px', fontWeight: 800, color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <MessageSquareIcon size={14} color="#FF7A00" />
+                      <span>Discussion & Updates ({replyUpdates.length})</span>
                     </span>
-                    {isLoadingTicketDetails && (
-                      <span style={{ fontSize: '10.5px', color: '#FF7A00', fontWeight: 600 }}>Refreshing...</span>
-                    )}
                   </div>
 
-                  <div className="ticket-conversation-box" style={{ maxHeight: '130px', overflowY: 'auto' }}>
+                  <div className="ticket-conversation-box" style={{ maxHeight: '220px', overflowY: 'auto', padding: '12px' }}>
                     {replyUpdates.map(msg => {
                       const isMyRole = 
                         (!isMainBranchLogin && msg.isCreator) || 
@@ -2226,10 +2355,11 @@ export default function HelpSupport() {
                         <div
                           key={msg.id}
                           className={`ticket-chat-message ${isMyRole ? 'sender-me' : 'sender-other'}`}
+                          style={{ maxWidth: '90%' }}
                         >
                           <div className="ticket-chat-header">
                             <span className="ticket-chat-sender" style={{ color: isMyRole ? '#ea580c' : '#0369a1' }}>
-                              {isMyRole ? <UserIcon size={11} color="#ea580c" /> : <ShieldIcon size={11} color="#0369a1" />}
+                              {isMyRole ? <UserIcon size={12} color="#ea580c" /> : <ShieldIcon size={12} color="#0369a1" />}
                               <span>{msg.sender} ({msg.role})</span>
                             </span>
                             <span className="ticket-chat-time">
@@ -2237,14 +2367,14 @@ export default function HelpSupport() {
                             </span>
                           </div>
 
-                          <div className="ticket-chat-body" style={{ fontSize: '12px' }}>
+                          <div className="ticket-chat-body" style={{ fontSize: '12.5px' }}>
                             {msg.message}
                           </div>
 
                           {msg.attachment && (
-                            <div className="ticket-chat-attachment">
+                            <div className="ticket-chat-attachment" style={{ marginTop: '6px' }}>
                               <a href={msg.attachment} target="_blank" rel="noopener noreferrer" title="Click to view full image">
-                                <img src={msg.attachment} alt="Attachment" style={{ maxHeight: '80px' }} />
+                                <img src={msg.attachment} alt="Attachment" style={{ maxHeight: '100px', borderRadius: '6px' }} />
                               </a>
                             </div>
                           )}
@@ -2256,15 +2386,15 @@ export default function HelpSupport() {
                 </div>
               )}
 
-              {/* Modal Footer (Read Only) */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '8px', marginTop: '2px' }}>
+              {/* Modal Footer */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid #e2e8f0', paddingTop: '14px', marginTop: '4px' }}>
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className="btn btn-primary"
                   onClick={() => setViewTicket(null)}
-                  style={{ padding: '6px 16px', fontSize: '12.5px' }}
+                  style={{ padding: '8px 22px', fontSize: '13px' }}
                 >
-                  Close Window
+                  Close
                 </button>
               </div>
             </div>

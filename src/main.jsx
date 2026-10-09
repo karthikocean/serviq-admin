@@ -5,9 +5,11 @@ import App from './App'
 import { AppProvider } from './config/AppContext'
 import './index.css'
 
-// Guarantee no local storage retention
+// Clean up legacy auth keys if present
 try {
-  localStorage.clear();
+  localStorage.removeItem('token');
+  localStorage.removeItem('userToken');
+  localStorage.removeItem('currentUser');
 } catch (e) {}
 
 ReactDOM.createRoot(document.getElementById('root')).render(

@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
-export default function BranchStockReceipt({ receipts, distributions, transfers, items, onSaveReceipt, onDeleteReceipt }) {
+export default function BranchStockReceipt({ receipts, distributions, transfers, items, onSaveReceipt, onDeleteReceipt, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'add') : true;
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'view') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'delete') : true;
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
 
@@ -359,6 +362,7 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
           />
         </div>
 
+        {canAdd && (
         <button
           type="button"
           onClick={() => { setViewState('ADD'); setRecErrors({}); }}
@@ -380,6 +384,7 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
           <PlusIcon size={15} />
           <span>Add Stock Receipt</span>
         </button>
+        )}
       </div>
 
       <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '4px' }}>
@@ -434,6 +439,7 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
                     </td>
                     <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => { setSelectedReceipt(r); setViewState('VIEW_DETAIL'); }}
@@ -447,6 +453,8 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
                         >
                           <EyeIcon size={15} color="#2563eb" />
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => onDeleteReceipt(r)}
@@ -460,6 +468,7 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
                         >
                           <TrashIcon size={15} color="#dc2626" />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

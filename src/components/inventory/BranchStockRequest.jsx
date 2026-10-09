@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
-export default function BranchStockRequest({ requests: initialRequests, items: initialItems, onSaveStockRequest }) {
+export default function BranchStockRequest({ requests: initialRequests, items: initialItems, onSaveStockRequest, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'add') : true;
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'view') : true;
   const [requestsList, setRequestsList] = useState(initialRequests || []);
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [loading, setLoading] = useState(false);
@@ -385,6 +387,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
           </div>
         </div>
 
+        {canAdd && (
         <button
           type="button"
           onClick={() => { setViewState('ADD'); setReqErrors({}); }}
@@ -406,6 +409,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
           <PlusIcon size={15} />
           <span>New Stock Request</span>
         </button>
+        )}
       </div>
 
       <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '4px' }}>
@@ -453,6 +457,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    {canView && (
                     <button
                       type="button"
                       onClick={() => { setSelectedReq(r); setViewState('VIEW_DETAIL'); }}
@@ -466,6 +471,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
                     >
                       <EyeIcon size={15} color="#2563eb" />
                     </button>
+                    )}
                   </td>
                 </tr>
               ))

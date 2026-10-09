@@ -35,7 +35,9 @@ const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function BranchMyStock({ items: initialItems, onUpdateBranchStock }) {
+export default function BranchMyStock({ items: initialItems, onUpdateBranchStock, hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_my_stock', 'view') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_my_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -211,6 +213,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
                 />
               </div>
 
+              {canEdit && (
               <button
                 type="submit"
                 style={{
@@ -227,6 +230,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
               >
                 Save Branch Stock
               </button>
+              )}
             </form>
           </div>
         </div>
@@ -391,6 +395,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
                         </span>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => { setViewingItem(item); setAdjustQty(currentStockVal.toString()); }}
@@ -404,6 +409,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
                         >
                           <EyeIcon size={15} color="#2563eb" />
                         </button>
+                        )}
                       </td>
                     </tr>
                   );

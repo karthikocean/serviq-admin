@@ -117,24 +117,30 @@
 }
 
 .help-support-container .data-table thead tr {
-  background-color: #f8fafc !important;
-  border-bottom: 2px solid #e2e8f0 !important;
+  background-color: #f95e10 !important;
+  color: #ffffff !important;
+  border-bottom: none !important;
   height: 48px;
 }
 
 .help-support-container .data-table thead th {
-  background-color: #f8fafc !important;
-  background: #f8fafc !important;
-  color: #475569 !important;
-  font-weight: 700 !important;
+  background-color: #f95e10 !important;
+  background: #f95e10 !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
   font-size: 11px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
-  border-bottom: 2px solid #e2e8f0 !important;
+  border-bottom: none !important;
   box-shadow: none !important;
   padding: 14px 14px !important;
   white-space: nowrap !important;
 }
+
+.help-support-container .data-table tbody tr:hover {
+  background-color: #fff7ed !important;
+}
+
 
 /* Filter Bar & Toolbar */
 .ticket-secondary-filters {

@@ -154,7 +154,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const role = roleStr || 'Admin';
   const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
 
-  if (!isRestaurantOwner) {
+  if (!isRestaurantOwner && !hasPermission('branch-management', 'view')) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
@@ -164,7 +164,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           Access Denied
         </h2>
         <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-          Branch Management is strictly restricted to the <strong>Restaurant Owner</strong> only. Other roles do not have permission to view or manage branches.
+          You do not have permission to view or manage branches.
         </p>
         <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
           Return to Dashboard
@@ -1154,9 +1154,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
       }
-      const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
-      const isMock = token && token.startsWith("mock_");
-
       let res;
       try {
         res = await BranchApi.createBranch(payload);
@@ -1164,10 +1161,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         console.warn("BranchApi create error:", createErr);
       }
 
-      if (res?.status || res?.isFallback || isMock) {
-        const createdData = res?.response?.data || res?.response || {};
+      if (res?.status || res?.data?.success || res?.success) {
+        const createdData = res?.response?.data || res?.response || res?.data || {};
         const branchDoc = createdData?.branch || createdData?.data?.branch || createdData;
-        const createdId = branchDoc?._id || branchDoc?.id || createdData?._id || createdData?.id || `BR-${Date.now()}`;
+        const createdId = branchDoc?._id || branchDoc?.id || createdData?._id || createdData?.id;
 
         // Create manager user if manager details were provided
         if (managerVal && emailStr) {
@@ -1234,23 +1231,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             mobileNumber: 'This mobile number is already registered to another branch/user.'
           }));
         } else {
-          // If server failed unexpectedly or had network disconnect, fallback to local branch creation smoothly
-          const fallbackId = `BR-${Date.now()}`;
-          const newBranchObj = {
-            ...payload,
-            id: fallbackId,
-            _id: fallbackId,
-            branchManager: managerVal,
-            managerName: managerVal
-          };
-          setApiBranches(prev => [...(prev || []), newBranchObj]);
-          const restIdForState = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || 'mirchi';
-          if (addBranch) {
-            addBranch(restIdForState, newBranchObj);
-          }
-          ShowNotifications.showAlertNotification("Branch Created Successfully!", true);
-          await fetchBranches();
-          setActiveView('list');
+          ShowNotifications.showAlertNotification(res?.message || res?.response?.message || "Failed to create branch. Please try again.", false);
         }
       }
     }
@@ -1392,8 +1373,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     });
 
     const mappedOrders = branchOrdersRaw.map((ord, idx) => {
-      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : `#ORD-${String(idx + 1).padStart(3, '0')}`);
-      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || 'Table 1';
+      const ordId = ord.orderId || ord.id || (ord._id ? `#${String(ord._id).slice(-5).toUpperCase()}` : '-');
+      const tableStr = ord.tableNumber || ord.tableNo || (typeof ord.table === 'object' ? (ord.table?.tableNumber || ord.table?.name) : ord.table) || (typeof ord.tableId === 'object' ? (ord.tableId?.tableNumber || ord.tableId?.name) : ord.tableId) || '-';
       const itemsStr = Array.isArray(ord.items)
         ? ord.items.map(i => `${i.quantity || i.qty || 1}x ${i.name || i.menuItem?.name || 'Item'}`).join(', ')
         : (typeof ord.items === 'string' ? ord.items : 'Items Ordered');
@@ -3348,6 +3329,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {/* 9. Actions */}
                   <td style={{ padding: '14px 12px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                      {hasPermission('branch-management', 'view') && (
                       <button
                         type="button"
                         title="View Details"
@@ -3358,6 +3340,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       >
                         <EyeIcon size={14} />
                       </button>
+                      )}
 
                       {hasPermission('branch-management', 'edit') && (
                         <button

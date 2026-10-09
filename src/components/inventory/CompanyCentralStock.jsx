@@ -35,7 +35,9 @@ const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function CompanyCentralStock({ items: initialItems, onUpdateStock }) {
+export default function CompanyCentralStock({ items: initialItems, onUpdateStock, hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'view') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -234,22 +236,24 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                 </select>
               </div>
 
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  background: '#16a34a',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Update Current Stock
-              </button>
+              {canEdit && (
+                <button
+                  type="submit"
+                  style={{
+                    width: '100%',
+                    background: '#16a34a',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Update Current Stock
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -530,6 +534,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                         </span>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => {
@@ -546,6 +551,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                         >
                           <EyeIcon size={15} />
                         </button>
+                        )}
                       </td>
                     </tr>
                   );

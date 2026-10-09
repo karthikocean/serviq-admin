@@ -231,15 +231,17 @@ export default function MenuPanel({
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              onClick={handleOpenCategoriesModal}
-            >
-              <SettingsIcon size={14} />
-              Manage Categories
-            </button>
+            {(hasPermission('menu', 'edit') || hasPermission('menu', 'add')) && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, border: '1.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={handleOpenCategoriesModal}
+              >
+                <SettingsIcon size={14} />
+                Manage Categories
+              </button>
+            )}
             {hasPermission('menu', 'add') && (
               <button
                 type="button"
@@ -433,6 +435,7 @@ export default function MenuPanel({
                   {/* 9. Actions */}
                   <td className="sticky-col-action" style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      {hasPermission('menu', 'view') && (
                       <button
                         type="button"
                         title="View Details"
@@ -443,6 +446,7 @@ export default function MenuPanel({
                       >
                         <EyeIcon size={16} />
                       </button>
+                      )}
                       {hasPermission('menu', 'edit') && (
                         <button
                           type="button"

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
-export default function BranchTransactions({ transactions }) {
+export default function BranchTransactions({ transactions, hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_transactions', 'view') : true;
   const [searchTerm, setSearchTerm] = useState('');
   const [txnTypeFilter, setTxnTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -203,6 +204,7 @@ export default function BranchTransactions({ transactions }) {
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    {canView && (
                     <button
                       type="button"
                       onClick={() => setSelectedTxn(t)}
@@ -216,6 +218,7 @@ export default function BranchTransactions({ transactions }) {
                     >
                       <EyeIcon size={15} color="#2563eb" />
                     </button>
+                    )}
                   </td>
                 </tr>
               ))

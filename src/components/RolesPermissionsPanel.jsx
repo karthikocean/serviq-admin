@@ -131,6 +131,7 @@ export default function RolesPermissionsPanel() {
   const [roleNameError, setRoleNameError] = useState('');
   const [permissionsState, setPermissionsState] = useState({});
   const [roleToDelete, setRoleToDelete] = useState(null);
+  const [roleToDeactivate, setRoleToDeactivate] = useState(null);
   const [apiRoles, setApiRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -147,8 +148,24 @@ export default function RolesPermissionsPanel() {
     fetchRoles();
   }, []);
 
-  const handleToggleRoleStatus = async (role) => {
-    const newActiveState = !role.isActive;
+  const handleToggleRoleStatus = (role) => {
+    if (isOwnerRole(role.roleName)) {
+      ShowNotifications.showAlertNotification("Owner and Super Admin roles cannot be deactivated.", false);
+      return;
+    }
+    const isCurrentlyActive = role.isActive !== false && String(role.status || '').toLowerCase() !== 'inactive';
+    // If role is currently active, show confirmation prompt before deactivating
+    if (isCurrentlyActive) {
+      setRoleToDeactivate(role);
+      return;
+    }
+    // If role is currently inactive, directly activate it
+    executeToggleRoleStatus(role, true);
+  };
+
+  const executeToggleRoleStatus = async (role, targetActiveState) => {
+    const isCurrentlyActive = role.isActive !== false && String(role.status || '').toLowerCase() !== 'inactive';
+    const newActiveState = targetActiveState !== undefined ? targetActiveState : !isCurrentlyActive;
     const newStatusText = newActiveState ? 'Active' : 'Inactive';
 
     setApiRoles(prev => prev.map(r => r._id === role._id ? { ...r, isActive: newActiveState, status: newStatusText } : r));
@@ -157,6 +174,7 @@ export default function RolesPermissionsPanel() {
       const res = await RoleApi.updateRole(role._id, {
         roleName: role.roleName,
         permissions: role.permissions,
+        adminAccess: role.adminAccess !== undefined ? role.adminAccess : role.isAdminAccess,
         isActive: newActiveState,
         status: newStatusText
       });
@@ -164,9 +182,14 @@ export default function RolesPermissionsPanel() {
       if (res?.status) {
         fetchRoles();
       }
+      if (typeof fetchProfile === 'function') {
+        fetchProfile();
+      }
     } catch (e) {
       console.warn("Role status toggle error:", e);
       ShowNotifications.showAlertNotification(`Role "${role.roleName}" status updated to ${newStatusText}.`, true);
+    } finally {
+      setRoleToDeactivate(null);
     }
   };
 
@@ -234,6 +257,12 @@ export default function RolesPermissionsPanel() {
       basePermissions['reports'][act] = anyReport;
     });
 
+    if (basePermissions['staff_management']) {
+      basePermissions['user_accounts'] = { ...basePermissions['staff_management'] };
+      basePermissions['staff'] = { ...basePermissions['staff_management'] };
+      basePermissions['users'] = { ...basePermissions['staff_management'] };
+    }
+
     setPermissionsState(basePermissions);
     setViewState('edit');
   };
@@ -279,6 +308,11 @@ export default function RolesPermissionsPanel() {
       finalPermissions['reports'][act] = anyReport;
     });
     finalPermissions['billing_payments'] = { ...finalPermissions['billing'] };
+    if (finalPermissions['staff_management']) {
+      finalPermissions['user_accounts'] = { ...finalPermissions['staff_management'] };
+      finalPermissions['staff'] = { ...finalPermissions['staff_management'] };
+      finalPermissions['users'] = { ...finalPermissions['staff_management'] };
+    }
 
     const rolePayload = {
       roleName: trimmedRoleName,
@@ -312,6 +346,15 @@ export default function RolesPermissionsPanel() {
         ...(next[moduleId] || {}),
         [action]: currentVal
       };
+
+      // If staff_management or user_accounts is toggled, sync all user/staff modules
+      if (moduleId === 'staff_management' || moduleId === 'user_accounts' || moduleId === 'staff' || moduleId === 'users') {
+        const staffObj = { ...(next['staff_management'] || {}), [action]: currentVal };
+        next['staff_management'] = staffObj;
+        next['user_accounts'] = staffObj;
+        next['staff'] = staffObj;
+        next['users'] = staffObj;
+      }
 
       // If an inventory submodule is toggled, keep inventory parent permission updated
       const allInvChildren = [...COMPANY_INVENTORY_MODULES, ...BRANCH_INVENTORY_MODULES];
@@ -645,6 +688,8 @@ export default function RolesPermissionsPanel() {
                           ? Boolean(role.isAdminAccess)
                           : !['waiter', 'kitchen staff', 'kitchen', 'chef', 'cook', 'server', 'steward'].includes((role.roleName || '').trim().toLowerCase())));
 
+                const isRoleActive = role.isActive !== false && String(role.status || '').toLowerCase() !== 'inactive';
+
                 return (
                   <tr
                     key={role._id}
@@ -697,11 +742,11 @@ export default function RolesPermissionsPanel() {
                         borderRadius: '14px',
                         fontSize: '11.5px',
                         fontWeight: '700',
-                        backgroundColor: role.isActive ? '#e6f4ea' : '#fee2e2',
-                        border: role.isActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
-                        color: role.isActive ? '#16a34a' : '#dc2626'
+                        backgroundColor: isRoleActive ? '#e6f4ea' : '#fee2e2',
+                        border: isRoleActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+                        color: isRoleActive ? '#16a34a' : '#dc2626'
                       }}>
-                        {role.isActive ? 'Active' : 'Inactive'}
+                        {isRoleActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
 
@@ -709,13 +754,14 @@ export default function RolesPermissionsPanel() {
                     <td style={{ padding: '8px 14px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
                         {/* Status Toggle Icon */}
+                        {hasPermission('roles-permissions', 'edit') && (
                         <button
                           type="button"
                           onClick={() => handleToggleRoleStatus(role)}
                           style={{
-                            background: role.isActive ? '#ecfdf5' : '#fef2f2',
-                            border: `1px solid ${role.isActive ? '#a7f3d0' : '#fecaca'}`,
-                            color: role.isActive ? '#059669' : '#dc2626',
+                            background: isRoleActive ? '#ecfdf5' : '#fef2f2',
+                            border: `1px solid ${isRoleActive ? '#a7f3d0' : '#fecaca'}`,
+                            color: isRoleActive ? '#059669' : '#dc2626',
                             cursor: 'pointer',
                             padding: '5px',
                             borderRadius: '5px',
@@ -725,15 +771,16 @@ export default function RolesPermissionsPanel() {
                             transition: 'all 0.15s'
                           }}
                           onMouseEnter={e => {
-                            e.currentTarget.style.background = role.isActive ? '#d1fae5' : '#fee2e2';
+                            e.currentTarget.style.background = isRoleActive ? '#d1fae5' : '#fee2e2';
                           }}
                           onMouseLeave={e => {
-                            e.currentTarget.style.background = role.isActive ? '#ecfdf5' : '#fef2f2';
+                            e.currentTarget.style.background = isRoleActive ? '#ecfdf5' : '#fef2f2';
                           }}
-                          title={role.isActive ? "Deactivate Role (Click to set Inactive)" : "Activate Role (Click to set Active)"}
+                          title={isRoleActive ? "Deactivate Role (Click to set Inactive)" : "Activate Role (Click to set Active)"}
                         >
-                          <PowerIcon size={14} color={role.isActive ? '#059669' : '#dc2626'} />
+                          <PowerIcon size={14} color={isRoleActive ? '#059669' : '#dc2626'} />
                         </button>
+                        )}
                         {hasPermission('roles-permissions', 'edit') && (
                           <button
                             type="button"
@@ -815,6 +862,55 @@ export default function RolesPermissionsPanel() {
               style={{ background: '#dc2626', border: 'none', color: '#ffffff', fontWeight: 700, borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}
             >
               Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm Role Deactivation Modal */}
+      <Modal
+        isOpen={!!roleToDeactivate}
+        onClose={() => setRoleToDeactivate(null)}
+        title="Confirm Role Deactivation"
+        maxWidth="480px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: 1.55 }}>
+            This role is currently assigned to users. Deactivating this role will prevent those users from accessing the system. Do you want to continue?
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => setRoleToDeactivate(null)}
+              style={{
+                background: '#ffffff',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
+                fontWeight: 700,
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => executeToggleRoleStatus(roleToDeactivate, false)}
+              style={{
+                background: '#dc2626',
+                border: 'none',
+                color: '#ffffff',
+                fontWeight: 700,
+                borderRadius: '8px',
+                padding: '8px 18px',
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)'
+              }}
+            >
+              Continue
             </button>
           </div>
         </div>

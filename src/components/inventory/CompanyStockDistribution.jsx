@@ -28,7 +28,9 @@ const PackageIcon = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function CompanyStockDistribution({ distributions: initialDistributions = [] }) {
+export default function CompanyStockDistribution({ distributions: initialDistributions = [], hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? (hasPermission('inventory_distribution', 'view') || hasPermission('inventory_stock_distribution', 'view')) : true;
+  const canEdit = typeof hasPermission === 'function' ? (hasPermission('inventory_distribution', 'edit') || hasPermission('inventory_stock_distribution', 'edit')) : true;
   const [requestsList, setRequestsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -437,7 +439,7 @@ export default function CompanyStockDistribution({ distributions: initialDistrib
                       </td>
                       <td style={{ padding: '14px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                          {isDistributable && (
+                          {isDistributable && canEdit && (
                             <button
                               type="button"
                               onClick={() => handleOpenDistributeModal(d)}
@@ -459,6 +461,7 @@ export default function CompanyStockDistribution({ distributions: initialDistrib
                             </button>
                           )}
 
+                          {canView && (
                           <button
                             type="button"
                             onClick={() => setSelectedDistItem(d)}
@@ -472,6 +475,7 @@ export default function CompanyStockDistribution({ distributions: initialDistrib
                           >
                             <EyeIcon size={15} color="#2563eb" />
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>

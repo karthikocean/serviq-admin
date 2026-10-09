@@ -147,8 +147,8 @@ export default function UserListPanel() {
 
     try {
       const serverRoles = await RoleApi.getRoles();
-      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data) 
-        ? serverRoles.response.data 
+      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data)
+        ? serverRoles.response.data
         : (Array.isArray(serverRoles?.response) ? serverRoles.response : []);
       const sMatch = sRoles.find(r => {
         const id = r._id || r.id;
@@ -177,10 +177,10 @@ export default function UserListPanel() {
   const fetchData = async () => {
     setIsLoading(true);
     const [usersRes, branchesRes, rolesRes] = await Promise.all([
-      UserApi.getUsers({ 
-        page, 
-        limit, 
-        search: searchQuery, 
+      UserApi.getUsers({
+        page,
+        limit,
+        search: searchQuery,
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
         statusFilter: statusFilter === 'All' ? '' : statusFilter,
         branchId: activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined
@@ -322,12 +322,15 @@ export default function UserListPanel() {
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
 
+    const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
       roleId: resolvedRoleId,
       branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
+      isActive: isStatusActive,
+      active: isStatusActive,
       phoneNumber: userForm.phone.trim(),
     };
 
@@ -344,6 +347,26 @@ export default function UserListPanel() {
     }
 
     if (res.status) {
+      const savedUserId = editingUserId || res.response?.data?._id || res.response?.data?.id;
+      try {
+        const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+        const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+        const uId = String(savedUserId || '');
+        const uEmail = (userForm.email || '').toLowerCase().trim();
+
+        if (!isStatusActive) {
+          if (uId && !storedInactiveIds.includes(uId)) storedInactiveIds.push(uId);
+          if (uEmail && !storedInactiveEmails.includes(uEmail)) storedInactiveEmails.push(uEmail);
+        } else {
+          const idIdx = storedInactiveIds.indexOf(uId);
+          if (idIdx > -1) storedInactiveIds.splice(idIdx, 1);
+          const emailIdx = storedInactiveEmails.indexOf(uEmail);
+          if (emailIdx > -1) storedInactiveEmails.splice(emailIdx, 1);
+        }
+        localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
+        localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
+      } catch (e) {}
+
       setViewState('list');
       fetchData();
     }
@@ -616,8 +639,7 @@ export default function UserListPanel() {
                   Phone Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="text"
-                  maxLength={10}
+                  type="text"                  maxLength={10}
                   inputMode="numeric"
                   value={userForm.phone}
                   onChange={e => {
@@ -733,15 +755,15 @@ export default function UserListPanel() {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
-              <button 
-                type="button" 
-                onClick={() => setViewState('list')} 
+              <button
+                type="button"
+                onClick={() => setViewState('list')}
                 style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 700, borderRadius: '8px', padding: '10px 24px', fontSize: '14px', cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 style={{ background: '#ff5a1f', border: 'none', padding: '10px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, color: '#ffffff', cursor: 'pointer' }}
               >
                 {editingUserId ? 'Save Changes' : 'Create User'}
@@ -777,17 +799,19 @@ export default function UserListPanel() {
             </h2>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={handleExportCSV}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600 }}
-            >
-              <DownloadIcon size={14} /> Export CSV
-            </button>
+            {hasPermission('users', 'view') && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={handleExportCSV}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 16px', fontWeight: 600 }}
+              >
+                <DownloadIcon size={14} /> Export CSV
+              </button>
+            )}
             {hasPermission('users', 'add') && (
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={openAddUser}
                 style={{
                   background: '#000000',
@@ -910,7 +934,7 @@ export default function UserListPanel() {
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
                 const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
                 const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
-                
+
                 let roleBadgeStyle = {
                   display: 'inline-block',
                   padding: '4px 12px',
@@ -991,27 +1015,29 @@ export default function UserListPanel() {
                     </td>
                     <td style={{ padding: '16px 20px', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setViewingUser(user)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#0284c7',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
-                          onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-                          title="View User Details"
-                        >
-                          <EyeIcon size={16} />
-                        </button>
+                        {hasPermission('users', 'view') && (
+                          <button
+                            type="button"
+                            onClick={() => setViewingUser(user)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#0284c7',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.backgroundColor = '#e0f2fe'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#0284c7'; e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            title="View User Details"
+                          >
+                            <EyeIcon size={16} />
+                          </button>
+                        )}
                         {hasPermission('users', 'edit') && (
                           <button
                             type="button"
@@ -1035,36 +1061,38 @@ export default function UserListPanel() {
                             <PencilIcon size={16} />
                           </button>
                         )}
-                        <button
-                        title="Change Password"
-                        onClick={() => {
-                          setChangePasswordUserId(user);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setPasswordError('');
-                          setConfirmPasswordError('');
-                          setShowNewPassword(false);
-                          setShowConfirmPassword(false);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '6px',
-                          color: '#eab308',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: '6px',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                      >
-                        <KeyIcon />
-                      </button>
-                      {hasPermission('users', 'delete') && (
-                        <button
+                        {hasPermission('users', 'edit') && (
+                          <button
+                            title="Change Password"
+                            onClick={() => {
+                              setChangePasswordUserId(user);
+                              setNewPassword('');
+                              setConfirmPassword('');
+                              setPasswordError('');
+                              setConfirmPasswordError('');
+                              setShowNewPassword(false);
+                              setShowConfirmPassword(false);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              color: '#eab308',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              borderRadius: '6px',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#fef9c3'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                          >
+                            <KeyIcon />
+                          </button>
+                        )}
+                        {hasPermission('users', 'delete') && (
+                          <button
                             type="button"
                             onClick={() => setUserToDelete(user)}
                             title="Delete User"
@@ -1079,7 +1107,7 @@ export default function UserListPanel() {
                           >
                             <TrashIcon size={14} />
                           </button>
-                      )}
+                        )}
                       </div>
                     </td>
                   </tr>

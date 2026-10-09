@@ -48,8 +48,10 @@ export default function BillingHistoryPanel({
   limit,
   totalItems,
   summary,
-  activeRestaurant = {}
+  activeRestaurant = {},
+  hasPermission
 }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('billing_history', 'view') : true;
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
@@ -143,22 +145,22 @@ export default function BillingHistoryPanel({
     }
 
     const exportData = itemsToExport.map((item, idx) => {
-      const id = item.id || item.invoiceId || item.invoiceNumber || item._id || `INV-${String(idx + 1).padStart(4, '0')}`;
-      const orderId = item.orderId || item.orderRefId || item.orderNumber || 'N/A';
-      const table = item.table || item.tableNumber || item.tableNo || '01';
+      const id = item.invoiceNo || item.invoiceNumber || item.id || item.invoiceId || item._id || '-';
+      const orderId = item.orderId || item.orderRefId || item.orderNumber || '-';
+      const table = item.table || item.tableNumber || item.tableNo || '-';
       const rawDate = item.rawDate || item.createdAt || item.date || new Date();
       const dateStr = item.date || formatDateDMY(rawDate);
-      const timeStr = item.time || (rawDate ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:00 PM');
+      const timeStr = item.time || (rawDate ? new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-');
       const amount = Number(item.amount ?? item.totalAmount ?? item.total ?? 0);
-      const methodStr = String(item.paymentMethod || item.paymentMode || 'UPI');
-      const paymentMethod = methodStr.toLowerCase() === 'upi' ? 'UPI' : (methodStr.charAt(0).toUpperCase() + methodStr.slice(1));
-      const staff = item.staff || item.staffName || item.waiterName || 'Admin';
+      const methodStr = String(item.paymentMethod || item.paymentMode || '-');
+      const paymentMethod = methodStr.toLowerCase() === 'upi' ? 'UPI' : (methodStr !== '-' ? (methodStr.charAt(0).toUpperCase() + methodStr.slice(1)) : '-');
+      const staff = item.staff || item.staffName || item.waiterName || item.cashier || item.billedBy || '-';
       const status = item.status || item.paymentStatus || 'Paid';
 
       return {
         'Invoice ID': id,
         'Order ID': orderId,
-        'Table': `Table ${String(table).replace('Table ', '').trim()}`,
+        'Table': table !== '-' ? (String(table).startsWith('Table') ? table : `Table ${table}`) : '-',
         'Date': dateStr,
         'Time': timeStr,
         'Subtotal': Number(item.subtotal ?? amount),
@@ -168,7 +170,7 @@ export default function BillingHistoryPanel({
         'Payment Method': paymentMethod,
         'Payment Status': status,
         'Staff': staff,
-        'Branch ID': item.branchId || selectedBranchId || 'main'
+        'Branch ID': item.branchId || selectedBranchId || '-'
       };
     });
 
@@ -452,8 +454,8 @@ export default function BillingHistoryPanel({
                 ) : (
                   <>
                     {billingHistory.map((invoice, idx) => {
-                      const billNo = invoice.billNo || invoice.billNumber || `B-${1040 + page * limit + idx + 1}`;
-                      const invNo = invoice.id || invoice.invoiceNo || `INV/25-26/${1000 + idx + 1}`;
+                      const billNo = invoice.billNo || invoice.billNumber || '-';
+                      const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.id || '-';
                       const totAmt = Number(invoice.amount ?? invoice.totalAmount ?? 0);
                       const paidAmt = Number(invoice.paidAmount ?? totAmt);
 
@@ -469,7 +471,7 @@ export default function BillingHistoryPanel({
                             {invNo}
                           </td>
                           <td style={{ textAlign: 'left', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
-                            {invoice.orderId || `ORD-${100 + idx}`}
+                            {invoice.orderId || invoice.order_id || '-'}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '6px', backgroundColor: '#eff6ff', color: '#2563eb', fontSize: '11px', fontWeight: 700 }}>
@@ -477,14 +479,14 @@ export default function BillingHistoryPanel({
                             </span>
                           </td>
                           <td style={{ textAlign: 'center', fontSize: '13px', fontWeight: 700, color: '#ea580c' }}>
-                            {invoice.table ? (invoice.table.includes('Table') ? invoice.table : `Table ${invoice.table}`) : 'Table 12'}
+                            {invoice.table ? (String(invoice.table).includes('Table') ? invoice.table : `Table ${invoice.table}`) : (invoice.tableNo ? `Table ${invoice.tableNo}` : '-')}
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', lineHeight: 1.2 }}>
                               {invoice.date || formatDateDMY(invoice.createdAt || new Date())}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', lineHeight: 1.2 }}>
-                              {invoice.time || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '08:45 PM')}
+                              {invoice.time || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (invoice.billDateTime ? new Date(invoice.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'))}
                             </div>
                           </td>
                           <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
@@ -495,7 +497,7 @@ export default function BillingHistoryPanel({
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '6px', backgroundColor: '#f1f5f9', color: '#334155', fontSize: '11px', fontWeight: 700 }}>
-                              {invoice.paymentMethod || 'UPI'}
+                              {invoice.paymentMethod || '-'}
                             </span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -513,11 +515,12 @@ export default function BillingHistoryPanel({
                             </span>
                           </td>
                           <td style={{ textAlign: 'left', fontSize: '13px', color: '#0f172a', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {invoice.staff || 'Admin'}
+                            {invoice.staff || invoice.cashier || invoice.billedBy || '-'}
                           </td>
                           <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
                             <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                               {/* 1. View Invoice (Icon without text) */}
+                              {canView && (
                               <button
                                 type="button"
                                 onClick={() => setSelectedInvoice(invoice)}
@@ -539,6 +542,7 @@ export default function BillingHistoryPanel({
                               >
                                 <EyeIcon size={15} color="var(--primary)" />
                               </button>
+                              )}
 
                               {/* 2. Print Invoice (Icon without text) */}
                               <button

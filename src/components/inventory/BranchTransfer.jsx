@@ -31,7 +31,10 @@ const InboxIcon = ({ size = 15, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function BranchTransfer({ transfers: initialTransfers, items: initialItems, onSaveTransfer }) {
+export default function BranchTransfer({ transfers: initialTransfers, items: initialItems, onSaveTransfer, hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'add') : true;
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'view') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'edit') : true;
   const [transfersList, setTransfersList] = useState(initialTransfers || []);
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -231,6 +234,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
           </div>
 
           {/* Action Buttons: 165. View, 166. Approve, 167. Reject, 168. Dispatch, 169. Receive */}
+          {canEdit && (
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #cbd5e1' }}>
             {selectedTransfer.status === 'Pending' && (
               <>
@@ -269,6 +273,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
               </button>
             )}
           </div>
+          )}
         </div>
       </div>
     );
@@ -474,6 +479,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
           />
         </div>
 
+        {canAdd && (
         <button
           type="button"
           onClick={() => { setViewState('ADD'); setTrfErrors({}); }}
@@ -495,6 +501,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
           <PlusIcon size={15} />
           <span>New Transfer Request</span>
         </button>
+        )}
       </div>
 
       <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '4px' }}>
@@ -545,6 +552,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      {canView && (
                       <button
                         type="button"
                         onClick={() => { setSelectedTransfer(t); setViewState('VIEW_DETAIL'); }}
@@ -558,8 +566,9 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                       >
                         <EyeIcon size={15} color="#2563eb" />
                       </button>
+                      )}
 
-                      {t.status === 'Pending' && (
+                      {canEdit && t.status === 'Pending' && (
                         <>
                           <button
                             type="button"
@@ -590,7 +599,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                         </>
                       )}
 
-                      {t.status === 'Approved' && (
+                      {canEdit && t.status === 'Approved' && (
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(t.id, 'Dispatched')}
@@ -606,7 +615,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                         </button>
                       )}
 
-                      {t.status === 'Dispatched' && (
+                      {canEdit && t.status === 'Dispatched' && (
                         <button
                           type="button"
                           onClick={() => handleUpdateStatus(t.id, 'Received')}

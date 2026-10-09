@@ -329,31 +329,7 @@ export default function BranchSearchDropdown() {
               </div>
             )}
 
-            {/* 2. SPICE ROUTE RESTAURANT (MAIN BRANCH / HQ OPTION) */}
-            {(!searchQuery || 
-              'all branches'.includes(searchQuery.toLowerCase()) || 
-              'main branch'.includes(searchQuery.toLowerCase()) || 
-              mainBranchName.toLowerCase().includes(searchQuery.toLowerCase())
-            ) && (
-              <div
-                className={`branch-search-option ${selectedBranchId === null || selectedBranchId === 'ALL' ? 'selected' : ''}`}
-                onClick={() => handleSelectBranch(null)}
-              >
-                <div className="branch-option-left-icon">
-                  <StoreFrontIcon size={16} color={selectedBranchId === null || selectedBranchId === 'ALL' ? 'var(--primary)' : '#64748b'} />
-                </div>
-                <div className="branch-option-info">
-                  <div className="branch-option-title-row">
-                    <span className="branch-option-name">{mainBranchName}</span>
-                    <span className="branch-badge-total">{branches.length} TOTAL</span>
-                  </div>
-                  <span className="branch-option-subtext">Aggregated data across all active outlets</span>
-                </div>
-                <div className="branch-option-action">
-                  {(selectedBranchId === null || selectedBranchId === 'ALL') && <CheckIcon size={15} color="var(--primary)" />}
-                </div>
-              </div>
-            )}
+
 
             {/* INDIVIDUAL BRANCHES */}
             {filteredBranches.length > 0 ? (

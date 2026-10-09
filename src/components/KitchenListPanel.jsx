@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import { useAppState } from '../config/AppContext';
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -87,6 +88,7 @@ export default function KitchenListPanel({
   openAddStaffModal,
   openEditStaffModal
 }) {
+  const { hasPermission } = useAppState();
   const [staffToDelete, setStaffToDelete] = React.useState(null);
   const [page, setPage] = React.useState(0);
   const limit = 10;
@@ -122,9 +124,11 @@ export default function KitchenListPanel({
     <section className="panel-view active">
       <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 className="panel-inner-title">Kitchen list</h2>
+        {hasPermission('staff', 'add') && (
         <button style={{ background: '#ff5a1f', color: '#ffffff', border: 'none', fontWeight: 700, borderRadius: '8px', padding: '10px 20px', fontSize: '13px', cursor: 'pointer' }} onClick={() => openAddStaffModal('Kitchen')}>
           Add Kitchen Staff
         </button>
+        )}
       </div>
 
       <div style={{ backgroundColor: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
@@ -168,8 +172,9 @@ export default function KitchenListPanel({
                     <td style={{ padding: '16px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
                       <button
                         type="button"
+                        disabled={!hasPermission('staff', 'edit')}
                         onClick={() => handleToggleDuty(s)}
-                        title="Click to toggle duty status"
+                        title={hasPermission('staff', 'edit') ? "Click to toggle duty status" : "Permission required to change duty status"}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -183,7 +188,8 @@ export default function KitchenListPanel({
                           color: isActive ? '#166534' : '#64748b',
                           background: isActive ? '#dcfce7' : '#f1f5f9',
                           border: isActive ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
-                          cursor: 'pointer',
+                          cursor: hasPermission('staff', 'edit') ? 'pointer' : 'not-allowed',
+                          opacity: hasPermission('staff', 'edit') ? 1 : 0.7,
                           width: '105px',
                           minWidth: '105px',
                           whiteSpace: 'nowrap',
@@ -205,7 +211,9 @@ export default function KitchenListPanel({
                       </button>
                     </td>
                     <td style={{ padding: '16px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {hasPermission('staff', 'edit') && (
                       <IconBtn icon={<PencilIcon size={16} />} tooltip="Edit Kitchen Staff" style={iconBtnEditStyle} onClick={() => openEditStaffModal(s)} />
+                      )}
                     </td>
                   </tr>
                 );

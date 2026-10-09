@@ -403,9 +403,6 @@ export default function TableFormPage() {
       payload.tableNumber = idStr;
     }
 
-    const token = sessionStorage.getItem("userToken") || sessionStorage.getItem("token");
-    const isMock = token && token.startsWith("mock_");
-
     if (isEdit) {
       const res = await TableApi.updateTable(tableId, payload);
       if (res?.status) {
@@ -423,7 +420,7 @@ export default function TableFormPage() {
       if (res?.status) {
         if (addDiningTable && activeRestaurant?.id) {
           addDiningTable(activeRestaurant.id, {
-            id: res?.response?.data?.tableNumber || idStr || `T-${Date.now().toString().slice(-3)}`,
+            id: res?.response?.data?.tableNumber || idStr || res?.response?.data?._id,
             seats: payload.seatingCapacity,
             status: payload.status,
             section: payload.section,

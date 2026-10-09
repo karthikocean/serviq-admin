@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
-import { isTokenExpired } from './index.js';
+import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
 import QrCodeApi from '../api/QrCode.js';
@@ -175,17 +175,20 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   // Restaurant Owner & Super Admin always have 100% full access to all modules and all actions
   if (isRestaurantOwner) return true;
 
-  // Branch management & Plans management are strictly for Restaurant Owners only
-  if (
-    moduleName === 'branch-management' || 
-    moduleName === 'branch_management' || 
-    moduleName === 'branches' || 
-    moduleName === 'plans-management' || 
-    moduleName === 'plans_subscription' || 
-    moduleName === 'plans_management' || 
-    moduleName === 'plans'
-  ) {
-    return isRestaurantOwner;
+  // Block permission immediately if staff user account itself is inactive or deleted
+  const isUserAccountInactive = 
+    currentUser?.isActive === false || 
+    currentUser?.isDelete === true || 
+    currentUser?.isDeleted === true || 
+    ['inactive', 'disabled', 'suspended', 'deactivated', 'blocked'].includes(String(currentUser?.status || '').toLowerCase().trim());
+
+  if (isUserAccountInactive) {
+    return false;
+  }
+
+  // Block permission immediately if assigned role is inactive
+  if (roleObj && (roleObj.isActive === false || String(roleObj.status || '').toLowerCase() === 'inactive')) {
+    return false;
   }
 
   // Check explicit admin access flag
@@ -213,17 +216,33 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       case 'orders': case 'order':
         return ['orders', 'order'];
       case 'staff': case 'staff_management': case 'waiter': case 'kitchen':
-        return ['staff_management', 'staff', 'waiter', 'kitchen'];
+        return ['staff_management', 'staff', 'waiter', 'kitchen', 'user_accounts', 'users'];
       case 'users': case 'user_accounts':
-        return ['user_accounts', 'users'];
+        return ['user_accounts', 'users', 'staff_management', 'staff'];
+      case 'billing': case 'billing_payments':
+        return ['billing', 'billing_payments', 'billing_current', 'billing_history'];
       case 'billing_current':
-        return ['billing_current'];
+        return ['billing_current', 'billing'];
       case 'billing_history':
-        return ['billing_history'];
+        return ['billing_history', 'billing'];
+      case 'reports': case 'reports_analytics':
+        return ['reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders', 'reports_inventory', 'reports_staff', 'reports_tax'];
+      case 'reports_sales':
+        return ['reports_sales', 'reports_analytics', 'reports'];
+      case 'reports_items':
+        return ['reports_items', 'reports_analytics', 'reports'];
+      case 'reports_orders':
+        return ['reports_orders', 'reports_analytics', 'reports'];
+      case 'reports_inventory':
+        return ['reports_inventory', 'reports_analytics', 'reports'];
+      case 'reports_staff':
+        return ['reports_staff', 'reports_analytics', 'reports'];
+      case 'reports_tax':
+        return ['reports_tax', 'reports_analytics', 'reports'];
       case 'help-support': case 'help_support': case 'help':
         return ['help_support', 'help-support', 'help'];
       case 'settings':
-        return ['settings'];
+        return ['settings', 'restaurant_settings'];
       case 'inventory_distribution': case 'inventory_stock_distribution':
         return ['inventory_distribution', 'inventory_stock_distribution'];
       default:
@@ -280,8 +299,11 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
     for (const k of keysToCheck) {
       if (permissions[k] !== undefined && permissions[k] !== null) {
         const modPerm = permissions[k];
-        if (typeof modPerm === 'object' && modPerm[action] !== undefined) {
+        if (typeof modPerm === 'object') {
           return Boolean(modPerm[action]);
+        }
+        if (typeof modPerm === 'boolean') {
+          return action === 'view' ? modPerm : false;
         }
       }
     }
@@ -297,8 +319,14 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   if (userRoleConfig?.permissions) {
     const keysToCheck = getNormalizedKeys(moduleName);
     for (const k of keysToCheck) {
-      if (userRoleConfig.permissions[k] && userRoleConfig.permissions[k][action] !== undefined) {
-        return Boolean(userRoleConfig.permissions[k][action]);
+      if (userRoleConfig.permissions[k] !== undefined && userRoleConfig.permissions[k] !== null) {
+        const modPerm = userRoleConfig.permissions[k];
+        if (typeof modPerm === 'object') {
+          return Boolean(modPerm[action]);
+        }
+        if (typeof modPerm === 'boolean') {
+          return action === 'view' ? modPerm : false;
+        }
       }
     }
   }
@@ -306,27 +334,9 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   return false;
 };
 
-export const DEFAULT_INVENTORY_CATEGORIES = [
-  { id: "INV-CAT-001", name: "Dairy", description: "Milk, butter, paneer, cream, yogurt", status: "AVAILABLE" },
-  { id: "INV-CAT-002", name: "Grains & Rice", description: "Basmati rice, wheat flour, grains, pulses", status: "AVAILABLE" },
-  { id: "INV-CAT-003", name: "Oils & Ghee", description: "Cooking oil, mustard oil, pure desi ghee", status: "AVAILABLE" },
-  { id: "INV-CAT-004", name: "Meat & Poultry", description: "Fresh chicken, mutton, seafood", status: "AVAILABLE" },
-  { id: "INV-CAT-005", name: "Vegetables", description: "Farm fresh onions, tomatoes, potatoes, herbs", status: "AVAILABLE" },
-  { id: "INV-CAT-006", name: "Spices & Condiments", description: "Cardamom, clove, whole & ground spices", status: "AVAILABLE" },
-  { id: "INV-CAT-007", name: "Beverages", description: "Tea leaves, coffee beans, syrups, juices", status: "AVAILABLE" },
-  { id: "INV-CAT-008", name: "Packaging", description: "Containers, paper bags, foil rolls, cups", status: "AVAILABLE" }
-];
+export const DEFAULT_INVENTORY_CATEGORIES = [];
 
-export const KNOWN_RESTAURANT_MAP = {
-  'test@gmail.com': 'Spice Route Restaurat',
-  'alice@gmail.com': 'AZ',
-  'test2@gmail.com': 'test',
-  'saravana@gmail.com': 'Saravana Bhavan',
-  'gayusmr5@gmail.com': 'Copper kitchen',
-  'mirchi@gmail.com': 'Mirchi',
-  'eee@gmail.com': 'eee',
-  'tttt@gmail.com': 'test'
-};
+export const KNOWN_RESTAURANT_MAP = {};
 
 export const extractRestaurantFromToken = (token) => {
   if (!token || typeof token !== 'string') return null;
@@ -352,8 +362,10 @@ export const extractRestaurantFromToken = (token) => {
 const loadSavedUser = () => {
   
   try {
-    // Clear any legacy localStorage items
-    localStorage.clear();
+    // Clean up legacy auth keys only, do NOT clear entire localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('currentUser');
   } catch (e) {}
 
   try {
@@ -1212,13 +1224,7 @@ export const AppProvider = ({ children }) => {
           isRestActiveFlag === false || 
           ['inactive', 'disabled', 'suspended', 'blocked', 'deactivated'].includes(restStatus);
 
-        const isInactive = 
-          profileData.isActive === false || 
-          profileData.isDelete === true || 
-          ['inactive', 'disabled', 'suspended'].includes(String(profileData.status || '').toLowerCase()) ||
-          isRestaurantInactive;
-
-        if (isInactive) {
+        if (isRestaurantInactive) {
           const inactiveMsg = "Your restaurant account has been deactivated. Please contact the Super Admin.";
           sessionStorage.setItem("deactivatedToast", inactiveMsg);
           sessionStorage.removeItem("userToken");
@@ -1239,30 +1245,110 @@ export const AppProvider = ({ children }) => {
         let profRoleObj = (typeof profileData.role === 'object' && profileData.role !== null) ? profileData.role :
                             (typeof profileData.roleId === 'object' && profileData.roleId !== null) ? profileData.roleId : null;
 
+        const initialRoleName = profRoleObj?.roleName || profRoleObj?.name || (typeof profileData.role === 'string' ? profileData.role : '') || '';
+        const initialRoleUpper = initialRoleName.toUpperCase().trim();
+
+        const isOwnerAccount = 
+          profUserType === 'RESTAURANT_OWNER' || 
+          profUserType === 'OWNER' || 
+          profUserType === 'SUPER ADMIN' || 
+          profUserType === 'SUPER_ADMIN' || 
+          initialRoleUpper === 'RESTAURANT_OWNER' || 
+          initialRoleUpper === 'OWNER' || 
+          initialRoleUpper === 'SUPER ADMIN';
+
+        // Check if staff user account itself is inactive or deleted
+        const pUserId = String(profileData._id || profileData.id || '').trim();
+        const pEmail = String(profileData.email || '').toLowerCase().trim();
+
+        let isLocallyDeactivated = false;
+        try {
+          const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+          const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+          const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
+          if (
+            (pUserId && storedInactiveIds.map(String).includes(pUserId)) ||
+            (pEmail && storedInactiveEmails.includes(pEmail)) ||
+            storedStatusesMap[pUserId]?.status === 'Inactive' ||
+            storedStatusesMap[pEmail]?.status === 'Inactive' ||
+            storedStatusesMap[pUserId]?.isActive === false ||
+            storedStatusesMap[pEmail]?.isActive === false
+          ) {
+            isLocallyDeactivated = true;
+          }
+        } catch (e) {}
+
+        const profStatusStr = String(profileData.status || '').toLowerCase().trim();
+        const resolveActiveBool = (val) => {
+          if (val === undefined || val === null) return undefined;
+          if (typeof val === 'boolean') return val;
+          if (typeof val === 'number') return val === 1;
+          if (typeof val === 'string') return val.trim().toLowerCase() === 'true' || val.trim() === '1';
+          return undefined;
+        };
+        const profIsActiveFlag = resolveActiveBool(profileData.isActive) ?? resolveActiveBool(profileData.active) ?? (profStatusStr ? !['inactive', 'disabled', 'suspended', 'deactivated', 'blocked'].includes(profStatusStr) : true);
+
+        const isStaffUserInactive = 
+          !isOwnerAccount && 
+          (isLocallyDeactivated ||
+           profIsActiveFlag === false || 
+           profileData.isDelete === true || 
+           profileData.isDeleted === true || 
+           ['inactive', 'disabled', 'suspended', 'deactivated', 'blocked'].includes(profStatusStr));
+
+        if (isStaffUserInactive) {
+          const inactiveStaffMsg = "Your account is currently inactive. Please contact your administrator.";
+          sessionStorage.setItem("deactivatedToast", inactiveStaffMsg);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try {
+            const savedInactiveIds = localStorage.getItem('serviq_inactive_staff_ids');
+            const savedInactiveEmails = localStorage.getItem('serviq_inactive_staff_emails');
+            const savedStatusesMap = localStorage.getItem('serviq_staff_statuses');
+            sessionStorage.clear();
+            localStorage.clear();
+            if (savedInactiveIds) localStorage.setItem('serviq_inactive_staff_ids', savedInactiveIds);
+            if (savedInactiveEmails) localStorage.setItem('serviq_inactive_staff_emails', savedInactiveEmails);
+            if (savedStatusesMap) localStorage.setItem('serviq_staff_statuses', savedStatusesMap);
+          } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(inactiveStaffMsg, false);
+          }
+          return null;
+        }
+
         const roleIdToLookup = (typeof profileData.roleId === 'string' && profileData.roleId) || 
                                (typeof profileData.role === 'string' && profileData.role) ||
                                profRoleObj?._id || profRoleObj?.id;
 
-        if ((!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) && roleIdToLookup) {
+        if (roleIdToLookup && !isOwnerAccount) {
           try {
+            let liveRole = null;
             if (/^[0-9a-fA-F]{24}$/.test(roleIdToLookup)) {
               const rRes = await RoleApi.getRoleById(roleIdToLookup);
               if (rRes && rRes.status && rRes.response) {
-                profRoleObj = rRes.response?.data || rRes.response;
+                liveRole = rRes.response?.data || rRes.response;
               }
             }
-            if (!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) {
+            if (!liveRole) {
               const listRes = await RoleApi.getRoles({ limit: 100 });
               if (listRes && listRes.status && listRes.response) {
                 const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                 if (Array.isArray(rolesList)) {
-                  profRoleObj = rolesList.find(r => 
+                  liveRole = rolesList.find(r => 
                     String(r._id) === String(roleIdToLookup) || 
                     String(r.id) === String(roleIdToLookup) ||
                     String(r.roleName || '').trim().toLowerCase() === String(roleIdToLookup).trim().toLowerCase()
                   );
                 }
               }
+            }
+            if (liveRole) {
+              profRoleObj = { ...(profRoleObj || {}), ...liveRole };
             }
           } catch (err) {
             console.warn("Could not fetch role in fetchProfile:", err);
@@ -1273,14 +1359,32 @@ export const AppProvider = ({ children }) => {
         const profRoleUpper = profRoleStr.toUpperCase().trim();
         const profRoleLower = profRoleStr.toLowerCase().trim();
 
-        const isOwnerAccount = 
-          profUserType === 'RESTAURANT_OWNER' || 
-          profUserType === 'OWNER' || 
-          profUserType === 'SUPER ADMIN' || 
-          profUserType === 'SUPER_ADMIN' || 
+        const isEffectiveOwner = isOwnerAccount || 
           profRoleUpper === 'RESTAURANT_OWNER' || 
           profRoleUpper === 'OWNER' || 
           profRoleUpper === 'SUPER ADMIN';
+
+        // Revoke access if user's assigned role is inactive on authorization check
+        const isRoleInactive = 
+          !isEffectiveOwner && 
+          profRoleObj && 
+          (profRoleObj.isActive === false || String(profRoleObj.status || '').toLowerCase() === 'inactive');
+
+        if (isRoleInactive) {
+          const inactiveRoleMsg = "Your assigned role is currently inactive. Please contact your administrator.";
+          sessionStorage.setItem("deactivatedToast", inactiveRoleMsg);
+          sessionStorage.removeItem("userToken");
+          sessionStorage.removeItem("token");
+          sessionStorage.removeItem("currentUser");
+          try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+          setCurrentUser(null);
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          } else {
+            ShowNotifications.showAlertNotification(inactiveRoleMsg, false);
+          }
+          return null;
+        }
 
         const resolveAdminAccessFlag = (obj) => {
           if (!obj || typeof obj !== 'object') return undefined;
@@ -1398,6 +1502,9 @@ export const AppProvider = ({ children }) => {
           try {
             sessionStorage.setItem("currentUser", JSON.stringify(updatedUser));
           } catch (e) {}
+          if (prevUser && JSON.stringify(prevUser) === JSON.stringify(updatedUser)) {
+            return prevUser;
+          }
           return updatedUser;
         });
         return res.data;
@@ -1519,24 +1626,180 @@ export const AppProvider = ({ children }) => {
                                  (typeof apiUser.role === 'string' && apiUser.role) ? apiUser.role : 
                                  roleObj?._id || roleObj?.id;
 
-          // Temporarily set token in sessionStorage so RoleApi calls are authenticated
+          // Temporarily set token in sessionStorage so RoleApi and AuthApi calls are authenticated
           sessionStorage.setItem("userToken", token);
           sessionStorage.setItem("token", token);
 
-          if ((!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) && roleIdentifier) {
+          const initialRoleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
+          const initialRoleUpper = initialRoleStr.toUpperCase().trim();
+
+          const isRestaurantOwner = 
+            userTypeUpper === 'RESTAURANT_OWNER' || 
+            userTypeUpper === 'OWNER' || 
+            userTypeUpper === 'SUPER ADMIN' || 
+            userTypeUpper === 'SUPER_ADMIN' || 
+            initialRoleUpper === 'SUPER ADMIN' || 
+            initialRoleUpper === 'RESTAURANT_OWNER' || 
+            initialRoleUpper === 'OWNER';
+
+          // Verify if staff user account itself is inactive or deleted
+          let liveProfile = null;
+          try {
+            const pRes = await AuthApi.getProfile();
+            if (pRes && pRes.status && pRes.data) {
+              liveProfile = pRes.data;
+            }
+          } catch (pErr) {
+            console.warn("Could not fetch live profile in login check:", pErr);
+          }
+
+          const candidateUserId = String(apiUser._id || apiUser.id || liveProfile?._id || liveProfile?.id || '').trim();
+          const candidateEmail = cleanEmail;
+
+          // 1. Check local storage list of deactivated staff
+          let isLocallyDeactivated = false;
+          try {
+            const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+            const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+            const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
+            if (
+              (candidateUserId && storedInactiveIds.map(String).includes(candidateUserId)) ||
+              (candidateEmail && storedInactiveEmails.includes(candidateEmail)) ||
+              storedStatusesMap[candidateUserId]?.status === 'Inactive' ||
+              storedStatusesMap[candidateEmail]?.status === 'Inactive' ||
+              storedStatusesMap[candidateUserId]?.isActive === false ||
+              storedStatusesMap[candidateEmail]?.isActive === false
+            ) {
+              isLocallyDeactivated = true;
+            }
+          } catch (e) {}
+
+          // 2. Fetch live user record from UserApi to get authoritative status from backend users collection
+          let backendStaffRecord = null;
+          try {
+            const uListRes = await UserApi.getUsers({ search: cleanEmail, limit: 20 });
+            if (uListRes && uListRes.status && uListRes.response) {
+              const uList = uListRes.response?.data?.users || uListRes.response?.data || uListRes.response?.users || (Array.isArray(uListRes.response) ? uListRes.response : []);
+              if (Array.isArray(uList)) {
+                backendStaffRecord = uList.find(u => 
+                  (cleanEmail && u.email && u.email.toLowerCase().trim() === cleanEmail) ||
+                  (candidateUserId && String(u._id || u.id) === candidateUserId)
+                );
+              }
+            }
+          } catch (uErr) {
+            console.warn("Could not check user status in users list:", uErr);
+          }
+
+          if (!backendStaffRecord && candidateUserId) {
             try {
+              const directUserRes = await apiClient.get(`/users/${candidateUserId}`);
+              if (directUserRes && (directUserRes.status === 200 || directUserRes.status === 201)) {
+                backendStaffRecord = directUserRes.data?.data || directUserRes.data?.user || directUserRes.data;
+              }
+            } catch (e) {}
+          }
+
+          if (!backendStaffRecord && !isRestaurantOwner) {
+            try {
+              const fullListRes = await UserApi.getUsers({ limit: 100 });
+              if (fullListRes && fullListRes.status && fullListRes.response) {
+                const fullList = fullListRes.response?.data?.users || fullListRes.response?.data || fullListRes.response?.users || (Array.isArray(fullListRes.response) ? fullListRes.response : []);
+                if (Array.isArray(fullList)) {
+                  backendStaffRecord = fullList.find(u => 
+                    (cleanEmail && u.email && u.email.toLowerCase().trim() === cleanEmail) ||
+                    (candidateUserId && String(u._id || u.id) === candidateUserId)
+                  );
+                }
+              }
+            } catch (e) {}
+          }
+
+          const evaluatedUser = {
+            ...(apiUser || {}),
+            ...(liveProfile || {}),
+            ...(backendStaffRecord || {})
+          };
+
+          const userStatusStr = String(
+            backendStaffRecord?.status ||
+            liveProfile?.status ||
+            apiUser?.status ||
+            evaluatedUser?.status ||
+            ''
+          ).toLowerCase().trim();
+
+          const resolveActiveBool = (val) => {
+            if (val === undefined || val === null) return undefined;
+            if (typeof val === 'boolean') return val;
+            if (typeof val === 'number') return val === 1;
+            if (typeof val === 'string') return val.trim().toLowerCase() === 'true' || val.trim() === '1';
+            return undefined;
+          };
+
+          const userIsActiveFlag = 
+            resolveActiveBool(backendStaffRecord?.isActive) ??
+            resolveActiveBool(backendStaffRecord?.active) ??
+            resolveActiveBool(liveProfile?.isActive) ??
+            resolveActiveBool(liveProfile?.active) ??
+            resolveActiveBool(apiUser?.isActive) ??
+            resolveActiveBool(apiUser?.active) ??
+            resolveActiveBool(evaluatedUser?.isActive) ??
+            resolveActiveBool(evaluatedUser?.active) ??
+            (userStatusStr ? !['inactive', 'disabled', 'suspended', 'deactivated', 'blocked'].includes(userStatusStr) : true);
+
+          const userIsDeletedFlag = 
+            backendStaffRecord?.isDelete || backendStaffRecord?.isDeleted ||
+            liveProfile?.isDelete || liveProfile?.isDeleted ||
+            apiUser?.isDelete || apiUser?.isDeleted;
+
+          const isStaffAccountInactive = 
+            !isRestaurantOwner && 
+            (isLocallyDeactivated ||
+             userIsActiveFlag === false || 
+             userIsDeletedFlag === true || 
+             ['inactive', 'disabled', 'suspended', 'deactivated', 'blocked'].includes(userStatusStr));
+
+          if (isStaffAccountInactive) {
+            try {
+              const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+              const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+              const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
+              if (candidateUserId && !storedInactiveIds.includes(candidateUserId)) storedInactiveIds.push(candidateUserId);
+              if (candidateEmail && !storedInactiveEmails.includes(candidateEmail)) storedInactiveEmails.push(candidateEmail);
+              if (candidateUserId) storedStatusesMap[candidateUserId] = { status: 'Inactive', isActive: false, active: false };
+              if (candidateEmail) storedStatusesMap[candidateEmail] = { status: 'Inactive', isActive: false, active: false };
+              localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
+              localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
+              localStorage.setItem('serviq_staff_statuses', JSON.stringify(storedStatusesMap));
+            } catch (e) {}
+
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Your account is currently inactive. Please contact your administrator."
+            };
+          }
+
+          if (roleIdentifier && !isRestaurantOwner) {
+            try {
+              let liveRole = null;
               if (/^[0-9a-fA-F]{24}$/.test(roleIdentifier)) {
                 const rRes = await RoleApi.getRoleById(roleIdentifier);
                 if (rRes && rRes.status && rRes.response) {
-                  roleObj = rRes.response?.data || rRes.response;
+                  liveRole = rRes.response?.data || rRes.response;
                 }
               }
-              if (!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) {
+              if (!liveRole) {
                 const listRes = await RoleApi.getRoles({ limit: 100 });
                 if (listRes && listRes.status && listRes.response) {
                   const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                   if (Array.isArray(rolesList)) {
-                    roleObj = rolesList.find(r => 
+                    liveRole = rolesList.find(r => 
                       String(r._id) === String(roleIdentifier) || 
                       String(r.id) === String(roleIdentifier) ||
                       String(r.roleName || '').trim().toLowerCase() === String(roleIdentifier).trim().toLowerCase()
@@ -1544,23 +1807,41 @@ export const AppProvider = ({ children }) => {
                   }
                 }
               }
+              if (liveRole) {
+                roleObj = { ...(roleObj || {}), ...liveRole };
+              }
             } catch (err) {
               console.warn("Could not fetch role in login:", err);
             }
           }
 
-          const roleStr = roleObj?.roleName || roleObj?.name || (typeof apiUser.role === 'string' ? apiUser.role : '') || (typeof apiUser.roleId === 'string' && !/^[0-9a-fA-F]{24}$/.test(apiUser.roleId) ? apiUser.roleId : '') || (apiUser.roleName || '');
+          const roleStr = roleObj?.roleName || roleObj?.name || initialRoleStr;
           const roleUpper = roleStr.toUpperCase().trim();
           const roleLower = roleStr.toLowerCase().trim();
 
-          const isRestaurantOwner = 
-            userTypeUpper === 'RESTAURANT_OWNER' || 
-            userTypeUpper === 'OWNER' || 
-            userTypeUpper === 'SUPER ADMIN' || 
-            userTypeUpper === 'SUPER_ADMIN' ||
+          const isEffectiveOwner = isRestaurantOwner ||
             roleUpper === 'SUPER ADMIN' ||
             roleUpper === 'RESTAURANT_OWNER' ||
             roleUpper === 'OWNER';
+
+          // Block login if role is inactive
+          const isRoleInactive = 
+            !isEffectiveOwner && 
+            roleObj && 
+            (roleObj.isActive === false || String(roleObj.status || '').toLowerCase() === 'inactive');
+
+          if (isRoleInactive) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Your assigned role is currently inactive. Please contact your administrator."
+            };
+          }
 
           const isManagerOrBranchAdmin = 
             userTypeUpper === 'BRANCH_ADMIN' ||

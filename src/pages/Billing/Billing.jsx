@@ -3,6 +3,7 @@ import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import BillingPanel from '../../components/BillingPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
+import { formatDateDMY } from '../../helper/DateHelper.js';
 import './Billing.css';
 
 export default function Billing() {
@@ -18,120 +19,131 @@ export default function Billing() {
   const [billingData, setBillingData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Filters State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedTable, setSelectedTable] = useState('All');
+  const [customerFilter, setCustomerFilter] = useState('');
+  const [selectedStaff, setSelectedStaff] = useState('All');
+  const [page, setPage] = useState(0);
+  const limit = 10;
+  const [totalItems, setTotalItems] = useState(0);
+
   useEffect(() => {
     if (activeRestaurant) {
       fetchBillingData();
     }
-  }, [activeRestaurant, selectedBranchId]);
+  }, [
+    activeRestaurant,
+    selectedBranchId,
+    searchTerm,
+    selectedTable,
+    customerFilter,
+    selectedStaff,
+    page
+  ]);
+
+  // Reset page when filter inputs change
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, selectedTable, customerFilter, selectedStaff, selectedBranchId]);
 
   const fetchBillingData = async () => {
     setIsLoading(true);
 
     const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
-    const params = isSingleBranch ? { branchId: selectedBranchId } : { branchId: 'ALL' };
+    const params = {
+      branchId: isSingleBranch ? selectedBranchId : undefined,
+      search: searchTerm ? searchTerm.trim() : undefined,
+      tableId: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
+      customer: customerFilter ? customerFilter.trim() : undefined,
+      cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
+      orderType: 'DINE_IN',
+      page: page + 1, // 1-based index
+      limit: 10,
+      sortBy: 'createdAt',
+      sortOrder: 'desc'
+    };
 
     let fetchedTables = [];
     try {
-      const tablesRes = await BillingApi.getActiveTables(params);
+      const tablesRes = await BillingApi.getCurrentBilling(params);
       if (tablesRes && tablesRes.status && tablesRes.response) {
-        const d = tablesRes.response.data || tablesRes.response.tables || tablesRes.response;
+        const resp = tablesRes.response;
+        const d = resp.data || resp.tables || resp;
+        const total = Number(resp.totalItems ?? resp.total ?? resp.count ?? (Array.isArray(d) ? d.length : 0));
+        setTotalItems(total);
         if (Array.isArray(d)) {
-          fetchedTables = d.map(t => {
-            const mongoOrderId = t.order_id || t.order?._id || t.rawOrderId || (Array.isArray(t.orders) ? t.orders[0]?._id : null) || (Array.isArray(t.orderIds) ? t.orderIds[0] : null) || t._id;
-            const allOrderIds = Array.isArray(t.orderIds)
-              ? t.orderIds.map(id => typeof id === 'object' ? (id?._id || id?.id) : id).filter(Boolean)
-              : (Array.isArray(t.orders) ? t.orders.map(o => o?._id || o?.id).filter(Boolean) : [mongoOrderId].filter(Boolean));
+          fetchedTables = d.map((t, idx) => {
+            const rawBillDate = t.billDateTime || t.createdAt || t.date || new Date().toISOString();
+            const dateObj = new Date(rawBillDate);
+            const dateStr = !isNaN(dateObj.getTime()) ? formatDateDMY(dateObj) : formatDateDMY(new Date());
+            const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+            const rawItems = (Array.isArray(t.items) ? t.items : []).map(it => {
+              const q = Number(it.qty ?? it.quantity ?? 1) || 1;
+              const r = Number(it.rate ?? it.price ?? 0) || 0;
+              const a = Number(it.amount ?? (q * r)) || 0;
+              return {
+                name: it.name || it.itemName || 'Item',
+                qty: q,
+                rate: r,
+                amount: a,
+                notes: it.notes || ''
+              };
+            });
+
+            const subtotal = Number(t.subtotal ?? rawItems.reduce((acc, curr) => acc + curr.amount, 0));
+            const tax = Number(t.tax ?? 0);
+            const discount = Number(t.discount ?? 0);
+            const billAmount = Number(t.billAmount ?? t.total ?? (subtotal + tax - discount));
+            const paidAmount = Number(t.paidAmount ?? 0);
+            const balanceAmount = Math.max(0, billAmount - paidAmount);
+            const isPaid = (t.status || '').toLowerCase() === 'paid' || balanceAmount <= 0;
+
+            const cleanTable = String(t.table || t.tableNumber || '').trim();
+            const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
+
+            const mongoOrderId = t.orderId || t.order_id || t.id || t._id;
+            const mongoTableId = t.tableId || t.id || t._id;
 
             return {
               ...t,
+              id: t.id || t._id,
               _id: t._id || t.id,
-              tableId: t.tableId || t._id || t.id,
+              sNo: t.sNo ?? (idx + 1),
+              billNo: t.billNo || t.billNumber || '-',
+              orderId: t.orderId || t.order_id || '-',
+              orderType: t.orderType || 'Dine-In',
+              tableId: mongoTableId,
+              table: tableDisplay,
+              billDateTime: rawBillDate,
+              date: dateStr,
+              time: timeStr,
+              createdAt: rawBillDate,
+              subtotal,
+              tax,
+              discount,
+              billAmount,
+              total: billAmount,
+              amount: billAmount,
+              paidAmount,
+              balanceAmount,
+              status: isPaid ? 'Paid' : (t.status || 'Unpaid'),
+              paymentStatus: isPaid ? 'Paid' : (t.status || 'Unpaid'),
+              cashier: t.cashier || t.staff || '-',
+              staff: t.cashier || t.staff || '-',
+              items: rawItems,
               order_id: mongoOrderId,
               rawOrderId: mongoOrderId,
-              orderIds: allOrderIds,
+              orderIds: [mongoTableId, mongoOrderId].filter(Boolean),
               customerName: t.customerName || t.customer?.name || t.clientName || '',
-              customerPhone: t.customerPhone || t.customerMobile || t.phone || '',
-              staff: t.staff || t.waiterName || t.waiter || t.server || t.billedBy || 'Admin',
-              orderType: t.orderType || t.type || 'Dine-In'
+              customerPhone: t.customerPhone || t.customerMobile || t.phone || ''
             };
           });
         }
       }
     } catch (e) {
-      console.warn("Failed to fetch active tables from BillingApi:", e);
-    }
-
-    // Fallback: If no tables returned by API, derive active tables from OrderApi / activeRestaurant.orders
-    if (fetchedTables.length === 0) {
-      try {
-        const orderParams = isSingleBranch ? { branchId: selectedBranchId, limit: 10 } : { limit: 10 };
-        const orderRes = await OrderApi.getOrders(orderParams).catch(() => null);
-        const oResp = orderRes?.status ? (orderRes.response?.data || orderRes.response?.orders || orderRes.response) : null;
-        const orderList = Array.isArray(oResp) ? oResp : (Array.isArray(activeRestaurant?.orders) ? activeRestaurant.orders : []);
-
-        const activeOrders = orderList.filter(o => {
-          const st = String(o.status || '').toLowerCase();
-          return st !== 'cancelled' && st !== 'rejected';
-        });
-
-        const tableMap = new Map();
-        activeOrders.forEach(o => {
-          const tNum = o.tableNumber || o.tableNo || (typeof o.table === 'object' ? (o.table?.tableNumber || o.table?.name) : o.table) || (typeof o.tableId === 'object' ? (o.tableId?.tableNumber || o.tableId?.name) : o.tableId) || '1';
-          const tKey = String(tNum).replace(/^Table\s*/i, '').trim();
-          const tId = (typeof o.tableId === 'object' ? (o.tableId?._id || o.tableId?.id) : o.tableId) || tKey;
-          
-          const items = (Array.isArray(o.items) ? o.items : []).map(it => {
-            const q = Number(it.quantity ?? it.qty ?? 1) || 1;
-            const r = Number(it.price ?? it.rate ?? it.itemPrice ?? 0) || 0;
-            return {
-              name: it.name || it.menuItem?.name || it.dishName || 'Item',
-              qty: q,
-              rate: r,
-              amount: q * r,
-              notes: it.notes || ''
-            };
-          });
-
-          const tot = Number(o.total || o.totalAmount || o.grandTotal || items.reduce((s, i) => s + i.amount, 0)) || 0;
-          const isPaid = String(o.billingStatus || o.paymentStatus || o.status || '').toLowerCase() === 'paid' || String(o.status || '').toLowerCase() === 'completed';
-
-          if (!tableMap.has(tKey)) {
-            tableMap.set(tKey, {
-              tableId: tId,
-              table: `Table ${tKey}`,
-              orders: 1,
-              orderId: o.orderId || o.id || (o._id ? `#${String(o._id).slice(-5).toUpperCase()}` : '#ORD-001'),
-              rawOrderId: o._id || o.id,
-              total: tot,
-              status: isPaid ? 'Paid' : 'Unpaid',
-              items: items,
-              orderIds: [o._id || o.id].filter(Boolean),
-              customerName: o.customerName || o.customer?.name || o.clientName || '',
-              customerPhone: o.customerPhone || o.customerMobile || o.phone || '',
-              staff: o.waiterName || o.waiter?.name || o.staff || o.server || o.cashier || 'Admin',
-              orderType: o.orderType || o.type || 'Dine-In',
-              createdAt: o.createdAt || o.date
-            });
-          } else {
-            const existing = tableMap.get(tKey);
-            existing.orders += 1;
-            existing.total += tot;
-            existing.items.push(...items);
-            if (o._id || o.id) existing.orderIds.push(o._id || o.id);
-            if (!isPaid) existing.status = 'Unpaid';
-            if (!existing.customerName && (o.customerName || o.customer?.name)) {
-              existing.customerName = o.customerName || o.customer?.name;
-              existing.customerPhone = o.customerPhone || o.customerMobile || o.phone || '';
-            }
-          }
-        });
-
-        if (tableMap.size > 0) {
-          fetchedTables = Array.from(tableMap.values());
-        }
-      } catch (err) {
-        console.warn("Could not derive active tables from orders:", err);
-      }
+      console.warn("Failed to fetch current billing from BillingApi:", e);
     }
 
     setBillingData(fetchedTables);
@@ -163,6 +175,19 @@ export default function Billing() {
       hasPermission={hasPermission}
       fetchBillingData={fetchBillingData}
       isLoading={isLoading}
+      currentUser={currentUser}
+      searchTerm={searchTerm}
+      setSearchTerm={setSearchTerm}
+      selectedTable={selectedTable}
+      setSelectedTable={setSelectedTable}
+      customerFilter={customerFilter}
+      setCustomerFilter={setCustomerFilter}
+      selectedStaff={selectedStaff}
+      setSelectedStaff={setSelectedStaff}
+      page={page}
+      setPage={setPage}
+      limit={limit}
+      totalItems={totalItems}
     />
   );
 }

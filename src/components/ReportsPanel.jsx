@@ -132,13 +132,13 @@ const getFormattedStaffId = (u, fallbackIndex) => {
   if (rawCode && !isRawHex) {
     return String(rawCode).trim();
   }
-  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
-    return `EMP-${String(fallbackIndex + 1).padStart(3, '0')}`;
-  }
   if (u._id && String(u._id).length >= 4) {
     return `EMP-${String(u._id).slice(-4).toUpperCase()}`;
   }
-  return 'EMP-001';
+  if (u.id && String(u.id).length >= 4) {
+    return `EMP-${String(u.id).slice(-4).toUpperCase()}`;
+  }
+  return '-';
 };
 
 // Formatted Order Number helper
@@ -192,12 +192,7 @@ const getFormattedOrderNo = (ord, fallbackIndex) => {
     return `#ORD-${strHex.toUpperCase()}`;
   }
 
-  // Priority 3: Fallback index
-  if (typeof fallbackIndex === 'number' && !isNaN(fallbackIndex)) {
-    return `#ORD-${String(fallbackIndex + 1).padStart(4, '0')}`;
-  }
-
-  return '#ORD-0001';
+  return '-';
 };
 
 // Helper to determine if an item is Veg, Non-Veg, or Egg
@@ -877,16 +872,7 @@ export default function ReportsPanel({
   // --------------------------------------------------------------------------
   const effectiveInventory = useMemo(() => {
     if (rawInventory && rawInventory.length > 0) return rawInventory;
-    return [
-      { id: 'inv-1', name: 'Paneer (Cottage Cheese)', category: 'Dairy', unit: 'kg', openingStock: 25, purchased: 15, used: 32, wastage: 1, quantity: 7, minStock: 10, unitCost: 320 },
-      { id: 'inv-2', name: 'Chicken Breast (Boneless)', category: 'Meat & Poultry', unit: 'kg', openingStock: 40, purchased: 30, used: 45, wastage: 2, quantity: 23, minStock: 15, unitCost: 260 },
-      { id: 'inv-3', name: 'Basmati Rice Premium', category: 'Grains & Staples', unit: 'kg', openingStock: 100, purchased: 50, used: 60, wastage: 0, quantity: 90, minStock: 30, unitCost: 110 },
-      { id: 'inv-4', name: 'Refined Sunflower Oil', category: 'Oils & Fats', unit: 'ltr', openingStock: 50, purchased: 25, used: 70, wastage: 1, quantity: 4, minStock: 15, unitCost: 140 },
-      { id: 'inv-5', name: 'Fresh Farm Tomatoes', category: 'Vegetables', unit: 'kg', openingStock: 35, purchased: 20, used: 53, wastage: 2, quantity: 0, minStock: 10, unitCost: 45 },
-      { id: 'inv-6', name: 'Full Cream Milk', category: 'Dairy', unit: 'ltr', openingStock: 30, purchased: 40, used: 62, wastage: 0, quantity: 8, minStock: 12, unitCost: 65 },
-      { id: 'inv-7', name: 'Red Onions Nashik', category: 'Vegetables', unit: 'kg', openingStock: 80, purchased: 50, used: 85, wastage: 3, quantity: 42, minStock: 25, unitCost: 35 },
-      { id: 'inv-8', name: 'Mozzarella Cheese Blend', category: 'Dairy', unit: 'kg', openingStock: 18, purchased: 10, used: 26, wastage: 0, quantity: 2, minStock: 8, unitCost: 480 }
-    ];
+    return [];
   }, [rawInventory]);
 
   const availableInventoryItems = useMemo(() => {
@@ -1013,96 +999,7 @@ export default function ReportsPanel({
         status: t.status || 'Completed'
       }));
     } else {
-      effectiveInventory.forEach((item, idx) => {
-        const itemName = item.name || item.itemName || `Item ${idx + 1}`;
-        const unit = item.unit || 'pcs';
-        const purchased = Number(item.purchased ?? item.added ?? 10);
-        const used = Number(item.used ?? item.consumed ?? 5);
-        const wastage = Number(item.wastage ?? 0);
-
-        const baseDate = new Date();
-        const d1 = new Date(baseDate.getTime() - (idx % 5) * 86400000).toISOString().split('T')[0] + ' 10:30 AM';
-        const d2 = new Date(baseDate.getTime() - ((idx % 4) + 1) * 86400000).toISOString().split('T')[0] + ' 02:15 PM';
-        const d3 = new Date(baseDate.getTime() - ((idx % 3) + 2) * 86400000).toISOString().split('T')[0] + ' 05:45 PM';
-
-        if (purchased > 0) {
-          movements.push({
-            id: `mov-pur-${idx}`,
-            date: d1,
-            txnNo: `TRX-${String(1001 + idx * 3).padStart(5, '0')}`,
-            type: idx % 2 === 0 ? 'Purchase' : 'Direct Purchase',
-            item: itemName,
-            quantity: purchased,
-            unit,
-            source: idx % 2 === 0 ? 'Metro Cash & Carry' : 'Direct Vendor',
-            destination: 'Central Stock',
-            refNo: `PO-${String(4001 + idx).padStart(4, '0')}`,
-            status: 'Completed'
-          });
-        }
-
-        if (used > 0) {
-          movements.push({
-            id: `mov-use-${idx}`,
-            date: d2,
-            txnNo: `TRX-${String(1002 + idx * 3).padStart(5, '0')}`,
-            type: idx % 3 === 0 ? 'Distribution' : 'Consumption',
-            item: itemName,
-            quantity: used,
-            unit,
-            source: 'Central Stock',
-            destination: idx % 3 === 0 ? 'Branch Kitchen' : 'Kitchen Consumption',
-            refNo: idx % 3 === 0 ? `DIS-${String(2001 + idx).padStart(4, '0')}` : `ORD-CONS-${String(501 + idx).padStart(3, '0')}`,
-            status: 'Completed'
-          });
-        }
-
-        if (wastage > 0) {
-          movements.push({
-            id: `mov-wst-${idx}`,
-            date: d3,
-            txnNo: `TRX-${String(1003 + idx * 3).padStart(5, '0')}`,
-            type: 'Wastage',
-            item: itemName,
-            quantity: wastage,
-            unit,
-            source: 'Kitchen Preparation',
-            destination: 'Disposal / Scrap',
-            refNo: `WST-${String(101 + idx).padStart(3, '0')}`,
-            status: 'Approved'
-          });
-        }
-
-        if (idx % 3 === 0) {
-          movements.push({
-            id: `mov-trf-${idx}`,
-            date: d1,
-            txnNo: `TRX-${String(1004 + idx * 3).padStart(5, '0')}`,
-            type: 'Branch Transfer',
-            item: itemName,
-            quantity: Math.max(1, Math.floor(purchased / 2)),
-            unit,
-            source: 'Main Branch',
-            destination: 'Express Branch',
-            refNo: `TRF-${String(301 + idx).padStart(3, '0')}`,
-            status: 'Completed'
-          });
-        } else if (idx % 3 === 1) {
-          movements.push({
-            id: `mov-adj-${idx}`,
-            date: d2,
-            txnNo: `TRX-${String(1005 + idx * 3).padStart(5, '0')}`,
-            type: 'Adjustment',
-            item: itemName,
-            quantity: 2,
-            unit,
-            source: 'Stock Audit',
-            destination: 'Central Stock',
-            refNo: `ADJ-${String(101 + idx).padStart(3, '0')}`,
-            status: 'Completed'
-          });
-        }
-      });
+      movements = [];
     }
 
     let list = [...movements];

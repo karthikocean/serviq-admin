@@ -33,7 +33,10 @@ const CheckCheckIcon = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 );
 
-export default function CompanyBranchRequests({ branchRequests: initialRequests, onApprove, onReject, onDistribute }) {
+export default function CompanyBranchRequests({ branchRequests: initialRequests, onApprove, onReject, onDistribute, hasPermission }) {
+  const canView = typeof hasPermission === 'function' ? hasPermission('inventory_branch_requests', 'view') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_branch_requests', 'edit') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_branch_requests', 'delete') : true;
   const [requestsList, setRequestsList] = useState(initialRequests || []);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -484,6 +487,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
           
           {isPending && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {canEdit && (
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -503,7 +507,9 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
               >
                 {isSubmitting ? 'Processing...' : 'Approve Request'}
               </button>
+              )}
 
+              {canEdit && (
               <button
                 type="button"
                 onClick={() => handleOpenDistributeForm(selectedReq)}
@@ -521,7 +527,9 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
               >
                 Distribute Stock
               </button>
+              )}
 
+              {(canDelete || canEdit) && (
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -540,11 +548,13 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
               >
                 Reject Request
               </button>
+              )}
             </div>
           )}
 
           {isApproved && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {canEdit && (
               <button
                 type="button"
                 onClick={() => handleOpenDistributeForm(selectedReq)}
@@ -562,6 +572,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
               >
                 Distribute Stock
               </button>
+              )}
               <span style={{ fontSize: '13px', color: '#0284c7', fontWeight: 600 }}>
                 ✓ Request Approved. Only Distribute action is now available.
               </span>
@@ -845,6 +856,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
                         </span>
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        {canView && (
                         <button
                           type="button"
                           onClick={() => handleOpenView(req)}
@@ -858,6 +870,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
                         >
                           <EyeIcon size={15} />
                         </button>
+                        )}
                       </td>
                     </tr>
                   );

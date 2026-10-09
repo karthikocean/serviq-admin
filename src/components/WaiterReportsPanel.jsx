@@ -256,12 +256,13 @@ export default function WaiterReportsPanel({
     const exportData = filteredWaiterReports.map((ord, idx) => {
       const date = getOrderDate(ord);
       const source = ord.source || ord.orderType || 'Dine-In';
-      const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
+      const paymentMode = ord.paymentMethod || ord.paymentMode || (ord.billingStatus === 'paid' ? 'Paid' : 'Pending');
+      const ordIdDisplay = ord.orderId || (ord.id ? (String(ord.id).startsWith('#') ? ord.id : (String(ord.id).startsWith('ORD-') ? `#${ord.id}` : `#ORD-${ord.id}`)) : '-');
       return {
         'S.No': idx + 1,
-        'Order ID': `#ORD-${ord.id}`,
+        'Order ID': ordIdDisplay,
         'Order Date': date ? formatDateDMY(date) : '—',
-        'Table Number': `Table ${ord.table || '—'}`,
+        'Table Number': ord.table ? `Table ${ord.table}` : '—',
         'Waiter Name': ord.waiter || 'Unassigned',
         'Order Source': source,
         'Order Status': (ord.status || 'New').toUpperCase(),
@@ -468,12 +469,13 @@ export default function WaiterReportsPanel({
                 paginatedWaiterReports.map(ord => {
                   const date = getOrderDate(ord);
                   const source = ord.source || ord.orderType || 'Dine-In';
-                  const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
+                  const paymentMode = ord.paymentMethod || ord.paymentMode || (ord.billingStatus === 'paid' ? 'Paid' : 'Pending');
+                  const ordIdDisplay = ord.orderId || (ord.id ? (String(ord.id).startsWith('#') ? ord.id : (String(ord.id).startsWith('ORD-') ? `#${ord.id}` : `#ORD-${ord.id}`)) : '-');
                   return (
                     <tr key={ord.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a', whiteSpace: 'nowrap' }}>#ORD-{ord.id}</td>
+                      <td style={{ padding: '16px 14px', fontWeight: 700, fontSize: '12px', color: '#0f172a', whiteSpace: 'nowrap' }}>{ordIdDisplay}</td>
                       <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, whiteSpace: 'nowrap' }}>{date ? formatDateDMY(date) : '—'}</td>
-                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>Table {ord.table}</td>
+                      <td style={{ padding: '16px 14px', fontSize: '12px', color: '#475569', fontWeight: 500, textAlign: 'center', whiteSpace: 'nowrap' }}>{ord.table ? `Table ${ord.table}` : '—'}</td>
                       <td style={{ padding: '16px 14px', fontSize: '12px', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' }}>{ord.waiter || 'Unassigned'}</td>
                       <td style={{ padding: '16px 14px', textAlign: 'center' }}>
                         <span style={{ 
