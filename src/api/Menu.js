@@ -45,12 +45,8 @@ class MenuApi {
       if (params.category && !cleanParams.category && params.category !== 'All' && params.category !== 'ALL') cleanParams.category = params.category;
       if (params.categoryId && !cleanParams.categoryId && params.categoryId !== 'All' && params.categoryId !== 'ALL') cleanParams.categoryId = params.categoryId;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
-      }
-      if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
-      }
+      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
+      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
       const response = await apiClient.get("/menu", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
@@ -74,12 +70,8 @@ class MenuApi {
       const searchVal = params.search || params.searchQuery || params.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
-      }
-      if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
-      }
+      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
+      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
       let response;
       try {
         response = await apiClient.get("/menu/categories", { params: cleanParams });

@@ -1689,17 +1689,21 @@ export default function OrdersPanel({
     });
   }
 
-  const isServerPaginated = (propTotalCount || 0) > 0 && sourceOrders.length <= limit && (propTotalCount || 0) >= sourceOrders.length;
+  const isServerPaginated = Boolean(
+    (propTotalCount || 0) > 0 &&
+    (propTotalPages || 1) > 1 &&
+    sourceOrders.length <= limit &&
+    (propTotalCount || 0) > sourceOrders.length
+  );
 
   const effectiveTotalCount = isServerPaginated ? (propTotalCount || 0) : filteredOrders.length;
   const effectiveTotalPages = isServerPaginated
     ? (propTotalPages || Math.max(1, Math.ceil(effectiveTotalCount / limit)))
     : Math.max(1, Math.ceil(effectiveTotalCount / limit));
 
-  // If filteredOrders in memory is already at most limit items, don't slice with page*limit (prevents empty table on page > 0)
-  const paginatedOrders = filteredOrders.length > limit
-    ? filteredOrders.slice(page * limit, (page + 1) * limit)
-    : filteredOrders;
+  const paginatedOrders = isServerPaginated
+    ? filteredOrders
+    : filteredOrders.slice(page * limit, (page + 1) * limit);
 
   const getOrderPageNumbers = () => {
     const pages = [];
@@ -1717,9 +1721,13 @@ export default function OrdersPanel({
     return pages;
   };
 
+  const selectedWaiterIdVal = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
+    ? (selectedWaiterFilter.id || selectedWaiterFilter.name || 'All Waiters')
+    : (selectedWaiterFilter || 'All Waiters');
+
   useEffect(() => {
     setPage(0);
-  }, [orderFilter, selectedWaiterFilter, searchOrderId, dateRangeFilter, customStartDate, customEndDate, selectedOrderType, selectedOrderBranchId]);
+  }, [orderFilter, selectedWaiterIdVal, orderTypeFilter, paymentStatusFilter, selectedTableFilter, searchOrderId, dateRangeFilter, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (page >= effectiveTotalPages && effectiveTotalPages > 0) {

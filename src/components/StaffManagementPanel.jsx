@@ -278,7 +278,7 @@ export default function StaffManagementPanel({
       UserApi.getStations(),
       BranchApi.getBranches(),
       RoleApi.getRoles(),
-      TableApi.getTables({ limit: 10 })
+      TableApi.getTables({ page: 0, limit: 10 })
     ]);
 
     let list = [];

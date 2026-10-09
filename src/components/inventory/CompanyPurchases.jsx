@@ -185,6 +185,10 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const totalPages = Math.max(1, Math.ceil(filteredPurchases.length / PAGE_SIZE));
 
   useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, supplierFilter, typeFilter, itemFilter, startDate, endDate]);
+
+  useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
       setCurrentPage(Math.max(0, totalPages - 1));
     }

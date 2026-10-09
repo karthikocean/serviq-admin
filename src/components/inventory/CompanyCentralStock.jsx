@@ -121,6 +121,10 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
 
   useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, categoryFilter, itemFilter, stockStatusFilter]);
+
+  useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
       setCurrentPage(Math.max(0, totalPages - 1));
     }

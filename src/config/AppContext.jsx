@@ -713,7 +713,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MemberApi.getTables({ limit: 10, ...params });
+      const res = await MemberApi.getTables({ page: 0, limit: 10, ...params });
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
@@ -821,7 +821,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const queryParams = { limit: 10, ...params };
+      const queryParams = { page: 0, limit: 10, ...params };
       const res = await MenuApi.getMenuItems(queryParams);
       if (res && res.status && res.response) {
         const menuData = Array.isArray(res.response.data)
@@ -850,7 +850,7 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
-      const branchParams = { limit: 10, ...params };
+      const branchParams = { page: 0, limit: 10, ...params };
       const branchResponse = await BranchApi.getBranches(branchParams);
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
@@ -1643,7 +1643,7 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (token) {
       fetchProfile();
-      fetchBranches({ limit: 10 });
+      fetchBranches({ page: 0, limit: 10 });
       fetchSubscriptionDashboard();
     }
   }, [currentUser?.id, currentUser?.restaurantId]);

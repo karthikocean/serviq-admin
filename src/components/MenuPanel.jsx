@@ -94,7 +94,7 @@ export default function MenuPanel({
   const fetchLiveCategories = React.useCallback(async () => {
     if (!activeRestaurant) return;
     try {
-      const params = { limit: 10 };
+      const params = { page: 0, limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         params.branchId = selectedBranchId;
       } else {
@@ -123,6 +123,10 @@ export default function MenuPanel({
   React.useEffect(() => {
     fetchLiveCategories();
   }, [fetchLiveCategories, refreshTrigger]);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [menuSearch, menuCategory, selectedBranchId]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -167,10 +171,23 @@ export default function MenuPanel({
       if (isBranchFiltered) {
         rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, activeRestaurant?.branches || []));
       }
-      setPaginatedMenu(rawList);
       const totalCount = (isBranchFiltered && res.response.data?.total === undefined) ? rawList.length : (res.response.data?.total || rawList.length);
       setTotalItems(totalCount);
-      setTotalPages(Math.ceil(totalCount / limit) || 1);
+      const calculatedTotalPages = Math.max(1, Math.ceil(totalCount / limit));
+      setTotalPages(calculatedTotalPages);
+
+      const isServerPaginated = Boolean(
+        res.response.data?.items &&
+        res.response.data?.total !== undefined &&
+        rawList.length <= limit &&
+        res.response.data.total > rawList.length
+      );
+
+      const displayedItems = isServerPaginated
+        ? rawList
+        : rawList.slice(page * limit, (page + 1) * limit);
+
+      setPaginatedMenu(displayedItems);
     }
   };
 

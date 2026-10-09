@@ -212,8 +212,18 @@ export default function TablesPanel({
   // Pagination for tables (10 tables per page)
   const [page, setPage] = useState(0);
   const limit = 10;
-  const totalPages = Math.ceil(filteredTables.length / limit) || 1;
+  const totalPages = Math.max(1, Math.ceil(filteredTables.length / limit));
   const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
 
   const handleDownloadQrPng = async (tableId, qrUrl) => {
     try {

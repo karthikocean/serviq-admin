@@ -75,6 +75,8 @@ export default function CategoryListPanel({
     if (!activeRestaurant) return;
     try {
       const params = {
+        page: 0,
+        limit: 10,
         search: searchQuery ? searchQuery.trim() : undefined
       };
       if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && isMongoId(selectedBranchId)) {
@@ -236,14 +238,12 @@ export default function CategoryListPanel({
     }
 
     if (allBranchesList.length > 0 && !effectiveBranch) {
-      errors.branchId = 'Please select a branch.';
+      ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
+      return;
     }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      if (errors.branchId) {
-        ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
-      }
       return;
     }
 
@@ -547,32 +547,24 @@ export default function CategoryListPanel({
                   }))
                 ];
 
-                const hasBranchError = formErrors.branchId || (isCompanyScope && !effectiveVal);
-
-                return (
-                  <div>
-                    <SearchableSelect
-                      value={effectiveVal}
-                      onChange={e => {
-                        setFormBranchId(e.target.value);
-                        if (formErrors.branchId) setFormErrors({ ...formErrors, branchId: '' });
-                      }}
-                      isDisabled={isLocked}
-                      options={branchOptions}
-                      placeholder="Select Branch..."
-                    />
-                    {isLocked && (
-                      <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
-                      </span>
-                    )}
-                    {hasBranchError && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.branchId || 'Please select a branch.'}
-                      </span>
-                    )}
-                  </div>
-                );
+                        return (
+                          <div>
+                            <SearchableSelect
+                              value={effectiveVal}
+                              onChange={e => {
+                                setFormBranchId(e.target.value);
+                              }}
+                              isDisabled={isLocked}
+                              options={branchOptions}
+                              placeholder="Select Branch..."
+                            />
+                            {isLocked && (
+                              <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                                {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
+                              </span>
+                            )}
+                          </div>
+                        );
               })()}
             </div>
 

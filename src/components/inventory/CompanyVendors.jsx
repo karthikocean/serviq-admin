@@ -75,6 +75,10 @@ export default function CompanyVendors({ hasPermission }) {
   const totalPages = Math.max(1, Math.ceil(filteredVendors.length / PAGE_SIZE));
 
   useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
       setCurrentPage(Math.max(0, totalPages - 1));
     }

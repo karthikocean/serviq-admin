@@ -199,7 +199,7 @@ export default function BillingHistory() {
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment.toUpperCase() : undefined,
         paymentStatus: 'PAID',
         orderType: 'DINE_IN',
-        page: page + 1, // 1-based page index
+        page: page,
         limit: 10,
         sortBy: 'createdAt',
         sortOrder: 'desc'
@@ -225,6 +225,16 @@ export default function BillingHistory() {
       }
     } catch (e) {
       console.error('Failed to fetch billing history from API', e);
+    }
+
+    if (items.length === 0) {
+      const fallbackList = Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0
+        ? activeRestaurant.billingData
+        : (Array.isArray(activeRestaurant?.orders) ? activeRestaurant.orders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed') : []);
+      if (fallbackList.length > 0) {
+        items = fallbackList;
+        serverTotal = fallbackList.length;
+      }
     }
 
     const mapped = items.map((it, idx) => mapItemToInvoice(it, idx));
@@ -386,7 +396,8 @@ export default function BillingHistory() {
     });
   }, [rawHistory, selectedBranchId, selectedPayment, selectedTable, selectedStaff, customerFilter, searchTerm, dateRange, customStartDate, customEndDate]);
 
-  const effectiveTotal = totalItems || filteredHistory.length;
+  const isServerPaginated = Boolean(totalItems > 0 && rawHistory.length <= limit && totalItems > rawHistory.length);
+  const effectiveTotal = isServerPaginated ? totalItems : filteredHistory.length;
   const totalPages = Math.max(1, Math.ceil(effectiveTotal / limit));
 
   useEffect(() => {
@@ -397,13 +408,12 @@ export default function BillingHistory() {
 
   // Compute pagination and current page slice
   const paginatedHistory = useMemo(() => {
-    // If the filtered data in memory is at most limit items, don't slice again (prevents empty slice on page > 0)
-    if (filteredHistory.length <= limit) {
+    if (isServerPaginated) {
       return filteredHistory;
     }
     const startIndex = page * limit;
     return filteredHistory.slice(startIndex, startIndex + limit);
-  }, [filteredHistory, page, limit]);
+  }, [filteredHistory, isServerPaginated, page, limit]);
 
   // Compute Summary
   const summary = useMemo(() => {
@@ -455,7 +465,8 @@ export default function BillingHistory() {
       page={page}
       setPage={setPage}
       limit={limit}
-      totalItems={totalItems || filteredHistory.length}
+      totalItems={effectiveTotal}
+      totalPages={totalPages}
       summary={summary}
       activeRestaurant={activeRestaurant}
       hasPermission={hasPermission}

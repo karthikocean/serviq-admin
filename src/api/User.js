@@ -27,13 +27,8 @@ class UserApi {
       if (statusVal && !cleanParams.status && statusVal !== 'All' && statusVal !== 'ALL') cleanParams.status = statusVal;
       if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
 
-      // Backend API pagination starts from zero (page 0 is first page)
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
-      }
-      if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
-      }
+      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
+      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
       const response = await apiClient.get("/users", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
@@ -57,13 +52,8 @@ class UserApi {
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
 
-      // Backend API pagination starts from zero (page 0 is first page)
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
-      }
-      if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
-      }
+      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
+      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
       const response = await apiClient.get("/users/stations", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

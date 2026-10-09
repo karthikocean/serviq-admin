@@ -282,7 +282,7 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 1000 });
+      const res = await TableApi.getTables({ limit: 10 });
       if (res && res.status && res.response) {
         const resp = res.response;
         const tList = Array.isArray(resp) ? resp : (Array.isArray(resp.data) ? resp.data : (Array.isArray(resp.tables) ? resp.tables : (Array.isArray(resp.data?.tables) ? resp.data.tables : [])));

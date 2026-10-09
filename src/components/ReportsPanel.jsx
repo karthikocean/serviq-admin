@@ -317,8 +317,8 @@ export default function ReportsPanel({
   const [taxSubTab, setTaxSubTab] = useState('tax-summary'); // 'tax-summary' | 'payment-settlement'
   const [inventorySubTab, setInventorySubTab] = useState('position'); // 'position' | 'movement' | 'low-stock'
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  // Pagination State (0-based page, default limit 10)
+  const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
   // View Order Modal State
@@ -486,7 +486,7 @@ export default function ReportsPanel({
 
   // Reset pagination when active tab or filters change
   useEffect(() => {
-    setCurrentPage(1);
+    setCurrentPage(0);
   }, [
     activeTab,
     inventorySubTab,
@@ -1385,8 +1385,8 @@ export default function ReportsPanel({
   }, [activeTab, currentApiData, totalRecordsCount, pageSize]);
 
   useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
     }
   }, [totalPages, currentPage]);
 
@@ -1394,19 +1394,19 @@ export default function ReportsPanel({
     if (activeTab === 'tax') {
       const records = taxSubTab === 'tax-summary' ? taxSummaryRows : paymentSettlementRows;
       if (records.length > pageSize) {
-        const start = (currentPage - 1) * pageSize;
+        const start = currentPage * pageSize;
         return records.slice(start, start + pageSize);
       }
       return records;
     }
     if (currentApiData && Array.isArray(currentApiData.data)) {
       if (currentApiData.data.length > pageSize && currentApiData.totalPages === undefined) {
-        const start = (currentPage - 1) * pageSize;
+        const start = currentPage * pageSize;
         return currentApiData.data.slice(start, start + pageSize);
       }
       return currentApiData.data;
     }
-    const start = (currentPage - 1) * pageSize;
+    const start = currentPage * pageSize;
     return currentTabRecords.slice(start, start + pageSize);
   }, [activeTab, taxSubTab, taxSummaryRows, paymentSettlementRows, currentApiData, currentTabRecords, currentPage, pageSize]);
 
@@ -2421,13 +2421,13 @@ export default function ReportsPanel({
             {totalRecordsCount > pageSize && (
               <div className="reports-pagination-bar">
                 <div className="pagination-info">
-                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                  Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
                 </div>
 
                 <div className="pagination-controls">
                   <div className="page-size-selector">
                     <span>Rows per page:</span>
-                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
@@ -2439,24 +2439,24 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 0}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                     >
                       Prev
                     </button>
 
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum = i + 1;
-                      if (totalPages > 5 && currentPage > 3) {
-                        pageNum = currentPage - 3 + i;
+                      if (totalPages > 5 && currentPage + 1 > 3) {
+                        pageNum = (currentPage + 1) - 3 + i;
                         if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                       }
                       return (
                         <button
                           key={pageNum}
                           type="button"
-                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                          onClick={() => setCurrentPage(pageNum)}
+                          className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum - 1)}
                         >
                           {pageNum}
                         </button>
@@ -2466,8 +2466,8 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                     >
                       Next
                     </button>
@@ -2569,13 +2569,13 @@ export default function ReportsPanel({
             {totalRecordsCount > pageSize && (
               <div className="reports-pagination-bar">
                 <div className="pagination-info">
-                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                  Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
                 </div>
 
                 <div className="pagination-controls">
                   <div className="page-size-selector">
                     <span>Rows per page:</span>
-                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
@@ -2587,24 +2587,24 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 0}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                     >
                       Prev
                     </button>
 
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum = i + 1;
-                      if (totalPages > 5 && currentPage > 3) {
-                        pageNum = currentPage - 3 + i;
+                      if (totalPages > 5 && currentPage + 1 > 3) {
+                        pageNum = (currentPage + 1) - 3 + i;
                         if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                       }
                       return (
                         <button
                           key={pageNum}
                           type="button"
-                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                          onClick={() => setCurrentPage(pageNum)}
+                          className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum - 1)}
                         >
                           {pageNum}
                         </button>
@@ -2614,8 +2614,8 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                     >
                       Next
                     </button>
@@ -3290,13 +3290,13 @@ export default function ReportsPanel({
         {totalRecordsCount > 0 && (
           <div className="reports-pagination-bar">
             <div className="pagination-info">
-              Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+              Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
             </div>
 
             <div className="pagination-controls">
               <div className="page-size-selector">
                 <span>Rows per page:</span>
-                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
@@ -3308,24 +3308,24 @@ export default function ReportsPanel({
                 <button
                   type="button"
                   className="btn-page-nav"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 0}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                 >
                   Prev
                 </button>
 
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum = i + 1;
-                  if (totalPages > 5 && currentPage > 3) {
-                    pageNum = currentPage - 3 + i;
+                  if (totalPages > 5 && currentPage + 1 > 3) {
+                    pageNum = (currentPage + 1) - 3 + i;
                     if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                   }
                   return (
                     <button
                       key={pageNum}
                       type="button"
-                      className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(pageNum)}
+                      className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(pageNum - 1)}
                     >
                       {pageNum}
                     </button>
@@ -3335,8 +3335,8 @@ export default function ReportsPanel({
                 <button
                   type="button"
                   className="btn-page-nav"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                 >
                   Next
                 </button>

@@ -123,7 +123,7 @@ export default function InventoryCategoryPanel() {
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const baseParams = { limit: 10 };
+      const baseParams = { page: 0, limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         baseParams.branchId = selectedBranchId;
       }

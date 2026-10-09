@@ -70,21 +70,27 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           setTotalItemsCount(formatted.length);
         }
       } else {
-        setItemsList([]);
-        setTotalItemsCount(0);
+        const fallback = Array.isArray(initialItems) ? initialItems : [];
+        setItemsList(fallback);
+        setTotalItemsCount(fallback.length);
       }
     } catch (err) {
       console.error('Fetch items error:', err);
-      setItemsList([]);
-      setTotalItemsCount(0);
+      const fallback = Array.isArray(initialItems) ? initialItems : [];
+      setItemsList(fallback);
+      setTotalItemsCount(fallback.length);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, categoryFilter, currentPage]);
+  }, [searchTerm, categoryFilter, currentPage, initialItems]);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, categoryFilter]);
 
   // Client-side fallback filter if API returns full unpaginated list
   const filteredItems = itemsList.filter(i => {
@@ -95,7 +101,9 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     return matchesSearch && matchesCategory;
   });
 
-  const totalPages = Math.max(1, Math.ceil((totalItemsCount || filteredItems.length) / PAGE_SIZE));
+  const isServerPaginated = Boolean(totalItemsCount > 0 && itemsList.length <= PAGE_SIZE && totalItemsCount > itemsList.length);
+  const effectiveTotal = isServerPaginated ? totalItemsCount : filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / PAGE_SIZE));
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -103,7 +111,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     }
   }, [totalPages, currentPage]);
 
-  const paginatedItems = filteredItems.length <= PAGE_SIZE 
+  const paginatedItems = isServerPaginated 
     ? filteredItems 
     : filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 

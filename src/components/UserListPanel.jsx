@@ -188,9 +188,12 @@ export default function UserListPanel() {
       RoleApi.getRoles()
     ]);
     if (usersRes?.status) {
-      setApiUsers(usersRes.response.data || []);
-      setTotalPages(usersRes.response.totalPages || 1);
-      setTotalRecords(usersRes.response.total || 0);
+      const uData = usersRes.response.data || [];
+      const list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : []);
+      setApiUsers(list);
+      const totalNum = usersRes.response.total ?? usersRes.response.totalRecords ?? list.length;
+      setTotalRecords(totalNum);
+      setTotalPages(usersRes.response.totalPages || Math.max(1, Math.ceil(totalNum / limit)));
     }
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
     if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
@@ -204,6 +207,10 @@ export default function UserListPanel() {
   };
 
   useEffect(() => {
+    setPage(0);
+  }, [searchQuery, roleFilter, statusFilter, activeFilteredBranchId]);
+
+  useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchData();
     }, 300);
@@ -215,6 +222,17 @@ export default function UserListPanel() {
       setPage(Math.max(0, totalPages - 1));
     }
   }, [totalPages, page]);
+
+  const isServerPaginated = Boolean(
+    totalRecords > 0 &&
+    totalPages > 1 &&
+    apiUsers.length <= limit &&
+    totalRecords > apiUsers.length
+  );
+
+  const paginatedUsers = isServerPaginated
+    ? apiUsers
+    : apiUsers.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -935,7 +953,7 @@ export default function UserListPanel() {
               </tr>
             </thead>
             <tbody>
-              {apiUsers.map((user, index) => {
+              {paginatedUsers.map((user, index) => {
                 const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
                 const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';

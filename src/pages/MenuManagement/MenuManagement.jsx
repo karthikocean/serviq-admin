@@ -59,7 +59,7 @@ export default function MenuManagement() {
   }, [activeRestaurant, selectedBranchId, refreshTrigger]);
 
   const fetchMenuItems = async () => {
-    const params = {};
+    const params = { page: 0, limit: 10 };
     if (selectedBranchId) {
       params.branchId = selectedBranchId;
     } else {
@@ -82,7 +82,7 @@ export default function MenuManagement() {
   };
 
   const fetchCategories = async () => {
-    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, limit: 10 } : { branchId: 'all', limit: 10 };
+    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, page: 0, limit: 10 } : { branchId: 'all', page: 0, limit: 10 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data)
@@ -322,6 +322,7 @@ export default function MenuManagement() {
     }
 
     const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+    let branchMissing = false;
     if (allBranchesList.length > 0) {
       const isCompanyUser = isUserCompanyUser(currentUser);
       const userBranchId = getUserAssignedBranchId(currentUser);
@@ -337,15 +338,16 @@ export default function MenuManagement() {
       }
 
       if (!effectiveBranchVal) {
-        errors.branchId = 'Please select a branch.';
+        branchMissing = true;
       }
     }
 
     setFormErrors(errors);
+    if (branchMissing) {
+      ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
+      return false;
+    }
     if (Object.keys(errors).length > 0) {
-      if (errors.branchId) {
-        ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
-      }
       return false;
     }
     return true;
@@ -370,7 +372,6 @@ export default function MenuManagement() {
 
     const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
     if (allBranchesList.length > 0 && !finalBranchId) {
-      setFormErrors(prev => ({ ...prev, branchId: 'Please select a branch.' }));
       ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
       return;
     }
@@ -737,17 +738,12 @@ export default function MenuManagement() {
                           }))
                         ];
 
-                        const hasBranchError = formErrors.branchId || (isCompanyScope && !effectiveVal);
-
                         return (
                           <div>
                             <SearchableSelect
                               value={effectiveVal}
                               onChange={e => {
                                 setMenuForm({ ...menuForm, branchId: e.target.value });
-                                if (formErrors.branchId) {
-                                  setFormErrors(prev => ({ ...prev, branchId: '' }));
-                                }
                               }}
                               isDisabled={isLocked}
                               options={branchOptions}
@@ -756,11 +752,6 @@ export default function MenuManagement() {
                             {isLocked && (
                               <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
                                 {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
-                              </span>
-                            )}
-                            {hasBranchError && (
-                              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                                {formErrors.branchId || 'Please select a branch.'}
                               </span>
                             )}
                           </div>
