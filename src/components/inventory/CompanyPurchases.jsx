@@ -3,8 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, PencilIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function CompanyPurchases({ purchases: initialPurchases, items: initialItems, onSavePurchase, onDeletePurchase, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'view') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'delete') : true;
@@ -40,8 +46,13 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   });
   const [vendorErrors, setVendorErrors] = useState({});
 
+  const defaultBranchId = isBranchFiltered
+    ? selectedBranchId
+    : (branches.length > 0 ? (branches[0]._id || branches[0].id) : '');
+
   // Purchase Form State - Fields strictly matched to reference layout
   const [purchaseForm, setPurchaseForm] = useState({
+    branchId: defaultBranchId,
     purchaseType: 'Material Purchase (Ingredients / Stock)',
     supplier: '',
     vendorId: '',
@@ -62,15 +73,26 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const activeBranch = isBranchFiltered ? selectedBranchId : undefined;
+
+      // 1. Fetch Vendors
+      const vendorsRes = await InventoryApi.getVendors({ limit: 0, branchId: activeBranch });
+      if (vendorsRes?.status && vendorsRes?.response) {
+        const rawVendors = vendorsRes.response.data || vendorsRes.response.vendors || (Array.isArray(vendorsRes.response) ? vendorsRes.response : []);
+        if (Array.isArray(rawVendors)) {
+          setVendorsList(rawVendors);
+        }
+      }
 
       // 2. Fetch Items
-      const itemsRes = await InventoryApi.getItems({ limit: 100 });
+      const itemsRes = await InventoryApi.getItems({ limit: 0, branchId: activeBranch });
       if (itemsRes?.status && itemsRes?.response) {
         const rawItems = itemsRes.response.data || itemsRes.response.items || (Array.isArray(itemsRes.response) ? itemsRes.response : []);
         if (Array.isArray(rawItems) && rawItems.length > 0) {
           const formattedItems = rawItems.map(i => ({
             id: i._id || i.id,
             _id: i._id || i.id,
+            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
             name: i.name,
             unit: i.unit || 'kg',
             category: i.category || 'General'
@@ -80,21 +102,25 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       }
 
       // 3. Fetch Purchases
-      const purRes = await InventoryApi.getPurchases();
+      const purRes = await InventoryApi.getPurchases(activeBranch ? { branchId: activeBranch } : {});
       if (purRes?.status && purRes?.response) {
         const rawPurchases = purRes.response.data || purRes.response || [];
         if (Array.isArray(rawPurchases) && rawPurchases.length > 0) {
           const formattedPur = rawPurchases.map(p => ({
             id: p._id || p.id,
             _id: p._id || p.id,
+            branchId: p.branchId || p.branch?._id || p.branch?.id || p.branch,
+            branchName: p.branchName || (typeof p.branchId === 'object' ? (p.branchId?.branchName || p.branchId?.name) : '') || p.branch || '',
             purchaseNo: p.purchaseNo || `PU-${String(p._id || '').slice(-3).toUpperCase()}`,
             purchaseType: p.purchaseType || 'Material Purchase',
             supplier: p.supplierName || p.supplier || (typeof p.vendorId === 'object' ? p.vendorId?.name : '') || 'General Vendor',
             supplierName: p.supplierName || p.supplier || '',
+            vendorId: typeof p.vendorId === 'object' ? (p.vendorId?._id || p.vendorId?.id) : p.vendorId,
             date: p.purchaseDate ? new Date(p.purchaseDate).toISOString().split('T')[0] : (p.date || new Date().toISOString().split('T')[0]),
             purchaseDate: p.purchaseDate ? new Date(p.purchaseDate).toISOString().split('T')[0] : (p.date || new Date().toISOString().split('T')[0]),
             invoiceNo: p.invoiceNumber || p.invoiceNo || 'N/A',
             item: p.itemName || (typeof p.itemId === 'object' ? p.itemId?.name : '') || p.item || 'N/A',
+            itemId: typeof p.itemId === 'object' ? (p.itemId?._id || p.itemId?.id) : p.itemId,
             quantity: p.purchaseQty !== undefined ? p.purchaseQty : (p.quantity || 0),
             unit: p.unit || (typeof p.itemId === 'object' ? p.itemId?.unit : 'kg') || 'kg',
             rate: p.unitPrice !== undefined ? p.unitPrice : (p.rate || 0),
@@ -109,7 +135,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchData();
@@ -144,20 +170,32 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
 
   // Auto handle vendor selection
   const handleVendorSelect = (vendorVal) => {
+    if (!vendorVal) {
+      setPurchaseForm(prev => ({
+        ...prev,
+        supplier: '',
+        vendorId: ''
+      }));
+      return;
+    }
     if (vendorVal === 'ADD_NEW_VENDOR') {
       openAddVendor();
       return;
     }
-    const matched = vendorsList.find(v => v.name === vendorVal || v._id === vendorVal || v.vendorCode === vendorVal);
+    const matched = vendorsList.find(v => (v._id && v._id === vendorVal) || (v.id && v.id === vendorVal) || v.name === vendorVal || v.vendorCode === vendorVal);
     setPurchaseForm(prev => ({
       ...prev,
       supplier: matched ? matched.name : vendorVal,
-      vendorId: matched ? matched._id : ''
+      vendorId: matched ? (matched._id || matched.id) : ''
     }));
   };
 
-  // Filter purchase list
-  const filteredPurchases = displayPurchases.filter(p => {
+  // Filter purchase list strictly by branch
+  const branchScopedPurchases = isBranchFiltered
+    ? displayPurchases.filter(p => isBranchMatch(p, selectedBranchId, branches))
+    : displayPurchases;
+
+  const filteredPurchases = branchScopedPurchases.filter(p => {
     const purNo = p.purchaseNo || p.id || '';
     const supp = p.supplier || p.supplierName || '';
     const itm = p.item || p.itemName || '';
@@ -186,7 +224,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [searchTerm, supplierFilter, typeFilter, itemFilter, startDate, endDate]);
+  }, [searchTerm, supplierFilter, typeFilter, itemFilter, startDate, endDate, selectedBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -281,6 +319,8 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
 
   const validatePurchase = () => {
     const errors = {};
+    if (!purchaseForm.branchId && !isBranchFiltered) errors.branchId = 'Target Branch selection is required';
+    if (!purchaseForm.supplier && !purchaseForm.vendorId) errors.supplier = 'Vendor / Supplier selection is required';
     if (!purchaseForm.item) errors.item = 'Material / Ingredient Item selection is required';
     if (!purchaseForm.purchaseDate) errors.purchaseDate = 'Purchase Date is required';
     if (!purchaseForm.quantity || Number(purchaseForm.quantity) <= 0) errors.quantity = 'Valid Purchase Quantity is required';
@@ -296,7 +336,13 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     setIsSubmitting(true);
     try {
       const matchedItem = displayItems.find(i => i.name === purchaseForm.item);
+      const targetBranchId = purchaseForm.branchId || (isBranchFiltered ? selectedBranchId : undefined);
+      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
+
       const payload = {
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
         purchaseType: purchaseForm.purchaseType,
         supplierName: purchaseForm.supplier,
         supplier: purchaseForm.supplier,
@@ -513,7 +559,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
         </div>
 
         <form onSubmit={handlePurchaseSubmit} style={{ width: '100%' }}>
-          {/* Row 1: Purchase Category / Type & Material / Ingredient Item */}
+          {/* Row 1: Purchase Category / Type & Target Branch */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
@@ -528,6 +574,66 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                 <option value="Vendor Direct Purchase (Supplies / Goods)">Vendor Direct Purchase (Supplies / Goods)</option>
                 <option value="Asset / Equipment Purchase">Asset / Equipment Purchase</option>
               </select>
+            </div>
+
+            <div>
+              <label style={formLabelStyle}>
+                Target Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                value={purchaseForm.branchId}
+                onChange={e => setPurchaseForm({ ...purchaseForm, branchId: e.target.value })}
+                style={{ ...formInputStyle, borderColor: purchaseErrors.branchId ? '#ef4444' : '#cbd5e1', background: isBranchFiltered ? '#f8fafc' : '#ffffff' }}
+                disabled={isBranchFiltered}
+              >
+                <option value="">-- Select Target Branch --</option>
+                {branches.map(b => (
+                  <option key={b._id || b.id} value={b._id || b.id}>
+                    {b.branchName || b.name} ({b.branchCode || b.code || 'Main'})
+                  </option>
+                ))}
+              </select>
+              {purchaseErrors.branchId && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.branchId}</span>}
+            </div>
+          </div>
+
+          {/* Row 2: Supplier / Vendor & Material / Ingredient Item */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ ...formLabelStyle, marginBottom: 0 }}>
+                  Supplier / Vendor <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={openAddVendor}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ff5a1f',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  + Add Vendor
+                </button>
+              </div>
+              <select
+                value={purchaseForm.vendorId || purchaseForm.supplier}
+                onChange={e => handleVendorSelect(e.target.value)}
+                style={{ ...formInputStyle, borderColor: purchaseErrors.supplier ? '#ef4444' : '#cbd5e1' }}
+              >
+                <option value="">-- Select Vendor / Supplier --</option>
+                {vendorsList.map(v => (
+                  <option key={v._id || v.id} value={v._id || v.id || v.name}>
+                    {v.name} {v.companyName ? `(${v.companyName})` : ''}
+                  </option>
+                ))}
+                <option value="ADD_NEW_VENDOR">+ Add New Vendor...</option>
+              </select>
+              {purchaseErrors.supplier && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.supplier}</span>}
             </div>
 
             <div>
@@ -736,10 +842,12 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             onClick={() => {
               setViewState('ADD_PURCHASE');
               setPurchaseErrors({});
+              const defBranch = isBranchFiltered ? selectedBranchId : (branches.length > 0 ? (branches[0]._id || branches[0].id) : '');
               setPurchaseForm({
+                branchId: defBranch,
                 purchaseType: 'Material Purchase (Ingredients / Stock)',
                 supplier: vendorsList.length > 0 ? vendorsList[0].name : '',
-                vendorId: vendorsList.length > 0 ? vendorsList[0]._id : '',
+                vendorId: vendorsList.length > 0 ? (vendorsList[0]._id || vendorsList[0].id) : '',
                 item: displayItems.length > 0 ? displayItems[0].name : '',
                 itemId: displayItems.length > 0 ? (displayItems[0]._id || displayItems[0].id) : '',
                 invoiceNo: '',
@@ -856,6 +964,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', width: '50px' }}>S.No</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Purchase Date</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Purchase No.</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Branch</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Supplier</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Item</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Quantity</th>
@@ -869,19 +978,20 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="12" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   Loading purchase records from server...
                 </td>
               </tr>
             ) : paginatedPurchases.length === 0 ? (
               <tr>
-                <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
+                <td colSpan="12" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                   No purchase records found matching criteria.
                 </td>
               </tr>
             ) : (
               paginatedPurchases.map((p, index) => {
                 const purCode = p.purchaseNo || p.id;
+                const bName = p.branchName || (branches.find(b => String(b._id || b.id) === String(p.branchId))?.branchName) || 'Main Branch';
                 const suppName = p.supplier || p.supplierName || 'General Supplier';
                 const itemTitle = p.item || p.itemName;
                 const purTotal = p.total ? p.total : (p.totalAmount ? p.totalAmount : (p.quantity || 0) * (p.rate || 0));
@@ -896,6 +1006,18 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f' }}>
                       {purCode}
+                    </td>
+                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '3px 8px',
+                        background: '#f1f5f9',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: '#334155'
+                      }}>
+                        {bName}
+                      </span>
                     </td>
                     <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
                       {suppName}

@@ -76,6 +76,7 @@ class BillingApi {
       });
 
       const queryParams = new URLSearchParams(cleanParams).toString();
+      const url = `/billing/history${queryParams ? `?${queryParams}` : ''}`;
       let response;
       try {
         response = await apiClient.get(url);

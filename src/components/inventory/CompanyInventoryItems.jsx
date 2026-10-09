@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'add') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'edit') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'delete') : true;
@@ -23,7 +29,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     category: 'Grains',
     unit: 'kg',
     minStock: '',
-    isActive: true
+    isActive: true,
+    branchId: isBranchFiltered ? selectedBranchId : ''
   });
   const [itemErrors, setItemErrors] = useState({});
 
@@ -40,6 +47,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
       const res = await InventoryApi.getItems({
         search: searchTerm,
         category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        branchId: isBranchFiltered ? selectedBranchId : undefined,
         page: currentPage,
         limit: PAGE_SIZE
       });
@@ -49,6 +57,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
         const formatted = (Array.isArray(payload) ? payload : []).map(i => ({
           id: i._id || i.id,
           _id: i._id || i.id,
+          branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+          branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
           itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
           name: i.name || '',
           category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'Grains',
@@ -82,7 +92,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, categoryFilter, currentPage, initialItems]);
+  }, [searchTerm, categoryFilter, currentPage, initialItems, selectedBranchId, isBranchFiltered]);
 
   useEffect(() => {
     fetchItems();
@@ -90,10 +100,14 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [searchTerm, categoryFilter]);
+  }, [searchTerm, categoryFilter, selectedBranchId]);
 
-  // Client-side fallback filter if API returns full unpaginated list
-  const filteredItems = itemsList.filter(i => {
+  // Client-side fallback filter with strict branch scoping
+  const branchScopedItems = isBranchFiltered
+    ? itemsList.filter(i => isBranchMatch(i, selectedBranchId, branches))
+    : itemsList;
+
+  const filteredItems = branchScopedItems.filter(i => {
     const matchesSearch = !searchTerm.trim() || 
       i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (i.itemCode && i.itemCode.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -148,7 +162,14 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setItemForm({ name: '', category: 'Grains', unit: 'kg', minStock: '', isActive: true });
+    setItemForm({
+      name: '',
+      category: 'Grains',
+      unit: 'kg',
+      minStock: '',
+      isActive: true,
+      branchId: isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || '')
+    });
     setItemErrors({});
     setViewState('ADD');
   };
@@ -160,7 +181,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
       category: item.category || 'Grains',
       unit: item.unit || 'kg',
       minStock: item.minAlertLevel !== undefined && item.minAlertLevel !== null ? String(item.minAlertLevel) : '',
-      isActive: item.isActive !== undefined ? Boolean(item.isActive) : true
+      isActive: item.isActive !== undefined ? Boolean(item.isActive) : true,
+      branchId: item.branchId || (branches[0]?._id || branches[0]?.id || '')
     });
     setItemErrors({});
     setViewState('EDIT');
@@ -203,13 +225,18 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
     setIsSubmitting(true);
     try {
+      const targetBranchId = isBranchFiltered ? selectedBranchId : (itemForm.branchId || undefined);
+      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
       const payload = {
         name: itemForm.name.trim(),
         category: itemForm.category,
         unit: itemForm.unit,
         minAlertLevel: Number(itemForm.minStock),
         minStock: Number(itemForm.minStock),
-        isActive: Boolean(itemForm.isActive)
+        isActive: Boolean(itemForm.isActive),
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
       };
 
       let res;
@@ -373,7 +400,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
             </div>
           </div>
 
-          {/* Row 3: Status (isActive key) */}
+          {/* Row 3: Status (isActive key) & Target Branch */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
             <div>
               <label style={formLabelStyle}>
@@ -388,7 +415,27 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                 <option value="false">Inactive</option>
               </select>
             </div>
-            <div></div>
+            <div>
+              <label style={formLabelStyle}>
+                Target Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                value={itemForm.branchId}
+                onChange={e => setItemForm({ ...itemForm, branchId: e.target.value })}
+                style={{ ...formInputStyle, background: isBranchFiltered ? '#f8fafc' : '#ffffff' }}
+                disabled={isBranchFiltered}
+              >
+                <option value="">-- All Branches / Global --</option>
+                {branches.map(b => (
+                  <option key={b._id || b.id} value={b._id || b.id}>
+                    {b.branchName || b.name} ({b.branchCode || b.code || 'Main'})
+                  </option>
+                ))}
+              </select>
+              <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                {isBranchFiltered ? 'Locked to current branch selected in top bar' : 'Assign item to a specific branch or leave global'}
+              </span>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -501,6 +548,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', width: '60px' }}>S.No</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Item Name</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Branch</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Category</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Unit</th> 
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Minimum Stock Level</th>
@@ -511,18 +559,20 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#ff5a1f', fontWeight: 700 }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#ff5a1f', fontWeight: 700 }}>
                   Loading inventory items...
                 </td>
               </tr>
             ) : paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No inventory items found.
                 </td>
               </tr>
             ) : (
-              paginatedItems.map((item, index) => (
+              paginatedItems.map((item, index) => {
+                const bName = item.branchName || (branches.find(b => String(b._id || b.id) === String(item.branchId))?.branchName) || 'All Branches';
+                return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
                     {currentPage * PAGE_SIZE + index + 1}
@@ -534,6 +584,18 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                         {item.itemCode}
                       </span>
                     )}
+                  </td>
+                  <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '3px 8px',
+                      background: '#f1f5f9',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#334155'
+                    }}>
+                      {bName}
+                    </span>
                   </td>
                   <td style={{ padding: '14px 16px', color: '#475569' }}>{item.category}</td>
                   <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>
@@ -597,7 +659,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                     </div>
                   </td>
                 </tr>
-              ))
+              );
+            })
             )}
           </tbody>
         </table>

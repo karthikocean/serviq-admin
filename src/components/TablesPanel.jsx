@@ -4,6 +4,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 import TableApi from '../api/Table.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -101,15 +102,19 @@ export default function TablesPanel({
   revokeQrCode,
   deleteQrCode
 }) {
-  const { hasPermission: contextHasPermission } = useAppState();
+  const { hasPermission: contextHasPermission, selectedBranchId, activeRestaurant: contextRestaurant } = useAppState();
   const checkPermission = hasPermissionProp || contextHasPermission || (() => true);
+  const branches = activeRestaurant?.branches || contextRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
   const [viewingQrTable, setViewingQrTable] = useState(null);
   const [localQrStatus, setLocalQrStatus] = useState({});
 
-  const displayTables = tables;
+  const displayTables = isBranchFiltered
+    ? tables.filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : tables;
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;

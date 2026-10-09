@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 
 export default function CompanyTransactions({ transactions = [], hasPermission }) {

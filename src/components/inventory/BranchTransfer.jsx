@@ -3,7 +3,7 @@ import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInp
 import InventoryApi from '../../api/Inventory';
 import BranchApi from '../../api/Branch';
 import { useAppState } from '../../config/AppContext';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../../helper/BranchHelper';
 
 const CheckIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -200,7 +200,15 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
     }
   };
 
-  const filteredTransfers = transfersList.filter(t => {
+  const branchScopedTransfers = !isCompanyFilter
+    ? transfersList.filter(t =>
+        isBranchMatch(t.fromBranch, selectedBranchId, allBranches) ||
+        isBranchMatch(t.toBranch, selectedBranchId, allBranches) ||
+        isBranchMatch(t, selectedBranchId, allBranches)
+      )
+    : transfersList;
+
+  const filteredTransfers = branchScopedTransfers.filter(t => {
     return !searchTerm.trim() ||
       (t.transferNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.item || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

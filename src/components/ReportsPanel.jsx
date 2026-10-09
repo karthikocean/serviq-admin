@@ -1369,7 +1369,9 @@ export default function ReportsPanel({
     if (currentApiData) {
       if (typeof currentApiData.totalItems === 'number') return currentApiData.totalItems;
       if (typeof currentApiData.totalRecords === 'number') return currentApiData.totalRecords;
+      if (typeof currentApiData.total === 'number') return currentApiData.total;
       if (typeof currentApiData.count === 'number') return currentApiData.count;
+      if (typeof currentApiData.pagination?.total === 'number') return currentApiData.pagination.total;
     }
     return currentTabRecords.length;
   }, [activeTab, taxSubTab, taxSummaryRows.length, paymentSettlementRows.length, currentApiData, currentTabRecords.length]);
@@ -1380,6 +1382,9 @@ export default function ReportsPanel({
     }
     if (currentApiData && typeof currentApiData.totalPages === 'number') {
       return Math.max(1, currentApiData.totalPages);
+    }
+    if (currentApiData && typeof currentApiData.pagination?.totalPages === 'number') {
+      return Math.max(1, currentApiData.pagination.totalPages);
     }
     return Math.max(1, Math.ceil(totalRecordsCount / pageSize));
   }, [activeTab, currentApiData, totalRecordsCount, pageSize]);

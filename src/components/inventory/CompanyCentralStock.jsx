@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 // Inline SVGs for Summary Cards
 const PackageIcon = ({ size = 22, color = 'currentColor' }) => (
@@ -36,6 +38,10 @@ const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
 );
 
 export default function CompanyCentralStock({ items: initialItems, onUpdateStock, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
@@ -56,13 +62,18 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   const fetchCentralStock = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({
+        limit: 100,
+        branchId: isBranchFiltered ? selectedBranchId : undefined
+      });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems)) {
           const formatted = rawItems.map(i => ({
             id: i._id || i.id,
             _id: i._id || i.id,
+            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+            branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
             itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
             name: i.name,
             category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'General',
@@ -80,13 +91,16 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchCentralStock();
   }, [fetchCentralStock]);
 
-  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const rawDisplay = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const displayItems = isBranchFiltered
+    ? rawDisplay.filter(i => isBranchMatch(i, selectedBranchId, branches))
+    : rawDisplay;
 
   // Summary Metrics for Central Stock
   const totalItemsCount = displayItems.length;

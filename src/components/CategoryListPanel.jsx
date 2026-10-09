@@ -75,8 +75,7 @@ export default function CategoryListPanel({
     if (!activeRestaurant) return;
     try {
       const params = {
-        page: 0,
-        limit: 10,
+        limit: 0,
         search: searchQuery ? searchQuery.trim() : undefined
       };
       if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && isMongoId(selectedBranchId)) {

@@ -134,7 +134,7 @@ export default function InventoryCategoryPanel() {
       };
       const [catsRes, itemsRes] = await Promise.all([
         InventoryCategoryApi.getCategories(queryParams),
-        InventoryApi.getItems(baseParams)
+        InventoryApi.getItems({ ...baseParams, search: undefined, status: undefined })
       ]);
 
       if (catsRes?.status) {

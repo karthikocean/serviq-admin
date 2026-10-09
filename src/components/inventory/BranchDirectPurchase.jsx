@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function BranchDirectPurchase({ purchases, items: initialItems, onSaveDirectPurchase, onDeletePurchase, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'view') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'delete') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
+  const [apiPurchases, setApiPurchases] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(0);
@@ -31,7 +38,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({ limit: 100, branchId: isBranchFiltered ? selectedBranchId : undefined });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems) && rawItems.length > 0) {
@@ -54,11 +61,29 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
     } catch (err) {
       console.warn('Branch direct purchase items load error:', err);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
+
+  const fetchPurchases = useCallback(async () => {
+    try {
+      const res = await InventoryApi.getPurchases(isBranchFiltered ? { branchId: selectedBranchId } : {});
+      if (res?.status && res?.response) {
+        const raw = res.response.data || res.response || [];
+        if (Array.isArray(raw)) {
+          setApiPurchases(raw.map(p => ({
+            ...p,
+            id: p._id || p.id,
+            branchId: p.branchId || p.branch?._id || p.branch?.id || p.branch,
+            branchName: p.branchName || p.branch || ''
+          })));
+        }
+      }
+    } catch (e) {}
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchItems();
-  }, [fetchItems]);
+    fetchPurchases();
+  }, [fetchItems, fetchPurchases]);
 
   const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
 
@@ -72,7 +97,12 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
     }));
   };
 
-  const filteredPurchases = purchases.filter(p => {
+  const sourcePurchases = apiPurchases.length > 0 ? apiPurchases : (purchases || []);
+  const branchScopedPurchases = isBranchFiltered
+    ? sourcePurchases.filter(p => isBranchMatch(p, selectedBranchId, branches))
+    : sourcePurchases;
+
+  const filteredPurchases = branchScopedPurchases.filter(p => {
     const purNo = p.purchaseNo || p.id || '';
     const supp = p.supplier || p.supplierName || '';
     const itm = p.item || p.itemName || '';
@@ -90,6 +120,10 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredPurchases.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, typeFilter, selectedBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -110,10 +144,31 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSaveDirectPurchase(purForm);
+    try {
+      const targetBranchId = isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || undefined);
+      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
+      const payload = {
+        ...purForm,
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        purchaseType: purForm.purchaseType || 'Vendor Direct Purchase',
+        supplierName: purForm.supplier,
+        quantity: Number(purForm.quantity),
+        purchaseQty: Number(purForm.quantity),
+        rate: Number(purForm.rate),
+        unitPrice: Number(purForm.rate),
+        totalAmount: Number(purForm.quantity) * Number(purForm.rate)
+      };
+      await InventoryApi.recordPurchase(payload);
+      fetchPurchases();
+    } catch (err) {
+      console.warn('Record direct purchase note:', err);
+    }
+    if (onSaveDirectPurchase) onSaveDirectPurchase(purForm);
     setViewState(null);
   };
 

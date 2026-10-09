@@ -18,8 +18,14 @@ class InventoryApi {
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
       if (params.isActive !== undefined && params.isActive !== 'All' && params.isActive !== 'ALL') cleanParams.isActive = params.isActive;
 
-      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
-      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 0;
+      }
       const response = await apiClient.get("/inventory/items", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

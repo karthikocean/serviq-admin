@@ -1690,18 +1690,17 @@ export default function OrdersPanel({
   }
 
   const isServerPaginated = Boolean(
-    (propTotalCount || 0) > 0 &&
-    (propTotalPages || 1) > 1 &&
-    sourceOrders.length <= limit &&
-    (propTotalCount || 0) > sourceOrders.length
+    ((propTotalCount || 0) > 0 && sourceOrders.length <= limit) ||
+    ((propTotalPages || 1) > 1 && sourceOrders.length <= limit) ||
+    (sourceOrders.length <= limit && (propTotalCount || 0) > sourceOrders.length)
   );
 
-  const effectiveTotalCount = isServerPaginated ? (propTotalCount || 0) : filteredOrders.length;
+  const effectiveTotalCount = isServerPaginated ? (propTotalCount || filteredOrders.length) : filteredOrders.length;
   const effectiveTotalPages = isServerPaginated
     ? (propTotalPages || Math.max(1, Math.ceil(effectiveTotalCount / limit)))
     : Math.max(1, Math.ceil(effectiveTotalCount / limit));
 
-  const paginatedOrders = isServerPaginated
+  const paginatedOrders = (isServerPaginated || filteredOrders.length <= limit)
     ? filteredOrders
     : filteredOrders.slice(page * limit, (page + 1) * limit);
 

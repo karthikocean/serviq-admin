@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function BranchStockReceipt({ receipts, distributions, transfers, items, onSaveReceipt, onDeleteReceipt, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'view') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'delete') : true;
@@ -54,7 +60,11 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
     setRecForm(prev => ({ ...prev, reqTrfNo: no }));
   };
 
-  const filteredReceipts = receipts.filter(r => {
+  const branchScopedReceipts = isBranchFiltered
+    ? (receipts || []).filter(r => isBranchMatch(r, selectedBranchId, branches) || isBranchMatch(r.branch, selectedBranchId, branches) || isBranchMatch(r.destination, selectedBranchId, branches))
+    : (receipts || []);
+
+  const filteredReceipts = branchScopedReceipts.filter(r => {
     const ref = r.reqTrfNo || r.refNo || r.requestNo || '';
     return !searchTerm.trim() ||
       r.receiptNo.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -171,19 +171,18 @@ export default function MenuPanel({
       if (isBranchFiltered) {
         rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, activeRestaurant?.branches || []));
       }
-      const totalCount = (isBranchFiltered && res.response.data?.total === undefined) ? rawList.length : (res.response.data?.total || rawList.length);
+      const totalCount = res.response?.total ?? res.response?.totalItems ?? res.response?.totalRecords ?? res.response?.count ?? res.response?.pagination?.total ?? (res.response?.data?.total ?? rawList.length);
       setTotalItems(totalCount);
-      const calculatedTotalPages = Math.max(1, Math.ceil(totalCount / limit));
+      const calculatedTotalPages = res.response?.totalPages || res.response?.pagination?.totalPages || res.response?.data?.totalPages || Math.max(1, Math.ceil(totalCount / limit));
       setTotalPages(calculatedTotalPages);
 
       const isServerPaginated = Boolean(
-        res.response.data?.items &&
-        res.response.data?.total !== undefined &&
-        rawList.length <= limit &&
-        res.response.data.total > rawList.length
+        (totalCount > rawList.length && rawList.length <= limit) ||
+        (calculatedTotalPages > 1 && rawList.length <= limit) ||
+        rawList.length <= limit
       );
 
-      const displayedItems = isServerPaginated
+      const displayedItems = (isServerPaginated || rawList.length <= limit)
         ? rawList
         : rawList.slice(page * limit, (page + 1) * limit);
 

@@ -16,8 +16,14 @@ class MemberApi {
       if (params.section && !cleanParams.section && params.section !== 'All' && params.section !== 'ALL') cleanParams.section = params.section;
       if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
 
-      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
-      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 0;
+      }
       let response;
       try {
         response = await apiClient.get("/tables", { params: cleanParams });

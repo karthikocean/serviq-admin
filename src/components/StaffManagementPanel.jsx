@@ -256,8 +256,7 @@ export default function StaffManagementPanel({
     setIsLoading(true);
 
     const userParams = {
-      page: 0,
-      limit: 10
+      limit: 0
     };
     if (searchQuery && searchQuery.trim()) {
       userParams.search = searchQuery.trim();
@@ -275,10 +274,10 @@ export default function StaffManagementPanel({
 
     const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
       UserApi.getUsers(userParams),
-      UserApi.getStations(),
-      BranchApi.getBranches(),
+      UserApi.getStations({ limit: 0 }),
+      BranchApi.getBranches({ limit: 0 }),
       RoleApi.getRoles(),
-      TableApi.getTables({ page: 0, limit: 10 })
+      TableApi.getTables({ limit: 0 })
     ]);
 
     let list = [];

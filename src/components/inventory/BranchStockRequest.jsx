@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function BranchStockRequest({ requests: initialRequests, items: initialItems, onSaveStockRequest, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'view') : true;
   const [requestsList, setRequestsList] = useState(initialRequests || []);
@@ -28,7 +34,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
   // Fetch Items dynamically
   const fetchItems = useCallback(async () => {
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({ limit: 100, branchId: isBranchFiltered ? selectedBranchId : undefined });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems) && rawItems.length > 0) {
@@ -52,7 +58,7 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
     } catch (err) {
       console.warn('Branch items load error:', err);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   const fetchRequests = useCallback(async () => {
     setLoading(true);
@@ -64,6 +70,8 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
           const formatted = rawReqs.map(r => ({
             id: r._id || r.id,
             _id: r._id || r.id,
+            branchId: r.branchId || r.branch?._id || r.branch?.id || r.branch,
+            branchName: r.branchName || r.branch || '',
             requestNo: r.requestNo || `BR-REQ-${String(r._id || '').slice(-3).toUpperCase()}`,
             item: r.itemName || (typeof r.itemId === 'object' ? r.itemId?.name : '') || r.item || 'General Material',
             reqQty: r.reqQty || 0,
@@ -100,8 +108,11 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
   };
 
   const displayRequests = requestsList.length > 0 ? requestsList : initialRequests;
+  const branchScopedRequests = isBranchFiltered
+    ? displayRequests.filter(r => isBranchMatch(r, selectedBranchId, branches))
+    : displayRequests;
 
-  const filteredRequests = displayRequests.filter(r => {
+  const filteredRequests = branchScopedRequests.filter(r => {
     const matchesSearch = !searchTerm.trim() ||
       (r.requestNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (r.item || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -112,6 +123,10 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, statusFilter, selectedBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -134,7 +149,14 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
     e.preventDefault();
     if (!validate()) return;
     try {
-      await InventoryApi.createStockRequest(reqForm);
+      const targetBranchId = isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || undefined);
+      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
+      await InventoryApi.createStockRequest({
+        ...reqForm,
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
+      });
       fetchRequests();
     } catch (err) {
       console.warn('Submit stock request error:', err);

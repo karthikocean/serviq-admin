@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function BranchTransactions({ transactions, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_transactions', 'view') : true;
   const [searchTerm, setSearchTerm] = useState('');
   const [txnTypeFilter, setTxnTypeFilter] = useState('All');
@@ -13,8 +19,15 @@ export default function BranchTransactions({ transactions, hasPermission }) {
 
   const txnTypes = ['All', 'Purchase', 'Stock Request', 'Transfer', 'Direct Purchase', 'Stock Receipt', 'Adjustment'];
 
-  // Filters: NO BRANCH FILTER (as requested by user!)
-  const filteredTransactions = transactions.filter(t => {
+  const branchScopedTransactions = isBranchFiltered
+    ? (transactions || []).filter(t => 
+        isBranchMatch(t, selectedBranchId, branches) ||
+        isBranchMatch(t.source, selectedBranchId, branches) ||
+        isBranchMatch(t.destination, selectedBranchId, branches)
+      )
+    : (transactions || []);
+
+  const filteredTransactions = branchScopedTransactions.filter(t => {
     const matchesSearch = !searchTerm.trim() ||
       t.txnNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.item.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -28,6 +41,10 @@ export default function BranchTransactions({ transactions, hasPermission }) {
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, txnTypeFilter, statusFilter, selectedBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {

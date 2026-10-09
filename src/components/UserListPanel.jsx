@@ -8,7 +8,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -187,15 +187,21 @@ export default function UserListPanel() {
       BranchApi.getBranches(),
       RoleApi.getRoles()
     ]);
+    if (branchesRes?.status) setApiBranches(branchesRes.response?.data || branchesRes.response || []);
+    const currentBranches = branchesRes?.status ? (branchesRes.response?.data || branchesRes.response || []) : apiBranches;
+
     if (usersRes?.status) {
-      const uData = usersRes.response.data || [];
-      const list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : []);
+      const uData = usersRes.response?.data || usersRes.response || [];
+      let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
+      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && activeFilteredBranchId !== 'All') {
+        list = list.filter(u => isBranchMatch(u, activeFilteredBranchId, currentBranches));
+      }
       setApiUsers(list);
-      const totalNum = usersRes.response.total ?? usersRes.response.totalRecords ?? list.length;
+      const totalNum = usersRes.response?.total ?? usersRes.response?.totalRecords ?? usersRes.response?.totalUsers ?? usersRes.response?.count ?? usersRes.response?.pagination?.total ?? (usersRes.response?.data?.total ?? list.length);
       setTotalRecords(totalNum);
-      setTotalPages(usersRes.response.totalPages || Math.max(1, Math.ceil(totalNum / limit)));
+      const totalP = usersRes.response?.totalPages || usersRes.response?.pagination?.totalPages || usersRes.response?.data?.totalPages || Math.max(1, Math.ceil(totalNum / limit));
+      setTotalPages(totalP);
     }
-    if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
     if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
       setApiRoles(rolesRes.response.data);
     } else if (rolesRes?.status && Array.isArray(rolesRes.response)) {
@@ -224,13 +230,12 @@ export default function UserListPanel() {
   }, [totalPages, page]);
 
   const isServerPaginated = Boolean(
-    totalRecords > 0 &&
-    totalPages > 1 &&
-    apiUsers.length <= limit &&
-    totalRecords > apiUsers.length
+    (totalRecords > apiUsers.length && apiUsers.length <= limit) ||
+    (totalPages > 1 && apiUsers.length <= limit) ||
+    apiUsers.length <= limit
   );
 
-  const paginatedUsers = isServerPaginated
+  const paginatedUsers = (isServerPaginated || apiUsers.length <= limit)
     ? apiUsers
     : apiUsers.slice(page * limit, (page + 1) * limit);
 

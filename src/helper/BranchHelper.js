@@ -362,6 +362,7 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
     const branchFields = [
       itemBranch.branchId,
       itemBranch.branch,
+      itemBranch.branchName,
       itemBranch.restaurantBranchId,
       itemBranch.activeBranchId,
       itemBranch.branch_id,

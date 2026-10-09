@@ -13,8 +13,14 @@ class InventoryCategoryApi {
       const searchVal = params.search || params.searchQuery || params.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
-      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
-      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 0;
+      }
       const response = await apiClient.get("/inventory/categories", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };

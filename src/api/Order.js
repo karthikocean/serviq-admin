@@ -24,8 +24,14 @@ class OrderApi {
       if (params.customStartDate && !cleanParams.startDate) cleanParams.startDate = params.customStartDate;
       if (params.customEndDate && !cleanParams.endDate) cleanParams.endDate = params.customEndDate;
 
-      cleanParams.page = cleanParams.page !== undefined ? Math.max(0, Number(cleanParams.page) || 0) : 0;
-      cleanParams.limit = cleanParams.limit !== undefined ? (Number(cleanParams.limit) || 10) : 10;
+      if (cleanParams.page !== undefined) {
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      }
+      if (cleanParams.limit !== undefined) {
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 10;
+      }
       const response = await apiClient.get("/orders", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
