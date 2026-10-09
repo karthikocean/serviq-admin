@@ -4,7 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import DashboardApi from '../api/Dashboard.js';
 import TableApi from '../api/Table.js';
-import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch } from '../helper/BranchHelper.js';
+import { 
+  resolveBranchManagerName, 
+  resolveBranchContactNumber, 
+  isBranchMatch,
+  isUserCompanyUser,
+  getUserAssignedBranchId
+} from '../helper/BranchHelper.js';
 
 const StoreIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -180,26 +186,10 @@ export default function OverviewPanel({
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
-  const isRestaurantOwner = 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER' || 
-    userType === 'SUPER ADMIN' || 
-    userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||
-    userType === 'COMPANY' ||
-    userType === 'COMPANY_ADMIN' ||
-    userRole === 'restaurant_owner' || 
-    userRole === 'restaurant owner' || 
-    userRole === 'owner' || 
-    userRole === 'super admin' || 
-    userRole === 'super_admin' ||
-    userRole === 'admin' ||
-    userRole === 'company' ||
-    userRole === 'company_admin' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
-  const isAdmin = isRestaurantOwner || userRole === 'admin' || userType === 'ADMIN';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isAdmin = isCompanyUser;
+  const isRestaurantOwner = isCompanyUser;
 
   const isSpecificBranch = Boolean(
     selectedBranchId && 
@@ -596,14 +586,14 @@ export default function OverviewPanel({
               </p>
             </div>
           </div>
-          {isAdmin && (
+          {isCompanyUser && (
             <button
               type="button"
               className="btn btn-outline"
               style={{ fontSize: '12px', fontWeight: 700, padding: '8px 16px', background: '#ffffff' }}
-              onClick={() => onSelectBranch(null)}
+              onClick={() => onSelectBranch('COMPANY')}
             >
-              ← View {activeRestaurant?.restaurantName || activeRestaurant?.name || 'All Branches'}
+              ← View All Branches
             </button>
           )}
         </div>

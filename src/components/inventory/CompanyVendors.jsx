@@ -4,7 +4,11 @@ import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon, filterInputStyle,
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
 
-export default function CompanyVendors() {
+export default function CompanyVendors({ hasPermission }) {
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'add') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'edit') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'delete') : true;
+
   const navigate = useNavigate();
   const [vendorsList, setVendorsList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -68,6 +72,14 @@ export default function CompanyVendors() {
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredVendors.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedVendors = filteredVendors.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // -------------------------------------------------------------
@@ -189,26 +201,28 @@ export default function CompanyVendors() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => openEditVendor(viewingVendor)}
-            style={{
-              background: '#f8fafc',
-              border: '1px solid #cbd5e1',
-              color: '#0f172a',
-              padding: '8px 18px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <PencilIcon size={14} />
-            <span>Edit Vendor</span>
-          </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => openEditVendor(viewingVendor)}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                color: '#0f172a',
+                padding: '8px 18px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <PencilIcon size={14} />
+              <span>Edit Vendor</span>
+            </button>
+          )}
         </div>
 
         <div style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '28px', width: '100%', boxSizing: 'border-box' }}>
@@ -453,27 +467,29 @@ export default function CompanyVendors() {
             ← Back to Purchases
           </button>
 
-          <button
-            type="button"
-            onClick={openAddVendor}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
-              color: '#ffffff',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              boxShadow: '0 2px 10px rgba(255, 90, 31, 0.3)'
-            }}
-          >
-            <PlusIcon size={15} />
-            <span>Register New Vendor</span>
-          </button>
+          {canAdd && (
+            <button
+              type="button"
+              onClick={openAddVendor}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
+                color: '#ffffff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: '0 2px 10px rgba(255, 90, 31, 0.3)'
+              }}
+            >
+              <PlusIcon size={15} />
+              <span>Register New Vendor</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -519,22 +535,39 @@ export default function CompanyVendors() {
                     {v.phone || '—'}
                   </td>
                   <td style={{ padding: '14px 16px' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(v)}
-                      style={{
-                        background: v.status === 'ACTIVE' ? '#dcfce7' : '#fef2f2',
-                        color: v.status === 'ACTIVE' ? '#16a34a' : '#dc2626',
-                        border: `1px solid ${v.status === 'ACTIVE' ? '#bbf7d0' : '#fecaca'}`,
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {v.status || 'ACTIVE'}
-                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleStatus(v)}
+                        style={{
+                          background: v.status === 'ACTIVE' ? '#dcfce7' : '#fef2f2',
+                          color: v.status === 'ACTIVE' ? '#16a34a' : '#dc2626',
+                          border: `1px solid ${v.status === 'ACTIVE' ? '#bbf7d0' : '#fecaca'}`,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {v.status || 'ACTIVE'}
+                      </button>
+                    ) : (
+                      <span
+                        style={{
+                          background: v.status === 'ACTIVE' ? '#dcfce7' : '#fef2f2',
+                          color: v.status === 'ACTIVE' ? '#16a34a' : '#dc2626',
+                          border: `1px solid ${v.status === 'ACTIVE' ? '#bbf7d0' : '#fecaca'}`,
+                          padding: '3px 10px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          display: 'inline-block'
+                        }}
+                      >
+                        {v.status || 'ACTIVE'}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '6px' }}>
@@ -551,32 +584,36 @@ export default function CompanyVendors() {
                       >
                         <EyeIcon size={15} color="#2563eb" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => openEditVendor(v)}
-                        title="Edit Vendor"
-                        style={{
-                          ...actionIconBtnStyle,
-                          background: '#eff6ff',
-                          border: '1px solid #bfdbfe',
-                          color: '#2563eb'
-                        }}
-                      >
-                        <PencilIcon size={15} color="#2563eb" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(v)}
-                        title="Delete Vendor"
-                        style={{
-                          ...actionIconBtnStyle,
-                          background: '#fef2f2',
-                          border: '1px solid #fecaca',
-                          color: '#dc2626'
-                        }}
-                      >
-                        <TrashIcon size={15} color="#dc2626" />
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => openEditVendor(v)}
+                          title="Edit Vendor"
+                          style={{
+                            ...actionIconBtnStyle,
+                            background: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            color: '#2563eb'
+                          }}
+                        >
+                          <PencilIcon size={15} color="#2563eb" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(v)}
+                          title="Delete Vendor"
+                          style={{
+                            ...actionIconBtnStyle,
+                            background: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            color: '#dc2626'
+                          }}
+                        >
+                          <TrashIcon size={15} color="#dc2626" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

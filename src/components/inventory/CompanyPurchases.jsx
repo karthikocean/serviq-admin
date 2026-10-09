@@ -182,6 +182,14 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredPurchases.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedPurchases = filteredPurchases.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // -------------------------------------------------------------
@@ -269,7 +277,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
 
   const validatePurchase = () => {
     const errors = {};
-    if (!purchaseForm.supplier.trim()) errors.supplier = 'Vendor / Supplier Name is required';
     if (!purchaseForm.item) errors.item = 'Material / Ingredient Item selection is required';
     if (!purchaseForm.purchaseDate) errors.purchaseDate = 'Purchase Date is required';
     if (!purchaseForm.quantity || Number(purchaseForm.quantity) <= 0) errors.quantity = 'Valid Purchase Quantity is required';
@@ -502,7 +509,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
         </div>
 
         <form onSubmit={handlePurchaseSubmit} style={{ width: '100%' }}>
-          {/* Row 1: Purchase Category / Type & Vendor / Supplier Name */}
+          {/* Row 1: Purchase Category / Type & Material / Ingredient Item */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
@@ -521,31 +528,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
 
             <div>
               <label style={formLabelStyle}>
-                Vendor / Supplier Name <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                value={purchaseForm.supplier}
-                onChange={e => handleVendorSelect(e.target.value)}
-                style={{ ...formInputStyle, borderColor: purchaseErrors.supplier ? '#ef4444' : '#cbd5e1' }}
-              >
-                <option value="">-- Select Vendor / Supplier --</option>
-                {vendorsList.map(v => (
-                  <option key={v._id || v.vendorCode} value={v.name}>
-                    {v.vendorCode ? `[${v.vendorCode}] ${v.name}` : v.name} {v.companyName ? `(${v.companyName})` : ''}
-                  </option>
-                ))}
-                <option value="ADD_NEW_VENDOR" style={{ fontWeight: 800, color: '#ff5a1f' }}>
-                  + Add New Vendor...
-                </option>
-              </select>
-              {purchaseErrors.supplier && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.supplier}</span>}
-            </div>
-          </div>
-
-          {/* Row 2: Material / Ingredient Item & Invoice No / Vendor Bill Ref */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div>
-              <label style={formLabelStyle}>
                 Material / Ingredient Item <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
@@ -560,7 +542,10 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
               </select>
               {purchaseErrors.item && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.item}</span>}
             </div>
+          </div>
 
+          {/* Row 2: Invoice No / Vendor Bill Ref & Purchase Date */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
                 Invoice No / Vendor Bill Ref
@@ -573,10 +558,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                 style={{ ...formInputStyle }}
               />
             </div>
-          </div>
 
-          {/* Row 3: Purchase Date & Unit of Measure */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
             <div>
               <label style={formLabelStyle}>
                 Purchase Date <span style={{ color: '#ef4444' }}>*</span>
@@ -588,6 +570,23 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                 style={{ ...formInputStyle, borderColor: purchaseErrors.purchaseDate ? '#ef4444' : '#cbd5e1' }}
               />
               {purchaseErrors.purchaseDate && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.purchaseDate}</span>}
+            </div>
+          </div>
+
+          {/* Row 3: Purchase Quantity, Unit of Measure, Rate per Unit & Total Valuation */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '20px' }}>
+            <div>
+              <label style={formLabelStyle}>
+                Purchase Quantity <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 100"
+                value={purchaseForm.quantity}
+                onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                style={{ ...formInputStyle, borderColor: purchaseErrors.quantity ? '#ef4444' : '#cbd5e1' }}
+              />
+              {purchaseErrors.quantity && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.quantity}</span>}
             </div>
 
             <div>
@@ -601,23 +600,6 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
                 placeholder="kg"
                 style={{ ...formInputStyle }}
               />
-            </div>
-          </div>
-
-          {/* Row 4: Purchase Quantity, Rate per Unit & Total Valuation */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div>
-              <label style={formLabelStyle}>
-                Purchase Quantity <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                placeholder="e.g. 100"
-                value={purchaseForm.quantity}
-                onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
-                style={{ ...formInputStyle, borderColor: purchaseErrors.quantity ? '#ef4444' : '#cbd5e1' }}
-              />
-              {purchaseErrors.quantity && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{purchaseErrors.quantity}</span>}
             </div>
 
             <div>
@@ -741,7 +723,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
               boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
             }}
           >
-            <span>Vendors ({vendorsList.length})</span>
+            <span>Vendors </span>
           </button>
 
           {canAdd && (

@@ -117,6 +117,14 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const handleSaveStockAdjust = (e) => {
@@ -160,7 +168,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', maxWidth: '800px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 1fr' : '1fr', gap: '24px', maxWidth: canEdit ? '800px' : '500px', marginBottom: '32px' }}>
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Stock Summary</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
@@ -196,43 +204,43 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-            <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Kitchen Adjustment</h4>
-            <form onSubmit={handleSaveStockAdjust}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Update Branch Stock Quantity ({viewingItem.unit})
-                </label>
-                <input
-                  type="number"
-                  value={adjustQty}
-                  placeholder={viewingItem.branchStock.toString()}
-                  onChange={e => setAdjustQty(e.target.value)}
-                  style={{ ...filterInputStyle, height: '40px' }}
-                  required
-                />
-              </div>
+          {canEdit && (
+            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+              <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Kitchen Adjustment</h4>
+              <form onSubmit={handleSaveStockAdjust}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Update Branch Stock Quantity ({viewingItem.unit})
+                  </label>
+                  <input
+                    type="number"
+                    value={adjustQty}
+                    placeholder={viewingItem.branchStock.toString()}
+                    onChange={e => setAdjustQty(e.target.value)}
+                    style={{ ...filterInputStyle, height: '40px' }}
+                    required
+                  />
+                </div>
 
-              {canEdit && (
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  background: '#ff5a1f',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Save Branch Stock
-              </button>
-              )}
-            </form>
-          </div>
+                <button
+                  type="submit"
+                  style={{
+                    width: '100%',
+                    background: '#ff5a1f',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Save Branch Stock
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     );

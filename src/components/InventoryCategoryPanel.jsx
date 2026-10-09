@@ -7,7 +7,7 @@ import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 
 const PencilIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -60,37 +60,18 @@ export default function InventoryCategoryPanel() {
     selectedBranchId,
     addInventoryCategory,
     updateInventoryCategory,
-    deleteInventoryCategory
+    deleteInventoryCategory,
+    hasPermission
   } = useAppState();
 
-  // Determine user role / permissions safely
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'add') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'edit') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'delete') : true;
 
-  const userType = (userTypeStr || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
-  const isRestaurantOwner =
-    userTypeStr === 'RESTAURANT_OWNER' ||
-    roleStr === 'RESTAURANT_OWNER' ||
-    userType === 'RESTAURANT_OWNER' ||
-    userType === 'ADMIN' ||
-    userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
-    userType === 'OWNER' ||
-    userRoleLower === 'admin' ||
-    userRoleLower === 'owner' ||
-    userRoleLower === 'super admin' ||
-    userRoleLower === 'restaurant_owner' ||
-    userRoleLower === 'restaurant owner' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
-
-  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-  const isBranchLogin = !isRestaurantOwner && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const isRestaurantOwner = isCompanyUser;
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
   // API State
   const [categories, setCategories] = useState([]);
@@ -252,6 +233,12 @@ export default function InventoryCategoryPanel() {
   useEffect(() => {
     setPage(0);
   }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
@@ -465,11 +452,14 @@ export default function InventoryCategoryPanel() {
               </label>
               {(() => {
                 const allBranchesList = (liveBranches && liveBranches.length > 0) ? liveBranches : (branches && branches.length > 0 ? branches : (activeRestaurant?.branches || []));
-                const isLocked = isBranchLogin;
+                const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+                const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+                const isLocked = !isCompanyScope;
 
                 let currentBranchVal = formBranchId;
-                if (isBranchLogin && userBranchId) {
-                  currentBranchVal = userBranchId;
+                if (!isCompanyScope) {
+                  currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || formBranchId);
                 } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                   currentBranchVal = '';
                 }
@@ -480,7 +470,7 @@ export default function InventoryCategoryPanel() {
                 let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -501,7 +491,7 @@ export default function InventoryCategoryPanel() {
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to your assigned branch.
+                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                       </span>
                     )}
                     {formErrors.branchId && (
@@ -634,27 +624,29 @@ export default function InventoryCategoryPanel() {
 
 
 
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            style={{
-              background: '#ff5a1f',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: '700',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
-              transition: 'all 0.2s'
-            }}
-          >
-            + Add Category
-          </button>
+          {canAdd && (
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              style={{
+                background: '#ff5a1f',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.2s'
+              }}
+            >
+              + Add Category
+            </button>
+          )}
         </div>
       </div>
 
@@ -826,29 +818,50 @@ export default function InventoryCategoryPanel() {
                         </span>
                       </td>
                       <td style={{ padding: '14px 20px' }}>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(item)}
-                          title="Click to toggle status"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '4px 10px',
-                            borderRadius: '20px',
-                            fontSize: '11px',
-                            fontWeight: '800',
-                            letterSpacing: '0.4px',
-                            background: isAvailable ? '#ecfdf5' : '#fef2f2',
-                            color: isAvailable ? '#059669' : '#dc2626',
-                            border: `1px solid ${isAvailable ? '#a7f3d0' : '#fecaca'}`,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isAvailable ? '#10b981' : '#ef4444' }}></span>
-                          {isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
-                        </button>
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(item)}
+                            title="Click to toggle status"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '4px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              letterSpacing: '0.4px',
+                              background: isAvailable ? '#ecfdf5' : '#fef2f2',
+                              color: isAvailable ? '#059669' : '#dc2626',
+                              border: `1px solid ${isAvailable ? '#a7f3d0' : '#fecaca'}`,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isAvailable ? '#10b981' : '#ef4444' }}></span>
+                            {isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
+                          </button>
+                        ) : (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '4px 10px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '800',
+                              letterSpacing: '0.4px',
+                              background: isAvailable ? '#ecfdf5' : '#fef2f2',
+                              color: isAvailable ? '#059669' : '#dc2626',
+                              border: `1px solid ${isAvailable ? '#a7f3d0' : '#fecaca'}`
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isAvailable ? '#10b981' : '#ef4444' }}></span>
+                            {isAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}
+                          </span>
+                        )}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
@@ -872,46 +885,50 @@ export default function InventoryCategoryPanel() {
                           >
                             <EyeIcon size={14} color="#64748b" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(item)}
-                            title="Edit Category"
-                            style={{
-                              background: '#f8fafc',
-                              border: '1px solid #e2e8f0',
-                              borderRadius: '6px',
-                              padding: '6px 10px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              color: '#0284c7',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#e0f2fe'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
-                          >
-                            <PencilIcon size={14} color="#0284c7" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(item)}
-                            title="Delete Category"
-                            style={{
-                              background: '#fef2f2',
-                              border: '1px solid #fecaca',
-                              borderRadius: '6px',
-                              padding: '6px 10px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              color: '#dc2626',
-                              transition: 'all 0.15s'
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#fef2f2'}
-                          >
-                            <TrashIcon size={14} color="#dc2626" />
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(item)}
+                              title="Edit Category"
+                              style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                color: '#0284c7',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#e0f2fe'}
+                              onMouseLeave={e => e.currentTarget.style.background = '#f8fafc'}
+                            >
+                              <PencilIcon size={14} color="#0284c7" />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item)}
+                              title="Delete Category"
+                              style={{
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                color: '#dc2626',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                              onMouseLeave={e => e.currentTarget.style.background = '#fef2f2'}
+                            >
+                              <TrashIcon size={14} color="#dc2626" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -40,6 +40,14 @@ export default function CompanyTransactions({ transactions = [], hasPermission }
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedTxns = filteredTransactions.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // Render View Transaction Detail Page View

@@ -6,7 +6,7 @@ import BranchApi from '../api/Branch.js';
 import UploadApi from '../api/Upload.js';
 import { useAppState } from '../config/AppContext';
 import SearchableSelect from './SearchableSelect.jsx';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import { cleanRelativeImagePath, getImageUrl } from '../helper/ImageHelper.js';
 import { isMongoId } from '../config/initialData';
 
@@ -38,7 +38,10 @@ export default function CategoryListPanel({
   refreshCategories,
   activeRestaurant
 }) {
-  const { currentUser, selectedBranchId } = useAppState();
+  const { currentUser, selectedBranchId, hasPermission } = useAppState();
+  const canAdd = typeof hasPermission === 'function' ? hasPermission('menu', 'add') : true;
+  const canEdit = typeof hasPermission === 'function' ? hasPermission('menu', 'edit') : true;
+  const canDelete = typeof hasPermission === 'function' ? hasPermission('menu', 'delete') : true;
   const [allCategories, setAllCategories] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,26 +143,8 @@ export default function CategoryListPanel({
     return pages;
   };
 
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userType = (userTypeStr || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
-  const isRestaurantOwner =
-    userTypeStr === 'RESTAURANT_OWNER' ||
-    roleStr === 'RESTAURANT_OWNER' ||
-    userType === 'RESTAURANT_OWNER' ||
-    userType === 'ADMIN' ||
-    userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
-    userType === 'OWNER' ||
-    userRoleLower === 'admin' ||
-    userRoleLower === 'owner' ||
-    userRoleLower === 'super admin' ||
-    userRoleLower === 'restaurant_owner' ||
-    userRoleLower === 'restaurant owner';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const isRestaurantOwner = isCompanyUser;
 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'form'
   const [viewingCategory, setViewingCategory] = useState(null);
@@ -184,9 +169,11 @@ export default function CategoryListPanel({
     setFormDesc('');
     setFormDisplayOrder(allCategories.length + 1);
     setFormStatus('AVAILABLE');
-    const defaultBranch = (selectedBranchId && selectedBranchId !== 'ALL')
-      ? selectedBranchId
-      : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : ''));
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const defaultBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
     setFormBranchId(defaultBranch || '');
     setFormErrors({});
     setViewMode('form');
@@ -199,8 +186,17 @@ export default function CategoryListPanel({
     setFormDesc(item.description || '');
     setFormDisplayOrder(item.displayOrder || item.order || 1);
     setFormStatus(item.status || 'AVAILABLE');
-    const itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : '')));
-    setFormBranchId(itemBranch || '');
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+
+    let itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || '';
+    if (itemBranch === 'COMPANY' || itemBranch === 'ALL' || itemBranch === 'all') {
+      itemBranch = '';
+    }
+    const defaultBranch = isBranchLogin ? userBranchId : (cleanSelectedBranch || itemBranch || '');
+    setFormBranchId(defaultBranch || '');
     setFormErrors({});
     setViewMode('form');
   };
@@ -225,20 +221,34 @@ export default function CategoryListPanel({
       errors.displayOrder = 'Please enter a valid Display Order (at least 1).';
     }
 
-    if (isRestaurantOwner && branches.length > 0 && !formBranchId) {
-      errors.branchId = 'Branch selection is required.';
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+
+    const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+    let effectiveBranch = formBranchId;
+    if (!isCompanyScope) {
+      effectiveBranch = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || formBranchId);
+    } else if (effectiveBranch === 'COMPANY' || effectiveBranch === 'ALL' || effectiveBranch === 'all') {
+      effectiveBranch = '';
+    }
+
+    if (allBranchesList.length > 0 && !effectiveBranch) {
+      errors.branchId = 'Please select a branch.';
     }
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
+      if (errors.branchId) {
+        ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
+      }
       return;
     }
 
     setIsSubmitting(true);
-    const candidateBranch = (isMongoId(formBranchId) ? formBranchId : null) || 
-                            (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && isMongoId(selectedBranchId) ? selectedBranchId : null) || 
-                            (isMongoId(currentUser?.activeBranchId) ? currentUser.activeBranchId : null) || 
-                            (isMongoId(currentUser?.branchId) ? currentUser.branchId : null);
+    const candidateBranch = effectiveBranch || (isMongoId(formBranchId) ? formBranchId : null);
     const payload = {
       name: formName.trim(),
       image: cleanRelativeImagePath(formImage),
@@ -505,41 +515,21 @@ export default function CategoryListPanel({
             {/* Branch Assignment */}
             <div>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#0f172a', marginBottom: '6px' }}>
-                Branch Assignment {branches.length > 0 && <span style={{ color: '#ef4444' }}>*</span>}
+                Branch Assignment {((branches && branches.length > 0) || (activeRestaurant?.branches?.length > 0)) && <span style={{ color: '#ef4444' }}>*</span>}
               </label>
               {(() => {
-                const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-                  ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-                  : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-                const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-                const userRole = (roleStr || '').toLowerCase().trim();
-                const userType = (userTypeStr || '').toUpperCase().trim();
-                const isCompanyUser =
-                  userType === 'RESTAURANT_OWNER' ||
-                  userType === 'OWNER' ||
-                  userType === 'SUPER ADMIN' ||
-                  userType === 'SUPER_ADMIN' ||
-                  userType === 'ADMIN' ||
-                  userRole === 'restaurant_owner' ||
-                  userRole === 'restaurant owner' ||
-                  userRole === 'owner' ||
-                  userRole === 'super admin' ||
-                  userRole === 'super_admin' ||
-                  userRole === 'admin' ||
-                  (!currentUser?.branchId && !currentUser?.activeBranchId);
-
-                const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-                  ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-                  : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-                const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-                const isLocked = isBranchLogin;
+                const isCompanyUser = isUserCompanyUser(currentUser);
+                const userBranchId = getUserAssignedBranchId(currentUser);
+                const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+                const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+                const isLocked = !isCompanyScope;
 
                 const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
 
                 let currentBranchVal = formBranchId;
-                if (isBranchLogin && userBranchId) {
-                  currentBranchVal = userBranchId;
+                if (!isCompanyScope) {
+                  currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || formBranchId);
                 } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                   currentBranchVal = '';
                 }
@@ -550,12 +540,14 @@ export default function CategoryListPanel({
                 let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
                   }))
                 ];
+
+                const hasBranchError = formErrors.branchId || (isCompanyScope && !effectiveVal);
 
                 return (
                   <div>
@@ -571,12 +563,12 @@ export default function CategoryListPanel({
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to your assigned branch.
+                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                       </span>
                     )}
-                    {formErrors.branchId && (
+                    {hasBranchError && (
                       <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.branchId}
+                        {formErrors.branchId || 'Please select a branch.'}
                       </span>
                     )}
                   </div>
@@ -704,29 +696,31 @@ export default function CategoryListPanel({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleOpenAdd}
-            style={{
-              background: '#ff5a1f',
-              border: 'none',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              fontSize: '14px',
-              fontWeight: '700',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
-            onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
-          >
-            Add Category
-          </button>
+          {canAdd && (
+            <button
+              type="button"
+              onClick={handleOpenAdd}
+              style={{
+                background: '#ff5a1f',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '700',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#e04d16'}
+              onMouseLeave={e => e.currentTarget.style.background = '#ff5a1f'}
+            >
+              Add Category
+            </button>
+          )}
         </div>
       </div>
 
@@ -863,48 +857,52 @@ export default function CategoryListPanel({
                         >
                           <EyeIcon size={16} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(item)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                          title="Edit Category"
-                        >
-                          <PencilIcon size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#ef4444',
-                            cursor: 'pointer',
-                            padding: '6px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                          onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
-                          title="Delete Category"
-                        >
-                          <TrashIcon size={16} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                            title="Edit Category"
+                          >
+                            <PencilIcon size={16} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(item)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              padding: '6px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
+                            title="Delete Category"
+                          >
+                            <TrashIcon size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

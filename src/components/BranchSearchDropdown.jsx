@@ -2,7 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
-import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
+import { 
+  resolveBranchManagerName, 
+  resolveBranchContactNumber,
+  isUserCompanyUser,
+  getUserAssignedBranchId,
+  isSubBranchUser
+} from '../helper/BranchHelper.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -121,44 +127,17 @@ export default function BranchSearchDropdown() {
     branchCode: b.branchCode || b.code
   }));
   
-  // Check if user is Restaurant Owner ONLY
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+  // Hierarchy check using centralized BranchHelper helpers
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isBranchLocked = !isCompanyUser;
 
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-
-  // Restaurant Owner / Super Admin / Company user can switch branches freely
-  const isCompanyUser =
-    userType === 'RESTAURANT_OWNER' ||
-    userType === 'OWNER' ||
-    userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' || 
-    userType === 'ADMIN' ||     
-    userRole === 'restaurant_owner' ||
-    userRole === 'restaurant owner' ||
-    userRole === 'owner' ||
-    userRole === 'super admin' ||
-    userRole === 'super_admin' ||
-    userRole === 'admin' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
-  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-  const isBranchLocked = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-
-  // Automatically lock branch ONLY if user is a branch manager or branch-scoped staff (non-owner)
+  // Automatically lock branch ONLY if user is a sub-branch user
   useEffect(() => {
-    if (isBranchLocked) {
-      const lockId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : (currentUser?.branchId || currentUser?.activeBranchId));
-      if (lockId && lockId !== 'ALL' && selectedBranchId !== lockId) {
-        setSelectedBranchId(lockId);
-      }
+    if (isBranchLocked && userBranchId && selectedBranchId !== userBranchId) {
+      setSelectedBranchId(userBranchId);
     }
-  }, [isBranchLocked, currentUser, selectedBranchId, setSelectedBranchId]);
+  }, [isBranchLocked, userBranchId, selectedBranchId, setSelectedBranchId]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -171,14 +150,23 @@ export default function BranchSearchDropdown() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const mainBranchName = activeRestaurant?.restaurantName || activeRestaurant?.name || currentUser?.restaurantName || 'Spice Route Restaurant';
+  const isAllBranchesSelected = !selectedBranchId || selectedBranchId === 'COMPANY' || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toLowerCase() === 'all branches';
 
-  const selectedBranch = selectedBranchId === 'COMPANY'
-    ? { branchName: 'Company', name: 'Company' }
+  const selectedBranch = isAllBranchesSelected
+    ? (isCompanyUser ? { branchName: 'All Branches', name: 'All Branches' } : null)
     : branches.find(b => 
         String(b.id || b._id) === String(selectedBranchId) || 
-        String(b.branchCode) === String(selectedBranchId)
+        String(b.branchCode) === String(selectedBranchId) ||
+        String(b.branchName || b.name || '').toLowerCase() === String(selectedBranchId).toLowerCase()
       );
+
+  const assignedBranchObj = isBranchLocked
+    ? (branches.find(b => String(b.id || b._id) === String(userBranchId) || String(b.branchCode) === String(userBranchId)) ||
+       (currentUser?.branch && typeof currentUser.branch === 'object' ? currentUser.branch : null))
+    : null;
+  const assignedBranchName = assignedBranchObj
+    ? (assignedBranchObj.branchName || assignedBranchObj.name || assignedBranchObj.branchCode)
+    : (currentUser?.branchName || (userBranchId ? `Branch (${userBranchId})` : 'Assigned Branch'));
 
   const filteredBranches = branches.filter(b => {
     const query = searchQuery.toLowerCase().trim();
@@ -194,6 +182,7 @@ export default function BranchSearchDropdown() {
 
   const handleSelectBranch = (branchId) => {
     if (isBranchLocked) return;
+    if ((branchId === 'COMPANY' || branchId === 'ALL' || String(branchId).toLowerCase() === 'all branches') && !isCompanyUser) return;
     setSelectedBranchId(branchId);
     try {
       if (branchId) {
@@ -221,8 +210,8 @@ export default function BranchSearchDropdown() {
             }
           }
         }}
-        title={isBranchLocked ? `Branch selection is disabled for your role (Locked to ${selectedBranch?.branchName || 'Assigned Branch'})` : "Filter modules by branch"}
-        style={isBranchLocked ? { cursor: 'not-allowed', opacity: 0.75, background: '#f8fafc', borderColor: '#e2e8f0' } : {}}
+        title={isBranchLocked ? `Branch selection is disabled for your account (Locked to ${assignedBranchName})` : "Filter modules by branch"}
+        style={isBranchLocked ? { cursor: 'not-allowed', opacity: 0.85, background: '#f8fafc', borderColor: '#e2e8f0' } : {}}
       >
         <div className="branch-search-trigger-content">
           <div style={{
@@ -235,7 +224,7 @@ export default function BranchSearchDropdown() {
             justifyContent: 'center',
             color: isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')
           }}>
-            {selectedBranchId === 'COMPANY' ? (
+            {isCompanyUser && isAllBranchesSelected ? (
               <BuildingIcon size={15} color="var(--primary)" />
             ) : (
               <StoreFrontIcon size={15} color={isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')} />
@@ -246,12 +235,14 @@ export default function BranchSearchDropdown() {
               {isBranchLocked ? 'Assigned Branch' : 'Branch Filter'}
             </span>
             <span className="branch-search-value">
-              {selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : mainBranchName}
+              {isBranchLocked 
+                ? assignedBranchName 
+                : (isAllBranchesSelected ? 'All Branches' : (selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : 'All Branches'))}
             </span>
           </div>
         </div>
         {isBranchLocked ? (
-          <div title="Branch locked for non-admin" style={{ display: 'flex', alignItems: 'center', marginLeft: '4px' }}>
+          <div title="Branch locked to assigned branch" style={{ display: 'flex', alignItems: 'center', marginLeft: '4px' }}>
             <LockIcon size={13} color="#94a3b8" />
           </div>
         ) : (
@@ -304,27 +295,29 @@ export default function BranchSearchDropdown() {
 
           {/* OPTIONS LIST */}
           <div className="branch-search-options-list">
-            {/* 1. COMPANY SCOPE OPTION (ABOVE SPICE ROUTE RESTAURANT) */}
-            {(!searchQuery || 
+            {/* 1. ALL BRANCHES OPTION - STRICTLY FOR COMPANY USERS ONLY */}
+            {isCompanyUser && (!searchQuery || 
+              'all branches'.includes(searchQuery.toLowerCase()) || 
+              'all'.includes(searchQuery.toLowerCase()) || 
               'company'.includes(searchQuery.toLowerCase()) || 
               'corporate'.includes(searchQuery.toLowerCase())
             ) && (
               <div
-                className={`branch-search-option ${selectedBranchId === 'COMPANY' ? 'selected' : ''}`}
+                className={`branch-search-option ${isAllBranchesSelected ? 'selected' : ''}`}
                 onClick={() => handleSelectBranch('COMPANY')}
               >
                 <div className="branch-option-left-icon">
-                  <BuildingIcon size={16} color={selectedBranchId === 'COMPANY' ? 'var(--primary)' : '#64748b'} />
+                  <BuildingIcon size={16} color={isAllBranchesSelected ? 'var(--primary)' : '#64748b'} />
                 </div>
                 <div className="branch-option-info">
                   <div className="branch-option-title-row">
-                    <span className="branch-option-name">Company</span>
+                    <span className="branch-option-name">All Branches</span>
                     <span className="branch-badge-total" style={{ background: '#f1f5f9', color: '#475569' }}>COMPANY HQ</span>
                   </div>
-                  <span className="branch-option-subtext">Enterprise Company Overview Scope</span>
+                  <span className="branch-option-subtext">Enterprise Company Overview Scope (All Branches)</span>
                 </div>
                 <div className="branch-option-action">
-                  {selectedBranchId === 'COMPANY' && <CheckIcon size={15} color="var(--primary)" />}
+                  {isAllBranchesSelected && <CheckIcon size={15} color="var(--primary)" />}
                 </div>
               </div>
             )}

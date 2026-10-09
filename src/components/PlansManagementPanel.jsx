@@ -796,6 +796,37 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     return matchesSearch;
   });
 
+  const [historyPage, setHistoryPage] = useState(0);
+  const historyLimit = 10;
+  const historyTotalPages = Math.max(1, Math.ceil(filteredInvoices.length / historyLimit));
+
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [historySearch, historyFilter]);
+
+  useEffect(() => {
+    if (historyPage >= historyTotalPages && historyTotalPages > 0) {
+      setHistoryPage(Math.max(0, historyTotalPages - 1));
+    }
+  }, [historyTotalPages, historyPage]);
+
+  const paginatedInvoices = filteredInvoices.slice(historyPage * historyLimit, (historyPage + 1) * historyLimit);
+
+  const getHistoryPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = historyPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(historyTotalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   // Handlers
   const handleConfirmExtraBranchPurchase = async () => {
     setIsProcessingPayment(true);
@@ -1451,8 +1482,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     </td>
                   </tr>
                 ) : (
-                  filteredInvoices.map((inv, idx) => {
-                    const isLatest = idx === 0;
+                  paginatedInvoices.map((inv, idx) => {
+                    const isLatest = historyPage === 0 && idx === 0;
                     const isAddon = isAddonInvoice(inv);
                     const isUpgrade = (inv.type === 'upgrade' || (inv.description || '').toLowerCase().includes('upgrade'));
                     const isRenewalItem = inv.type === 'renewal' || (inv.description || '').toLowerCase().includes('renewal');
@@ -1463,7 +1494,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                     const itemTypeBorder = isAddon ? '#bfdbfe' : (isUpgrade ? '#d8b4fe' : (isRenewalItem ? '#fde68a' : '#bbf7d0'));
 
                     return (
-                      <tr key={inv.id} style={{ borderBottom: idx !== filteredInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>
+                      <tr key={inv.id} style={{ borderBottom: idx !== paginatedInvoices.length - 1 ? '1px solid #f1f5f9' : 'none', background: isLatest ? '#fafafa' : '#ffffff' }}>
                         <td style={{ padding: '14px 18px', color: '#0f172a', fontWeight: 600 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span>{formatDate(inv.date)}</span>
@@ -1567,6 +1598,88 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             </table>
           </div>
         </div>
+
+        {/* History Table Pagination Controls */}
+        {filteredInvoices.length > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: '16px',
+            padding: '12px 20px',
+            background: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
+              Showing {filteredInvoices.length === 0 ? 0 : historyPage * historyLimit + 1} to {Math.min((historyPage + 1) * historyLimit, filteredInvoices.length)} of {filteredInvoices.length} invoices
+            </div>
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setHistoryPage(p => Math.max(0, p - 1))}
+                disabled={historyPage === 0}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: historyPage === 0 ? '#f8fafc' : '#ffffff',
+                  color: historyPage === 0 ? '#cbd5e1' : '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: historyPage === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Prev
+              </button>
+
+              {getHistoryPageNumbers().map(pageNum => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setHistoryPage(pageNum - 1)}
+                  style={{
+                    minWidth: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: historyPage + 1 === pageNum ? 700 : 500,
+                    border: historyPage + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                    background: historyPage + 1 === pageNum ? '#000000' : '#ffffff',
+                    color: historyPage + 1 === pageNum ? '#ffffff' : '#334155',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setHistoryPage(p => Math.min(historyTotalPages - 1, p + 1))}
+                disabled={historyPage >= historyTotalPages - 1 || historyTotalPages === 0}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: (historyPage >= historyTotalPages - 1 || historyTotalPages === 0) ? '#f8fafc' : '#ffffff',
+                  color: (historyPage >= historyTotalPages - 1 || historyTotalPages === 0) ? '#cbd5e1' : '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: (historyPage >= historyTotalPages - 1 || historyTotalPages === 0) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MODAL: BRANCH-BASED PLAN CALCULATION & ADD-ON CALCULATOR POPUP (TRIGGERED BY + BUY ADDONS) */}

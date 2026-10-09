@@ -103,14 +103,13 @@ export default function AdminLayout() {
   const userRoleLower = userRoleStr.toLowerCase().trim();
   const userRoleUpper = userRoleStr.toUpperCase().trim();
 
-  const isRestaurantOwner = 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER' || 
-    userType === 'SUPER ADMIN' || 
-    userType === 'SUPER_ADMIN' || 
-    userRoleUpper === 'RESTAURANT_OWNER' || 
-    userRoleUpper === 'OWNER' || 
-    userRoleUpper === 'SUPER ADMIN';
+  const isOwnerRoleName = (r) => {
+    const s = String(r || '').toUpperCase().trim();
+    return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
+  };
+
+  const hasSpecificNonOwnerRole = Boolean(userRoleUpper && !isOwnerRoleName(userRoleUpper));
+  const isRestaurantOwner = !hasSpecificNonOwnerRole && (isOwnerRoleName(userType) || isOwnerRoleName(userRoleUpper));
 
   // Verify if current user has Admin access allowed or restricted
   const resolveAdminAccessFlag = (obj) => {
@@ -235,6 +234,9 @@ export default function AdminLayout() {
       if (tab === 'sales') return 'reports_sales';
       if (tab === 'items') return 'reports_items';
       if (tab === 'orders') return 'reports_orders';
+
+
+      
       if (tab === 'inventory') return 'reports_inventory';
       if (tab === 'staff') return 'reports_staff';
       if (tab === 'tax') return 'reports_tax';
@@ -603,6 +605,14 @@ export default function AdminLayout() {
                           <Link to="/inventory/distribution" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M16 3h5v5"></path><path d="M4 20L21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path></svg>
                             <span>Stock Distribution</span>
+                          </Link>
+                        </li>
+                      )}
+                      {hasPermission('inventory_branch_transfer', 'view') && (
+                        <li className={`sidebar-item ${location.pathname === '/inventory/branch-transfer' ? 'active' : ''}`}>
+                          <Link to="/inventory/branch-transfer" style={{ display: 'flex', alignItems: 'center' }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
+                            <span>Branch Transfer</span>
                           </Link>
                         </li>
                       )}

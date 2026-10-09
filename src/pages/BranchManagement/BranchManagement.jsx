@@ -16,14 +16,12 @@ export default function BranchManagement() {
 
   const userType = (userTypeStr || roleStr || '').toUpperCase();
   const userRoleUpper = (roleStr || '').toUpperCase().trim();
-  const isRestaurantOwner = 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER' || 
-    userType === 'SUPER ADMIN' || 
-    userType === 'SUPER_ADMIN' || 
-    userRoleUpper === 'RESTAURANT_OWNER' || 
-    userRoleUpper === 'OWNER' || 
-    userRoleUpper === 'SUPER ADMIN';
+  const isOwnerRoleName = (r) => {
+    const s = String(r || '').toUpperCase().trim();
+    return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
+  };
+  const hasSpecificNonOwnerRole = Boolean(userRoleUpper && !isOwnerRoleName(userRoleUpper));
+  const isRestaurantOwner = !hasSpecificNonOwnerRole && (isOwnerRoleName(userType) || isOwnerRoleName(userRoleUpper));
 
   // Strict check: Only Restaurant Owner / Company can access branch management
   if (!isRestaurantOwner && !hasPermission('branch-management', 'view')) {

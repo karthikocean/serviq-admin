@@ -152,7 +152,7 @@ export default function SearchableSelect({
       transition: 'all 0.15s ease',
       cursor: state.isDisabled ? 'not-allowed' : 'pointer',
       '&:hover': {
-        borderColor: '#ff5a1f'
+        borderColor: state.isDisabled ? '#cbd5e1' : '#ff5a1f'
       },
       ...style
     }),

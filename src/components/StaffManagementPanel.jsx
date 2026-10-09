@@ -9,7 +9,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -118,17 +118,16 @@ export default function StaffManagementPanel({
 
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
-  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
-  const isCompanyUser = isAdmin || (!user?.branchId && !user?.activeBranchId);
-
-  const currentBranchId = typeof user?.branchId === 'object' ? (user?.branchId?._id || user?.branchId?.id) : user?.branchId;
-  const userBranchId = currentBranchId || user?.activeBranchId || '';
-  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-  const isCompanyScope = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || isCompanyScope;
-  const activeFilteredBranchId = !isAllBranches
-    ? selectedBranchId
-    : (!isAdmin && currentBranchId ? currentBranchId : null);
+  const isCompanyUser = isUserCompanyUser(user);
+  const userBranchId = getUserAssignedBranchId(user);
+  const isAdmin = isCompanyUser;
+  const currentBranchId = userBranchId;
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+  const isCompanyScope = isCompanyUser && String(selectedBranchId || '').toUpperCase() === 'COMPANY';
+  const isAllBranches = isCompanyUser && (!selectedBranchId || selectedBranchId === 'ALL' || isCompanyScope);
+  const activeFilteredBranchId = isBranchLogin
+    ? userBranchId
+    : (!isAllBranches ? selectedBranchId : null);
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -442,7 +441,7 @@ export default function StaffManagementPanel({
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
-      setPage(totalPages - 1);
+      setPage(Math.max(0, totalPages - 1));
     }
   }, [totalPages, page]);
 
@@ -1303,11 +1302,13 @@ export default function StaffManagementPanel({
               </label>
               {(() => {
                 const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                const isLocked = isBranchLogin;
+                const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                const isCompanyScopeEffective = isCompanyUser && (!cleanSelectedBranch);
+                const isLocked = !isCompanyScopeEffective;
 
                 let currentBranchVal = userForm.branchId;
-                if (isBranchLogin && userBranchId) {
-                  currentBranchVal = userBranchId;
+                if (!isCompanyScopeEffective) {
+                  currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
                 } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                   currentBranchVal = '';
                 }
@@ -1318,7 +1319,7 @@ export default function StaffManagementPanel({
                 let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -1339,7 +1340,7 @@ export default function StaffManagementPanel({
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to your assigned branch.
+                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                       </span>
                     )}
                   </>

@@ -84,9 +84,14 @@ export default function OrderManagement() {
 
       setApiOrders(fetchedOrders);
 
-      if (paginationInfo && paginationInfo.totalOrders) {
-        setTotalPages(paginationInfo.totalPages || Math.ceil(paginationInfo.totalOrders / limit));
-        setTotalCount(paginationInfo.totalOrders);
+      const rawResData = orderRes?.data;
+      const serverTotal = (paginationInfo && (paginationInfo.totalOrders || paginationInfo.total || paginationInfo.totalCount || paginationInfo.count)) ??
+        rawResData?.totalOrders ?? rawResData?.total ?? rawResData?.count ?? rawResData?.data?.totalOrders ?? rawResData?.data?.total ?? rawResData?.data?.count;
+
+      if (serverTotal !== undefined && serverTotal !== null) {
+        const totalNum = Number(serverTotal) || 0;
+        setTotalPages((paginationInfo && paginationInfo.totalPages) || Math.max(1, Math.ceil(totalNum / limit)));
+        setTotalCount(totalNum);
       } else {
         setTotalCount(fetchedOrders.length);
         setTotalPages(Math.max(1, Math.ceil(fetchedOrders.length / limit)));

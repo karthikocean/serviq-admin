@@ -702,6 +702,21 @@ export default function HelpSupport() {
     }
   }, [totalPages, currentPage]);
 
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = currentPage + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   // Raise Ticket Modal Handlers
   const handleOpenRaiseTicket = () => {
     let initialBranch = '';
@@ -1787,6 +1802,28 @@ export default function HelpSupport() {
               >
                 Previous
               </button>
+
+              {getPageNumbers().map(pageNum => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum - 1)}
+                  style={{
+                    minWidth: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: currentPage + 1 === pageNum ? 700 : 500,
+                    border: currentPage + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                    background: currentPage + 1 === pageNum ? '#000000' : '#ffffff',
+                    color: currentPage + 1 === pageNum ? '#ffffff' : '#334155',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
 
               <button
                 type="button"

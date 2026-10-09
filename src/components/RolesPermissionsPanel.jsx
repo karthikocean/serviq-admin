@@ -139,7 +139,11 @@ export default function RolesPermissionsPanel() {
     setIsLoading(true);
     const res = await RoleApi.getRoles();
     if (res?.status) {
-      setApiRoles(res.response.data || []);
+      const data = res.response.data || [];
+      setApiRoles(data);
+      try {
+        sessionStorage.setItem('serviq_roles_cache', JSON.stringify(data));
+      } catch (e) {}
     }
     setIsLoading(false);
   };
@@ -329,6 +333,42 @@ export default function RolesPermissionsPanel() {
     }
 
     if (res.status) {
+      // Update cache immediately
+      try {
+        const cachedRoles = JSON.parse(sessionStorage.getItem('serviq_roles_cache') || '[]');
+        const updatedCache = cachedRoles.map(r => String(r._id) === String(editingRoleId) ? { ...r, ...rolePayload } : r);
+        if (viewState === 'add' && res.response?.data) {
+          updatedCache.push(res.response.data);
+        }
+        sessionStorage.setItem('serviq_roles_cache', JSON.stringify(updatedCache));
+      } catch (e) {}
+
+      // If current user is currently assigned this role, immediately apply updated permissions!
+      const userRoleStr = (typeof currentUser?.role === 'object' ? currentUser?.role?.roleName : currentUser?.role) || '';
+      const userRoleId = (typeof currentUser?.roleId === 'object' ? (currentUser?.roleId?._id || currentUser?.roleId?.id) : currentUser?.roleId) || 
+                         (typeof currentUser?.role === 'object' ? (currentUser?.role?._id || currentUser?.role?.id) : null);
+      
+      const isRoleOfCurrentUser = 
+        (userRoleId && String(userRoleId) === String(editingRoleId)) ||
+        (userRoleStr && userRoleStr.trim().toLowerCase() === trimmedRoleName.toLowerCase());
+
+      if (isRoleOfCurrentUser) {
+        setCurrentUser(prevUser => {
+          if (!prevUser) return prevUser;
+          const updatedRole = typeof prevUser.role === 'object' ? { ...prevUser.role, permissions: finalPermissions, roleName: trimmedRoleName } : trimmedRoleName;
+          const updated = {
+            ...prevUser,
+            role: updatedRole,
+            roleId: updatedRole,
+            permissions: finalPermissions
+          };
+          try {
+            sessionStorage.setItem('currentUser', JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+      }
+
       setViewState('list');
       fetchRoles();
       if (typeof fetchProfile === 'function') {

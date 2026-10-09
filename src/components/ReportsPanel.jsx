@@ -111,7 +111,7 @@ const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import { formatDateDMY, formatDateTimeDMY, extractOrderISODate } from '../helper/DateHelper.js';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import { useAppState } from '../config/AppContext.jsx';
 
 // Safe text extractor
@@ -254,41 +254,10 @@ export default function ReportsPanel({
   }, [branches, activeRestaurant?.branches]);
 
   // Determine if login is Company vs Branch login
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-
-  // Company user: Restaurant Owner, Super Admin, Owner role, or unassigned to a specific branch
-  const isCompanyUser = useMemo(() => {
-    return (
-      userType === 'RESTAURANT_OWNER' ||
-      userType === 'OWNER' ||
-      userType === 'SUPER ADMIN' ||
-      userType === 'SUPER_ADMIN' ||
-      userRole === 'restaurant_owner' ||
-      userRole === 'restaurant owner' ||
-      userRole === 'owner' ||
-      userRole === 'super admin' ||
-      userRole === 'super_admin' ||
-      (!currentUser?.branchId && !currentUser?.activeBranchId)
-    );
-  }, [userType, userRole, currentUser]);
-
-  const userBranchId = useMemo(() => {
-    return (
-      typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-        ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-        : (currentUser?.branchId || currentUser?.activeBranchId)
-    );
-  }, [currentUser]);
-
-  // Branch Login: User is a branch-level staff/manager (not company owner) with an assigned branch
+  const isCompanyUser = useMemo(() => isUserCompanyUser(currentUser), [currentUser]);
+  const userBranchId = useMemo(() => getUserAssignedBranchId(currentUser), [currentUser]);
   const isBranchLogin = useMemo(() => {
-    return !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+    return !isCompanyUser && Boolean(userBranchId);
   }, [isCompanyUser, userBranchId]);
 
   const [activeTab, setActiveTab] = useState(activeTabProp || initialTab);
@@ -1414,6 +1383,12 @@ export default function ReportsPanel({
     }
     return Math.max(1, Math.ceil(totalRecordsCount / pageSize));
   }, [activeTab, currentApiData, totalRecordsCount, pageSize]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   const paginatedRecords = useMemo(() => {
     if (activeTab === 'tax') {

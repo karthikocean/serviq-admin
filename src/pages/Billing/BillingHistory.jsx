@@ -386,15 +386,24 @@ export default function BillingHistory() {
     });
   }, [rawHistory, selectedBranchId, selectedPayment, selectedTable, selectedStaff, customerFilter, searchTerm, dateRange, customStartDate, customEndDate]);
 
+  const effectiveTotal = totalItems || filteredHistory.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / limit));
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   // Compute pagination and current page slice
   const paginatedHistory = useMemo(() => {
-    // If server paginated and returned a single page of items, don't slice again
-    if (totalItems > limit && rawHistory.length <= limit && filteredHistory.length === rawHistory.length) {
+    // If the filtered data in memory is at most limit items, don't slice again (prevents empty slice on page > 0)
+    if (filteredHistory.length <= limit) {
       return filteredHistory;
     }
     const startIndex = page * limit;
     return filteredHistory.slice(startIndex, startIndex + limit);
-  }, [filteredHistory, rawHistory.length, page, limit, totalItems]);
+  }, [filteredHistory, page, limit]);
 
   // Compute Summary
   const summary = useMemo(() => {

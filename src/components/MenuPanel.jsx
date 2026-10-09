@@ -174,6 +174,12 @@ export default function MenuPanel({
     }
   };
 
+  React.useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;

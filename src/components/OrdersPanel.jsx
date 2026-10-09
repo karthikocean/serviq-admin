@@ -9,6 +9,7 @@ import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
+import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -367,14 +368,8 @@ export default function OrdersPanel({
   }, [selectedBranchId]);
 
   // Check branch lock
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userRole = (roleStr || '').toLowerCase();
-  const userType = (userTypeStr || '').toUpperCase();
-  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const isAdmin = isCompanyUser;
   const isBranchLocked = !isAdmin;
   const canChooseBranchInOrder = isAdmin && (!selectedBranchId || selectedBranchId === 'ALL');
 
@@ -1694,16 +1689,17 @@ export default function OrdersPanel({
     });
   }
 
-  const isServerPaginated = (propTotalCount || 0) > 0 && sourceOrders.length <= limit && (propTotalCount || 0) > sourceOrders.length && filteredOrders.length === sourceOrders.length;
+  const isServerPaginated = (propTotalCount || 0) > 0 && sourceOrders.length <= limit && (propTotalCount || 0) >= sourceOrders.length;
 
   const effectiveTotalCount = isServerPaginated ? (propTotalCount || 0) : filteredOrders.length;
   const effectiveTotalPages = isServerPaginated
     ? (propTotalPages || Math.max(1, Math.ceil(effectiveTotalCount / limit)))
     : Math.max(1, Math.ceil(effectiveTotalCount / limit));
 
-  const paginatedOrders = isServerPaginated
-    ? filteredOrders
-    : filteredOrders.slice(page * limit, (page + 1) * limit);
+  // If filteredOrders in memory is already at most limit items, don't slice with page*limit (prevents empty table on page > 0)
+  const paginatedOrders = filteredOrders.length > limit
+    ? filteredOrders.slice(page * limit, (page + 1) * limit)
+    : filteredOrders;
 
   const getOrderPageNumbers = () => {
     const pages = [];
@@ -1723,7 +1719,13 @@ export default function OrdersPanel({
 
   useEffect(() => {
     setPage(0);
-  }, [orderFilter, selectedWaiterFilter]);
+  }, [orderFilter, selectedWaiterFilter, searchOrderId, dateRangeFilter, customStartDate, customEndDate, selectedOrderType, selectedOrderBranchId]);
+
+  useEffect(() => {
+    if (page >= effectiveTotalPages && effectiveTotalPages > 0) {
+      setPage(Math.max(0, effectiveTotalPages - 1));
+    }
+  }, [effectiveTotalPages, page]);
 
   const handleOrderStatusUpdate = async (orderId, currentStatus, branchId) => {
     let nextStatus = currentStatus;
@@ -1990,36 +1992,16 @@ export default function OrdersPanel({
                   </label>
                   {(() => {
                     const allBranchesList = apiBranches.length > 0 ? apiBranches : (activeRestaurant?.branches || []);
-                    const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-                      ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-                      : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-                    const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-                    const userRole = (roleStr || '').toLowerCase().trim();
-                    const userType = (userTypeStr || '').toUpperCase().trim();
-                    const isCompanyUser =
-                      userType === 'RESTAURANT_OWNER' ||
-                      userType === 'OWNER' ||
-                      userType === 'SUPER ADMIN' ||
-                      userType === 'SUPER_ADMIN' ||
-                      userType === 'ADMIN' ||
-                      userRole === 'restaurant_owner' ||
-                      userRole === 'restaurant owner' ||
-                      userRole === 'owner' ||
-                      userRole === 'super admin' ||
-                      userRole === 'super_admin' ||
-                      userRole === 'admin' ||
-                      (!currentUser?.branchId && !currentUser?.activeBranchId);
-
-                    const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-                      ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-                      : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-                    const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-                    const isLocked = isBranchLogin;
+                    const isCompanyUser = isUserCompanyUser(currentUser);
+                    const userBranchId = getUserAssignedBranchId(currentUser);
+                    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+                    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                    const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+                    const isLocked = !isCompanyScope;
 
                     let currentBranchVal = modalSelectedBranchId;
-                    if (isBranchLogin && userBranchId) {
-                      currentBranchVal = userBranchId;
+                    if (!isCompanyScope) {
+                      currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || modalSelectedBranchId);
                     } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                       currentBranchVal = '';
                     }
@@ -2030,7 +2012,7 @@ export default function OrdersPanel({
                     let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                     const branchOptions = [
-                      { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                      ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                       ...allBranchesList.map(b => ({
                         value: b._id || b.id,
                         label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -2048,7 +2030,7 @@ export default function OrdersPanel({
                         />
                         {isLocked && (
                           <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                            Branch is locked to your assigned branch.
+                            {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                           </span>
                         )}
                       </div>
@@ -4357,7 +4339,7 @@ export default function OrdersPanel({
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <button
                   type="button"
-                  onClick={() => setPage(page - 1)}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
                   disabled={page === 0}
                   style={{
                     padding: '6px 14px',
@@ -4398,17 +4380,17 @@ export default function OrdersPanel({
 
                 <button
                   type="button"
-                  onClick={() => setPage(page + 1)}
-                  disabled={page >= effectiveTotalPages - 1}
+                  onClick={() => setPage(p => Math.min(effectiveTotalPages - 1, p + 1))}
+                  disabled={page >= effectiveTotalPages - 1 || effectiveTotalPages === 0}
                   style={{
                     padding: '6px 14px',
                     borderRadius: '8px',
                     border: '1px solid #e2e8f0',
-                    background: page >= effectiveTotalPages - 1 ? '#f8fafc' : '#ffffff',
-                    color: page >= effectiveTotalPages - 1 ? '#cbd5e1' : '#334155',
+                    background: (page >= effectiveTotalPages - 1 || effectiveTotalPages === 0) ? '#f8fafc' : '#ffffff',
+                    color: (page >= effectiveTotalPages - 1 || effectiveTotalPages === 0) ? '#cbd5e1' : '#334155',
                     fontSize: '13px',
                     fontWeight: 600,
-                    cursor: page >= effectiveTotalPages - 1 ? 'not-allowed' : 'pointer',
+                    cursor: (page >= effectiveTotalPages - 1 || effectiveTotalPages === 0) ? 'not-allowed' : 'pointer',
                     transition: 'all 0.15s ease'
                   }}
                 >

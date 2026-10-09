@@ -63,6 +63,14 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredReceipts.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedReceipts = filteredReceipts.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const validate = () => {

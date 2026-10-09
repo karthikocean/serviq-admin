@@ -62,6 +62,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
         if (res.response.totalCount !== undefined) {
           setTotalItemsCount(res.response.totalCount);
+        } else if (res.response.total !== undefined) {
+          setTotalItemsCount(res.response.total);
         } else if (res.response.totalDocs !== undefined) {
           setTotalItemsCount(res.response.totalDocs);
         } else {
@@ -92,6 +94,14 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     const matchesCategory = categoryFilter === 'All' || i.category === categoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  const totalPages = Math.max(1, Math.ceil((totalItemsCount || filteredItems.length) / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
 
   const paginatedItems = filteredItems.length <= PAGE_SIZE 
     ? filteredItems 

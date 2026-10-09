@@ -651,6 +651,13 @@ export default function StockReductionPanel() {
       : filteredPurchases;
 
   const totalPages = Math.ceil(activeDataList.length / rowsPerPage) || 1;
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedData = activeDataList.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
 
   const getPageNumbers = () => {

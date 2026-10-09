@@ -361,6 +361,12 @@ export default function TablesPanel({
     setPage(0);
   }, [searchTerm, statusFilter]);
 
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const totalCount = displayTables.length;
   const freeCount = displayTables.filter(t => (t.status || 'free').toLowerCase() === 'free' || (t.status || '').toLowerCase() === 'available').length;
   const occupiedCount = displayTables.filter(t => (t.status || '').toLowerCase() === 'occupied').length;

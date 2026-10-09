@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import BranchApi from '../../api/Branch';
+import { useAppState } from '../../config/AppContext';
+import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper';
 
 const CheckIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -32,9 +35,68 @@ const InboxIcon = ({ size = 15, color = 'currentColor' }) => (
 );
 
 export default function BranchTransfer({ transfers: initialTransfers, items: initialItems, onSaveTransfer, hasPermission }) {
+  const { currentUser, activeRestaurant, selectedBranchId } = useAppState();
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_branch_transfer', 'edit') : true;
+
+  const [liveBranches, setLiveBranches] = useState([]);
+
+  useEffect(() => {
+    const loadBranches = async () => {
+      try {
+        const res = await BranchApi.getBranches({ limit: 100 });
+        if (res?.status && res?.response) {
+          const list = Array.isArray(res.response)
+            ? res.response
+            : (Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response.branches) ? res.response.branches : []));
+          if (list.length > 0) setLiveBranches(list);
+        }
+      } catch (e) {}
+    };
+    loadBranches();
+  }, []);
+
+  const allBranches = useMemo(() => {
+    return (liveBranches && liveBranches.length > 0) ? liveBranches : (activeRestaurant?.branches || []);
+  }, [liveBranches, activeRestaurant?.branches]);
+
+  const mainRestaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userAssignedBranchId = getUserAssignedBranchId(currentUser);
+  const isCompanyScope = !selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY';
+  const isCompanyFilter = isCompanyUser && isCompanyScope;
+
+  const loginRestaurantName = useMemo(() => {
+    if (userAssignedBranchId) {
+      const bObj = allBranches.find(b =>
+        String(b._id || b.id) === String(userAssignedBranchId) ||
+        String(b.branchCode) === String(userAssignedBranchId)
+      );
+      if (bObj) return bObj.branchName || bObj.name || mainRestaurantName;
+    }
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+      const bObj = allBranches.find(b =>
+        String(b._id || b.id) === String(selectedBranchId) ||
+        String(b.branchCode) === String(selectedBranchId)
+      );
+      if (bObj) return bObj.branchName || bObj.name || mainRestaurantName;
+    }
+    return currentUser?.branchName || mainRestaurantName;
+  }, [userAssignedBranchId, selectedBranchId, allBranches, currentUser?.branchName, mainRestaurantName]);
+
+  const availableBranches = useMemo(() => {
+    const names = allBranches.map(b => b.branchName || b.name).filter(Boolean);
+    if (names.length === 0) {
+      return [mainRestaurantName, 'Serviq Chennai Branch', 'Serviq Madurai Branch', 'Serviq Coimbatore Outlet', 'Serviq Trichy Branch'];
+    }
+    if (!names.includes(mainRestaurantName)) {
+      return [mainRestaurantName, ...names];
+    }
+    return names;
+  }, [allBranches, mainRestaurantName]);
+
   const [transfersList, setTransfersList] = useState(initialTransfers || []);
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,8 +114,8 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
 
   // Form state
   const [trfForm, setTrfForm] = useState({
-    fromBranch: 'Serviq Chennai Branch',
-    toBranch: 'Serviq Madurai Branch',
+    fromBranch: loginRestaurantName,
+    toBranch: '',
     item: '',
     quantity: '',
     unit: 'kg',
@@ -61,12 +123,32 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
   });
   const [trfErrors, setTrfErrors] = useState({});
 
-  const availableBranches = [
-    'Serviq Chennai Branch',
-    'Serviq Madurai Branch',
-    'Serviq Coimbatore Outlet',
-    'Serviq Trichy Branch'
-  ];
+  useEffect(() => {
+    if (!isCompanyFilter) {
+      setTrfForm(prev => {
+        const dest = (prev.toBranch && prev.toBranch !== loginRestaurantName)
+          ? prev.toBranch
+          : (availableBranches.find(b => b !== loginRestaurantName) || '');
+        return {
+          ...prev,
+          fromBranch: loginRestaurantName,
+          toBranch: dest
+        };
+      });
+    } else {
+      setTrfForm(prev => {
+        const currentFrom = prev.fromBranch || availableBranches[0] || loginRestaurantName;
+        const currentTo = (prev.toBranch && prev.toBranch !== currentFrom)
+          ? prev.toBranch
+          : (availableBranches.find(b => b !== currentFrom) || '');
+        return {
+          ...prev,
+          fromBranch: currentFrom,
+          toBranch: currentTo
+        };
+      });
+    }
+  }, [isCompanyFilter, loginRestaurantName, availableBranches]);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -127,14 +209,23 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredTransfers.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedTransfers = filteredTransfers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const validate = () => {
     const errors = {};
-    if (!trfForm.fromBranch.trim()) errors.fromBranch = 'From Branch is required';
+    const effectiveFromBranch = isCompanyFilter ? trfForm.fromBranch : loginRestaurantName;
+    if (!effectiveFromBranch || !effectiveFromBranch.trim()) errors.fromBranch = 'From Branch is required';
     if (!trfForm.item) errors.item = 'Item selection is required';
     if (!trfForm.quantity || Number(trfForm.quantity) <= 0) errors.quantity = 'Valid Required Quantity is required';
-    if (trfForm.fromBranch === trfForm.toBranch) errors.toBranch = 'Destination Branch must be different from Source Branch';
+    if (effectiveFromBranch === trfForm.toBranch) errors.toBranch = 'Destination Branch must be different from Source Branch';
     setTrfErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -142,11 +233,13 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
+    const effectiveFromBranch = isCompanyFilter ? trfForm.fromBranch : loginRestaurantName;
     const newTrf = {
       id: `TRF-${Date.now().toString().slice(-4)}`,
       transferNo: `TRF-2026-${Date.now().toString().slice(-3)}`,
       date: new Date().toISOString().split('T')[0],
       ...trfForm,
+      fromBranch: effectiveFromBranch,
       quantity: Number(trfForm.quantity),
       status: 'Pending'
     };
@@ -318,15 +411,46 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
               <label style={formLabelStyle}>
                 From Branch <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <select
-                value={trfForm.fromBranch}
-                onChange={e => setTrfForm({ ...trfForm, fromBranch: e.target.value })}
-                style={{ ...formInputStyle, borderColor: trfErrors.fromBranch ? '#ef4444' : '#cbd5e1' }}
-              >
-                {availableBranches.map(br => (
-                  <option key={br} value={br}>{br}</option>
-                ))}
-              </select>
+              {isCompanyFilter ? (
+                <select
+                  value={trfForm.fromBranch}
+                  onChange={e => {
+                    const newFrom = e.target.value;
+                    setTrfForm(prev => {
+                      const nextTo = prev.toBranch === newFrom
+                        ? (availableBranches.find(b => b !== newFrom) || '')
+                        : prev.toBranch;
+                      return { ...prev, fromBranch: newFrom, toBranch: nextTo };
+                    });
+                  }}
+                  style={{ ...formInputStyle, borderColor: trfErrors.fromBranch ? '#ef4444' : '#cbd5e1' }}
+                >
+                  {availableBranches.map(br => (
+                    <option key={br} value={br}>{br}</option>
+                  ))}
+                </select>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    value={loginRestaurantName}
+                    readOnly
+                    disabled
+                    style={{
+                      ...formInputStyle,
+                      background: '#f8fafc',
+                      color: '#475569',
+                      cursor: 'not-allowed',
+                      borderColor: '#cbd5e1',
+                      fontWeight: 600
+                    }}
+                    title="From Branch is locked to your login restaurant / branch"
+                  />
+                  <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                    Locked to your login restaurant / branch
+                  </span>
+                </>
+              )}
               {trfErrors.fromBranch && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{trfErrors.fromBranch}</span>}
             </div>
 
@@ -339,9 +463,12 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                 onChange={e => setTrfForm({ ...trfForm, toBranch: e.target.value })}
                 style={{ ...formInputStyle, borderColor: trfErrors.toBranch ? '#ef4444' : '#cbd5e1' }}
               >
-                {availableBranches.map(br => (
-                  <option key={br} value={br}>{br}</option>
-                ))}
+                <option value="">-- Select Destination Branch --</option>
+                {availableBranches
+                  .filter(br => br !== (isCompanyFilter ? trfForm.fromBranch : loginRestaurantName))
+                  .map(br => (
+                    <option key={br} value={br}>{br}</option>
+                  ))}
               </select>
               {trfErrors.toBranch && <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block', fontWeight: 600 }}>{trfErrors.toBranch}</span>}
             </div>

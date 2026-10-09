@@ -177,7 +177,7 @@ export const PaginationBar = ({ currentPage, totalItems, pageSize = 10, onPageCh
         <button
           type="button"
           disabled={currentPage === 0}
-          onClick={() => onPageChange(currentPage - 1)}
+          onClick={() => onPageChange(Math.max(0, currentPage - 1))}
           style={{
             padding: '4px 10px',
             borderRadius: '6px',
@@ -229,17 +229,17 @@ export const PaginationBar = ({ currentPage, totalItems, pageSize = 10, onPageCh
           })}
         <button
           type="button"
-          disabled={currentPage >= totalPages - 1}
-          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages - 1 || totalPages <= 1}
+          onClick={() => onPageChange(Math.min(totalPages - 1, currentPage + 1))}
           style={{
             padding: '4px 10px',
             borderRadius: '6px',
             border: '1px solid #cbd5e1',
-            background: currentPage >= totalPages - 1 ? '#f1f5f9' : '#ffffff',
-            color: currentPage >= totalPages - 1 ? '#94a3b8' : '#0f172a',
+            background: (currentPage >= totalPages - 1 || totalPages <= 1) ? '#f1f5f9' : '#ffffff',
+            color: (currentPage >= totalPages - 1 || totalPages <= 1) ? '#94a3b8' : '#0f172a',
             fontSize: '11.5px',
             fontWeight: 700,
-            cursor: currentPage >= totalPages - 1 ? 'not-allowed' : 'pointer'
+            cursor: (currentPage >= totalPages - 1 || totalPages <= 1) ? 'not-allowed' : 'pointer'
           }}
         >
           Next

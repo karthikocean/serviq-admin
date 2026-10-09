@@ -222,6 +222,12 @@ export default function KitchenReportsPanel({
     setPage(0);
   }, [dateStart, dateEnd, filterStaff, filterDish, filterPriority]);
 
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const handleResetFilters = () => {
     setDateStart('');
     setDateEnd('');
@@ -435,7 +441,7 @@ export default function KitchenReportsPanel({
             gap: '12px'
           }}>
             <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-              Showing {page * limit + 1} to {Math.min((page + 1) * limit, filteredKitchenReports.length)} of {filteredKitchenReports.length} records
+              Showing {filteredKitchenReports.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredKitchenReports.length)} of {filteredKitchenReports.length} records
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -481,14 +487,14 @@ export default function KitchenReportsPanel({
               <button
                 type="button"
                 onClick={() => setPage(prev => Math.min(totalPages - 1, prev + 1))}
-                disabled={page >= totalPages - 1}
+                disabled={page >= totalPages - 1 || totalPages === 0}
                 style={{
                   padding: '6px 12px',
                   borderRadius: '6px',
                   border: '1px solid #cbd5e1',
-                  background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
-                  color: page >= totalPages - 1 ? '#94a3b8' : '#0f172a',
-                  cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                  background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                  color: (page >= totalPages - 1 || totalPages === 0) ? '#94a3b8' : '#0f172a',
+                  cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                   fontSize: '13px',
                   fontWeight: 600
                 }}
