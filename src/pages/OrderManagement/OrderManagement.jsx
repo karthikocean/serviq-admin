@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from '../../config/AppContext';
 import OrdersPanel from '../../components/OrdersPanel';
 import apiClient from '../../config/index.js';
-import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper';
+import { isBranchMatch } from '../../helper/BranchHelper';
 import './OrderManagement.css';
 
 export default function OrderManagement() {
@@ -31,7 +31,7 @@ export default function OrderManagement() {
 
   const fetchOrdersAndStaff = async () => {
     try {
-      const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+      const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
       const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&page=${page}&limit=10` : `?page=${page}&limit=10`;
 
       let fetchedOrders = [];
@@ -135,7 +135,7 @@ export default function OrderManagement() {
 
   if (!activeRestaurant) return null;
 
-  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const displayOrders = isBranchFiltered
     ? apiOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
     : apiOrders;

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppState } from '../../config/AppContext';
 import KitchenListPanel from '../../components/KitchenListPanel';
 import KitchenReportsPanel from '../../components/KitchenReportsPanel';
-import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function KitchenManagement({ isReports = false }) {
   const {
@@ -23,10 +23,10 @@ export default function KitchenManagement({ isReports = false }) {
   const rawOrders = activeRestaurant.orders || [];
   const rawMenu = activeRestaurant.menu || [];
 
-  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const staff = isBranchFiltered ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || [])) : rawStaff;
   const orders = isBranchFiltered ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || [])) : rawOrders;
-  const menu = isBranchFiltered ? rawMenu.filter(m => isBranchMatch(m, selectedBranchId, activeRestaurant?.branches || [])) : rawMenu;
+  const menu = rawMenu;
 
   const showReports = isReports || location.pathname.includes('/reports');
 

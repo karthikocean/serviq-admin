@@ -315,23 +315,8 @@ export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
   return 'N/A';
 };
 
-/**
- * Checks whether an active sub-branch filter is in effect.
- * Returns true if a specific sub-branch ID/code is selected,
- * and false if the view scope is org-wide (All, COMPANY, empty).
- */
-export const isBranchFilterActive = (branchId) => {
-  if (!branchId) return false;
-  if (typeof branchId === 'object' && branchId !== null) {
-    const innerId = branchId._id || branchId.id || branchId.branchCode;
-    return isBranchFilterActive(innerId);
-  }
-  const s = String(branchId).trim().toUpperCase();
-  return s !== '' && s !== 'ALL' && s !== 'ALL BRANCHES' && s !== 'COMPANY';
-};
-
 export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => {
-  if (!targetBranchId || !isBranchFilterActive(targetBranchId)) return true;
+  if (!targetBranchId || targetBranchId === 'ALL' || targetBranchId === 'All' || String(targetBranchId).toLowerCase() === 'all branches' || String(targetBranchId).toUpperCase() === 'COMPANY') return true;
   if (!itemBranch) return false;
   if (itemBranch.isServerReport === true) return true;
 
@@ -500,7 +485,6 @@ export const isSubBranchUser = (user) => {
 export default {
   resolveBranchManagerName,
   resolveBranchContactNumber,
-  isBranchFilterActive,
   isBranchMatch,
   getUserAssignedBranchId,
   isUserCompanyUser,

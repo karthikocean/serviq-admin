@@ -13,7 +13,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
 import PasswordRequirements from './common/PasswordRequirements';
-import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch, isBranchFilterActive } from '../helper/BranchHelper.js';
+import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
 import { getPlanBranchLimit } from '../config/initialData';
 import {
   sanitizeName,
@@ -131,7 +131,7 @@ const initialBranchState = {
 
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
   const navigate = useNavigate();
-  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders, selectedBranchId, hasPermission: contextHasPermission } = useAppState();
+  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders, hasPermission: contextHasPermission } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -534,12 +534,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
   // Filtered branches
-  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
   const filteredBranches = branches.filter(b => {
-    if (isBranchFiltered && !isBranchMatch(b, selectedBranchId, branches)) {
-      return false;
-    }
-
     const matchesSearch = !searchTerm ||
       (b.branchName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (b.branchCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -111,7 +111,7 @@ const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import { formatDateDMY, formatDateTimeDMY, extractOrderISODate } from '../helper/DateHelper.js';
-import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId, isBranchFilterActive } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import { useAppState } from '../config/AppContext.jsx';
 
 // Safe text extractor
@@ -281,7 +281,7 @@ export default function ReportsPanel({
     if (isBranchLogin) {
       return userBranchId;
     }
-    if (!isBranchFilterActive(selectedBranchId)) {
+    if (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
       return 'ALL';
     }
     return selectedBranchId;
@@ -290,8 +290,8 @@ export default function ReportsPanel({
   useEffect(() => {
     if (isBranchLogin) {
       setBranchFilter(userBranchId);
-    } else if (selectedBranchId !== undefined) {
-      if (!isBranchFilterActive(selectedBranchId)) {
+    } else if (selectedBranchId) {
+      if (selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
         setBranchFilter('ALL');
       } else {
         setBranchFilter(selectedBranchId);
@@ -346,9 +346,9 @@ export default function ReportsPanel({
   // Fetch Report Data from APIs when Tab or Filters change
   useEffect(() => {
     let isSubscribed = true;
-    const isFilteredBranch = isBranchFilterActive(branchFilter);
+    const isCompany = !branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY';
     const commonFilters = {
-      branchId: isFilteredBranch ? branchFilter : undefined,
+      branchId: isCompany ? undefined : branchFilter,
       startDate: dateStart,
       endDate: dateEnd,
       search: searchQuery,
@@ -1661,7 +1661,7 @@ export default function ReportsPanel({
               border: `1px solid ${(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? '#bfdbfe' : '#fed7aa'}`
             }}>
               {(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? (
-                <>🏢 Company View: Complete History (All Branches)</>
+                <></>
               ) : (
                 <>📍 Branch View: {allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.name || 
                   allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.branchName || 

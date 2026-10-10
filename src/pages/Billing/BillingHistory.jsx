@@ -4,7 +4,7 @@ import BillingHistoryPanel from '../../components/BillingHistoryPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import { formatDateDMY } from '../../helper/DateHelper.js';
-import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper.js';
+import { isBranchMatch } from '../../helper/BranchHelper.js';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId, hasPermission } = useAppState();
@@ -186,7 +186,7 @@ export default function BillingHistory() {
     }
 
     try {
-      const isSpecificBranch = isBranchFilterActive(selectedBranchId);
+      const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
       const filters = {
         branchId: isSpecificBranch ? selectedBranchId : undefined,
         search: searchTerm ? searchTerm.trim() : undefined,
@@ -237,11 +237,6 @@ export default function BillingHistory() {
       }
     }
 
-    const isSpecificBranch = isBranchFilterActive(selectedBranchId);
-    if (isSpecificBranch) {
-      items = items.filter(it => isBranchMatch(it, selectedBranchId, activeRestaurant?.branches || []));
-    }
-
     const mapped = items.map((it, idx) => mapItemToInvoice(it, idx));
     setRawHistory(mapped);
     setTotalItems(serverTotal > 0 ? serverTotal : mapped.length);
@@ -251,16 +246,12 @@ export default function BillingHistory() {
 
   // Derive unique Table options
   const tableOptions = useMemo(() => {
-    const isSpecificBranch = isBranchFilterActive(selectedBranchId);
     const set = new Set();
     rawHistory.forEach(it => {
       if (it.table) set.add(String(it.table).replace(/^Table\s*/i, '').trim());
     });
     if (Array.isArray(activeRestaurant?.tables)) {
-      const scopedTables = isSpecificBranch
-        ? activeRestaurant.tables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant.branches || []))
-        : activeRestaurant.tables;
-      scopedTables.forEach(t => {
+      activeRestaurant.tables.forEach(t => {
         const tNum = t.tableNumber || t.tableNo || t.name;
         if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
       });

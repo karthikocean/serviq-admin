@@ -400,12 +400,7 @@ export default function AdminLayout() {
     setSidebarBillingOpen(false);
     setSidebarWaiterOpen(false);
     setSidebarKitchenOpen(false);
-    if (!isReportsActive) {
-      setSidebarReportsOpen(true);
-      navigate(`/reports?tab=${getFirstAllowedReportTab()}`);
-    } else {
-      setSidebarReportsOpen(prev => !prev);
-    }
+    setSidebarReportsOpen(prev => !prev);
   };
 
   // Close dropdowns if navigating to an outside route
@@ -418,8 +413,6 @@ export default function AdminLayout() {
     }
     if (!pathname.startsWith('/reports')) {
       setSidebarReportsOpen(false);
-    } else {
-      setSidebarReportsOpen(true);
     }
   }, [pathname]);
 

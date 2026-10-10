@@ -6,7 +6,7 @@ import { Modal } from '../../components/Modal';
 import TableApi from '../../api/Table';
 import StaffApi from '../../api/Staff';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
-import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper';
+import { isBranchMatch } from '../../helper/BranchHelper';
 import './TableManagement.css';
 
 export default function TableManagement() {
@@ -51,22 +51,21 @@ export default function TableManagement() {
     try {
       const activeSearch = filters.search !== undefined ? filters.search : searchTerm;
       const activeStatus = filters.status !== undefined ? filters.status : statusFilter;
-      const isBranchFiltered = isBranchFilterActive(selectedBranchId);
       const params = {
-        branchId: isBranchFiltered ? selectedBranchId : undefined,
+        branchId: (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : undefined,
         search: activeSearch ? activeSearch.trim() : undefined,
         status: activeStatus !== 'All' ? activeStatus : undefined
       };
       const tablesRes = await TableApi.getTables(params);
       if (tablesRes.status && tablesRes.response?.data) {
         let tableList = tablesRes.response.data;
-        if (isBranchFiltered) {
+        if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
           tableList = tableList.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []));
         }
         setTables(tableList);
       } else if (activeRestaurant?.tables) {
         let tableList = activeRestaurant.tables;
-        if (isBranchFiltered) {
+        if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
           tableList = tableList.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []));
         }
         setTables(tableList);
@@ -84,14 +83,14 @@ export default function TableManagement() {
         if (localStaff.length > 0) staffData = localStaff;
       }
       if (staffData.length > 0) {
-        if (isBranchFiltered) {
+        if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
           staffData = staffData.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || []));
         }
         setStaff(staffData);
       }
       // Orders
       const rawOrders = activeRestaurant?.orders || [];
-      const branchOrders = isBranchFiltered
+      const branchOrders = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All')
         ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
         : rawOrders;
       setOrders(branchOrders);

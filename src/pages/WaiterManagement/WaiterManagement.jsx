@@ -5,7 +5,7 @@ import WaiterListPanel from '../../components/WaiterListPanel';
 import WaiterReportsPanel from '../../components/WaiterReportsPanel';
 import { Modal } from '../../components/Modal';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
-import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function WaiterManagement({ isReports = false }) {
   const {
@@ -31,7 +31,7 @@ export default function WaiterManagement({ isReports = false }) {
   const rawTables = activeRestaurant.tables || [];
   const rawOrders = activeRestaurant.orders || [];
 
-  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const staff = isBranchFiltered ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || [])) : rawStaff;
   const tables = isBranchFiltered ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || [])) : rawTables;
   const orders = isBranchFiltered ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || [])) : rawOrders;
