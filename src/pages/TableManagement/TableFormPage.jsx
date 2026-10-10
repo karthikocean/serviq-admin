@@ -8,7 +8,7 @@ import UserApi from '../../api/User';
 import BranchApi from '../../api/Branch';
 import RoleApi from '../../api/Role';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchFilterActive, isBranchMatch } from '../../helper/BranchHelper.js';
 
 export default function TableFormPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function TableFormPage() {
   const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
   // Get default branch from context
-  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
+  const cleanSelectedBranch = isBranchFilterActive(selectedBranchId)
     ? selectedBranchId
     : '';
 

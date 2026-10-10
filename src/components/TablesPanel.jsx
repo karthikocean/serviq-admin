@@ -4,7 +4,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 import TableApi from '../api/Table.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isBranchFilterActive } from '../helper/BranchHelper.js';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -105,7 +105,7 @@ export default function TablesPanel({
   const { hasPermission: contextHasPermission, selectedBranchId, activeRestaurant: contextRestaurant } = useAppState();
   const checkPermission = hasPermissionProp || contextHasPermission || (() => true);
   const branches = activeRestaurant?.branches || contextRestaurant?.branches || [];
-  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
@@ -115,6 +115,12 @@ export default function TablesPanel({
   const displayTables = isBranchFiltered
     ? tables.filter(t => isBranchMatch(t, selectedBranchId, branches))
     : tables;
+  const displayStaff = isBranchFiltered
+    ? staff.filter(s => isBranchMatch(s, selectedBranchId, branches))
+    : staff;
+  const displayOrders = isBranchFiltered
+    ? orders.filter(o => isBranchMatch(o, selectedBranchId, branches))
+    : orders;
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;

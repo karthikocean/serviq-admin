@@ -4,6 +4,7 @@ import BillingPanel from '../../components/BillingPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import { formatDateDMY } from '../../helper/DateHelper.js';
+import { isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper.js';
 import './Billing.css';
 
 export default function Billing() {
@@ -50,7 +51,7 @@ export default function Billing() {
   const fetchBillingData = async () => {
     setIsLoading(true);
 
-    const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
+    const isSingleBranch = isBranchFilterActive(selectedBranchId);
     const params = {
       branchId: isSingleBranch ? selectedBranchId : undefined,
       search: searchTerm ? searchTerm.trim() : undefined,
@@ -146,7 +147,11 @@ export default function Billing() {
       console.warn("Failed to fetch current billing from BillingApi:", e);
     }
 
-    setBillingData(fetchedTables);
+    const finalBillingData = isSingleBranch
+      ? fetchedTables.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []))
+      : fetchedTables;
+
+    setBillingData(finalBillingData);
 
     if (fetchedTables.length > 0) {
       if (!selectedBillingTable || !fetchedTables.some(t => t.tableId === selectedBillingTable || t._id === selectedBillingTable)) {

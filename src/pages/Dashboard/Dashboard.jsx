@@ -5,7 +5,7 @@ import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
 import UserApi from '../../api/User';
-import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch } from '../../helper/BranchHelper';
+import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch, isBranchFilterActive } from '../../helper/BranchHelper';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -21,13 +21,7 @@ export default function Dashboard() {
   const [liveUsers, setLiveUsers] = useState([]);
   const [hasFetchedLive, setHasFetchedLive] = useState(false);
 
-  const isSpecificBranch = Boolean(
-    selectedBranchId && 
-    selectedBranchId !== 'ALL' && 
-    selectedBranchId !== 'All' && 
-    String(selectedBranchId).toLowerCase() !== 'all branches' && 
-    String(selectedBranchId).toUpperCase() !== 'COMPANY'
-  );
+  const isSpecificBranch = isBranchFilterActive(selectedBranchId);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -78,7 +72,7 @@ export default function Dashboard() {
   const rawStaff = rawUsers.length > 0 ? rawUsers : (hasFetchedLive ? [] : (activeRestaurant.staff || []));
   const rawBranches = hasFetchedLive ? liveBranches : (activeRestaurant.branches || []);
 
-  const branches = rawBranches.map(b => {
+  const allBranches = rawBranches.map(b => {
     const mgrName = resolveBranchManagerName(b, rawUsers, rawStaff);
     const contactNum = resolveBranchContactNumber(b, rawUsers, rawStaff);
     return {
@@ -89,17 +83,25 @@ export default function Dashboard() {
     };
   });
 
+  const branches = isSpecificBranch
+    ? allBranches.filter(b => isBranchMatch(b, selectedBranchId, allBranches))
+    : allBranches;
+
   const orders = isSpecificBranch
-    ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, branches))
+    ? rawOrders.filter(o => isBranchMatch(o, selectedBranchId, allBranches))
     : rawOrders;
 
   const tables = isSpecificBranch
-    ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, branches))
+    ? rawTables.filter(t => isBranchMatch(t, selectedBranchId, allBranches))
     : rawTables;
 
   const staff = isSpecificBranch
-    ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, branches))
+    ? rawStaff.filter(s => isBranchMatch(s, selectedBranchId, allBranches))
     : rawStaff;
+
+  const users = isSpecificBranch
+    ? rawUsers.filter(u => isBranchMatch(u, selectedBranchId, allBranches))
+    : rawUsers;
 
   // Compute today's revenue (from paid orders of the active scope)
   const todayRevenue = orders
@@ -111,12 +113,12 @@ export default function Dashboard() {
       orders={orders}
       tables={tables}
       staff={staff}
-      users={rawUsers}
-      allOrders={rawOrders}
-      allTables={rawTables}
-      allStaff={rawStaff}
-      allUsers={rawUsers}
-      branches={branches}
+      users={users}
+      allOrders={isSpecificBranch ? orders : rawOrders}
+      allTables={isSpecificBranch ? tables : rawTables}
+      allStaff={isSpecificBranch ? staff : rawStaff}
+      allUsers={isSpecificBranch ? users : rawUsers}
+      branches={allBranches}
       selectedBranchId={selectedBranchId}
       onSelectBranch={setSelectedBranchId}
       todayRevenue={todayRevenue}

@@ -8,7 +8,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
-import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch, isBranchFilterActive } from '../helper/BranchHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -74,10 +74,10 @@ export default function UserListPanel() {
   const isAdmin = isCompanyUser;
   const currentBranchId = userBranchId;
   const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
-  const isAllBranches = isCompanyUser && (!selectedBranchId || selectedBranchId === 'ALL' || String(selectedBranchId).toUpperCase() === 'COMPANY');
   const activeFilteredBranchId = isBranchLogin
     ? userBranchId
-    : (!isAllBranches ? selectedBranchId : null);
+    : (isBranchFilterActive(selectedBranchId) ? selectedBranchId : null);
+  const isAllBranches = !activeFilteredBranchId;
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -182,7 +182,7 @@ export default function UserListPanel() {
         search: searchQuery,
         roleFilter: roleFilter === 'All' ? '' : roleFilter,
         statusFilter: statusFilter === 'All' ? '' : statusFilter,
-        branchId: activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined
+        branchId: isBranchFilterActive(activeFilteredBranchId) ? activeFilteredBranchId : undefined
       }),
       BranchApi.getBranches(),
       RoleApi.getRoles()
@@ -193,7 +193,7 @@ export default function UserListPanel() {
     if (usersRes?.status) {
       const uData = usersRes.response?.data || usersRes.response || [];
       let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
-      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && activeFilteredBranchId !== 'All') {
+      if (isBranchFilterActive(activeFilteredBranchId)) {
         list = list.filter(u => isBranchMatch(u, activeFilteredBranchId, currentBranches));
       }
       setApiUsers(list);

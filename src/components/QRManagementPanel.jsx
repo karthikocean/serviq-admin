@@ -3,7 +3,9 @@ import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import GenerateQRModal from './GenerateQRModal';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isBranchFilterActive } from '../helper/BranchHelper.js';
+import QrCodeApi from '../api/QrCode.js';
+import TableApi from '../api/Table.js';
 
 const PrintIcon = ({ size = 14, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -51,15 +53,62 @@ export default function QRManagementPanel({
   const [openDropdown, setOpenDropdown] = useState(null);
   const [localStatus, setLocalStatus] = useState({});
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [liveQrs, setLiveQrs] = useState(null);
+  const [liveTables, setLiveTables] = useState(null);
 
-  const rawQrCodes = activeRestaurant.qrCodes || [];
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
+  const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFreshQrAndTables = async () => {
+      try {
+        const params = isBranchFiltered ? { branchId: selectedBranchId } : {};
+        const [qrRes, tableRes] = await Promise.allSettled([
+          QrCodeApi.getQrCodes(params),
+          TableApi.getTables(params)
+        ]);
+        if (isMounted) {
+          if (qrRes.status === 'fulfilled' && qrRes.value?.status && qrRes.value.response) {
+            const data = qrRes.value.response.data || qrRes.value.response;
+            if (Array.isArray(data)) setLiveQrs(data);
+          }
+          if (tableRes.status === 'fulfilled' && tableRes.value?.status && tableRes.value.response) {
+            const tData = tableRes.value.response.data || tableRes.value.response.tables || tableRes.value.response;
+            if (Array.isArray(tData)) setLiveTables(tData);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch fresh QR codes / tables in QRManagementPanel:", e);
+      }
+    };
+    fetchFreshQrAndTables();
+    return () => { isMounted = false; };
+  }, [selectedBranchId, isBranchFiltered]);
+
+  const allTables = liveTables || activeRestaurant.tables || [];
+  const rawQrCodes = liveQrs || activeRestaurant.qrCodes || [];
+  const branches = activeRestaurant.branches || [];
+
   const scopedQrCodes = isBranchFiltered
-    ? rawQrCodes.filter(q => isBranchMatch(q, selectedBranchId, activeRestaurant.branches || []))
+    ? rawQrCodes.filter(q => {
+        if (isBranchMatch(q, selectedBranchId, branches)) return true;
+        const tableKey = q.tableId || q.table || q.diningTableId;
+        if (tableKey) {
+          const matchedTable = allTables.find(t => 
+            String(t._id || t.id) === String(tableKey) ||
+            String(t.tableNumber || t.tableNo || t.name) === String(tableKey)
+          );
+          if (matchedTable && isBranchMatch(matchedTable, selectedBranchId, branches)) {
+            return true;
+          }
+        }
+        return false;
+      })
     : rawQrCodes;
+
   const tables = isBranchFiltered
-    ? (activeRestaurant.tables || []).filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant.branches || []))
-    : (activeRestaurant.tables || []);
+    ? allTables.filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : allTables;
 
   // Display QR codes (no dummy fallback — only show real data)
   const displayQrs = scopedQrCodes;

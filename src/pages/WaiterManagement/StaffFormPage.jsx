@@ -6,7 +6,7 @@ import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/V
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import RoleApi from '../../api/Role';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchFilterActive, isBranchMatch } from '../../helper/BranchHelper.js';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function StaffFormPage() {
   const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
   const rawBranches = activeRestaurant?.branches || [];
-  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
+  const cleanSelectedBranch = isBranchFilterActive(selectedBranchId)
     ? selectedBranchId
     : '';
 

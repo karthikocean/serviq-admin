@@ -8,6 +8,7 @@ import {
   resolveBranchManagerName, 
   resolveBranchContactNumber, 
   isBranchMatch,
+  isBranchFilterActive,
   isUserCompanyUser,
   getUserAssignedBranchId
 } from '../helper/BranchHelper.js';
@@ -191,13 +192,7 @@ export default function OverviewPanel({
   const isAdmin = isCompanyUser;
   const isRestaurantOwner = isCompanyUser;
 
-  const isSpecificBranch = Boolean(
-    selectedBranchId && 
-    selectedBranchId !== 'ALL' && 
-    selectedBranchId !== 'All' && 
-    String(selectedBranchId).toLowerCase() !== 'all branches' && 
-    String(selectedBranchId).toUpperCase() !== 'COMPANY'
-  );
+  const isSpecificBranch = isBranchFilterActive(selectedBranchId);
   const isAllBranches = !isSpecificBranch;
 
   const selectedBranch = isSpecificBranch
@@ -282,12 +277,14 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 10 });
+      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, limit: 10 } : { limit: 10 };
+      const res = await TableApi.getTables(branchParam);
       if (res && res.status && res.response) {
         const resp = res.response;
         const tList = Array.isArray(resp) ? resp : (Array.isArray(resp.data) ? resp.data : (Array.isArray(resp.tables) ? resp.tables : (Array.isArray(resp.data?.tables) ? resp.data.tables : [])));
         if (tList.length > 0) {
-          setFetchedAllTables(tList);
+          const filtered = isSpecificBranch ? tList.filter(t => isBranchMatch(t, selectedBranchId, branches)) : tList;
+          setFetchedAllTables(filtered);
         }
       }
     } catch (e) {
@@ -610,9 +607,9 @@ export default function OverviewPanel({
                 {isAllBranches ? "TODAY'S ORDERS (ALL)" : "TODAY'S ORDERS"}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)' }}>
-                {statsData?.todayOrders?.count !== undefined 
-                  ? statsData.todayOrders.count 
-                  : displayOrders.length}
+                {isSpecificBranch
+                  ? displayOrders.length
+                  : (statsData?.todayOrders?.count !== undefined ? statsData.todayOrders.count : displayOrders.length)}
               </h3>
             </div>
           </div>
@@ -643,7 +640,9 @@ export default function OverviewPanel({
                 {isAllBranches ? 'ORG REVENUE (TODAY)' : 'BRANCH REVENUE (TODAY)'}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {statsData?.todayRevenue?.formatted || `₹${(statsData?.todayRevenue?.amount ?? todayRevenue).toLocaleString('en-IN')}`}
+                {isSpecificBranch
+                  ? `₹${todayRevenue.toLocaleString('en-IN')}`
+                  : (statsData?.todayRevenue?.formatted || `₹${(statsData?.todayRevenue?.amount ?? todayRevenue).toLocaleString('en-IN')}`)}
               </h3>
             </div>
           </div>
@@ -657,7 +656,9 @@ export default function OverviewPanel({
                 {isAllBranches ? 'ORG REVENUE (THIS MONTH)' : 'BRANCH REVENUE (THIS MONTH)'}
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {statsData?.monthRevenue?.formatted || `₹${(statsData?.monthRevenue?.amount ?? monthlySales).toLocaleString('en-IN')}`}
+                {isSpecificBranch
+                  ? `₹${monthlySales.toLocaleString('en-IN')}`
+                  : (statsData?.monthRevenue?.formatted || `₹${(statsData?.monthRevenue?.amount ?? monthlySales).toLocaleString('en-IN')}`)}
               </h3>
             </div>
           </div>
@@ -672,12 +673,12 @@ export default function OverviewPanel({
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)', display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap' }}>
                 <span>
-                  {statsData?.staffOnDuty?.onDuty !== undefined 
-                    ? statsData.staffOnDuty.onDuty 
-                    : onDutyStaffCount}
+                  {isSpecificBranch
+                    ? onDutyStaffCount
+                    : (statsData?.staffOnDuty?.onDuty !== undefined ? statsData.staffOnDuty.onDuty : onDutyStaffCount)}
                 </span>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  / {statsData?.staffOnDuty?.total ?? displayStaff.length} Total
+                  / {isSpecificBranch ? displayStaff.length : (statsData?.staffOnDuty?.total ?? displayStaff.length)} Total
                 </span>
               </h3>
             </div>
@@ -692,7 +693,9 @@ export default function OverviewPanel({
                 PENDING ORDERS (TODAY)
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)' }}>
-                {statsData?.pendingOrders?.count !== undefined ? statsData.pendingOrders.count : pendingOrdersCount}
+                {isSpecificBranch
+                  ? pendingOrdersCount
+                  : (statsData?.pendingOrders?.count !== undefined ? statsData.pendingOrders.count : pendingOrdersCount)}
               </h3>
             </div>
           </div>
@@ -706,7 +709,9 @@ export default function OverviewPanel({
                 COMPLETED ORDERS (TODAY)
               </div>
               <h3 style={{ fontSize: '24px', fontWeight: 800, margin: '4px 0', color: 'var(--black)' }}>
-                {statsData?.completedOrders?.count !== undefined ? statsData.completedOrders.count : completedOrdersCount}
+                {isSpecificBranch
+                  ? completedOrdersCount
+                  : (statsData?.completedOrders?.count !== undefined ? statsData.completedOrders.count : completedOrdersCount)}
               </h3>
             </div>
           </div>

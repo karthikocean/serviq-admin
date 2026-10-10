@@ -10,7 +10,7 @@ import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import { cleanRelativeImagePath, getImageUrl } from '../../helper/ImageHelper.js';
-import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
+import { isBranchMatch, isBranchFilterActive, isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -59,11 +59,10 @@ export default function MenuManagement() {
   }, [activeRestaurant, selectedBranchId, refreshTrigger]);
 
   const fetchMenuItems = async () => {
+    const isBranchFiltered = isBranchFilterActive(selectedBranchId);
     const params = { page: 0, limit: 10 };
-    if (selectedBranchId) {
+    if (isBranchFiltered) {
       params.branchId = selectedBranchId;
-    } else {
-      params.branchId = 'all';
     }
 
     const res = await MenuApi.getMenuItems(params);
@@ -74,7 +73,7 @@ export default function MenuManagement() {
       } else {
         rawList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       }
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
+      if (isBranchFiltered) {
         rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, branches));
       }
       setMenuItems(rawList);
@@ -82,7 +81,8 @@ export default function MenuManagement() {
   };
 
   const fetchCategories = async () => {
-    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, page: 0, limit: 10 } : { branchId: 'all', page: 0, limit: 10 };
+    const isBranchFiltered = isBranchFilterActive(selectedBranchId);
+    const params = isBranchFiltered ? { branchId: selectedBranchId, page: 0, limit: 10 } : { page: 0, limit: 10 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data)
@@ -91,7 +91,7 @@ export default function MenuManagement() {
             ? res.response.data.items
             : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
       let cleanList = catArray.filter(cat => !cat?.isDelete);
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
+      if (isBranchFiltered) {
         cleanList = cleanList.filter(c => isBranchMatch(c, selectedBranchId, branches));
       }
       setCategories(cleanList);

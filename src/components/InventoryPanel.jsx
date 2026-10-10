@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications';
-import { isUserCompanyUser } from '../helper/BranchHelper.js';
+import { isUserCompanyUser, isBranchFilterActive } from '../helper/BranchHelper.js';
 
 // Modular Inventory Sub-Components
 import CompanyInventoryItems from './inventory/CompanyInventoryItems';
@@ -36,8 +36,8 @@ export default function InventoryPanel() {
   const location = useLocation();
 
   const isCompanyUser = isUserCompanyUser(currentUser);
-  const isCompanySelected = isCompanyUser && (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY');
-  const scope = isCompanySelected ? 'COMPANY' : 'BRANCH';
+  const isBranchFilter = isBranchFilterActive(selectedBranchId);
+  const scope = (isCompanyUser && !isBranchFilter) ? 'COMPANY' : 'BRANCH';
 
   // Shared Datasets
   const [items, setItems] = useState(INITIAL_INVENTORY_ITEMS);

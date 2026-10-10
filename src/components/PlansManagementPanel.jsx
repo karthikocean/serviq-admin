@@ -6,6 +6,7 @@ import SubscriptionApi from '../api/Subscription';
 import BranchApi from '../api/Branch';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications';
+import { isBranchFilterActive, isBranchMatch } from '../helper/BranchHelper.js';
 
 // Icons matching modern UI
 const BuildingIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -61,6 +62,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     purchaseExtraBranchSlots,
     toggleSubscriptionAutoRenew,
     currentUser,
+    selectedBranchId,
     hasPermission: contextHasPermission
   } = useAppState();
 
@@ -676,6 +678,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
     return {
       id: invoiceId,
+      branchId: item.branchId || item.branch?._id || item.branch || null,
+      branch: item.branch || null,
       planName,
       type: isAddon ? 'addon' : 'subscription',
       description,
@@ -774,6 +778,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   // Filtered Invoices
   const filteredInvoices = invoices.filter(inv => {
+    if (isBranchFilterActive(selectedBranchId) && (inv.branchId || inv.branch)) {
+      if (!isBranchMatch(inv, selectedBranchId, apiBranches)) {
+        return false;
+      }
+    }
+
     const matchesSearch =
       (inv.id || '').toLowerCase().includes(historySearch.toLowerCase()) ||
       (inv.description || '').toLowerCase().includes(historySearch.toLowerCase()) ||

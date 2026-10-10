@@ -111,7 +111,7 @@ const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import { formatDateDMY, formatDateTimeDMY, extractOrderISODate } from '../helper/DateHelper.js';
-import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId, isBranchFilterActive } from '../helper/BranchHelper.js';
 import { useAppState } from '../config/AppContext.jsx';
 
 // Safe text extractor
@@ -281,7 +281,7 @@ export default function ReportsPanel({
     if (isBranchLogin) {
       return userBranchId;
     }
-    if (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
+    if (!isBranchFilterActive(selectedBranchId)) {
       return 'ALL';
     }
     return selectedBranchId;
@@ -290,8 +290,8 @@ export default function ReportsPanel({
   useEffect(() => {
     if (isBranchLogin) {
       setBranchFilter(userBranchId);
-    } else if (selectedBranchId) {
-      if (selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY') {
+    } else if (selectedBranchId !== undefined) {
+      if (!isBranchFilterActive(selectedBranchId)) {
         setBranchFilter('ALL');
       } else {
         setBranchFilter(selectedBranchId);
@@ -346,9 +346,9 @@ export default function ReportsPanel({
   // Fetch Report Data from APIs when Tab or Filters change
   useEffect(() => {
     let isSubscribed = true;
-    const isCompany = !branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY';
+    const isFilteredBranch = isBranchFilterActive(branchFilter);
     const commonFilters = {
-      branchId: isCompany ? undefined : branchFilter,
+      branchId: isFilteredBranch ? branchFilter : undefined,
       startDate: dateStart,
       endDate: dateEnd,
       search: searchQuery,
