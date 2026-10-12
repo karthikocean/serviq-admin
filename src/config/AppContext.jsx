@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId, initialTables, initialOrders, initialMenu, initialStaff, initialBillingData, initialBillingHistory } from './initialData';
 import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
@@ -536,26 +536,20 @@ export const AppProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  // Periodic token expiration check & live profile active status verification
+  // Periodic token expiration check
   useEffect(() => {
     const checkStatus = () => {
       const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
-      if (token) {
-        if (isTokenExpired(token)) {
-          ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
-          logout();
-        } else {
-          fetchProfile();
-        }
+      if (token && isTokenExpired(token)) {
+        ShowNotifications.showAlertNotification("Session expired. Please log in again.", false);
+        logout();
       }
     };
 
-    const interval = setInterval(checkStatus, 15000);
-    window.addEventListener('focus', checkStatus);
+    const interval = setInterval(checkStatus, 30000);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('focus', checkStatus);
     };
   }, []);
 
@@ -1323,9 +1317,13 @@ export const AppProvider = ({ children }) => {
     window.dispatchEvent(new Event('plan_updated'));
   };
 
+  const isFetchingProfileRef = useRef(false);
+
   const fetchProfile = async () => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return null;
+    if (isFetchingProfileRef.current) return null;
+    isFetchingProfileRef.current = true;
     try {
       const res = await AuthApi.getProfile();
       if (res && res.status && res.data) {
@@ -1678,15 +1676,16 @@ export const AppProvider = ({ children }) => {
           window.location.href = '/login';
         }
       }
+    } finally {
+      isFetchingProfileRef.current = false;
     }
     return null;
   };
 
-  // Automatically fetch live profile, branches, subscription dashboard, orders, tables, and menu from API for current user
+  // Automatically fetch live branches, subscription dashboard, orders, tables, and menu from API for current user
   useEffect(() => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (token) {
-      fetchProfile();
       fetchBranches({ page: 0, limit: 10 });
       fetchSubscriptionDashboard();
       fetchOrders({ page: 0, limit: 50 });
