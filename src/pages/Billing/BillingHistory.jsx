@@ -305,107 +305,10 @@ export default function BillingHistory() {
     ];
   }, [rawHistory, activeRestaurant]);
 
-  // Filter raw history by search, date range, branch, payment method, dining table, customer, and cashier/staff
-  const filteredHistory = useMemo(() => {
-    return rawHistory.filter(item => {
-      // 1. Branch Filter (robust, using isBranchMatch)
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company') {
-        if (!isBranchMatch(item, selectedBranchId, activeRestaurant?.branches || [])) {
-          return false;
-        }
-      }
+  // Backend API handles all filtering and pagination
+  const filteredHistory = rawHistory;
 
-      // 2. Payment Method Filter
-      if (selectedPayment && selectedPayment !== 'All') {
-        if (item.paymentMethod.toLowerCase() !== selectedPayment.toLowerCase()) {
-          return false;
-        }
-      }
-
-      // 3. Dining Table Filter
-      if (selectedTable && selectedTable !== 'All') {
-        const itemTable = String(item.table || '').replace(/^Table\s*/i, '').trim().toLowerCase();
-        const targetTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
-        const itemTableId = String(item.tableId || '').trim().toLowerCase();
-        if (itemTable !== targetTable && itemTableId !== targetTable) {
-          return false;
-        }
-      }
-
-      // 4. Cashier / Staff Filter
-      if (selectedStaff && selectedStaff !== 'All') {
-        const itemStaffId = String(item.cashierId || item.staffId || '').trim();
-        const itemStaffName = String(item.staff || item.staffName || '').trim().toLowerCase();
-        const selStaffOpt = staffOptions.find(o => o.value === selectedStaff);
-        const selLabel = (selStaffOpt?.label || selectedStaff).toLowerCase();
-        if (itemStaffId !== selectedStaff && itemStaffName !== String(selectedStaff).toLowerCase() && itemStaffName !== selLabel) {
-          return false;
-        }
-      }
-
-      // 5. Customer Filter
-      if (customerFilter && customerFilter.trim()) {
-        const cq = customerFilter.toLowerCase().trim();
-        const matchesName = (item.customerName || '').toLowerCase().includes(cq);
-        const matchesPhone = (item.customerPhone || '').toLowerCase().includes(cq);
-        if (!matchesName && !matchesPhone) {
-          return false;
-        }
-      }
-
-      // 6. Search Filter
-      if (searchTerm && searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const matchesId = (item.id || '').toLowerCase().includes(q);
-        const matchesBill = (item.billNo || '').toLowerCase().includes(q);
-        const matchesOrder = (item.orderId || '').toLowerCase().includes(q);
-        const matchesTable = `table ${item.table}`.toLowerCase().includes(q) || (item.table || '').toLowerCase().includes(q);
-        const matchesStaff = (item.staff || '').toLowerCase().includes(q);
-        const matchesCust = (item.customerName || '').toLowerCase().includes(q) || (item.customerPhone || '').toLowerCase().includes(q);
-        const matchesAmount = String(item.amount || '').includes(q);
-        if (!matchesId && !matchesBill && !matchesOrder && !matchesTable && !matchesStaff && !matchesCust && !matchesAmount) {
-          return false;
-        }
-      }
-
-      // 7. Date Range Filter
-      if (dateRange && dateRange !== 'All') {
-        const itemDate = new Date(item.rawDate);
-        const now = new Date();
-
-        if (dateRange === 'Today') {
-          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
-          if (itemDay.getTime() !== today.getTime()) return false;
-        } else if (dateRange === 'Yesterday') {
-          const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-          const itemDay = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
-          if (itemDay.getTime() !== yest.getTime()) return false;
-        } else if (dateRange === 'This Week') {
-          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          if (itemDate < sevenDaysAgo) return false;
-        } else if (dateRange === 'This Month') {
-          if (itemDate.getMonth() !== now.getMonth() || itemDate.getFullYear() !== now.getFullYear()) return false;
-        } else if (dateRange === 'Custom') {
-          if (customStartDate) {
-            const start = new Date(customStartDate);
-            start.setHours(0, 0, 0, 0);
-            if (itemDate < start) return false;
-          }
-          if (customEndDate) {
-            const end = new Date(customEndDate);
-            end.setHours(23, 59, 59, 999);
-            if (itemDate > end) return false;
-          }
-        }
-      }
-
-      return true;
-    });
-  }, [rawHistory, selectedBranchId, selectedPayment, selectedTable, selectedStaff, customerFilter, searchTerm, dateRange, customStartDate, customEndDate]);
-
-  const isServerPaginated = Boolean(totalItems > 0 && rawHistory.length <= limit && totalItems > rawHistory.length);
-  const effectiveTotal = isServerPaginated ? totalItems : filteredHistory.length;
+  const effectiveTotal = totalItems > 0 ? totalItems : filteredHistory.length;
   const totalPages = Math.max(1, Math.ceil(effectiveTotal / limit));
 
   useEffect(() => {
@@ -414,14 +317,8 @@ export default function BillingHistory() {
     }
   }, [totalPages, page]);
 
-  // Compute pagination and current page slice
-  const paginatedHistory = useMemo(() => {
-    if (isServerPaginated) {
-      return filteredHistory;
-    }
-    const startIndex = page * limit;
-    return filteredHistory.slice(startIndex, startIndex + limit);
-  }, [filteredHistory, isServerPaginated, page, limit]);
+  // Current page records directly from backend
+  const paginatedHistory = filteredHistory;
 
   // Compute Summary
   const summary = useMemo(() => {

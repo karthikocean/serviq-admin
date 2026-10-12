@@ -167,50 +167,8 @@ export default function BillingPanel({
     ];
   }, [displayBillingData, activeRestaurant]);
 
-  // Filter bills by Dining Table, Customer, Cashier/Staff, and Search
-  const filteredBills = useMemo(() => {
-    return displayBillingData.filter(bill => {
-      // 1. Table Filter
-      if (selectedTable && selectedTable !== 'All') {
-        const bTable = String(bill.table || bill.tableNumber || bill.tableNo || '').replace(/^Table\s*/i, '').trim().toLowerCase();
-        const sTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
-        const bTableId = String(bill.tableId || '').trim().toLowerCase();
-        if (bTable !== sTable && bTableId !== sTable) return false;
-      }
-
-      // 2. Customer Filter
-      if (customerFilter && customerFilter.trim()) {
-        const cq = customerFilter.toLowerCase().trim();
-        const cName = (bill.customerName || bill.customer?.name || bill.clientName || '').toLowerCase();
-        const cPhone = (bill.customerPhone || bill.customerMobile || bill.phone || '').toLowerCase();
-        if (!cName.includes(cq) && !cPhone.includes(cq)) return false;
-      }
-
-      // 3. Cashier / Staff Filter
-      if (selectedStaff && selectedStaff !== 'All') {
-        const itemStaffId = String(bill.cashierId || bill.staffId || bill.waiterId || '').trim();
-        const itemStaffName = String(bill.staff || bill.cashier || bill.waiter || bill.billedBy || bill.waiterName || '').trim().toLowerCase();
-        const selStaffOpt = staffOptions.find(o => o.value === selectedStaff);
-        const selLabel = (selStaffOpt?.label || selectedStaff).toLowerCase();
-        if (itemStaffId !== selectedStaff && itemStaffName !== String(selectedStaff).toLowerCase() && itemStaffName !== selLabel) {
-          return false;
-        }
-      }
-
-      // 4. Search Term
-      if (searchTerm && searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const matchesBill = (bill.billNo || bill.billNumber || '').toLowerCase().includes(q);
-        const matchesOrd = (bill.orderId || '').toLowerCase().includes(q);
-        const matchesTab = (bill.table || '').toLowerCase().includes(q) || `table ${bill.table}`.toLowerCase().includes(q);
-        const matchesStaff = (bill.staff || bill.cashier || bill.waiter || bill.billedBy || '').toLowerCase().includes(q);
-        const matchesCust = (bill.customerName || '').toLowerCase().includes(q) || (bill.customerPhone || '').toLowerCase().includes(q);
-        if (!matchesBill && !matchesOrd && !matchesTab && !matchesStaff && !matchesCust) return false;
-      }
-
-      return true;
-    });
-  }, [displayBillingData, selectedTable, customerFilter, selectedStaff, searchTerm, staffOptions]);
+  // Bills are already filtered and paginated by backend API
+  const filteredBills = displayBillingData;
 
   const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
@@ -236,9 +194,9 @@ export default function BillingPanel({
     return pages;
   };
 
-  const paginatedBills = displayBillingData.length > limit
-    ? filteredBills.slice(page * limit, (page + 1) * limit)
-    : filteredBills;
+  const paginatedBills = (propTotalItems > 0 || displayBillingData.length <= limit)
+    ? filteredBills
+    : filteredBills.slice(page * limit, (page + 1) * limit);
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';

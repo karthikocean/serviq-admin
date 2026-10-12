@@ -231,6 +231,7 @@ export default function StaffManagementPanel({
   const [isLoading, setIsLoading] = useState(false);
 
   const [page, setPage] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
   const limit = 10;
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
@@ -255,7 +256,12 @@ export default function StaffManagementPanel({
   const fetchData = async () => {
     setIsLoading(true);
 
+    const targetBranch = (isCompanyScope && branchFilter && branchFilter !== 'All')
+      ? branchFilter
+      : (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' ? activeFilteredBranchId : undefined);
+
     const userParams = {
+      page: page,
       limit: 10
     };
     if (searchQuery && searchQuery.trim()) {
@@ -268,8 +274,11 @@ export default function StaffManagementPanel({
     if (statusFilter && statusFilter !== 'All') {
       userParams.status = statusFilter;
     }
-    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
-      userParams.branchId = activeFilteredBranchId;
+    if (dutyFilter && dutyFilter !== 'All') {
+      userParams.dutyStatus = dutyFilter;
+    }
+    if (targetBranch) {
+      userParams.branchId = targetBranch;
     }
 
     const [usersRes, stationsRes, branchesRes, rolesRes, tablesRes] = await Promise.all([
@@ -281,16 +290,23 @@ export default function StaffManagementPanel({
     ]);
 
     let list = [];
+    let serverTotal = 0;
     if (usersRes?.status) {
       const raw = usersRes.response?.data || usersRes.response?.users || usersRes.response?.staff || (Array.isArray(usersRes.response) ? usersRes.response : []);
       if (Array.isArray(raw)) list = [...raw];
       else if (Array.isArray(raw?.data)) list = [...raw.data];
       else if (Array.isArray(raw?.users)) list = [...raw.users];
       else if (Array.isArray(raw?.staff)) list = [...raw.staff];
+
+      serverTotal = usersRes.response?.pagination?.total 
+        ?? usersRes.response?.total 
+        ?? usersRes.response?.totalRecords 
+        ?? usersRes.response?.totalUsers 
+        ?? usersRes.response?.count 
+        ?? (usersRes.response?.data?.total || list.length);
     }
 
     // Also merge any local staff from activeRestaurant
-    
     const localStaffPool = [
       ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
       ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
@@ -350,6 +366,7 @@ export default function StaffManagementPanel({
     });
 
     setApiUsers(syncedList);
+    setTotalRecords(serverTotal || syncedList.length);
     if (stationsRes?.status) setApiStations(stationsRes.response.data || stationsRes.response || []);
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || branchesRes.response || []);
     if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
@@ -364,79 +381,20 @@ export default function StaffManagementPanel({
   };
 
   useEffect(() => {
+    setPage(0);
+  }, [selectedBranchId, activeFilteredBranchId, branchFilter, roleFilter, statusFilter, dutyFilter, searchQuery]);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       fetchData();
     }, 300);
     return () => clearTimeout(timer);
-  }, [selectedBranchId, roleFilter, statusFilter, dutyFilter, searchQuery]);
+  }, [selectedBranchId, activeFilteredBranchId, branchFilter, roleFilter, statusFilter, dutyFilter, searchQuery, page]);
 
   const isCompanyLogin = isCompanyScope;
 
-  const filteredUsers = apiUsers.filter(u => {
-    // 1a. Selected Header Branch filter
-    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
-      if (!isBranchMatch(u, activeFilteredBranchId, apiBranches)) {
-        return false;
-      }
-    }
-
-    // 1b. Company Login Branch Filter
-    if (isCompanyLogin && branchFilter && branchFilter !== 'All') {
-      if (!isBranchMatch(u, branchFilter, apiBranches)) {
-        return false;
-      }
-    }
-
-    // 2. Role filter
-    if (roleFilter && roleFilter !== 'All') {
-      const uRoleId = typeof u.roleId === 'object' ? u.roleId?._id : u.roleId;
-      const uRoleName = (u.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || u.role || '').toLowerCase();
-      const targetRoleObj = apiRoles.find(r => r._id === roleFilter);
-      const targetRoleName = (targetRoleObj?.roleName || roleFilter).toLowerCase();
-      const matchRole = String(uRoleId) === String(roleFilter) || uRoleName === targetRoleName || uRoleName.includes(targetRoleName);
-      if (!matchRole) return false;
-    }
-
-    // 3. Status filter
-    if (statusFilter && statusFilter !== 'All') {
-      const uStatusStr = String(u.status || '').toLowerCase().trim();
-      const isActive = !(
-        uStatusStr === 'inactive' || 
-        uStatusStr === 'disabled' || 
-        uStatusStr === 'deactivated' || 
-        u.isActive === false || 
-        String(u.isActive) === 'false' || 
-        u.isActive === 0 || 
-        u.active === false
-      );
-      if (statusFilter === 'Active' && !isActive) return false;
-      if (statusFilter === 'Inactive' && isActive) return false;
-    }
-
-    // 4. Duty Status filter
-    if (dutyFilter && dutyFilter !== 'All') {
-      const isOnDuty = u.dutyStatus === 'ON_DUTY' || u.status === 'On Duty' || (!u.dutyStatus && u.status !== 'Off Duty' && u.dutyStatus !== 'OFF_DUTY');
-      if (dutyFilter === 'ON_DUTY' && !isOnDuty) return false;
-      if (dutyFilter === 'OFF_DUTY' && isOnDuty) return false;
-    }
-
-    // 5. Search query
-    if (searchQuery && searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const name = (u.name || '').toLowerCase();
-      const email = (u.email || '').toLowerCase();
-      const phone = (u.phoneNumber || u.phone || '').toLowerCase();
-      if (!name.includes(q) && !email.includes(q) && !phone.includes(q)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  const totalRecords = filteredUsers.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
-  const paginatedUsers = filteredUsers.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil((totalRecords || apiUsers.length) / limit));
+  const paginatedUsers = apiUsers;
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -2223,7 +2181,7 @@ export default function StaffManagementPanel({
               );
             })}
 
-            {filteredUsers.length === 0 && !isLoading && (
+            {paginatedUsers.length === 0 && !isLoading && (
               <tr>
                 <td colSpan="9" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>

@@ -62,7 +62,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
     setLoading(true);
     try {
       const res = await InventoryApi.getItems({
-        limit: 100,
+        limit: 10,
         branchId: isBranchFiltered ? selectedBranchId : undefined
       });
       if (res?.status && res?.response) {

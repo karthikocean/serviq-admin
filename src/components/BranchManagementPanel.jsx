@@ -223,6 +223,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [kdsPage, setKdsPage] = useState(0);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalBranchRecords, setTotalBranchRecords] = useState(0);
 
   const fetchBranches = async () => {
     setIsLoading(true);
@@ -230,6 +232,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       const branchParams = {
         search: searchTerm ? searchTerm.trim() : undefined,
         status: statusFilter !== 'All' ? statusFilter : undefined,
+        page: page,
         limit: 10
       };
       const [res, usersRes] = await Promise.allSettled([
@@ -292,6 +295,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           };
         });
         setApiBranches(mappedBranches);
+        const serverTotal = branchResponse.response?.pagination?.total 
+          ?? branchResponse.response?.total 
+          ?? branchResponse.response?.totalRecords 
+          ?? branchResponse.response?.count 
+          ?? (branchResponse.response?.data?.total || mappedBranches.length);
+        setTotalBranchRecords(Number(serverTotal) || mappedBranches.length);
       }
     } catch (e) {
       console.error("Failed to fetch branches or managers", e);
@@ -439,6 +448,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   }, []);
 
   useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
     if (isRestaurantOwner) {
       const timer = setTimeout(() => {
         fetchBranches();
@@ -446,7 +459,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       fetchLiveSubscription();
       return () => clearTimeout(timer);
     }
-  }, [isRestaurantOwner, searchTerm, statusFilter, fetchLiveSubscription]);
+  }, [isRestaurantOwner, searchTerm, statusFilter, page, fetchLiveSubscription]);
 
   // Listen to plan updates across modules
   useEffect(() => {
@@ -533,24 +546,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : (planName.toLowerCase().includes('basic') ? 799 : 699)));
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
-  // Filtered branches
-  const filteredBranches = branches.filter(b => {
-    const matchesSearch = !searchTerm ||
-      (b.branchName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.branchCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.city || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.managerName || b.branchManager || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'All' || b.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Pagination for branches
-  const [page, setPage] = useState(0);
+  // Branches are fetched with filters and pagination from backend API
+  const filteredBranches = branches;
   const limit = 10;
-  const totalPages = Math.ceil(filteredBranches.length / limit) || 1;
-  const paginatedBranches = filteredBranches.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil((totalBranchRecords || filteredBranches.length) / limit));
+  const paginatedBranches = (apiBranches && apiBranches.length > 0)
+    ? filteredBranches
+    : filteredBranches.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];

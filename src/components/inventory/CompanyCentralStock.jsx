@@ -63,7 +63,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     setLoading(true);
     try {
       const res = await InventoryApi.getItems({
-        limit: 100,
+        limit: 10,
         branchId: isBranchFiltered ? selectedBranchId : undefined
       });
       if (res?.status && res?.response) {
