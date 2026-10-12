@@ -29,6 +29,8 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 10;
+  const [totalPurchasesCount, setTotalPurchasesCount] = useState(0);
 
   // View States: null | 'ADD_PURCHASE' | 'VIEW_PURCHASE' | 'VENDOR_MODAL'
   const [viewState, setViewState] = useState(null);
@@ -76,7 +78,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       const activeBranch = isBranchFiltered ? selectedBranchId : undefined;
 
       // 1. Fetch Vendors
-      const vendorsRes = await InventoryApi.getVendors({ limit: 0, branchId: activeBranch });
+      const vendorsRes = await InventoryApi.getVendors({ limit: 10, branchId: activeBranch });
       if (vendorsRes?.status && vendorsRes?.response) {
         const rawVendors = vendorsRes.response.data || vendorsRes.response.vendors || (Array.isArray(vendorsRes.response) ? vendorsRes.response : []);
         if (Array.isArray(rawVendors)) {
@@ -85,7 +87,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       }
 
       // 2. Fetch Items
-      const itemsRes = await InventoryApi.getItems({ limit: 0, branchId: activeBranch });
+      const itemsRes = await InventoryApi.getItems({ limit: 10, branchId: activeBranch });
       if (itemsRes?.status && itemsRes?.response) {
         const rawItems = itemsRes.response.data || itemsRes.response.items || (Array.isArray(itemsRes.response) ? itemsRes.response : []);
         if (Array.isArray(rawItems) && rawItems.length > 0) {
@@ -102,9 +104,21 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       }
 
       // 3. Fetch Purchases
-      const purRes = await InventoryApi.getPurchases(activeBranch ? { branchId: activeBranch } : {});
+      const purchaseParams = {
+        branchId: activeBranch,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        supplier: supplierFilter !== 'All' ? supplierFilter : undefined,
+        item: itemFilter !== 'All' ? itemFilter : undefined,
+        purchaseType: typeFilter !== 'All' ? typeFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page: currentPage,
+        limit: PAGE_SIZE
+      };
+      const purRes = await InventoryApi.getPurchases(purchaseParams);
       if (purRes?.status && purRes?.response) {
-        const rawPurchases = purRes.response.data || purRes.response || [];
+        const rawPurchases = purRes.response.data || purRes.response.purchases || purRes.response || [];
+        const serverTotal = purRes.response.totalItems ?? purRes.response.total ?? purRes.response.totalRecords ?? purRes.response.count ?? (Array.isArray(rawPurchases) ? rawPurchases.length : 0);
         if (Array.isArray(rawPurchases) && rawPurchases.length > 0) {
           const formattedPur = rawPurchases.map(p => ({
             id: p._id || p.id,
@@ -128,6 +142,10 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
             remarks: p.remarks || p.notes || ''
           }));
           setPurchasesList(formattedPur);
+          setTotalPurchasesCount(Number(serverTotal) || formattedPur.length);
+        } else {
+          setPurchasesList([]);
+          setTotalPurchasesCount(0);
         }
       }
     } catch (err) {
@@ -135,10 +153,13 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     } finally {
       setLoading(false);
     }
-  }, [isBranchFiltered, selectedBranchId]);
+  }, [isBranchFiltered, selectedBranchId, searchTerm, supplierFilter, itemFilter, typeFilter, startDate, endDate, currentPage]);
 
   useEffect(() => {
-    fetchData();
+    const handler = setTimeout(() => {
+      fetchData();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [fetchData]);
 
   // Combined dropdown list sources
@@ -190,37 +211,9 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     }));
   };
 
-  // Filter purchase list strictly by branch
-  const branchScopedPurchases = isBranchFiltered
-    ? displayPurchases.filter(p => isBranchMatch(p, selectedBranchId, branches))
-    : displayPurchases;
-
-  const filteredPurchases = branchScopedPurchases.filter(p => {
-    const purNo = p.purchaseNo || p.id || '';
-    const supp = p.supplier || p.supplierName || '';
-    const itm = p.item || p.itemName || '';
-    const inv = p.invoiceNo || p.invoiceNumber || '';
-    const pType = p.purchaseType || 'Material Purchase';
-
-    const matchesSearch = !searchTerm.trim() ||
-      purNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supp.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      itm.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const pDate = p.purchaseDate || p.date || '';
-    const matchesStartDate = !startDate || (pDate >= startDate);
-    const matchesEndDate = !endDate || (pDate <= endDate);
-
-    const matchesSupplier = supplierFilter === 'All' || supp === supplierFilter;
-    const matchesType = typeFilter === 'All' || pType === typeFilter || pType.includes(typeFilter);
-    const matchesItem = itemFilter === 'All' || itm === itemFilter;
-
-    return matchesSearch && matchesSupplier && matchesType && matchesItem && matchesStartDate && matchesEndDate;
-  });
-
-  const PAGE_SIZE = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredPurchases.length / PAGE_SIZE));
+  // Backend API handles all filtering and pagination
+  const filteredPurchases = displayPurchases;
+  const totalPages = Math.max(1, Math.ceil((totalPurchasesCount || filteredPurchases.length) / PAGE_SIZE));
 
   useEffect(() => {
     setCurrentPage(0);
@@ -232,7 +225,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     }
   }, [totalPages, currentPage]);
 
-  const paginatedPurchases = filteredPurchases.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const paginatedPurchases = filteredPurchases;
 
   // -------------------------------------------------------------
   // VENDOR MANAGEMENT HANDLERS

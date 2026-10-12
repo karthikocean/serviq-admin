@@ -1463,7 +1463,7 @@ export const AppProvider = ({ children }) => {
               }
             }
             if (!liveRole) {
-              const listRes = await RoleApi.getRoles({ limit: 100 });
+              const listRes = await RoleApi.getRoles({ limit: 10 });
               if (listRes && listRes.status && listRes.response) {
                 const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                 if (Array.isArray(rolesList)) {
@@ -1688,9 +1688,9 @@ export const AppProvider = ({ children }) => {
     if (token) {
       fetchBranches({ page: 0, limit: 10 });
       fetchSubscriptionDashboard();
-      fetchOrders({ page: 0, limit: 50 });
-      fetchTables({ page: 0, limit: 50 });
-      fetchMenu({ page: 0, limit: 50 });
+      fetchOrders({ page: 0, limit: 10 });
+      fetchTables({ page: 0, limit: 10 });
+      fetchMenu({ page: 0, limit: 10 });
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
 
@@ -1820,7 +1820,7 @@ export const AppProvider = ({ children }) => {
           // 2. Fetch live user record from UserApi to get authoritative status from backend users collection
           let backendStaffRecord = null;
           try {
-            const uListRes = await UserApi.getUsers({ search: cleanEmail, limit: 20 });
+            const uListRes = await UserApi.getUsers({ search: cleanEmail, limit: 10 });
             if (uListRes && uListRes.status && uListRes.response) {
               const uList = uListRes.response?.data?.users || uListRes.response?.data || uListRes.response?.users || (Array.isArray(uListRes.response) ? uListRes.response : []);
               if (Array.isArray(uList)) {
@@ -1845,7 +1845,7 @@ export const AppProvider = ({ children }) => {
 
           if (!backendStaffRecord && !isRestaurantOwner) {
             try {
-              const fullListRes = await UserApi.getUsers({ limit: 100 });
+              const fullListRes = await UserApi.getUsers({ limit: 10 });
               if (fullListRes && fullListRes.status && fullListRes.response) {
                 const fullList = fullListRes.response?.data?.users || fullListRes.response?.data || fullListRes.response?.users || (Array.isArray(fullListRes.response) ? fullListRes.response : []);
                 if (Array.isArray(fullList)) {
@@ -1938,7 +1938,7 @@ export const AppProvider = ({ children }) => {
                 }
               }
               if (!liveRole) {
-                const listRes = await RoleApi.getRoles({ limit: 100 });
+                const listRes = await RoleApi.getRoles({ limit: 10 });
                 if (listRes && listRes.status && listRes.response) {
                   const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                   if (Array.isArray(rolesList)) {

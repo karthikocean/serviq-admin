@@ -46,7 +46,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
   useEffect(() => {
     const loadBranches = async () => {
       try {
-        const res = await BranchApi.getBranches({ limit: 100 });
+        const res = await BranchApi.getBranches({ limit: 10 });
         if (res?.status && res?.response) {
           const list = Array.isArray(res.response)
             ? res.response
@@ -152,7 +152,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({ limit: 10 });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems) && rawItems.length > 0) {

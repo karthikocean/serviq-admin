@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAppState } from '../../config/AppContext';
 import BillingHistoryPanel from '../../components/BillingHistoryPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
+import TableApi from '../../api/Table';
+import UserApi from '../../api/User';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
 import { initialBillingHistory, initialOrders } from '../../config/initialData';
@@ -16,42 +18,59 @@ export default function BillingHistory() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('All');
+  const [paymentStatus, setPaymentStatus] = useState('All');
+  const [orderType, setOrderType] = useState('All');
   const [selectedTable, setSelectedTable] = useState('All');
   const [customerFilter, setCustomerFilter] = useState('');
   const [selectedStaff, setSelectedStaff] = useState('All');
+
+  // Tables and Staff for Dropdowns
+  const [availableTables, setAvailableTables] = useState([]);
+  const [availableStaff, setAvailableStaff] = useState([]);
 
   // Pagination States
   const [page, setPage] = useState(0);
   const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
 
-
   // Data States
   const [rawHistory, setRawHistory] = useState([]);
   const [apiSummary, setApiSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Trigger fetch when activeRestaurant, selectedBranchId, date filters, or page change
+  // Fetch Tables and Staff from backend for dropdowns
   useEffect(() => {
-    fetchHistory();
-  }, [
-    activeRestaurant?.id,
-    selectedBranchId,
-    dateRange,
-    customStartDate,
-    customEndDate,
-    searchTerm,
-    selectedPayment,
-    selectedTable,
-    customerFilter,
-    selectedStaff,
-    page
-  ]);
+    let isMounted = true;
+    const fetchMetadata = async () => {
+      try {
+        const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
+        const branchParam = isSpecificBranch ? { branchId: selectedBranchId } : {};
 
-  // Reset page to 0 if filters change
+        const [tablesRes, staffRes] = await Promise.all([
+          TableApi.getTables({ ...branchParam, limit: 0 }).catch(() => null),
+          UserApi.getUsers({ ...branchParam, limit: 0 }).catch(() => null)
+        ]);
+
+        if (isMounted) {
+          if (tablesRes?.status) {
+            const tData = tablesRes.response?.data || tablesRes.response?.tables || tablesRes.response || [];
+            if (Array.isArray(tData)) setAvailableTables(tData);
+          }
+          if (staffRes?.status) {
+            const sData = staffRes.response?.data || staffRes.response?.users || staffRes.response || [];
+            if (Array.isArray(sData)) setAvailableStaff(sData);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch dropdown metadata:", e);
+      }
+    };
+    fetchMetadata();
+    return () => { isMounted = false; };
+  }, [selectedBranchId]);
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, dateRange, customStartDate, customEndDate, selectedBranchId, selectedPayment, selectedTable, customerFilter, selectedStaff]);
+  }, [searchTerm, dateRange, customStartDate, customEndDate, selectedBranchId, selectedPayment, paymentStatus, orderType, selectedTable, customerFilter, selectedStaff]);
 
   // Safe mapping function for any invoice / order / bill record
   const mapItemToInvoice = (item, index = 0) => {
@@ -142,7 +161,8 @@ export default function BillingHistory() {
     };
   };
 
-  const fetchHistory = async () => {
+  // Debounced fetchHistory trigger
+  const fetchHistory = useCallback(async () => {
     setIsLoading(true);
     let items = [];
     let summaryObj = null;
@@ -186,20 +206,22 @@ export default function BillingHistory() {
       endDate = customEndDate || undefined;
     }
 
+    let apiSuccess = false;
     try {
       const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
       const filters = {
         branchId: isSpecificBranch ? selectedBranchId : undefined,
         search: searchTerm ? searchTerm.trim() : undefined,
         tableId: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
+        table: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
         customer: customerFilter ? customerFilter.trim() : undefined,
         cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
         dateRange: apiDateRange,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment.toUpperCase() : undefined,
-        paymentStatus: 'PAID',
-        orderType: 'DINE_IN',
+        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : undefined,
+        orderType: orderType && orderType !== 'All' ? orderType : undefined,
         page: page,
         limit: 10,
         sortBy: 'createdAt',
@@ -208,6 +230,7 @@ export default function BillingHistory() {
 
       const result = await BillingApi.getBillingHistory(filters);
       if (result && result.status) {
+        apiSuccess = true;
         const payload = result.response?.data || result.response || result.data;
         if (Array.isArray(payload)) {
           items = payload;
@@ -228,7 +251,8 @@ export default function BillingHistory() {
       console.error('Failed to fetch billing history from API', e);
     }
 
-    if (items.length === 0) {
+    // Only fall back to local mock data if the API network call completely failed
+    if (!apiSuccess) {
       let fallbackList = [];
       if (Array.isArray(activeRestaurant?.billingHistory) && activeRestaurant.billingHistory.length > 0) {
         fallbackList = activeRestaurant.billingHistory;
@@ -250,13 +274,36 @@ export default function BillingHistory() {
     setTotalItems(serverTotal > 0 ? serverTotal : mapped.length);
     setApiSummary(summaryObj);
     setIsLoading(false);
-  };
+  }, [
+    activeRestaurant,
+    selectedBranchId,
+    searchTerm,
+    dateRange,
+    customStartDate,
+    customEndDate,
+    selectedPayment,
+    paymentStatus,
+    orderType,
+    selectedTable,
+    customerFilter,
+    selectedStaff,
+    page
+  ]);
+
+  // Debounce API calls on user typing / changing filters
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchHistory();
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [fetchHistory]);
 
   // Derive unique Table options
   const tableOptions = useMemo(() => {
     const set = new Set();
-    rawHistory.forEach(it => {
-      if (it.table) set.add(String(it.table).replace(/^Table\s*/i, '').trim());
+    availableTables.forEach(t => {
+      const tNum = t.tableNumber || t.tableNo || t.name || t.id;
+      if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
     });
     if (Array.isArray(activeRestaurant?.tables)) {
       activeRestaurant.tables.forEach(t => {
@@ -264,6 +311,9 @@ export default function BillingHistory() {
         if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
       });
     }
+    rawHistory.forEach(it => {
+      if (it.table) set.add(String(it.table).replace(/^Table\s*/i, '').trim());
+    });
     const sorted = Array.from(set).sort((a, b) => {
       const numA = parseInt(a, 10);
       const numB = parseInt(b, 10);
@@ -274,11 +324,20 @@ export default function BillingHistory() {
       { value: 'All', label: 'All Tables' },
       ...sorted.map(t => ({ value: t, label: `Table ${t}` }))
     ];
-  }, [rawHistory, activeRestaurant]);
+  }, [availableTables, activeRestaurant, rawHistory]);
 
   // Derive unique Cashier / Staff options
   const staffOptions = useMemo(() => {
     const map = new Map();
+    availableStaff.forEach(s => {
+      const id = s._id || s.id;
+      const name = s.name || s.staffName || s.fullName || s.userName;
+      if (id && name) {
+        map.set(String(id), name);
+      } else if (name) {
+        map.set(name, name);
+      }
+    });
     if (Array.isArray(activeRestaurant?.staff)) {
       activeRestaurant.staff.forEach(s => {
         const id = s._id || s.id;
@@ -303,7 +362,7 @@ export default function BillingHistory() {
       { value: 'All', label: 'All Cashier / Staff' },
       ...Array.from(map.entries()).map(([value, label]) => ({ value, label }))
     ];
-  }, [rawHistory, activeRestaurant]);
+  }, [availableStaff, activeRestaurant, rawHistory]);
 
   // Backend API handles all filtering and pagination
   const filteredHistory = rawHistory;
@@ -359,6 +418,10 @@ export default function BillingHistory() {
       selectedBranchId={selectedBranchId}
       selectedPayment={selectedPayment}
       setSelectedPayment={setSelectedPayment}
+      paymentStatus={paymentStatus}
+      setPaymentStatus={setPaymentStatus}
+      orderType={orderType}
+      setOrderType={setOrderType}
       selectedTable={selectedTable}
       setSelectedTable={setSelectedTable}
       tableOptions={tableOptions}

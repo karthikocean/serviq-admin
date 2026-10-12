@@ -53,7 +53,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await InventoryCategoryApi.getCategories({ limit: 0 });
+        const res = await InventoryCategoryApi.getCategories({ limit: 10 });
         if (res?.status) {
           const raw = res.response?.data || res.response?.categories || res.response || [];
           const list = (Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : [])).filter(c => !c?.isDelete);
@@ -80,13 +80,26 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getItems({
+      const queryParams = {
         branchId: isBranchFiltered ? selectedBranchId : undefined,
-        limit: 0
-      });
+        search: searchTerm ? searchTerm.trim() : undefined,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        page: currentPage,
+        limit: PAGE_SIZE
+      };
+      if (statusFilter === 'Active') {
+        queryParams.status = 'Active';
+        queryParams.isActive = true;
+      } else if (statusFilter === 'Inactive') {
+        queryParams.status = 'Inactive';
+        queryParams.isActive = false;
+      }
+
+      const res = await InventoryApi.getItems(queryParams);
 
       if (res?.status && res?.response) {
         const payload = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
+        const serverTotal = res.response.totalItems ?? res.response.total ?? res.response.totalRecords ?? res.response.count ?? (Array.isArray(payload) ? payload.length : 0);
         const formatted = (Array.isArray(payload) ? payload : []).map(i => {
           const rawCat = (typeof i.category === 'object' ? i.category?.name : i.category) || 
                          (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || '';
@@ -108,7 +121,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           };
         });
         setItemsList(formatted);
-        setTotalItemsCount(formatted.length);
+        setTotalItemsCount(Number(serverTotal) || formatted.length);
       } else {
         const fallback = Array.isArray(initialItems) ? initialItems : [];
         setItemsList(fallback);
@@ -122,43 +135,22 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     } finally {
       setLoading(false);
     }
-  }, [initialItems, selectedBranchId, isBranchFiltered]);
+  }, [initialItems, selectedBranchId, isBranchFiltered, searchTerm, categoryFilter, statusFilter, currentPage, PAGE_SIZE]);
 
   useEffect(() => {
-    fetchItems();
+    const handler = setTimeout(() => {
+      fetchItems();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [fetchItems]);
 
   useEffect(() => {
     setCurrentPage(0);
   }, [searchTerm, categoryFilter, statusFilter, selectedBranchId]);
 
-  // Client-side fallback filter with strict branch scoping
-  const branchScopedItems = isBranchFiltered
-    ? itemsList.filter(i => isBranchMatch(i, selectedBranchId, branches))
-    : itemsList;
-
-  const filteredItems = branchScopedItems.filter(i => {
-    // 1. Search Filter: match name, itemCode, or category
-    const term = searchTerm.trim().toLowerCase();
-    const matchesSearch = !term ||
-      (i.name && i.name.toLowerCase().includes(term)) ||
-      (i.itemCode && i.itemCode.toLowerCase().includes(term)) ||
-      (i.category && i.category.toLowerCase().includes(term));
-
-    // 2. Category Filter
-    const itemCat = String(i.category || '').toLowerCase().trim();
-    const filterCat = String(categoryFilter || '').toLowerCase().trim();
-    const matchesCategory = categoryFilter === 'All' || itemCat === filterCat;
-
-    // 3. Status Filter (Active / Inactive)
-    const matchesStatus = statusFilter === 'All' ||
-      (statusFilter === 'Active' && Boolean(i.isActive)) ||
-      (statusFilter === 'Inactive' && !Boolean(i.isActive));
-
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  // Backend API handles all filtering and pagination
+  const filteredItems = itemsList;
+  const totalPages = Math.max(1, Math.ceil(totalItemsCount / PAGE_SIZE));
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -166,7 +158,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     }
   }, [totalPages, currentPage]);
 
-  const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const paginatedItems = filteredItems;
 
   // -------------------------------------------------------------
   // INPUT HANDLERS WITH STRICT VALIDATION

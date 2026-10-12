@@ -95,6 +95,9 @@ export default function InventoryCategoryPanel() {
   const [formStatus, setFormStatus] = useState('AVAILABLE');
   const [formBranchId, setFormBranchId] = useState('');
   const [formErrors, setFormErrors] = useState({});
+  const [page, setPage] = useState(0);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const limit = 10;
 
   // Fetch Branches from API
   const fetchBranches = useCallback(async () => {
@@ -123,7 +126,7 @@ export default function InventoryCategoryPanel() {
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const baseParams = { page: 0, limit: 10 };
+      const baseParams = { page, limit: 10 };
       if (selectedBranchId && selectedBranchId !== 'ALL') {
         baseParams.branchId = selectedBranchId;
       }
@@ -134,13 +137,15 @@ export default function InventoryCategoryPanel() {
       };
       const [catsRes, itemsRes] = await Promise.all([
         InventoryCategoryApi.getCategories(queryParams),
-        InventoryApi.getItems({ ...baseParams, search: undefined, status: undefined })
+        InventoryApi.getItems({ branchId: baseParams.branchId })
       ]);
 
       if (catsRes?.status) {
         const rawData = catsRes.response?.data || catsRes.response?.categories || catsRes.response || [];
         const list = (Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])).filter(item => !item?.isDelete);
         setCategories(list);
+        const serverTotal = catsRes.response?.pagination?.total ?? catsRes.response?.total ?? catsRes.response?.totalRecords ?? catsRes.response?.count ?? (catsRes.response?.data?.total || list.length);
+        setTotalRecords(Number(serverTotal) || list.length);
       } else {
         // Fallback to local default if API is unreachable
         if (categories.length === 0 && activeRestaurant?.inventoryCategories) {
@@ -160,7 +165,11 @@ export default function InventoryCategoryPanel() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedBranchId, searchTerm, statusFilter, activeRestaurant]);
+  }, [selectedBranchId, searchTerm, statusFilter, page, activeRestaurant]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [selectedBranchId, searchTerm, statusFilter]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -193,27 +202,10 @@ export default function InventoryCategoryPanel() {
     return getItemsForCategory(category).length;
   };
 
-  // Client-side search and status filtering strictly isolated by branch
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
-  const branchScopedCategories = isBranchFiltered
-    ? categories.filter(c => isBranchMatch(c, selectedBranchId, branches))
-    : categories;
-
-  const filteredCategories = branchScopedCategories.filter(c => {
-    const matchesSearch =
-      (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (c.description || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      statusFilter === 'ALL' ||
-      (c.status || 'AVAILABLE').toUpperCase() === statusFilter.toUpperCase();
-    return matchesSearch && matchesStatus;
-  });
-
-  // Pagination states
-  const [page, setPage] = useState(0);
-  const limit = 10;
-  const totalPages = Math.ceil(filteredCategories.length / limit) || 1;
-  const paginatedCategories = filteredCategories.slice(page * limit, (page + 1) * limit);
+  // Backend API handles filtering and pagination
+  const filteredCategories = categories;
+  const totalPages = Math.max(1, Math.ceil((totalRecords || filteredCategories.length) / limit));
+  const paginatedCategories = filteredCategories;
 
   const getPageNumbers = () => {
     const pages = [];

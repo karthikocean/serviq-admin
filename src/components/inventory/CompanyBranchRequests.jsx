@@ -47,6 +47,8 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 10;
+  const [totalRequestsCount, setTotalRequestsCount] = useState(0);
 
   // View States: null | 'VIEW_PAGE' | 'DISTRIBUTE_FORM'
   const [viewState, setViewState] = useState(null);
@@ -68,9 +70,19 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getStockRequests();
+      const requestParams = {
+        search: searchTerm ? searchTerm.trim() : undefined,
+        branch: branchFilter !== 'All' ? branchFilter : undefined,
+        status: statusFilter !== 'All' ? statusFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page: currentPage,
+        limit: PAGE_SIZE
+      };
+      const res = await InventoryApi.getStockRequests(requestParams);
       if (res?.status && res?.response) {
-        const rawReqs = res.response.data || res.response || [];
+        const rawReqs = res.response.data || res.response.requests || res.response || [];
+        const serverTotal = res.response.totalItems ?? res.response.total ?? res.response.totalRecords ?? res.response.count ?? (Array.isArray(rawReqs) ? rawReqs.length : 0);
         if (Array.isArray(rawReqs) && rawReqs.length > 0) {
           const formatted = rawReqs.map(r => ({
             id: r._id || r.id,
@@ -87,6 +99,10 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
             remarks: r.remarks || ''
           }));
           setRequestsList(formatted);
+          setTotalRequestsCount(Number(serverTotal) || formatted.length);
+        } else {
+          setRequestsList([]);
+          setTotalRequestsCount(0);
         }
       }
     } catch (err) {
@@ -94,10 +110,13 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [searchTerm, branchFilter, statusFilter, startDate, endDate, currentPage]);
 
   useEffect(() => {
-    fetchRequests();
+    const handler = setTimeout(() => {
+      fetchRequests();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [fetchRequests]);
 
   const displayRequests = requestsList.length > 0 ? requestsList : initialRequests;
@@ -109,24 +128,13 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
   const dispatchedCount = displayRequests.filter(r => r.status === 'Dispatched').length;
   const completedCount = displayRequests.filter(r => r.status === 'Completed').length;
 
-  const filteredRequests = displayRequests.filter(r => {
-    const matchesSearch = !searchTerm.trim() ||
-      (r.requestNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.branch || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.item || '').toLowerCase().includes(searchTerm.toLowerCase());
+  // Backend API handles all filtering and pagination
+  const filteredRequests = displayRequests;
+  const totalPages = Math.max(1, Math.ceil((totalRequestsCount || filteredRequests.length) / PAGE_SIZE));
 
-    const matchesBranch = branchFilter === 'All' || r.branch === branchFilter;
-    const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
-
-    const rDate = r.date || '';
-    const matchesStartDate = !startDate || (rDate >= startDate);
-    const matchesEndDate = !endDate || (rDate <= endDate);
-
-    return matchesSearch && matchesBranch && matchesStatus && matchesStartDate && matchesEndDate;
-  });
-
-  const PAGE_SIZE = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, branchFilter, statusFilter, startDate, endDate]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -134,7 +142,7 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
     }
   }, [totalPages, currentPage]);
 
-  const paginatedRequests = filteredRequests.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const paginatedRequests = filteredRequests;
 
   const handleOpenView = (req) => {
     setSelectedReq(req);

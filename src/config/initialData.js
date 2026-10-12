@@ -649,7 +649,7 @@ export const initialRestaurantsData = {
       extraBranchSlots: 0,
       extraBranchPrice: 699,
       userLimit: 15,
-      orderLimit: 2000,
+      orderLimit: 10,
       autoRenew: true,
       paymentMethod: "Credit Card"
     },

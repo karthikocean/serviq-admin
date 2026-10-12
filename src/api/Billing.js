@@ -15,19 +15,24 @@ class BillingApi {
         cleanParams.search = String(searchVal).trim();
       }
 
-      const tableVal = filters.tableId || filters.table;
+      const tableVal = filters.tableId || filters.table || filters.tableNumber;
       if (tableVal && tableVal !== 'All' && tableVal !== 'ALL') {
         cleanParams.tableId = tableVal;
+        cleanParams.table = tableVal;
+        cleanParams.tableNumber = tableVal;
       }
 
-      const customerVal = filters.customer || filters.customerFilter;
+      const customerVal = filters.customer || filters.customerFilter || filters.customerName || filters.customerPhone;
       if (customerVal && String(customerVal).trim()) {
         cleanParams.customer = String(customerVal).trim();
+        cleanParams.customerName = String(customerVal).trim();
       }
 
-      const cashierVal = filters.cashierId || filters.cashier || filters.staffId;
+      const cashierVal = filters.cashierId || filters.cashier || filters.staffId || filters.waiterId;
       if (cashierVal && cashierVal !== 'All' && cashierVal !== 'ALL') {
         cleanParams.cashierId = cashierVal;
+        cleanParams.cashier = cashierVal;
+        cleanParams.staffId = cashierVal;
       }
 
       if (filters.dateRange && filters.dateRange !== 'All' && filters.dateRange !== 'ALL') {
@@ -35,24 +40,34 @@ class BillingApi {
       }
 
       const startDateVal = filters.startDate || filters.dateStart || filters.fromDate || filters.customStartDate;
-      if (startDateVal) cleanParams.startDate = startDateVal;
+      if (startDateVal) {
+        cleanParams.startDate = startDateVal;
+        cleanParams.fromDate = startDateVal;
+      }
 
       const endDateVal = filters.endDate || filters.dateEnd || filters.toDate || filters.customEndDate;
-      if (endDateVal) cleanParams.endDate = endDateVal;
+      if (endDateVal) {
+        cleanParams.endDate = endDateVal;
+        cleanParams.toDate = endDateVal;
+      }
 
       const pm = filters.paymentMethod || filters.paymentMode;
       if (pm && pm !== 'All' && pm !== 'ALL') {
         cleanParams.paymentMethod = String(pm).toUpperCase();
+        cleanParams.paymentMode = String(pm).toUpperCase();
       }
 
       const ps = filters.paymentStatus || filters.status;
-      if (ps && ps !== 'All' && ps !== 'ALL') {
+      if (ps && ps !== 'All' && ps !== 'ALL' && ps !== 'All Statuses') {
         cleanParams.paymentStatus = String(ps).toUpperCase();
-      } else if (!cleanParams.paymentStatus) {
-        cleanParams.paymentStatus = 'PAID';
+        cleanParams.status = String(ps).toUpperCase();
+        cleanParams.billingStatus = String(ps).toUpperCase();
       }
 
-      cleanParams.orderType = filters.orderType || 'DINE_IN';
+      const ot = filters.orderType;
+      if (ot && ot !== 'All' && ot !== 'ALL' && ot !== 'All Types') {
+        cleanParams.orderType = String(ot).toUpperCase().replace('-', '_');
+      }
 
       // 0-based page index (starts with 0, limit is 10)
       const pageNum = filters.page !== undefined ? Number(filters.page) : 0;
@@ -67,7 +82,7 @@ class BillingApi {
 
       // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
-        if (!['branchId', 'search', 'searchTerm', 'searchQuery', 'tableId', 'table', 'customer', 'customerFilter', 'cashierId', 'cashier', 'staffId', 'dateRange', 'startDate', 'endDate', 'dateStart', 'dateEnd', 'fromDate', 'toDate', 'customStartDate', 'customEndDate', 'paymentMethod', 'paymentMode', 'paymentStatus', 'status', 'orderType', 'page', 'limit', 'sortBy', 'sortOrder', 'isExport', 'selectedTable', 'selectedStaff', 'selectedPayment'].includes(key)) {
+        if (!['branchId', 'search', 'searchTerm', 'searchQuery', 'tableId', 'table', 'tableNumber', 'customer', 'customerFilter', 'customerName', 'customerPhone', 'cashierId', 'cashier', 'staffId', 'waiterId', 'dateRange', 'startDate', 'endDate', 'dateStart', 'dateEnd', 'fromDate', 'toDate', 'customStartDate', 'customEndDate', 'paymentMethod', 'paymentMode', 'paymentStatus', 'status', 'billingStatus', 'orderType', 'page', 'limit', 'sortBy', 'sortOrder', 'isExport', 'selectedTable', 'selectedStaff', 'selectedPayment'].includes(key)) {
           const val = filters[key];
           if (val !== undefined && val !== null && val !== '' && val !== 'null' && val !== 'undefined' && val !== 'All' && val !== 'ALL') {
             cleanParams[key] = val;
@@ -82,8 +97,8 @@ class BillingApi {
         response = await apiClient.get(url);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
-          const orderParams = { limit: cleanParams.limit || 50, page: Math.max(0, cleanParams.page || 0) };
-          if (cleanParams.branchId) orderParams.branchId = cleanParams.branchId;
+          const orderParams = { ...cleanParams };
+          if (!orderParams.limit) orderParams.limit = 50;
           const ordersRes = await apiClient.get('/orders', { params: orderParams }).catch(() => null);
           if (ordersRes?.data) {
             const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
