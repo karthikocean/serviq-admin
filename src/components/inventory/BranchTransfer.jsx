@@ -34,6 +34,29 @@ const InboxIcon = ({ size = 15, color = 'currentColor' }) => (
   </svg>
 );
 
+const formatDate = (dateVal) => {
+  if (!dateVal) return '-';
+  const str = String(dateVal).trim();
+  const datePart = str.split('T')[0].split(' ')[0].trim();
+  const parts = datePart.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
+  }
+  if (parts.length === 3 && parts[2].length === 4) {
+    return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`;
+  }
+  try {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${day}-${m}-${y}`;
+    }
+  } catch {}
+  return datePart || '-';
+};
+
 export default function BranchTransfer({ transfers: initialTransfers, items: initialItems, onSaveTransfer, hasPermission }) {
   const { currentUser, activeRestaurant, selectedBranchId } = useAppState();
 
@@ -101,16 +124,48 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // View States: null | 'ADD' | 'VIEW_DETAIL'
   const [viewState, setViewState] = useState(null);
   const [selectedTransfer, setSelectedTransfer] = useState(null);
 
-  useEffect(() => {
-    if (initialTransfers && initialTransfers.length > 0) {
-      setTransfersList(initialTransfers);
+  const fetchTransfers = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await InventoryApi.getTransfers({
+        branchId: isCompanyFilter ? undefined : selectedBranchId
+      });
+      if (res?.status && res?.response) {
+        const rawList = res.response.data || res.response.transfers || (Array.isArray(res.response) ? res.response : []);
+        if (Array.isArray(rawList)) {
+          const formatted = rawList.map(t => ({
+            id: t._id || t.id,
+            _id: t._id || t.id,
+            transferNo: t.transferNo,
+            fromBranch: t.fromBranch || t.fromBranchId?.branchName || '',
+            toBranch: t.toBranch || t.toBranchId?.branchName || '',
+            item: t.itemName || t.item || '',
+            quantity: t.quantity,
+            unit: t.unit || 'kg',
+            status: t.status || 'Pending',
+            date: t.transferDate ? new Date(t.transferDate).toISOString().split('T')[0] : (t.date || new Date(t.createdAt).toISOString().split('T')[0]),
+            remarks: t.remarks || ''
+          }));
+          setTransfersList(formatted);
+        }
+      }
+    } catch (err) {
+      console.warn('Branch transfers fetch error:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [initialTransfers]);
+  }, [isCompanyFilter, selectedBranchId]);
+
+  useEffect(() => {
+    fetchTransfers();
+  }, [fetchTransfers]);
 
   // Form state
   const [trfForm, setTrfForm] = useState({
@@ -193,10 +248,17 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
     }));
   };
 
-  const handleUpdateStatus = (id, newStatus) => {
-    setTransfersList(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-    if (selectedTransfer && selectedTransfer.id === id) {
-      setSelectedTransfer(prev => ({ ...prev, status: newStatus }));
+  const handleUpdateStatus = async (id, newStatus) => {
+    try {
+      const res = await InventoryApi.updateTransferStatus(id, { status: newStatus });
+      if (res?.status) {
+        setTransfersList(prev => prev.map(t => (t.id === id || t._id === id) ? { ...t, status: newStatus } : t));
+        if (selectedTransfer && (selectedTransfer.id === id || selectedTransfer._id === id)) {
+          setSelectedTransfer(prev => ({ ...prev, status: newStatus }));
+        }
+      }
+    } catch (err) {
+      console.error('Update transfer status error:', err);
     }
   };
 
@@ -238,22 +300,47 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    setIsSubmitting(true);
     const effectiveFromBranch = isCompanyFilter ? trfForm.fromBranch : loginRestaurantName;
-    const newTrf = {
-      id: `TRF-${Date.now().toString().slice(-4)}`,
-      transferNo: `TRF-2026-${Date.now().toString().slice(-3)}`,
-      date: new Date().toISOString().split('T')[0],
-      ...trfForm,
+
+    const matchedItem = displayItems.find(i => (typeof i === 'string' ? i : (i.name || i.itemName)) === trfForm.item);
+    const matchedItemId = typeof matchedItem === 'object' && matchedItem ? (matchedItem.id || matchedItem._id) : undefined;
+
+    const payload = {
       fromBranch: effectiveFromBranch,
+      toBranch: trfForm.toBranch,
+      itemId: matchedItemId,
+      itemName: trfForm.item,
       quantity: Number(trfForm.quantity),
-      status: 'Pending'
+      unit: trfForm.unit || 'kg',
+      remarks: trfForm.remarks || 'Inter-branch transfer'
     };
-    setTransfersList(prev => [newTrf, ...prev]);
-    if (onSaveTransfer) onSaveTransfer(newTrf);
-    setViewState(null);
+
+    try {
+      const res = await InventoryApi.createTransfer(payload);
+      if (res?.status) {
+        await fetchTransfers();
+        if (onSaveTransfer && res?.response?.data) {
+          onSaveTransfer(res.response.data);
+        }
+        setViewState(null);
+        setTrfForm(prev => ({
+          fromBranch: loginRestaurantName,
+          toBranch: availableBranches.find(b => b !== loginRestaurantName) || '',
+          item: displayItems[0]?.name || '',
+          quantity: '',
+          unit: displayItems[0]?.unit || 'kg',
+          remarks: ''
+        }));
+      }
+    } catch (err) {
+      console.error('Submit transfer error:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Render View Transfer Detail Page View
@@ -307,7 +394,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Request Date</span>
-              <span style={{ color: '#0f172a', fontWeight: 600 }}>{selectedTransfer.date}</span>
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>{formatDate(selectedTransfer.date)}</span>
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>From Branch</span>
@@ -576,19 +663,20 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               style={{
-                background: '#ff5a1f',
+                background: isSubmitting ? '#94a3b8' : '#ff5a1f',
                 color: '#ffffff',
                 border: 'none',
                 padding: '12px 32px',
                 borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: 700,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)'
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: isSubmitting ? 'none' : '0 2px 8px rgba(255, 90, 31, 0.25)'
               }}
             >
-              Submit Transfer Request
+              {isSubmitting ? 'Submitting...' : 'Submit Transfer Request'}
             </button>
           </div>
         </form>
@@ -658,7 +746,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
             {paginatedTransfers.length === 0 ? (
               <tr>
                 <td colSpan="9" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
-                  No branch transfer records found.
+                  {loading ? 'Loading branch transfer records...' : 'No branch transfer records found.'}
                 </td>
               </tr>
             ) : (
@@ -670,7 +758,7 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
                   <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>{t.transferNo}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0f172a' }}>{t.fromBranch}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#ff5a1f' }}>{t.toBranch}</td>
-                  <td style={{ padding: '14px 16px', color: '#64748b' }}>{t.date}</td>
+                  <td style={{ padding: '14px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>{formatDate(t.date)}</td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{t.item}</td>
                   <td style={{ padding: '14px 16px', color: '#0f172a' }}>{t.quantity} {t.unit}</td>
                   <td style={{ padding: '14px 16px' }}>
