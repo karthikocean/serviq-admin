@@ -2,12 +2,38 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import { useAppState } from '../../config/AppContext';
-import { isBranchMatch } from '../../helper/BranchHelper';
+import { isBranchMatch, getUserAssignedBranchId, isUserCompanyUser } from '../../helper/BranchHelper';
+
+const formatDate = (dateVal) => {
+  if (!dateVal) return '-';
+  const str = String(dateVal).trim();
+  const datePart = str.split('T')[0].split(' ')[0].trim();
+  const parts = datePart.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[0]}`;
+  }
+  if (parts.length === 3 && parts[2].length === 4) {
+    return `${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}-${parts[2]}`;
+  }
+  try {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${day}-${m}-${y}`;
+    }
+  } catch {}
+  return datePart || '-';
+};
 
 export default function BranchDirectPurchase({ purchases, items: initialItems, onSaveDirectPurchase, onDeletePurchase, hasPermission }) {
-  const { selectedBranchId, activeRestaurant } = useAppState();
+  const { currentUser, selectedBranchId, activeRestaurant } = useAppState();
   const branches = activeRestaurant?.branches || [];
-  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
+  const userAssignedBranchId = getUserAssignedBranchId(currentUser);
+  const effectiveBranchId = userAssignedBranchId || (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
+  const isBranchFiltered = Boolean(effectiveBranchId);
 
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_direct_purchase', 'view') : true;
@@ -17,6 +43,8 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // View States: null | 'ADD' | 'VIEW_DETAIL'
   const [viewState, setViewState] = useState(null);
@@ -38,14 +66,25 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await InventoryApi.getItems({ limit: 100, branchId: isBranchFiltered ? selectedBranchId : undefined });
+      const res = await InventoryApi.getItems({
+        limit: 100,
+        branchId: effectiveBranchId || undefined,
+        strictBranch: isBranchFiltered
+      });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
-        if (Array.isArray(rawItems) && rawItems.length > 0) {
-          const formatted = rawItems.map(i => ({
+        if (Array.isArray(rawItems)) {
+          // Strictly filter to branch's own items if branch login / scoped
+          const branchSpecific = isBranchFiltered
+            ? rawItems.filter(i => isBranchMatch(i, effectiveBranchId, branches))
+            : rawItems;
+
+          const formatted = branchSpecific.map(i => ({
             id: i._id || i.id || i.name,
+            _id: i._id || i.id,
             name: i.name || i.itemName || i.item || '',
-            unit: i.unit || i.unitOfMeasurement || 'kg'
+            unit: i.unit || i.unitOfMeasurement || 'kg',
+            branchId: i.branchId
           })).filter(i => Boolean(i.name));
 
           setItemsList(formatted);
@@ -61,31 +100,56 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
     } catch (err) {
       console.warn('Branch direct purchase items load error:', err);
     }
-  }, [isBranchFiltered, selectedBranchId]);
+  }, [isBranchFiltered, effectiveBranchId, branches]);
 
   const fetchPurchases = useCallback(async () => {
     try {
-      const res = await InventoryApi.getPurchases(isBranchFiltered ? { branchId: selectedBranchId } : {});
+      setLoading(true);
+      const res = await InventoryApi.getPurchases(effectiveBranchId ? { branchId: effectiveBranchId } : {});
       if (res?.status && res?.response) {
         const raw = res.response.data || res.response || [];
         if (Array.isArray(raw)) {
           setApiPurchases(raw.map(p => ({
             ...p,
             id: p._id || p.id,
-            branchId: p.branchId || p.branch?._id || p.branch?.id || p.branch,
-            branchName: p.branchName || p.branch || ''
+            _id: p._id || p.id,
+            purchaseNo: p.purchaseNo || `PU-${String(p._id || '').slice(-3).toUpperCase()}`,
+            purchaseType: p.purchaseType || 'Vendor Direct Purchase',
+            supplier: p.supplierName || p.supplier || (typeof p.vendorId === 'object' ? p.vendorId?.name : '') || 'Local Vendor',
+            supplierName: p.supplierName || p.supplier || (typeof p.vendorId === 'object' ? p.vendorId?.name : '') || 'Local Vendor',
+            invoiceNo: p.invoiceNumber || p.invoiceNo || '',
+            invoiceNumber: p.invoiceNumber || p.invoiceNo || '',
+            item: p.itemName || (typeof p.itemId === 'object' ? p.itemId?.name : '') || p.item || '',
+            itemName: p.itemName || (typeof p.itemId === 'object' ? p.itemId?.name : '') || p.item || '',
+            quantity: p.purchaseQty !== undefined ? p.purchaseQty : (p.quantity ?? 0),
+            purchaseQty: p.purchaseQty !== undefined ? p.purchaseQty : (p.quantity ?? 0),
+            unit: p.unit || (typeof p.itemId === 'object' ? p.itemId?.unit : 'kg') || 'kg',
+            rate: p.unitPrice !== undefined ? p.unitPrice : (p.rate ?? 0),
+            unitPrice: p.unitPrice !== undefined ? p.unitPrice : (p.rate ?? 0),
+            total: p.totalAmount !== undefined ? p.totalAmount : (p.total ?? 0),
+            totalAmount: p.totalAmount !== undefined ? p.totalAmount : (p.total ?? 0),
+            purchaseDate: p.purchaseDate || p.date,
+            date: p.purchaseDate || p.date,
+            branchId: p.branchId?._id || p.branchId?.id || p.branchId || p.branch?._id || p.branch?.id || p.branch,
+            branchName: p.branchId?.branchName || p.branchId?.name || p.branchName || p.branch || ''
           })));
         }
       }
-    } catch (e) {}
-  }, [isBranchFiltered, selectedBranchId]);
+    } catch (e) {
+      console.warn('Branch direct purchases load error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [effectiveBranchId]);
 
   useEffect(() => {
     fetchItems();
     fetchPurchases();
   }, [fetchItems, fetchPurchases]);
 
-  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const displayItems = isBranchFiltered
+    ? (itemsList.length > 0 ? itemsList.filter(i => isBranchMatch(i, effectiveBranchId, branches)) : (initialItems || []).filter(i => isBranchMatch(i, effectiveBranchId, branches)))
+    : (itemsList.length > 0 ? itemsList : (initialItems || []));
 
   const handleItemSelect = (itemName) => {
     const matched = displayItems.find(i => (typeof i === 'string' ? i : (i.name || i.itemName)) === itemName);
@@ -99,7 +163,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
   const sourcePurchases = apiPurchases.length > 0 ? apiPurchases : (purchases || []);
   const branchScopedPurchases = isBranchFiltered
-    ? sourcePurchases.filter(p => isBranchMatch(p, selectedBranchId, branches))
+    ? sourcePurchases.filter(p => isBranchMatch(p, effectiveBranchId, branches))
     : sourcePurchases;
 
   const filteredPurchases = branchScopedPurchases.filter(p => {
@@ -123,7 +187,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [searchTerm, typeFilter, selectedBranchId]);
+  }, [searchTerm, typeFilter, effectiveBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -147,14 +211,21 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    setIsSubmitting(true);
     try {
-      const targetBranchId = isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || undefined);
+      const targetBranchId = effectiveBranchId || (branches[0]?._id || branches[0]?.id || undefined);
       const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
+      const matchedItem = displayItems.find(i => (typeof i === 'string' ? i : (i.name || i.itemName)) === purForm.item);
+      const matchedItemId = typeof matchedItem === 'object' && matchedItem ? (matchedItem.id || matchedItem._id) : undefined;
+
       const payload = {
         ...purForm,
         branchId: targetBranchId,
         branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
         branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        itemId: matchedItemId,
+        item: purForm.item,
+        itemName: purForm.item,
         purchaseType: purForm.purchaseType || 'Vendor Direct Purchase',
         supplierName: purForm.supplier,
         quantity: Number(purForm.quantity),
@@ -163,13 +234,45 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         unitPrice: Number(purForm.rate),
         totalAmount: Number(purForm.quantity) * Number(purForm.rate)
       };
-      await InventoryApi.recordPurchase(payload);
-      fetchPurchases();
+      const res = await InventoryApi.recordPurchase(payload);
+      if (res?.status) {
+        await fetchPurchases();
+        await fetchItems();
+        if (onSaveDirectPurchase) onSaveDirectPurchase(purForm);
+        setViewState(null);
+        setPurForm({
+          supplier: '',
+          purchaseType: 'Vendor Direct Purchase',
+          purchaseDate: new Date().toISOString().split('T')[0],
+          invoiceNo: '',
+          item: displayItems[0]?.name || '',
+          quantity: '',
+          unit: displayItems[0]?.unit || 'kg',
+          rate: '',
+          remarks: ''
+        });
+      }
     } catch (err) {
       console.warn('Record direct purchase note:', err);
+    } finally {
+      setIsSubmitting(false);
     }
-    if (onSaveDirectPurchase) onSaveDirectPurchase(purForm);
-    setViewState(null);
+  };
+
+  const handleDelete = async (purchase) => {
+    const pId = purchase._id || purchase.id;
+    if (!pId) return;
+    if (window.confirm(`Are you sure you want to delete purchase ${purchase.purchaseNo || purchase.id}?`)) {
+      try {
+        const res = await InventoryApi.deletePurchase(pId);
+        if (res?.status) {
+          setApiPurchases(prev => prev.filter(p => (p.id !== pId && p._id !== pId)));
+          if (onDeletePurchase) onDeletePurchase(purchase);
+        }
+      } catch (err) {
+        console.error('Delete purchase error:', err);
+      }
+    }
   };
 
   const getTypeBadgeStyle = (typeStr) => {
@@ -185,10 +288,13 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
   if (viewState === 'VIEW_DETAIL' && selectedPurchase) {
     const typeInfo = getTypeBadgeStyle(selectedPurchase.purchaseType || 'Vendor Direct Purchase');
     const suppName = selectedPurchase.supplier || selectedPurchase.supplierName || 'Local Vendor';
-    const itemTitle = selectedPurchase.item || selectedPurchase.itemName;
+    const itemTitle = selectedPurchase.item || selectedPurchase.itemName || '-';
     const purCode = selectedPurchase.purchaseNo || selectedPurchase.id;
     const invCode = selectedPurchase.invoiceNo || selectedPurchase.invoiceNumber || 'BILL-DIRECT';
-    const purTotal = selectedPurchase.total ? selectedPurchase.total : (selectedPurchase.totalAmount ? selectedPurchase.totalAmount : selectedPurchase.quantity * (selectedPurchase.rate || selectedPurchase.unitPrice || 0));
+    const selQty = selectedPurchase.purchaseQty !== undefined ? selectedPurchase.purchaseQty : (selectedPurchase.quantity ?? 0);
+    const selRate = selectedPurchase.rate !== undefined ? selectedPurchase.rate : (selectedPurchase.unitPrice ?? 0);
+    const purTotal = selectedPurchase.total !== undefined ? selectedPurchase.total : (selectedPurchase.totalAmount !== undefined ? selectedPurchase.totalAmount : selQty * selRate);
+    const selUnit = selectedPurchase.unit || 'kg';
 
     return (
       <div style={{ background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '32px 40px', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
@@ -253,7 +359,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Purchase Date</span>
-              <span style={{ color: '#0f172a', fontWeight: 600 }}>{selectedPurchase.date || selectedPurchase.purchaseDate}</span>
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>{formatDate(selectedPurchase.date || selectedPurchase.purchaseDate)}</span>
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Stock Item</span>
@@ -261,11 +367,11 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Quantity & Unit</span>
-              <span style={{ color: '#0f172a', fontWeight: 700 }}>{selectedPurchase.quantity} {selectedPurchase.unit}</span>
+              <span style={{ color: '#0f172a', fontWeight: 700 }}>{selQty} {selUnit}</span>
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Unit Purchase Rate</span>
-              <span style={{ color: '#0f172a', fontWeight: 600 }}>₹{selectedPurchase.rate || selectedPurchase.unitPrice || 0}</span>
+              <span style={{ color: '#0f172a', fontWeight: 600 }}>₹{Number(selRate).toLocaleString('en-IN')}</span>
             </div>
             <div>
               <span style={{ color: '#64748b', display: 'block', fontSize: '12px', marginBottom: '4px' }}>Total Amount Paid</span>
@@ -480,19 +586,20 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               style={{
-                background: 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
+                background: isSubmitting ? '#94a3b8' : 'linear-gradient(135deg, #ff5a1f 0%, #ea580c 100%)',
                 color: '#ffffff',
                 border: 'none',
                 padding: '12px 32px',
                 borderRadius: '8px',
                 fontSize: '14px',
                 fontWeight: 800,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(255, 90, 31, 0.3)'
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: isSubmitting ? 'none' : '0 4px 12px rgba(255, 90, 31, 0.3)'
               }}
             >
-              Save & Credit Branch Stock
+              {isSubmitting ? 'Recording...' : 'Save & Credit Branch Stock'}
             </button>
           </div>
         </form>
@@ -557,51 +664,62 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         )}
       </div>
 
-      <div style={{ overflowX: 'auto', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', paddingBottom: '4px' }}>
-        <table style={{ width: '100%', minWidth: '950px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+      <div style={{
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        borderRadius: '12px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+        background: '#ffffff',
+        width: '100%',
+        scrollbarWidth: 'thin'
+      }}>
+        <table style={{ width: '100%', minWidth: '1350px', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
           <thead>
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>S.No</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Purchase Date</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Purchase No.</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Supplier</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Item</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Quantity</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Unit</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Purchase Rate</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Total Amount</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Status</th>
-              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', textAlign: 'right' }}>Actions</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', width: '60px', minWidth: '60px' }}>S.No</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '130px' }}>Purchase Date</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '130px' }}>Purchase No.</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '170px' }}>Supplier</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '220px' }}>Item</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '100px' }}>Quantity</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '80px' }}>Unit</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '130px' }}>Purchase Rate</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '130px' }}>Total Amount</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '110px' }}>Status</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', minWidth: '100px', textAlign: 'right' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {paginatedPurchases.length === 0 ? (
               <tr>
                 <td colSpan="11" style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
-                  No direct purchase records found.
+                  {loading ? 'Loading direct purchases...' : 'No direct purchase records found for this branch.'}
                 </td>
               </tr>
             ) : (
               paginatedPurchases.map((p, index) => {
                 const purCode = p.purchaseNo || p.id;
                 const suppName = p.supplier || p.supplierName || 'Local Vendor';
-                const itemTitle = p.item || p.itemName;
-                const purRate = p.rate || p.unitPrice || 0;
-                const purTotal = p.total ? p.total : (p.totalAmount ? p.totalAmount : p.quantity * purRate);
+                const itemTitle = p.item || p.itemName || '-';
+                const purQty = p.purchaseQty !== undefined ? p.purchaseQty : (p.quantity !== undefined ? p.quantity : 0);
+                const purRate = p.rate !== undefined ? p.rate : (p.unitPrice !== undefined ? p.unitPrice : 0);
+                const purTotal = p.total !== undefined ? p.total : (p.totalAmount !== undefined ? p.totalAmount : (Number(purQty) || 0) * purRate);
+                const purUnit = p.unit || 'kg';
                 const status = p.status || 'Received';
 
                 return (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
+                  <tr key={p.id || p._id || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b', width: '60px', minWidth: '60px', whiteSpace: 'nowrap' }}>
                       {currentPage * PAGE_SIZE + index + 1}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px' }}>
-                      {p.date || p.purchaseDate}
+                    <td style={{ padding: '14px 16px', color: '#64748b', fontSize: '12px', minWidth: '130px', whiteSpace: 'nowrap' }}>
+                      {formatDate(p.purchaseDate || p.date)}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 900, color: '#ff5a1f', minWidth: '130px', whiteSpace: 'nowrap' }}>
                       {purCode}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a', minWidth: '170px', whiteSpace: 'nowrap' }}>
                       {suppName}
                       {p.invoiceNo && (
                         <span style={{ display: 'block', fontSize: '11px', color: '#64748b', fontWeight: 500 }}>
@@ -609,22 +727,22 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 800, color: '#0f172a', minWidth: '220px', whiteSpace: 'nowrap' }}>
                       {itemTitle}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 700 }}>
-                      {p.quantity}
+                    <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 700, minWidth: '100px', whiteSpace: 'nowrap' }}>
+                      {purQty}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#475569' }}>
-                      {p.unit || 'kg'}
+                    <td style={{ padding: '14px 16px', color: '#475569', minWidth: '80px', whiteSpace: 'nowrap' }}>
+                      {purUnit}
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', color: '#0f172a', minWidth: '130px', whiteSpace: 'nowrap' }}>
                       ₹{Number(purRate).toLocaleString('en-IN')}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 900, color: '#16a34a' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 900, color: '#16a34a', minWidth: '130px', whiteSpace: 'nowrap' }}>
                       ₹{Number(purTotal).toLocaleString('en-IN')}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
+                    <td style={{ padding: '14px 16px', minWidth: '110px', whiteSpace: 'nowrap' }}>
                       <span style={{
                         background: '#e6f4ea',
                         color: '#16a34a',
@@ -636,7 +754,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         {status}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', minWidth: '100px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
                         {canView && (
                         <button
@@ -656,7 +774,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
                         {canDelete && (
                         <button
                           type="button"
-                          onClick={() => onDeletePurchase(p)}
+                          onClick={() => handleDelete(p)}
                           title="Delete Direct Purchase"
                           style={{
                             ...actionIconBtnStyle,
