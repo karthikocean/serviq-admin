@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
+import OrderApi from '../api/Order.js';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -200,10 +201,10 @@ export default function OrdersPanel({
   orders = [],
   staff = [],
   tables = [],
-  orderFilter = 'All',
-  setOrderFilter,
-  selectedWaiterFilter = { id: 'All Waiters', name: 'All Waiters' },
-  setSelectedWaiterFilter,
+  orderFilter: propOrderFilter = 'All',
+  setOrderFilter: propSetOrderFilter,
+  selectedWaiterFilter: propSelectedWaiterFilter = { id: 'All Waiters', name: 'All Waiters' },
+  setSelectedWaiterFilter: propSetSelectedWaiterFilter,
   waiterDropdownOpen: propsWaiterDropdownOpen,
   setWaiterDropdownOpen: propsSetWaiterDropdownOpen,
   activeRestaurant,
@@ -219,6 +220,21 @@ export default function OrdersPanel({
   currentUser = null
 }) {
   const { hasPermission } = useAppState();
+
+  const [internalOrderFilter, setInternalOrderFilter] = useState('All');
+  const orderFilter = propOrderFilter !== undefined ? propOrderFilter : internalOrderFilter;
+  const setOrderFilter = (val) => {
+    if (propSetOrderFilter) propSetOrderFilter(val);
+    setInternalOrderFilter(val);
+  };
+
+  const [internalSelectedWaiterFilter, setInternalSelectedWaiterFilter] = useState({ id: 'All Waiters', name: 'All Waiters' });
+  const selectedWaiterFilter = propSelectedWaiterFilter !== undefined ? propSelectedWaiterFilter : internalSelectedWaiterFilter;
+  const setSelectedWaiterFilter = (val) => {
+    if (propSetSelectedWaiterFilter) propSetSelectedWaiterFilter(val);
+    setInternalSelectedWaiterFilter(val);
+  };
+
   const [internalPage, setInternalPage] = useState(0);
   const page = propPage !== undefined ? propPage : internalPage;
   const limit = propLimit || 10;
@@ -309,6 +325,20 @@ export default function OrdersPanel({
   const [dateRangeFilter, setDateRangeFilter] = useState('All');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+
+  // Server-side filtered orders state
+  const [serverOrders, setServerOrders] = useState(null);
+  const [serverTotalCount, setServerTotalCount] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchOrderId ? searchOrderId.trim() : '');
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchOrderId]);
 
   const [apiCategories, setApiCategories] = useState([]);
   const [apiMenuItems, setApiMenuItems] = useState([]);
@@ -1114,6 +1144,7 @@ export default function OrdersPanel({
       if (res.data?.success || res.status === 200) {
         ShowNotifications.showAlertNotification("Items added successfully!", true);
         setAppendingOrder(null);
+        fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
         return;
       } else {
@@ -1154,6 +1185,7 @@ export default function OrdersPanel({
         if (res2.data?.success || res2.status === 200) {
           ShowNotifications.showAlertNotification("Items added to order successfully!", true);
           setAppendingOrder(null);
+          fetchFilteredOrders();
           if (refreshOrders) refreshOrders();
           return;
         }
@@ -1357,6 +1389,7 @@ export default function OrdersPanel({
       if (res.data?.success || res.status === 200 || res.status === 201) {
         ShowNotifications.showAlertNotification(`Order created successfully!`, true);
         setIsCreateOrderModalOpen(false);
+        fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
       } else {
         const msg = res.data?.message || "Failed to create order";
@@ -1416,6 +1449,7 @@ export default function OrdersPanel({
             if (retryRes.data?.success || retryRes.status === 200 || retryRes.status === 201) {
               ShowNotifications.showAlertNotification(`Order created successfully!`, true);
               setIsCreateOrderModalOpen(false);
+              fetchFilteredOrders();
               if (refreshOrders) refreshOrders();
               return;
             }
@@ -1564,10 +1598,12 @@ export default function OrdersPanel({
       if (res && (res.data?.success || res.status === 200)) {
         ShowNotifications.showAlertNotification(`Order updated successfully!`, true);
         setEditingOrder(null);
+        fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
       } else {
         ShowNotifications.showAlertNotification(res?.data?.message || "Order updated successfully!", true);
         setEditingOrder(null);
+        fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
       }
     } catch (err) {
@@ -1578,129 +1614,235 @@ export default function OrdersPanel({
       }
       ShowNotifications.showAlertNotification(`Order updated successfully!`, true);
       setEditingOrder(null);
+      fetchFilteredOrders();
       if (refreshOrders) refreshOrders();
     } finally {
       setIsSavingEdit(false);
     }
   };
 
-  const sourceOrders = Array.isArray(orders) ? orders : [];
-
-  let filteredOrders = [...sourceOrders];
-
-  // 1. Apply Status Filter ('All', 'New', 'Preparing', 'Ready', 'Served', 'Completed', 'Cancelled')
-  if (orderFilter && orderFilter.toLowerCase() !== 'all') {
-    filteredOrders = filteredOrders.filter(ord => {
-      const s = (ord.status || 'new').toLowerCase();
-      return s === orderFilter.toLowerCase();
-    });
-  }
-
-  // 2. Apply Order Type Filter ('All', 'Dine-In', 'Takeaway', 'Delivery')
-  if (orderTypeFilter && orderTypeFilter.toLowerCase() !== 'all') {
-    filteredOrders = filteredOrders.filter(ord => {
-      const t = (ord.orderType || 'Dine-In').toLowerCase();
-      return t === orderTypeFilter.toLowerCase();
-    });
-  }
-
-  // 3. Apply Payment Status Filter ('All', 'Unpaid', 'Paid')
-  if (paymentStatusFilter && paymentStatusFilter.toLowerCase() !== 'all') {
-    filteredOrders = filteredOrders.filter(ord => {
-      const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true;
-      if (paymentStatusFilter.toLowerCase() === 'paid') return isPaid;
-      if (paymentStatusFilter.toLowerCase() === 'unpaid') return !isPaid;
-      return true;
-    });
-  }
-
-  // 4. Apply Dining Table Filter
-  if (selectedTableFilter && selectedTableFilter !== 'All') {
-    filteredOrders = filteredOrders.filter(ord => {
-      const tbl = String(ord.table || (ord.tableId && typeof ord.tableId === 'object' ? (ord.tableId.tableNumber || ord.tableId.tableNo) : ord.tableId) || '').replace(/^Table\s*/i, '').trim();
-      const selTbl = String(selectedTableFilter).replace(/^Table\s*/i, '').trim();
-      return tbl === selTbl;
-    });
-  }
-
-  // 5. Resolve active selected waiter filter & apply Waiter Filter
   const currentSelectedWaiterId = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
     ? (selectedWaiterFilter.id || selectedWaiterFilter.name || 'All Waiters')
     : (selectedWaiterFilter || 'All Waiters');
+
   const currentSelectedWaiterName = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
     ? (selectedWaiterFilter.name || selectedWaiterFilter.id || 'All Waiters')
     : (selectedWaiterFilter || 'All Waiters');
 
-  if (currentSelectedWaiterId && currentSelectedWaiterId !== 'All Waiters' && currentSelectedWaiterId !== 'All') {
-    filteredOrders = filteredOrders.filter(ord => {
-      const resolvedName = getResolvedWaiterName(ord);
-      if (currentSelectedWaiterId === 'unassigned' || String(currentSelectedWaiterId).toLowerCase() === 'unassigned') {
-        return !resolvedName || resolvedName === 'Unassigned' || resolvedName === 'None' || resolvedName === '-';
-      }
-      return resolvedName.toLowerCase() === (currentSelectedWaiterName || '').toLowerCase();
-    });
-  }
+  const selectedWaiterIdVal = currentSelectedWaiterId;
 
-  // 6. Apply Search Order ID / Customer / Table
-  if (searchOrderId && searchOrderId.trim()) {
-    const q = searchOrderId.toLowerCase().trim();
-    filteredOrders = filteredOrders.filter(ord => {
-      const rawId = String(ord.orderId || ord.id || ord._id || '').toLowerCase();
-      const cName = String(ord.customerName || ord.customer?.name || '').toLowerCase();
-      const cPhone = String(ord.customerMobile || ord.customerPhone || ord.customer?.mobile || '').toLowerCase();
-      const tbl = String(ord.table || '').toLowerCase();
-      return rawId.includes(q) || cName.includes(q) || cPhone.includes(q) || tbl.includes(q);
-    });
-  }
+  // Reset page to 0 whenever any filter value changes
+  useEffect(() => {
+    setPage(0);
+  }, [
+    orderFilter,
+    selectedWaiterIdVal,
+    orderTypeFilter,
+    paymentStatusFilter,
+    selectedTableFilter,
+    debouncedSearch,
+    dateRangeFilter,
+    customStartDate,
+    customEndDate,
+    selectedBranchId
+  ]);
 
-  // 7. Apply Date Range Filter
-  if (dateRangeFilter && dateRangeFilter !== 'All') {
-    const now = new Date();
-    filteredOrders = filteredOrders.filter(ord => {
-      const ordDate = ord.createdAt ? new Date(ord.createdAt) : null;
-      if (!ordDate || isNaN(ordDate.getTime())) return true;
-
+  // Fetch filtered orders directly from backend API
+  async function fetchFilteredOrders() {
+    setIsOrdersLoading(true);
+    try {
+      // 1. Calculate Date Range query parameters
+      let startDate;
+      let endDate;
+      const now = new Date();
       if (dateRangeFilter === 'Today') {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const d = new Date(ordDate.getFullYear(), ordDate.getMonth(), ordDate.getDate());
-        return d.getTime() === today.getTime();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        startDate = todayStr;
+        endDate = todayStr;
       } else if (dateRangeFilter === 'Yesterday') {
         const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        const d = new Date(ordDate.getFullYear(), ordDate.getMonth(), ordDate.getDate());
-        return d.getTime() === yest.getTime();
+        const yestStr = `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}`;
+        startDate = yestStr;
+        endDate = yestStr;
       } else if (dateRangeFilter === 'This Week') {
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        return ordDate >= sevenDaysAgo;
+        startDate = `${sevenDaysAgo.getFullYear()}-${String(sevenDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(sevenDaysAgo.getDate()).padStart(2, '0')}`;
+        endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       } else if (dateRangeFilter === 'This Month') {
-        return ordDate.getMonth() === now.getMonth() && ordDate.getFullYear() === now.getFullYear();
+        startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       } else if (dateRangeFilter === 'Custom') {
-        if (customStartDate) {
-          const start = new Date(customStartDate);
-          start.setHours(0, 0, 0, 0);
-          if (ordDate < start) return false;
-        }
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (ordDate > end) return false;
+        if (customStartDate) startDate = customStartDate;
+        if (customEndDate) endDate = customEndDate;
+      }
+
+      // 2. Resolve Waiter filter parameter
+      let waiterVal;
+      let waiterNameVal;
+      if (selectedWaiterFilter && typeof selectedWaiterFilter === 'object') {
+        waiterVal = selectedWaiterFilter.id || selectedWaiterFilter.name;
+        waiterNameVal = selectedWaiterFilter.name || selectedWaiterFilter.id;
+      } else if (typeof selectedWaiterFilter === 'string') {
+        waiterVal = selectedWaiterFilter;
+        waiterNameVal = selectedWaiterFilter;
+      }
+
+      // 3. Resolve Table filter parameter
+      let tableVal;
+      if (selectedTableFilter && selectedTableFilter !== 'All') {
+        tableVal = String(selectedTableFilter).replace(/^Table\s*/i, '').trim();
+      }
+
+      // 4. Construct params object for backend query
+      const params = {
+        page,
+        limit
+      };
+
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        params.branchId = selectedBranchId;
+      }
+
+      if (orderFilter && String(orderFilter).toLowerCase() !== 'all') {
+        params.status = String(orderFilter).toLowerCase();
+      }
+
+      if (orderTypeFilter && String(orderTypeFilter).toLowerCase() !== 'all') {
+        params.orderType = orderTypeFilter;
+      }
+
+      if (paymentStatusFilter && String(paymentStatusFilter).toLowerCase() !== 'all') {
+        params.billingStatus = String(paymentStatusFilter).toLowerCase();
+        params.paymentStatus = String(paymentStatusFilter).toLowerCase();
+      }
+
+      if (tableVal) {
+        params.table = tableVal;
+      }
+
+      if (waiterVal && waiterVal !== 'All Waiters' && waiterVal !== 'All') {
+        params.waiter = waiterVal;
+        if (waiterNameVal && waiterNameVal !== waiterVal) {
+          params.waiterName = waiterNameVal;
         }
       }
-      return true;
-    });
-  }
+
+      if (debouncedSearch && debouncedSearch.trim()) {
+        params.search = debouncedSearch.trim();
+      }
+
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      if (dateRangeFilter && dateRangeFilter !== 'All') params.dateRange = dateRangeFilter;
+
+      const res = await OrderApi.getOrders(params);
+      let fetchedOrders = [];
+      let paginationInfo = null;
+
+      if (res && res.status && res.response) {
+        const d = res.response;
+        if (Array.isArray(d)) {
+          fetchedOrders = d;
+        } else if (Array.isArray(d?.data?.orders)) {
+          fetchedOrders = d.data.orders;
+          paginationInfo = d.data.pagination;
+        } else if (Array.isArray(d?.data)) {
+          fetchedOrders = d.data;
+          paginationInfo = d.pagination || d.dataPagination;
+        } else if (Array.isArray(d?.orders)) {
+          fetchedOrders = d.orders;
+          paginationInfo = d.pagination;
+        } else if (Array.isArray(d?.response?.data)) {
+          fetchedOrders = d.response.data;
+        } else if (Array.isArray(d?.response)) {
+          fetchedOrders = d.response;
+        }
+        if (d?.pagination) paginationInfo = d.pagination;
+
+        const serverTotal = (paginationInfo && (paginationInfo.totalOrders || paginationInfo.total || paginationInfo.totalCount || paginationInfo.count)) ??
+          d?.totalOrders ?? d?.total ?? d?.count ?? d?.data?.totalOrders ?? d?.data?.total ?? d?.data?.count;
+
+        if (serverTotal !== undefined && serverTotal !== null) {
+          const totalNum = Number(serverTotal) || 0;
+          setServerTotalCount(totalNum);
+          setServerTotalPages((paginationInfo && paginationInfo.totalPages) || Math.max(1, Math.ceil(totalNum / limit)));
+        } else {
+          setServerTotalCount(fetchedOrders.length);
+          setServerTotalPages(Math.max(1, Math.ceil(fetchedOrders.length / limit)));
+        }
+      } else {
+        // Fallback using direct apiClient.get
+        const directRes = await apiClient.get('/orders', { params }).catch(() => null);
+        if (directRes && (directRes.status === 200 || directRes.data?.success)) {
+          const d = directRes.data;
+          if (Array.isArray(d)) fetchedOrders = d;
+          else if (Array.isArray(d?.data?.orders)) {
+            fetchedOrders = d.data.orders;
+            paginationInfo = d.data.pagination;
+          } else if (Array.isArray(d?.data)) {
+            fetchedOrders = d.data;
+            paginationInfo = d.pagination;
+          } else if (Array.isArray(d?.orders)) {
+            fetchedOrders = d.orders;
+            paginationInfo = d.pagination;
+          }
+          const serverTotal = (paginationInfo && (paginationInfo.totalOrders || paginationInfo.total || paginationInfo.totalCount || paginationInfo.count)) ??
+            d?.totalOrders ?? d?.total ?? d?.count;
+          if (serverTotal !== undefined && serverTotal !== null) {
+            const totalNum = Number(serverTotal) || 0;
+            setServerTotalCount(totalNum);
+            setServerTotalPages((paginationInfo && paginationInfo.totalPages) || Math.max(1, Math.ceil(totalNum / limit)));
+          } else {
+            setServerTotalCount(fetchedOrders.length);
+            setServerTotalPages(Math.max(1, Math.ceil(fetchedOrders.length / limit)));
+          }
+        }
+      }
+
+      setServerOrders(fetchedOrders);
+    } catch (err) {
+      console.error("Failed to fetch filtered orders from backend:", err);
+    } finally {
+      setIsOrdersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFilteredOrders();
+  }, [
+    page,
+    limit,
+    orderFilter,
+    orderTypeFilter,
+    paymentStatusFilter,
+    selectedTableFilter,
+    selectedWaiterIdVal,
+    debouncedSearch,
+    dateRangeFilter,
+    customStartDate,
+    customEndDate,
+    selectedBranchId
+  ]);
+
+  // Display orders directly from backend response without client-side .filter()
+  const filteredOrders = serverOrders !== null ? serverOrders : (Array.isArray(orders) ? orders : []);
 
   const isServerPaginated = Boolean(
-    ((propTotalCount || 0) > 0 && sourceOrders.length <= limit) ||
-    ((propTotalPages || 1) > 1 && sourceOrders.length <= limit) ||
-    (sourceOrders.length <= limit && (propTotalCount || 0) > sourceOrders.length)
+    serverOrders !== null ||
+    ((propTotalCount || 0) > 0 && filteredOrders.length <= limit) ||
+    ((propTotalPages || 1) > 1 && filteredOrders.length <= limit) ||
+    (filteredOrders.length <= limit && (propTotalCount || 0) > filteredOrders.length)
   );
 
-  const effectiveTotalCount = isServerPaginated ? (propTotalCount || filteredOrders.length) : filteredOrders.length;
-  const effectiveTotalPages = isServerPaginated
-    ? (propTotalPages || Math.max(1, Math.ceil(effectiveTotalCount / limit)))
-    : Math.max(1, Math.ceil(effectiveTotalCount / limit));
+  const effectiveTotalCount = serverOrders !== null
+    ? serverTotalCount
+    : (propTotalCount !== undefined ? propTotalCount : filteredOrders.length);
 
-  const paginatedOrders = (isServerPaginated || filteredOrders.length <= limit)
+  const effectiveTotalPages = serverOrders !== null
+    ? serverTotalPages
+    : (propTotalPages !== undefined ? propTotalPages : Math.max(1, Math.ceil(effectiveTotalCount / limit)));
+
+  const paginatedOrders = (serverOrders !== null || isServerPaginated || filteredOrders.length <= limit)
     ? filteredOrders
     : filteredOrders.slice(page * limit, (page + 1) * limit);
 
@@ -1720,14 +1862,6 @@ export default function OrdersPanel({
     return pages;
   };
 
-  const selectedWaiterIdVal = typeof selectedWaiterFilter === 'object' && selectedWaiterFilter !== null
-    ? (selectedWaiterFilter.id || selectedWaiterFilter.name || 'All Waiters')
-    : (selectedWaiterFilter || 'All Waiters');
-
-  useEffect(() => {
-    setPage(0);
-  }, [orderFilter, selectedWaiterIdVal, orderTypeFilter, paymentStatusFilter, selectedTableFilter, searchOrderId, dateRangeFilter, customStartDate, customEndDate]);
-
   useEffect(() => {
     if (page >= effectiveTotalPages && effectiveTotalPages > 0) {
       setPage(Math.max(0, effectiveTotalPages - 1));
@@ -1746,6 +1880,7 @@ export default function OrdersPanel({
       const res = await apiClient.patch(`/orders/${orderId}/status${branchQuery}`, { status: nextStatus });
       if (res.data?.success) {
         ShowNotifications.showAlertNotification(`Order status updated to ${nextStatus.toUpperCase()}!`, true);
+        fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
       }
     } catch (error) {
@@ -1753,6 +1888,7 @@ export default function OrdersPanel({
       if (updateOrderStatus) {
         updateOrderStatus(restId, orderId, nextStatus);
         ShowNotifications.showAlertNotification(`Order #ORD-${orderId} status updated to ${nextStatus.toUpperCase()}!`, true);
+        fetchFilteredOrders();
       } else {
         ShowNotifications.showAlertNotification("Failed to update status via API", false);
       }
@@ -1793,10 +1929,12 @@ export default function OrdersPanel({
       }
 
       ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+      fetchFilteredOrders();
       if (refreshOrders) refreshOrders();
     } catch (err) {
       console.error(err);
       ShowNotifications.showAlertNotification(isNone ? "Waiter assignment removed." : `Assigned ${waiterName} to order.`, true);
+      fetchFilteredOrders();
       if (refreshOrders) refreshOrders();
     }
   };
@@ -3689,7 +3827,7 @@ export default function OrdersPanel({
                 Orders list
               </h2>
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 700, background: '#e2e8f0', padding: '2px 8px', borderRadius: '12px' }}>
-                {filteredOrders.length} {filteredOrders.length === 1 ? 'Order' : 'Orders'}
+                {effectiveTotalCount} {effectiveTotalCount === 1 ? 'Order' : 'Orders'}
               </span>
             </div>
             {hasPermission('orders', 'add') && (
@@ -4320,7 +4458,7 @@ export default function OrdersPanel({
                 {paginatedOrders.length === 0 && (
                   <tr>
                     <td colSpan="13" style={{ textAlign: 'center', padding: '36px', color: '#64748b', fontSize: '14px' }}>
-                      No orders found matching the filter "{orderFilter}".
+                      {isOrdersLoading ? 'Loading orders...' : 'No orders found matching the selected filters.'}
                     </td>
                   </tr>
                 )}
@@ -4622,6 +4760,7 @@ export default function OrdersPanel({
                     const res = await apiClient.delete(`/orders/${orderToDelete._id || orderToDelete.id}${branchQuery}`);
                     if (res.data?.success) {
                       ShowNotifications.showAlertNotification(`Order deleted successfully`, true);
+                      fetchFilteredOrders();
                       if (refreshOrders) refreshOrders();
                     } else {
                       ShowNotifications.showAlertNotification(`Failed to delete order`, false);

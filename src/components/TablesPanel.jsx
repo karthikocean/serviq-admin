@@ -655,11 +655,11 @@ export default function TablesPanel({
         {/* Status Filter Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[
-            { id: 'All', label: `All Tables (${totalCount})` },
-            { id: 'Free', label: `Free (${freeCount})` },
-            { id: 'Occupied', label: `Occupied (${occupiedCount})` },
-            { id: 'Reserved', label: `Reserved (${reservedCount})` },
-            { id: 'Maintenance', label: `Maintenance / Unavailable (${maintenanceCount})` }
+            { id: 'All', label: `All Tables` },
+            { id: 'Free', label: `Free` },
+            { id: 'Occupied', label: `Occupied` },
+            { id: 'Reserved', label: `Reserved` },
+            { id: 'Maintenance', label: `Maintenance / Unavailable` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -734,25 +734,10 @@ export default function TablesPanel({
                       </td>
 
                       {/* TABLE NO */}
-                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', minWidth: '160px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-                          <div style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            background: statusProps.bg,
-                            color: statusProps.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                          }}>
-                            <TableIcon size={16} color={statusProps.color} />
-                          </div>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', wordBreak: 'keep-all', display: 'inline-block' }}>
-                            {tableIdStr}
-                          </span>
-                        </div>
+                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', minWidth: '140px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', wordBreak: 'keep-all', display: 'inline-block' }}>
+                          {tableIdStr}
+                        </span>
                       </td>
 
                       {/* SECTION / AREA */}

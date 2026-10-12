@@ -26,76 +26,16 @@ export default function OrderManagement() {
   // Pagination State
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(10);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
-  const fetchOrdersAndStaff = async () => {
+  const fetchStaffAndTables = async () => {
     try {
       const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
-      const branchParam = isBranchFiltered ? `?branchId=${selectedBranchId}&page=${page}&limit=10` : `?page=${page}&limit=10`;
 
-      let fetchedOrders = [];
-      let paginationInfo = null;
-
-      // 1. Fetch orders, staff/users & tables in parallel
-      const [orderRes, staffRes, tableRes] = await Promise.all([
-        apiClient.get(`/orders${branchParam}`).catch(() => null),
+      // Fetch staff/users & tables in parallel
+      const [staffRes, tableRes] = await Promise.all([
         apiClient.get(`/users${isBranchFiltered ? `?branchId=${selectedBranchId}` : ''}`).catch(() => null),
         apiClient.get(`/tables${isBranchFiltered ? `?branchId=${selectedBranchId}` : ''}`).catch(() => null)
       ]);
-
-      if (orderRes && (orderRes.status === 200 || orderRes.status === 201 || orderRes.data?.success || orderRes.data?.status)) {
-        const d = orderRes.data;
-        if (Array.isArray(d)) {
-          fetchedOrders = d;
-        } else if (Array.isArray(d?.data)) {
-          fetchedOrders = d.data;
-        } else if (Array.isArray(d?.data?.orders)) {
-          fetchedOrders = d.data.orders;
-          paginationInfo = d.data.pagination;
-        } else if (Array.isArray(d?.orders)) {
-          fetchedOrders = d.orders;
-          paginationInfo = d.pagination;
-        } else if (Array.isArray(d?.response?.data)) {
-          fetchedOrders = d.response.data;
-        } else if (Array.isArray(d?.response)) {
-          fetchedOrders = d.response;
-        }
-        if (d?.pagination) paginationInfo = d.pagination;
-      }
-
-      // 2. If endpoint returned empty, fallback to basic /orders
-      if (fetchedOrders.length === 0) {
-        try {
-          const fallbackRes = await apiClient.get(isBranchFiltered ? `/orders?branchId=${selectedBranchId}` : '/orders').catch(() => null);
-          if (fallbackRes && (fallbackRes.status === 200 || fallbackRes.data?.success || fallbackRes.data?.status)) {
-            const fd = fallbackRes.data;
-            if (Array.isArray(fd)) fetchedOrders = fd;
-            else if (Array.isArray(fd?.data)) fetchedOrders = fd.data;
-            else if (Array.isArray(fd?.data?.orders)) fetchedOrders = fd.data.orders;
-            else if (Array.isArray(fd?.orders)) fetchedOrders = fd.orders;
-            else if (Array.isArray(fd?.response?.data)) fetchedOrders = fd.response.data;
-            else if (Array.isArray(fd?.response)) fetchedOrders = fd.response;
-          }
-        } catch (e) {
-          console.warn("Fallback orders fetch note:", e);
-        }
-      }
-
-      setApiOrders(fetchedOrders);
-
-      const rawResData = orderRes?.data;
-      const serverTotal = (paginationInfo && (paginationInfo.totalOrders || paginationInfo.total || paginationInfo.totalCount || paginationInfo.count)) ??
-        rawResData?.totalOrders ?? rawResData?.total ?? rawResData?.count ?? rawResData?.data?.totalOrders ?? rawResData?.data?.total ?? rawResData?.data?.count;
-
-      if (serverTotal !== undefined && serverTotal !== null) {
-        const totalNum = Number(serverTotal) || 0;
-        setTotalPages((paginationInfo && paginationInfo.totalPages) || Math.max(1, Math.ceil(totalNum / limit)));
-        setTotalCount(totalNum);
-      } else {
-        setTotalCount(fetchedOrders.length);
-        setTotalPages(Math.max(1, Math.ceil(fetchedOrders.length / limit)));
-      }
 
       if (staffRes && (staffRes.status === 200 || staffRes.data?.success || staffRes.data?.status)) {
         const sd = staffRes.data;
@@ -121,7 +61,7 @@ export default function OrderManagement() {
         setApiTables(tableList);
       }
     } catch (e) {
-      console.error("Failed to fetch fresh orders/staff/tables:", e);
+      console.error("Failed to fetch fresh staff/tables:", e);
     }
   };
 
@@ -130,15 +70,12 @@ export default function OrderManagement() {
   }, [orderFilter, selectedWaiterFilter, selectedBranchId]);
 
   useEffect(() => {
-    fetchOrdersAndStaff();
-  }, [selectedBranchId, page, limit]);
+    fetchStaffAndTables();
+  }, [selectedBranchId]);
 
   if (!activeRestaurant) return null;
 
   const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
-  const displayOrders = isBranchFiltered
-    ? apiOrders.filter(o => isBranchMatch(o, selectedBranchId, activeRestaurant?.branches || []))
-    : apiOrders;
 
   const displayStaff = isBranchFiltered
     ? apiStaff.filter(s => isBranchMatch(s, selectedBranchId, activeRestaurant?.branches || []))
@@ -151,7 +88,6 @@ export default function OrderManagement() {
   return (
     <div style={{ width: '100%' }}>
       <OrdersPanel
-        orders={displayOrders}
         staff={displayStaff}
         tables={displayTables}
         orderFilter={orderFilter}
@@ -161,7 +97,7 @@ export default function OrderManagement() {
         activeRestaurant={activeRestaurant}
         selectedBranchId={selectedBranchId}
         updateOrderStatus={updateOrderStatus}
-        refreshOrders={fetchOrdersAndStaff}
+        refreshOrders={fetchStaffAndTables}
         currentUser={currentUser}
 
         // Pass pagination state
@@ -169,8 +105,6 @@ export default function OrderManagement() {
         setPage={setPage}
         limit={limit}
         setLimit={setLimit}
-        totalPages={totalPages}
-        totalCount={totalCount}
       />
     </div>
   );

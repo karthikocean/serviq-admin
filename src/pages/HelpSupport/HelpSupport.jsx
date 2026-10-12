@@ -167,10 +167,10 @@ const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
-const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed', 'Draft'];
+const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed'];
 
 export default function HelpSupport() {
-  const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, selectedBranchId, setSelectedBranchId, currentUser } = useAppState();
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
@@ -205,9 +205,40 @@ export default function HelpSupport() {
   // Company Admin: Restaurant Owner / HQ Admin not tied to a single branch
   const isCompanyAdmin = !isSuperAdmin && !isBranchAdmin;
 
-  // Company filter active state: Resolve and Share icons are strictly for Company filter only
-  const isCompanyFilterActive = String(selectedBranchId || '').trim().toUpperCase() === 'COMPANY';
-  const isBranchFilterActive = !isCompanyFilterActive;
+  // Single branch selection detection (not All Branches, not Company overview)
+  const isSpecificBranchSelected = Boolean(
+    selectedBranchId &&
+    selectedBranchId !== 'ALL' &&
+    selectedBranchId !== 'All' &&
+    String(selectedBranchId).toLowerCase() !== 'all branches' &&
+    String(selectedBranchId).toUpperCase() !== 'COMPANY'
+  );
+
+  // Company filter active state: Resolve and Share icons are strictly for Company scope
+  const isCompanyFilterActive = !isSpecificBranchSelected;
+  const isBranchFilterActive = isSpecificBranchSelected || !isBranchAdmin;
+
+  // Active target branch ID for filtering:
+  // - Sub-branch login -> always strictly locked to userBranchId
+  // - Main Branch login -> selectedBranchId if a specific branch is selected, otherwise empty (all branches/company overview)
+  const activeBranchTargetId = useMemo(() => {
+    if (!hasSpecificBranch && isSpecificBranchSelected) {
+      return typeof selectedBranchId === 'object' && selectedBranchId !== null
+        ? String(selectedBranchId._id || selectedBranchId.id || selectedBranchId.branchCode || '')
+        : String(selectedBranchId);
+    }
+    if (userBranchId && hasSpecificBranch) {
+      return typeof userBranchId === 'object' && userBranchId !== null
+        ? String(userBranchId._id || userBranchId.id || userBranchId.branchCode || '')
+        : String(userBranchId);
+    }
+    if (isSpecificBranchSelected) {
+      return typeof selectedBranchId === 'object' && selectedBranchId !== null
+        ? String(selectedBranchId._id || selectedBranchId.id || selectedBranchId.branchCode || '')
+        : String(selectedBranchId);
+    }
+    return '';
+  }, [hasSpecificBranch, userBranchId, isSpecificBranchSelected, selectedBranchId]);
 
   const [tickets, setTickets] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
@@ -284,7 +315,6 @@ export default function HelpSupport() {
   const [persistedCounts, setPersistedCounts] = useState({
     All: 0,
     Open: 0,
-    Draft: 0,
     'In Progress': 0,
     'Waiting for Response': 0,
     Resolved: 0,
@@ -435,9 +465,10 @@ export default function HelpSupport() {
       if (!isMainBranchLogin) {
         const raisedTo = resolveTicketRaisedTo(t);
         if (raisedTo !== 'Company') return false;
-        if (userBranchId) {
-          const branchTarget = t.branchId || t.branch;
-          return isBranchMatch(branchTarget, userBranchId, allBranches);
+      }
+      if (activeBranchTargetId) {
+        if (!isBranchMatch(t, activeBranchTargetId, allBranches)) {
+          return false;
         }
       }
       return true;
@@ -446,7 +477,6 @@ export default function HelpSupport() {
     const counts = {
       All: base.length,
       Open: 0,
-      Draft: 0,
       'In Progress': 0,
       'Waiting for Response': 0,
       Resolved: 0,
@@ -463,7 +493,7 @@ export default function HelpSupport() {
     });
 
     setPersistedCounts(counts);
-  }, [isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
+  }, [isMainBranchLogin, activeBranchTargetId, allBranches, resolveTicketRaisedTo]);
 
   // Keep a stable ref to updateCountsFromTickets so fetchTickets is not recreated
   const updateCountsRef = useRef(updateCountsFromTickets);
@@ -475,10 +505,8 @@ export default function HelpSupport() {
   const fetchStatusCounts = useCallback(async () => {
     try {
       const countParams = {};
-      if (!isMainBranchLogin && userBranchId) {
-        countParams.branchId = userBranchId;
-      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
-        countParams.branchId = selectedBranchId;
+      if (activeBranchTargetId) {
+        countParams.branchId = activeBranchTargetId;
       }
       const data = await ticketApi.getTickets(countParams);
       const list = (data && data.status && Array.isArray(data.data)) ? data.data : (Array.isArray(data) ? data : []);
@@ -488,18 +516,16 @@ export default function HelpSupport() {
     } catch (err) {
       console.warn("Failed to fetch status counts:", err);
     }
-  }, [isMainBranchLogin, userBranchId, selectedBranchId]);
+  }, [activeBranchTargetId]);
 
   // Fetch Tickets calling list API with active filters
   const fetchTickets = useCallback(async (showLoading = true) => {
     if (showLoading) setIsLoading(true);
     try {
       const params = {};
-      // If login is not a main branch, filter by their branch
-      if (!isMainBranchLogin && userBranchId) {
-        params.branchId = userBranchId;
-      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
-        params.branchId = selectedBranchId;
+      // Pass branchId if a specific branch is targeted
+      if (activeBranchTargetId) {
+        params.branchId = activeBranchTargetId;
       }
 
       // Pass status in list API call
@@ -540,7 +566,7 @@ export default function HelpSupport() {
     } finally {
       if (showLoading) setIsLoading(false);
     }
-  }, [isMainBranchLogin, userBranchId, selectedBranchId, statusFilter, priorityFilter, targetFilter, debouncedSearch]);
+  }, [activeBranchTargetId, statusFilter, priorityFilter, targetFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchBranches();
@@ -553,7 +579,7 @@ export default function HelpSupport() {
   // Reset pagination to page 0 only when active filter inputs change
   useEffect(() => {
     setCurrentPage(0);
-  }, [statusFilter, priorityFilter, targetFilter, debouncedSearch, selectedBranchId]);
+  }, [statusFilter, priorityFilter, targetFilter, debouncedSearch, activeBranchTargetId]);
 
   useEffect(() => {
     fetchTickets(true);
@@ -569,23 +595,17 @@ export default function HelpSupport() {
         if (raisedTo !== 'Company') {
           return false;
         }
-        if (userBranchId) {
-          const branchTarget = t.branchId || t.branch;
-          if (!isBranchMatch(branchTarget, userBranchId, allBranches)) {
-            return false;
-          }
-        }
       }
 
-      // If header selected a branch (for Company Admin), respect it
-      if (isCompanyAdmin && selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
-        const branchTarget = t.branchId || t.branch;
-        if (!isBranchMatch(branchTarget, selectedBranchId, allBranches)) {
+      // 2. Strict Branch Filter:
+      // If a specific branch is active/selected, strictly show ONLY tickets for that branch!
+      if (activeBranchTargetId) {
+        if (!isBranchMatch(t, activeBranchTargetId, allBranches)) {
           return false;
         }
       }
 
-      // 2. Status Filter
+      // 3. Status Filter
       if (statusFilter !== 'All') {
         const currentStatus = String(t.status || 'Open').toLowerCase();
         if (currentStatus !== statusFilter.toLowerCase()) {
@@ -593,7 +613,7 @@ export default function HelpSupport() {
         }
       }
 
-      // 3. Priority Filter
+      // 4. Priority Filter
       if (priorityFilter !== 'All') {
         const currentPriority = String(t.priority || 'Medium').toLowerCase();
         if (currentPriority !== priorityFilter.toLowerCase()) {
@@ -601,7 +621,7 @@ export default function HelpSupport() {
         }
       }
 
-      // 4. Target Level Filter (Company vs Super Admin)
+      // 5. Target Level Filter (Company vs Super Admin)
       if (targetFilter !== 'All') {
         const raisedTo = resolveTicketRaisedTo(t);
         if (raisedTo !== targetFilter) {
@@ -609,7 +629,7 @@ export default function HelpSupport() {
         }
       }
 
-      // 5. Search Filter
+      // 6. Search Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const ticketNum = String(t.ticketNumber || '').toLowerCase();
@@ -622,7 +642,7 @@ export default function HelpSupport() {
 
       return true;
     });
-  }, [tickets, isMainBranchLogin, userBranchId, isCompanyAdmin, selectedBranchId, allBranches, statusFilter, priorityFilter, targetFilter, searchQuery, resolveTicketRaisedTo, resolveTicketBranchName, resolveTicketRaisedBy]);
+  }, [tickets, isMainBranchLogin, activeBranchTargetId, allBranches, statusFilter, priorityFilter, targetFilter, searchQuery, resolveTicketRaisedTo, resolveTicketBranchName, resolveTicketRaisedBy]);
 
   // Counts for status tabs
   const statusCounts = useMemo(() => {
@@ -630,11 +650,11 @@ export default function HelpSupport() {
       if (!isMainBranchLogin) {
         const raisedTo = resolveTicketRaisedTo(t);
         if (raisedTo !== 'Company') return false;
-        if (userBranchId) {
-          const branchTarget = t.branchId || t.branch;
-          return isBranchMatch(branchTarget, userBranchId, allBranches);
+      }
+      if (activeBranchTargetId) {
+        if (!isBranchMatch(t, activeBranchTargetId, allBranches)) {
+          return false;
         }
-        return true;
       }
       return true;
     });
@@ -642,7 +662,6 @@ export default function HelpSupport() {
     const counts = {
       All: baseTickets.length,
       Open: 0,
-      Draft: 0,
       'In Progress': 0,
       'Waiting for Response': 0,
       Resolved: 0,
@@ -659,7 +678,7 @@ export default function HelpSupport() {
     });
 
     return counts;
-  }, [tickets, isMainBranchLogin, userBranchId, allBranches, resolveTicketRaisedTo]);
+  }, [tickets, isMainBranchLogin, activeBranchTargetId, allBranches, resolveTicketRaisedTo]);
 
   // Use persistedCounts when filtered so dropdown options don't zero-out other statuses
   const displayCounts = useMemo(() => {
@@ -673,7 +692,6 @@ export default function HelpSupport() {
   const statusOptions = useMemo(() => [
     { value: 'All', label: `All Status (${displayCounts.All ?? 0})` },
     { value: 'Open', label: `Open (${displayCounts.Open ?? 0})` },
-    { value: 'Draft', label: `Draft (${displayCounts.Draft ?? 0})` },
     { value: 'In Progress', label: `In Progress (${displayCounts['In Progress'] ?? 0})` },
     { value: 'Waiting for Response', label: `Waiting (${displayCounts['Waiting for Response'] ?? 0})` },
     { value: 'Resolved', label: `Resolved (${displayCounts.Resolved ?? 0})` },
@@ -681,13 +699,16 @@ export default function HelpSupport() {
   ], [displayCounts]);
 
   // Check if any filter is active
-  const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0;
+  const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0 || (isMainBranchLogin && isSpecificBranchSelected);
 
   const handleResetFilters = () => {
     setStatusFilter('All');
     setPriorityFilter('All');
     setTargetFilter('All');
     setSearchQuery('');
+    if (isMainBranchLogin && typeof setSelectedBranchId === 'function') {
+      setSelectedBranchId('COMPANY');
+    }
     setCurrentPage(0);
   };
 
@@ -1066,9 +1087,7 @@ export default function HelpSupport() {
   // Open Resolve Ticket Modal
   const handleOpenResolveModal = (ticket) => {
     setResolveTicketModal(ticket);
-    const initialStatus = ticket.status === 'Draft' 
-      ? 'Draft' 
-      : (ticket.status === 'In Progress' ? 'In Progress' : 'Resolved');
+    const initialStatus = ticket.status === 'In Progress' ? 'In Progress' : 'Resolved';
     setResolutionStatus(initialStatus);
     const prevNote = ticket.solutionRemarks || ticket.resolutionNote || ticket.resolutionRemarks || '';
     const prevAttachment = ticket.resolutionAttachment || '';
@@ -1140,14 +1159,13 @@ export default function HelpSupport() {
       // 2. Post resolution remark and proof in thread
       await ticketApi.addReply(
         targetId,
-        `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
+        `[${resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution'} - ${resolutionStatus}]: ${cleanNote}`,
         senderName,
         resolutionAttachment || undefined,
         {
           role: senderRole,
           status: resolutionStatus,
           isResolution: resolutionStatus === 'Resolved',
-          isDraft: resolutionStatus === 'Draft',
           isInProgress: resolutionStatus === 'In Progress',
           attachment: resolutionAttachment || undefined
         }
@@ -1183,7 +1201,7 @@ export default function HelpSupport() {
             ...(Array.isArray(prev.replies) ? prev.replies : []),
             {
               id: `reply-${Date.now()}`,
-              message: `[${resolutionStatus === 'Draft' ? 'Draft Note' : (resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution')} - ${resolutionStatus}]: ${cleanNote}`,
+              message: `[${resolutionStatus === 'In Progress' ? 'Progress Update' : 'Resolution'} - ${resolutionStatus}]: ${cleanNote}`,
               sender: senderName,
               role: senderRole,
               isCreator: false,
@@ -1195,11 +1213,9 @@ export default function HelpSupport() {
       }
 
       ShowNotifications.showAlertNotification(
-        resolutionStatus === 'Draft'
-          ? `Ticket #${resolveTicketModal.ticketNumber || ''} saved as Draft!`
-          : (resolutionStatus === 'In Progress'
-              ? `Ticket #${resolveTicketModal.ticketNumber || ''} updated to In Progress!`
-              : `Ticket #${resolveTicketModal.ticketNumber || ''} marked as Resolved!`),
+        resolutionStatus === 'In Progress'
+          ? `Ticket #${resolveTicketModal.ticketNumber || ''} updated to In Progress!`
+          : `Ticket #${resolveTicketModal.ticketNumber || ''} marked as Resolved!`,
         true
       );
       setResolveTicketModal(null);
@@ -1414,6 +1430,35 @@ export default function HelpSupport() {
               />
             </div>
 
+            {/* Filter by Branch (for Main Branch logins) */}
+            {isMainBranchLogin && allBranches && allBranches.length > 0 && (
+              <div style={{ minWidth: '175px' }}>
+                <SearchableSelect
+                  isCompact={true}
+                  value={
+                    isSpecificBranchSelected
+                      ? String(selectedBranchId)
+                      : 'COMPANY'
+                  }
+                  onChange={e => {
+                    const bId = e.target.value;
+                    if (typeof setSelectedBranchId === 'function') {
+                      setSelectedBranchId(bId);
+                    }
+                    setCurrentPage(0);
+                  }}
+                  options={[
+                    { value: 'COMPANY', label: 'All Branches' },
+                    ...allBranches.map(b => ({
+                      value: String(b._id || b.id),
+                      label: b.branchName || b.name || b.branchCode || 'Branch'
+                    }))
+                  ]}
+                  placeholder="All Branches..."
+                />
+              </div>
+            )}
+
             {/* Filter by Target Level (Only for Main Branch) */}
             {isMainBranchLogin && (
               <div style={{ minWidth: '165px' }}>
@@ -1483,7 +1528,7 @@ export default function HelpSupport() {
             )}
 
             {/* Branch indicator / lock notification */}
-            {!isMainBranchLogin && (
+            {!isMainBranchLogin ? (
               <span style={{
                 fontSize: '12px',
                 fontWeight: 700,
@@ -1498,6 +1543,39 @@ export default function HelpSupport() {
               }}>
                 <StoreIcon size={13} color="#ea580c" />
                 <span>My Branch: {resolveTicketBranchName({ branchId: userBranchId }, allBranches)}</span>
+              </span>
+            ) : isSpecificBranchSelected && (
+              <span style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#0284c7',
+                background: '#f0f9ff',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid #bae6fd',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <StoreIcon size={13} color="#0284c7" />
+                <span>Branch: {resolveTicketBranchName({ branchId: selectedBranchId }, allBranches)}</span>
+                <button
+                  type="button"
+                  onClick={() => typeof setSelectedBranchId === 'function' && setSelectedBranchId('COMPANY')}
+                  title="Clear branch filter"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#0284c7',
+                    cursor: 'pointer',
+                    padding: 0,
+                    marginLeft: '2px',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  ✕
+                </button>
               </span>
             )}
           </div>
@@ -1561,7 +1639,7 @@ export default function HelpSupport() {
                       ? "Ticket is closed"
                       : (isSuperAdminTicket || isEscalated)
                         ? "Ticket routed to Super Admin"
-                        : (ticket.status === 'Draft' ? "Update Draft / Resolve Ticket" : "Resolve Ticket (Company)");
+                        : "Resolve Ticket (Company)";
 
                   const shareTitle = (isEscalated || isSuperAdminTicket)
                     ? "Ticket already escalated to Super Admin"
@@ -2138,16 +2216,7 @@ export default function HelpSupport() {
                           }}
                         />
                       </a>
-                      <a
-                        href={viewTicket.attachmentUrl || viewTicket.attachment || viewTicket.attachments?.[0]}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-outline"
-                        style={{ fontSize: '12px', padding: '6px 12px' }}
-                      >
-                        <EyeIcon size={13} color="#ea580c" />
-                        <span>Open Full Size</span>
-                      </a>
+
                     </div>
                   </div>
                 )}
@@ -2185,8 +2254,8 @@ export default function HelpSupport() {
               {/* COMPANY RESPONSE & SOLUTION REMARKS CARD */}
               {companyResponse ? (
                 <div style={{
-                  background: companyResponse.status === 'In Progress' ? '#f0f9ff' : (companyResponse.status === 'Draft' ? '#fffbeb' : '#f0fdf4'),
-                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#bae6fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
+                  background: companyResponse.status === 'In Progress' ? '#f0f9ff' : '#f0fdf4',
+                  border: `1.5px solid ${companyResponse.status === 'In Progress' ? '#bae6fd' : '#bbf7d0'}`,
                   borderRadius: '12px',
                   padding: '16px 18px',
                   display: 'flex',
@@ -2199,17 +2268,15 @@ export default function HelpSupport() {
                         width: '32px',
                         height: '32px',
                         borderRadius: '8px',
-                        background: companyResponse.status === 'In Progress' ? '#dbeafe' : (companyResponse.status === 'Draft' ? '#fef3c7' : '#dcfce7'),
+                        background: companyResponse.status === 'In Progress' ? '#dbeafe' : '#dcfce7',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: companyResponse.status === 'In Progress' ? '#1d4ed8' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                        color: companyResponse.status === 'In Progress' ? '#1d4ed8' : '#15803d',
                         flexShrink: 0
                       }}>
                         {companyResponse.status === 'In Progress' ? (
                           <ClockIcon size={16} color="#1d4ed8" />
-                        ) : companyResponse.status === 'Draft' ? (
-                          <FileTextIcon size={16} color="#b45309" />
                         ) : (
                           <CheckCircleIcon size={16} color="#15803d" />
                         )}
@@ -2218,7 +2285,7 @@ export default function HelpSupport() {
                         <div style={{
                           fontSize: '12.5px',
                           fontWeight: 800,
-                          color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                          color: companyResponse.status === 'In Progress' ? '#1e40af' : '#166534',
                           textTransform: 'uppercase',
                           letterSpacing: '0.4px',
                           display: 'flex',
@@ -2243,7 +2310,7 @@ export default function HelpSupport() {
                         </div>
                         <div style={{
                           fontSize: '11.5px',
-                          color: companyResponse.status === 'In Progress' ? '#2563eb' : (companyResponse.status === 'Draft' ? '#b45309' : '#15803d'),
+                          color: companyResponse.status === 'In Progress' ? '#2563eb' : '#15803d',
                           display: 'flex',
                           alignItems: 'center',
                           gap: '6px',
@@ -2265,7 +2332,7 @@ export default function HelpSupport() {
                   {/* Remarks Content */}
                   <div style={{
                     background: '#ffffff',
-                    border: `1px solid ${companyResponse.status === 'In Progress' ? '#bfdbfe' : (companyResponse.status === 'Draft' ? '#fde68a' : '#bbf7d0')}`,
+                    border: `1px solid ${companyResponse.status === 'In Progress' ? '#bfdbfe' : '#bbf7d0'}`,
                     borderRadius: '8px',
                     padding: '12px 14px',
                     fontSize: '13px',
@@ -2280,7 +2347,7 @@ export default function HelpSupport() {
                   {companyResponse.attachment && (
                     <div style={{
                       paddingTop: '8px',
-                      borderTop: `1px dashed ${companyResponse.status === 'In Progress' ? '#93c5fd' : (companyResponse.status === 'Draft' ? '#fde68a' : '#86efac')}`,
+                      borderTop: `1px dashed ${companyResponse.status === 'In Progress' ? '#93c5fd' : '#86efac'}`,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '6px'
@@ -2288,7 +2355,7 @@ export default function HelpSupport() {
                       <span style={{
                         fontSize: '10.5px',
                         fontWeight: 700,
-                        color: companyResponse.status === 'In Progress' ? '#1e40af' : (companyResponse.status === 'Draft' ? '#92400e' : '#166534'),
+                        color: companyResponse.status === 'In Progress' ? '#1e40af' : '#166534',
                         textTransform: 'uppercase',
                         display: 'flex',
                         alignItems: 'center',
@@ -2784,29 +2851,6 @@ export default function HelpSupport() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setResolutionStatus('Draft')}
-                  style={{
-                    flex: 1,
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: resolutionStatus === 'Draft' ? '2px solid #475569' : '1px solid #cbd5e1',
-                    background: resolutionStatus === 'Draft' ? '#f1f5f9' : '#ffffff',
-                    color: resolutionStatus === 'Draft' ? '#0f172a' : '#475569',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <FileTextIcon size={14} color={resolutionStatus === 'Draft' ? '#0f172a' : '#64748b'} />
-                  <span>Draft</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => setResolutionStatus('Resolved')}
                   style={{
                     flex: 1,
@@ -2835,9 +2879,7 @@ export default function HelpSupport() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#334155' }}>
-                  {resolutionStatus === 'Draft' 
-                    ? 'Draft Notes / Remarks' 
-                    : (resolutionStatus === 'In Progress' ? 'Progress Notes & Actions Taken' : 'Resolution Details & Solution Remarks')} <span style={{ color: '#dc2626' }}>*</span>
+                  {resolutionStatus === 'In Progress' ? 'Progress Notes & Actions Taken' : 'Resolution Details & Solution Remarks'} <span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <span style={{ fontSize: '11px', color: '#64748b' }}>Shared with branch</span>
               </div>
@@ -2846,11 +2888,9 @@ export default function HelpSupport() {
                 value={resolutionNote}
                 onChange={e => setResolutionNote(e.target.value)}
                 placeholder={
-                  resolutionStatus === 'Draft' 
-                    ? "Add draft notes, internal findings, or preliminary instructions..." 
-                    : (resolutionStatus === 'In Progress'
-                        ? "Describe ongoing investigation, actions taken, or expected timeline for the branch..."
-                        : "Explain the solution provided, steps taken to resolve the issue, or instructions for the branch staff...")
+                  resolutionStatus === 'In Progress'
+                    ? "Describe ongoing investigation, actions taken, or expected timeline for the branch..."
+                    : "Explain the solution provided, steps taken to resolve the issue, or instructions for the branch staff..."
                 }
                 required
                 style={{
@@ -2937,9 +2977,7 @@ export default function HelpSupport() {
                 type="submit"
                 disabled={isResolving || !resolutionNote.trim() || isUploadingResolutionFile}
                 style={{
-                  background: resolutionStatus === 'Draft' 
-                    ? '#475569' 
-                    : (resolutionStatus === 'In Progress' ? '#0284c7' : '#16a34a'),
+                  background: resolutionStatus === 'In Progress' ? '#0284c7' : '#16a34a',
                   color: '#ffffff',
                   border: 'none',
                   padding: '10px 20px',
@@ -2951,14 +2989,10 @@ export default function HelpSupport() {
                   alignItems: 'center',
                   gap: '8px',
                   opacity: (isResolving || !resolutionNote.trim() || isUploadingResolutionFile) ? 0.6 : 1,
-                  boxShadow: resolutionStatus === 'Draft' 
-                    ? '0 2px 8px rgba(71, 85, 105, 0.25)' 
-                    : (resolutionStatus === 'In Progress' ? '0 2px 8px rgba(2, 132, 199, 0.25)' : '0 2px 8px rgba(22, 163, 74, 0.25)')
+                  boxShadow: resolutionStatus === 'In Progress' ? '0 2px 8px rgba(2, 132, 199, 0.25)' : '0 2px 8px rgba(22, 163, 74, 0.25)'
                 }}
               >
-                {resolutionStatus === 'Draft' ? (
-                  <FileTextIcon size={14} color="#ffffff" />
-                ) : resolutionStatus === 'In Progress' ? (
+                {resolutionStatus === 'In Progress' ? (
                   <ClockIcon size={14} color="#ffffff" />
                 ) : (
                   <CheckCircleIcon size={14} color="#ffffff" />
@@ -2966,9 +3000,7 @@ export default function HelpSupport() {
                 <span>
                   {isResolving 
                     ? 'Updating...' 
-                    : (resolutionStatus === 'Draft' 
-                        ? 'Save as Draft' 
-                        : (resolutionStatus === 'In Progress' ? 'Save & Mark as In Progress' : 'Save & Mark as Resolved'))}
+                    : (resolutionStatus === 'In Progress' ? 'Save & Mark as In Progress' : 'Save & Mark as Resolved')}
                 </span>
               </button>
             </div>

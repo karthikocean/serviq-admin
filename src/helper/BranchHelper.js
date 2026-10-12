@@ -358,11 +358,18 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
   };
 
   if (typeof itemBranch === 'object' && itemBranch !== null) {
-    // Check entity branch reference fields first
+    // 1. Direct object identifiers (in case itemBranch is a branch itself or entity with _id/branchCode/branchName)
+    if (itemBranch._id) itemIds.push(String(itemBranch._id).toLowerCase().trim());
+    if (itemBranch.id) itemIds.push(String(itemBranch.id).toLowerCase().trim());
+    if (itemBranch.branchCode) itemIds.push(String(itemBranch.branchCode).toLowerCase().trim());
+    if (itemBranch.code) itemIds.push(String(itemBranch.code).toLowerCase().trim());
+    if (itemBranch.branchName) itemIds.push(String(itemBranch.branchName).toLowerCase().trim());
+    if (itemBranch.name) itemIds.push(String(itemBranch.name).toLowerCase().trim());
+
+    // 2. Check entity branch reference fields
     const branchFields = [
       itemBranch.branchId,
       itemBranch.branch,
-      itemBranch.branchName,
       itemBranch.restaurantBranchId,
       itemBranch.activeBranchId,
       itemBranch.branch_id,
@@ -379,12 +386,7 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
     }
 
     const validBranchFields = branchFields.filter(f => f !== undefined && f !== null && f !== '');
-    if (validBranchFields.length > 0) {
-      validBranchFields.forEach(f => extractFromBranchObj(f));
-    } else if (itemBranch.branchCode || itemBranch.branchName || itemBranch.managerName || itemBranch.city || itemBranch.address) {
-      // It is an actual branch object
-      extractFromBranchObj(itemBranch);
-    }
+    validBranchFields.forEach(f => extractFromBranchObj(f));
   } else if (typeof itemBranch === 'string') {
     itemIds.push(itemBranch.toLowerCase().trim());
   }
