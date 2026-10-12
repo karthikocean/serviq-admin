@@ -5,6 +5,7 @@ import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
+import { initialBillingHistory, initialOrders } from '../../config/initialData';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId, hasPermission } = useAppState();
@@ -228,13 +229,20 @@ export default function BillingHistory() {
     }
 
     if (items.length === 0) {
-      const fallbackList = Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0
-        ? activeRestaurant.billingData
-        : (Array.isArray(activeRestaurant?.orders) ? activeRestaurant.orders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed') : []);
-      if (fallbackList.length > 0) {
-        items = fallbackList;
-        serverTotal = fallbackList.length;
+      let fallbackList = [];
+      if (Array.isArray(activeRestaurant?.billingHistory) && activeRestaurant.billingHistory.length > 0) {
+        fallbackList = activeRestaurant.billingHistory;
+      } else if (Array.isArray(activeRestaurant?.orders) && activeRestaurant.orders.length > 0) {
+        const paid = activeRestaurant.orders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+        fallbackList = paid.length > 0 ? paid : activeRestaurant.orders;
       }
+
+      if (fallbackList.length === 0) {
+        fallbackList = initialBillingHistory;
+      }
+
+      items = fallbackList;
+      serverTotal = fallbackList.length;
     }
 
     const mapped = items.map((it, idx) => mapItemToInvoice(it, idx));

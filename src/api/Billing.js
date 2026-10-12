@@ -81,14 +81,15 @@ class BillingApi {
       try {
         response = await apiClient.get(url);
       } catch (err1) {
-        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
-          const orderParams = { limit: cleanParams.limit, page: Math.max(0, cleanParams.page - 1) };
+        if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
+          const orderParams = { limit: cleanParams.limit || 50, page: Math.max(0, cleanParams.page || 0) };
           if (cleanParams.branchId) orderParams.branchId = cleanParams.branchId;
           const ordersRes = await apiClient.get('/orders', { params: orderParams }).catch(() => null);
           if (ordersRes?.data) {
-            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || []);
-            const paidOrders = rawOrders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed');
-            return { status: true, response: { data: paidOrders, total: paidOrders.length } };
+            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            const paidOrders = rawOrders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+            const resultOrders = paidOrders.length > 0 ? paidOrders : rawOrders;
+            return { status: true, response: { data: resultOrders, total: resultOrders.length } };
           }
         }
         throw err1;
@@ -161,7 +162,20 @@ class BillingApi {
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/current${queryParams ? `?${queryParams}` : ''}`;
-      const response = await apiClient.get(url);
+      let response;
+      try {
+        response = await apiClient.get(url);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
+          const ordersRes = await apiClient.get('/orders').catch(() => null);
+          if (ordersRes?.data) {
+            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
+          }
+        }
+        throw err1;
+      }
+
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

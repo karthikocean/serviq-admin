@@ -508,90 +508,15 @@ export const ReceiptCard = ({
         </div>
       </div>
 
-      {/* Bottom Dashed Separator */}
-      <div style={{ borderBottom: '1px dashed #000000', margin: '8px 0 12px 0' }}></div>
+      {/* Action Buttons for the Screen Modal */}
+      {!r.isPaid && onCollectPayment && (
+        <>
+          <div style={{ borderBottom: '1px dashed #000000', margin: '8px 0 12px 0' }}></div>
+          <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
 
-      {/* Action Buttons for the Screen Modal (Black & White Monochromatic) */}
-      <div style={{ display: 'flex', gap: '8px', paddingTop: '4px' }}>
-        {onPrint && (
-          <button
-            type="button"
-            onClick={onPrint}
-            style={{
-              flex: 1,
-              padding: '9px 12px',
-              background: '#000000',
-              color: '#ffffff',
-              border: '1px solid #000000',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 6 2 18 2 18 9"></polyline>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-              <rect x="6" y="14" width="12" height="8"></rect>
-            </svg>
-            Print
-          </button>
-        )}
-        {onDownload && (
-          <button
-            type="button"
-            onClick={onDownload}
-            style={{
-              flex: 1,
-              padding: '9px 12px',
-              background: '#ffffff',
-              color: '#000000',
-              border: '1px solid #000000',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            Download
-          </button>
-        )}
-        {!r.isPaid && onCollectPayment && (
-          <button
-            type="button"
-            onClick={onCollectPayment}
-            style={{
-              flex: 1,
-              padding: '9px 12px',
-              background: '#000000',
-              color: '#ffffff',
-              border: '1px solid #000000',
-              borderRadius: '6px',
-              fontWeight: 700,
-              fontSize: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            Collect
-          </button>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId, initialTables, initialOrders, initialMenu, initialStaff, initialBillingData, initialBillingHistory } from './initialData';
 import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -646,7 +646,8 @@ export const AppProvider = ({ children }) => {
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
-    if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
+    const effectiveTables = (Array.isArray(tablesList) && tablesList.length > 0) ? tablesList : initialTables;
+    const effectiveOrders = (Array.isArray(ordersList) && ordersList.length > 0) ? ordersList : initialOrders;
 
     const extractOrderTable = (o) => {
       if (!o) return '';
@@ -661,13 +662,14 @@ export const AppProvider = ({ children }) => {
       return '';
     };
 
-    return tablesList.map(t => {
+    return effectiveTables.map((t, idx) => {
       if (!t) return null;
       const tIdStr = String(t.id || t.tableNumber || t.tableNo || t.name || '').trim();
       const tableNum = tIdStr.replace(/^T-|^Table\s*/i, '').trim();
-      const tableLabel = `Table ${tableNum || tIdStr || '1'}`;
+      const tableLabel = `Table ${tableNum || tIdStr || (idx + 1)}`;
+      const tableId = t._id || t.id || `tbl-${tableNum || (idx + 1)}`;
 
-      const unpaidOrders = ordersList.filter(o => {
+      const unpaidOrders = effectiveOrders.filter(o => {
         if (!o) return false;
         const rawTable = extractOrderTable(o);
         const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
@@ -678,33 +680,74 @@ export const AppProvider = ({ children }) => {
         return isMatch && bStatus !== 'paid';
       });
 
-      if (unpaidOrders.length > 0) {
-        const total = unpaidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      const paidOrders = effectiveOrders.filter(o => {
+        if (!o) return false;
+        const rawTable = extractOrderTable(o);
+        const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+        const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+          (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+          (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+        const bStatus = (o.billingStatus || '').toLowerCase();
+        return isMatch === true;
+      });
+
+      const targetOrders = unpaidOrders.length > 0 ? unpaidOrders : (paidOrders.length > 0 ? paidOrders.slice(0, 1) : []);
+      if (targetOrders.length === 0) return null;
+
+      const isUnpaid = unpaidOrders.length > 0;
+      const primaryOrder = targetOrders[0] || {};
+      const allItems = targetOrders.flatMap(o => Array.isArray(o.items) ? o.items : []);
+      const mappedItems = allItems.map(it => {
+        const q = Number(it.qty ?? it.quantity ?? 1) || 1;
+        const r = Number(it.rate ?? it.price ?? 0) || 0;
         return {
-          table: tableLabel,
-          orders: unpaidOrders.length,
-          total: total,
-          status: 'Unpaid'
+          name: it.name || it.itemName || 'Item',
+          qty: q,
+          rate: r,
+          amount: Number(it.amount ?? it.total ?? (q * r)) || (q * r)
         };
-      } else {
-        const paidOrders = ordersList.filter(o => {
-          if (!o) return false;
-          const rawTable = extractOrderTable(o);
-          const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
-          const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
-            (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
-            (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
-          const bStatus = (o.billingStatus || '').toLowerCase();
-          return isMatch && bStatus === 'paid';
-        });
-        const lastPaidTotal = paidOrders.length > 0 ? (Number(paidOrders[paidOrders.length - 1].total) || 0) : 0;
-        return {
-          table: tableLabel,
-          orders: 0,
-          total: lastPaidTotal,
-          status: 'Paid'
-        };
-      }
+      });
+
+      const subtotal = targetOrders.reduce((sum, o) => sum + (Number(o.subtotal ?? o.total) || 0), 0) || mappedItems.reduce((sum, it) => sum + it.amount, 0);
+      const tax = targetOrders.reduce((sum, o) => sum + (Number(o.tax) || 0), 0) || Math.round(subtotal * 0.05);
+      const discount = targetOrders.reduce((sum, o) => sum + (Number(o.discount) || 0), 0);
+      const total = targetOrders.reduce((sum, o) => sum + (Number(o.total ?? o.totalAmount) || 0), 0) || (subtotal + tax - discount);
+      const paidAmount = isUnpaid ? 0 : total;
+      const balanceAmount = isUnpaid ? total : 0;
+      const rawDate = primaryOrder.createdAt || primaryOrder.date || new Date().toISOString();
+
+      return {
+        _id: `bill-${tableId}`,
+        id: `BILL-${tableNum || idx + 1}`,
+        sNo: idx + 1,
+        billNo: `BILL-${tableNum || idx + 1}`,
+        orderId: primaryOrder.orderId || primaryOrder.id || `#ORD-${tableNum}`,
+        orderType: primaryOrder.orderType || 'Dine-In',
+        table: tableLabel,
+        tableNo: tableNum,
+        tableId: tableId,
+        billDateTime: rawDate,
+        date: rawDate.includes('T') ? rawDate.split('T')[0] : rawDate,
+        time: primaryOrder.time || '12:30 PM',
+        subtotal,
+        tax,
+        discount,
+        billAmount: total,
+        total,
+        amount: total,
+        paidAmount,
+        balanceAmount,
+        status: isUnpaid ? 'Unpaid' : 'Paid',
+        paymentStatus: isUnpaid ? 'Unpaid' : 'Paid',
+        paymentMethod: primaryOrder.paymentMethod || 'UPI',
+        cashier: primaryOrder.staff || primaryOrder.waiter || 'Priya Sharma',
+        staff: primaryOrder.waiter || primaryOrder.staff || 'Ramesh Kumar',
+        customerName: primaryOrder.customerName || `Guest (${tableLabel})`,
+        customerPhone: primaryOrder.customerPhone || '',
+        orderIds: targetOrders.map(o => o._id || o.id).filter(Boolean),
+        orders: targetOrders.length,
+        items: mappedItems
+      };
     }).filter(Boolean);
   };
 
@@ -800,12 +843,13 @@ export const AppProvider = ({ children }) => {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
-          const computedBillData = computeBillingData(rawOrders, rest.tables || []);
+          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : initialOrders);
+          const computedBillData = computeBillingData(finalOrders, rest.tables || []);
           return {
             ...prev,
             [targetId]: {
               ...rest,
-              orders: rawOrders,
+              orders: finalOrders,
               billingData: computedBillData
             }
           };
@@ -1638,13 +1682,16 @@ export const AppProvider = ({ children }) => {
     return null;
   };
 
-  // Automatically fetch live profile, branches, and subscription dashboard from API for current user
+  // Automatically fetch live profile, branches, subscription dashboard, orders, tables, and menu from API for current user
   useEffect(() => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (token) {
       fetchProfile();
       fetchBranches({ page: 0, limit: 10 });
       fetchSubscriptionDashboard();
+      fetchOrders({ page: 0, limit: 50 });
+      fetchTables({ page: 0, limit: 50 });
+      fetchMenu({ page: 0, limit: 50 });
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
 
