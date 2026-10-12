@@ -184,6 +184,22 @@ export default function AdminLayout() {
       return isRestaurantOwner || hasPermission('plans-management', 'view');
     }
 
+    if (permissionKey === 'billing' || permissionKey === 'billing_payments') {
+      return hasPermission('billing', 'view') || hasPermission('billing_current', 'view') || hasPermission('billing_history', 'view');
+    }
+
+    if (permissionKey === 'billing_current') {
+      return hasPermission('billing_current', 'view') || hasPermission('billing', 'view');
+    }
+
+    if (permissionKey === 'billing_history') {
+      return hasPermission('billing_history', 'view') || hasPermission('billing', 'view');
+    }
+
+    if (permissionKey === 'help_support' || permissionKey === 'help-support') {
+      return hasPermission('help_support', 'view') || hasPermission('help-support', 'view');
+    }
+
     return hasPermission(permissionKey, 'view');
   };
 
@@ -284,7 +300,7 @@ export default function AdminLayout() {
     if (isTabAllowed('reports_analytics')) {
       return `/reports?tab=${getFirstAllowedReportTab()}`;
     }
-    if (isTabAllowed('help_support')) return '/help-support';
+    if (isTabAllowed('help_support') || isTabAllowed('help-support')) return '/help-support';
     if (isTabAllowed('settings')) return '/settings';
     return null;
   };
@@ -734,14 +750,14 @@ export default function AdminLayout() {
               </div>
               {sidebarBillingOpen && (
                 <ul className="sidebar-submenu">
-                  {hasPermission('billing_current', 'view') && (
+                  {(hasPermission('billing_current', 'view') || hasPermission('billing', 'view')) && (
                     <li className={`sidebar-item ${pathname === '/billing' ? 'active' : ''}`}>
                       <Link to="/billing">
                         <span>Current Billing</span>
                       </Link>
                     </li>
                   )}
-                  {hasPermission('billing_history', 'view') && (
+                  {(hasPermission('billing_history', 'view') || hasPermission('billing', 'view')) && (
                     <li className={`sidebar-item ${pathname === '/billing/history' ? 'active' : ''}`}>
                       <Link to="/billing/history">
                         <span>Billing History</span>

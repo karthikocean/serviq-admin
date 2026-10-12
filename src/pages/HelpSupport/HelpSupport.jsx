@@ -170,7 +170,7 @@ const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
 const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed'];
 
 export default function HelpSupport() {
-  const { activeRestaurant, selectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, selectedBranchId, currentUser, hasPermission } = useAppState();
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
@@ -183,8 +183,15 @@ export default function HelpSupport() {
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // Hierarchy Roles
+  // Hierarchy Roles & Permissions
   const isSuperAdmin = userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userRole === 'super admin' || userRole === 'super_admin';
+  const isRestaurantOwner = userType === 'RESTAURANT_OWNER' || userType === 'RESTAURANT OWNER' || userType === 'OWNER' || userRole === 'restaurant_owner' || userRole === 'restaurant owner' || userRole === 'owner';
+  const isOwnerOrSuper = isSuperAdmin || isRestaurantOwner;
+
+  const canViewHelpSupport = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'view') || hasPermission('help-support', 'view')) : true);
+  const canAddTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'add') || hasPermission('help-support', 'add')) : true);
+  const canEditTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'edit') || hasPermission('help-support', 'edit')) : true);
+  const canDeleteTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'delete') || hasPermission('help-support', 'delete')) : true);
 
   const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
     ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
@@ -733,6 +740,10 @@ export default function HelpSupport() {
 
   // Raise Ticket Modal Handlers
   const handleOpenRaiseTicket = () => {
+    if (!canAddTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to raise support tickets.", false);
+      return;
+    }
     let initialBranch = '';
     if (!isMainBranchLogin && userBranchId) {
       initialBranch = userBranchId;
@@ -1079,6 +1090,10 @@ export default function HelpSupport() {
 
   // Open Resolve Ticket Modal
   const handleOpenResolveModal = (ticket) => {
+    if (!canEditTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to resolve tickets.", false);
+      return;
+    }
     setResolveTicketModal(ticket);
     const initialStatus = ticket.status === 'In Progress' ? 'In Progress' : 'Resolved';
     setResolutionStatus(initialStatus);
@@ -1222,6 +1237,10 @@ export default function HelpSupport() {
 
   // Open Share / Forward to Super Admin Modal
   const handleOpenForwardModal = (ticket) => {
+    if (!canEditTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to escalate tickets.", false);
+      return;
+    }
     setForwardTicketModal(ticket);
     setForwardNote('');
     setIsForwarding(false);
@@ -1302,6 +1321,10 @@ export default function HelpSupport() {
 
   const handleDeleteTicket = async () => {
     if (!deleteTicketConfirm) return;
+    if (!canDeleteTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to delete tickets.", false);
+      return;
+    }
     const targetId = deleteTicketConfirm._id || deleteTicketConfirm.id;
     setIsDeleting(true);
     try {
@@ -1339,6 +1362,15 @@ export default function HelpSupport() {
     return 'badge-status-closed';
   };
 
+  if (!canViewHelpSupport) {
+    return (
+      <div className="help-support-container" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Access Denied</h3>
+        <p style={{ fontSize: '14px' }}>You do not have permission to access Help & Support.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="help-support-container">
       {/* Header Bar */}
@@ -1354,14 +1386,16 @@ export default function HelpSupport() {
           </div>
         </div>
 
-        <button 
-          type="button" 
-          className="btn btn-primary" 
-          onClick={handleOpenRaiseTicket}
-        >
-          <PlusIcon size={14} color="#ffffff" />
-          <span>Raise Ticket</span>
-        </button>
+        {canAddTicket && (
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={handleOpenRaiseTicket}
+          >
+            <PlusIcon size={14} color="#ffffff" />
+            <span>Raise Ticket</span>
+          </button>
+        )}
       </div>
 
       {/* Main Ticket Card */}
@@ -1584,27 +1618,31 @@ export default function HelpSupport() {
                   const isEscalated = Boolean(ticket.isEscalated || String(ticket.status || '').toLowerCase() === 'escalated');
 
                   // In Company filter: Never remove Resolve or Share icons; keep all 4 icons visible and disable them when not applicable
-                  const isResolveDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
-                  const isShareDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isResolveDisabled = !canEditTicket || isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isShareDisabled = !canEditTicket || isResolved || isClosed || isSuperAdminTicket || isEscalated;
 
-                  const resolveTitle = isResolved
-                    ? "Ticket already resolved"
-                    : isClosed
-                      ? "Ticket is closed"
-                      : (isSuperAdminTicket || isEscalated)
-                        ? "Ticket routed to Super Admin"
-                        : "Resolve Ticket (Company)";
-
-                  const shareTitle = (isEscalated || isSuperAdminTicket)
-                    ? "Ticket already escalated to Super Admin"
+                  const resolveTitle = !canEditTicket
+                    ? "You do not have permission to resolve tickets"
                     : isResolved
                       ? "Ticket already resolved"
                       : isClosed
                         ? "Ticket is closed"
-                        : "Share to Super Admin (If unable to solve)";
+                        : (isSuperAdminTicket || isEscalated)
+                          ? "Ticket routed to Super Admin"
+                          : "Resolve Ticket (Company)";
 
-                  // Delete action is available for all
-                  const canDeleteThisTicket = true;
+                  const shareTitle = !canEditTicket
+                    ? "You do not have permission to escalate tickets"
+                    : (isEscalated || isSuperAdminTicket)
+                      ? "Ticket already escalated to Super Admin"
+                      : isResolved
+                        ? "Ticket already resolved"
+                        : isClosed
+                          ? "Ticket is closed"
+                          : "Share to Super Admin (If unable to solve)";
+
+                  // Delete action is available only if user has delete permission
+                  const canDeleteThisTicket = canDeleteTicket;
 
                   return (
                     <tr 

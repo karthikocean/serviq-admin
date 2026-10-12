@@ -33,12 +33,16 @@ export const DEFAULT_ROLES = {
       inventory: { view: true, add: true, edit: true, delete: true },
       stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      billing_current: { view: true, add: true, edit: true, delete: true },
+      billing_history: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
       users: { view: true, add: true, edit: true, delete: true },
       'roles-permissions': { view: true, add: true, edit: true, delete: true },
+      help_support: { view: true, add: true, edit: true, delete: true },
+      'help-support': { view: true, add: true, edit: true, delete: true },
       Settings: { view: true, add: true, edit: true, delete: true }
     }
   },
@@ -53,12 +57,16 @@ export const DEFAULT_ROLES = {
       inventory: { view: true, add: true, edit: true, delete: true },
       stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      billing_current: { view: true, add: true, edit: true, delete: true },
+      billing_history: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
       users: { view: true, add: true, edit: true, delete: true },
       'roles-permissions': { view: true, add: true, edit: true, delete: true },
+      help_support: { view: true, add: true, edit: true, delete: true },
+      'help-support': { view: true, add: true, edit: true, delete: true },
       Settings: { view: true, add: true, edit: true, delete: true }
     }
   },
@@ -73,12 +81,16 @@ export const DEFAULT_ROLES = {
       inventory: { view: true, add: true, edit: true, delete: true },
       stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      billing_current: { view: true, add: true, edit: true, delete: true },
+      billing_history: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: true },
       users: { view: true, add: true, edit: true, delete: true },
       'roles-permissions': { view: true, add: true, edit: true, delete: true },
+      help_support: { view: true, add: true, edit: true, delete: true },
+      'help-support': { view: true, add: true, edit: true, delete: true },
       Settings: { view: true, add: true, edit: true, delete: true }
     }
   },
@@ -93,12 +105,16 @@ export const DEFAULT_ROLES = {
       inventory: { view: true, add: true, edit: true, delete: true },
       stock_reduction: { view: true, add: true, edit: true, delete: true },
       billing: { view: true, add: true, edit: true, delete: true },
+      billing_current: { view: true, add: true, edit: true, delete: true },
+      billing_history: { view: true, add: true, edit: true, delete: true },
       staff: { view: true, add: true, edit: true, delete: true },
       waiter: { view: true, add: true, edit: true, delete: true },
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: false },
       users: { view: true, add: true, edit: true, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: true, add: true, edit: true, delete: true },
+      'help-support': { view: true, add: true, edit: true, delete: true },
       Settings: { view: true, add: false, edit: true, delete: false }
     }
   },
@@ -113,12 +129,64 @@ export const DEFAULT_ROLES = {
       inventory: { view: true, add: true, edit: true, delete: false },
       stock_reduction: { view: true, add: true, edit: true, delete: false },
       billing: { view: true, add: true, edit: true, delete: false },
+      billing_current: { view: true, add: true, edit: true, delete: false },
+      billing_history: { view: true, add: false, edit: false, delete: false },
       staff: { view: true, add: true, edit: true, delete: false },
       waiter: { view: true, add: true, edit: true, delete: false },
       kitchen: { view: true, add: true, edit: true, delete: false },
       Reports: { view: true, add: false, edit: false, delete: false },
       users: { view: true, add: true, edit: true, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: true, add: true, edit: true, delete: false },
+      'help-support': { view: true, add: true, edit: true, delete: false },
+      Settings: { view: false, add: false, edit: false, delete: false }
+    }
+  },
+  'Branch Manager': {
+    permissions: {
+      overview: { view: true, add: false, edit: false, delete: false },
+      'branch-management': { view: false, add: false, edit: false, delete: false },
+      'plans-management': { view: false, add: false, edit: false, delete: false },
+      orders: { view: true, add: true, edit: true, delete: true },
+      menu: { view: true, add: true, edit: true, delete: false },
+      tables: { view: true, add: true, edit: true, delete: false },
+      inventory: { view: true, add: true, edit: true, delete: false },
+      stock_reduction: { view: true, add: true, edit: true, delete: false },
+      billing: { view: true, add: true, edit: true, delete: false },
+      billing_current: { view: true, add: true, edit: true, delete: false },
+      billing_history: { view: true, add: false, edit: false, delete: false },
+      staff: { view: true, add: true, edit: true, delete: false },
+      waiter: { view: true, add: true, edit: true, delete: false },
+      kitchen: { view: true, add: true, edit: true, delete: false },
+      Reports: { view: true, add: false, edit: false, delete: false },
+      users: { view: true, add: true, edit: true, delete: false },
+      'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: true, add: true, edit: true, delete: false },
+      'help-support': { view: true, add: true, edit: true, delete: false },
+      Settings: { view: false, add: false, edit: false, delete: false }
+    }
+  },
+  Cashier: {
+    permissions: {
+      overview: { view: true, add: false, edit: false, delete: false },
+      'branch-management': { view: false, add: false, edit: false, delete: false },
+      'plans-management': { view: false, add: false, edit: false, delete: false },
+      orders: { view: true, add: true, edit: true, delete: false },
+      menu: { view: true, add: false, edit: false, delete: false },
+      tables: { view: true, add: false, edit: false, delete: false },
+      inventory: { view: false, add: false, edit: false, delete: false },
+      stock_reduction: { view: false, add: false, edit: false, delete: false },
+      billing: { view: true, add: true, edit: true, delete: false },
+      billing_current: { view: true, add: true, edit: true, delete: false },
+      billing_history: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
+      waiter: { view: false, add: false, edit: false, delete: false },
+      kitchen: { view: false, add: false, edit: false, delete: false },
+      Reports: { view: false, add: false, edit: false, delete: false },
+      users: { view: false, add: false, edit: false, delete: false },
+      'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: true, add: true, edit: false, delete: false },
+      'help-support': { view: true, add: true, edit: false, delete: false },
       Settings: { view: false, add: false, edit: false, delete: false }
     }
   },
@@ -131,12 +199,16 @@ export const DEFAULT_ROLES = {
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: true, add: false, edit: true, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
+      billing_current: { view: false, add: false, edit: false, delete: false },
+      billing_history: { view: false, add: false, edit: false, delete: false },
       staff: { view: true, add: false, edit: false, delete: false },
       waiter: { view: true, add: false, edit: false, delete: false },
       kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: false, add: false, edit: false, delete: false },
+      'help-support': { view: false, add: false, edit: false, delete: false },
       Settings: { view: false, add: false, edit: false, delete: false }
     }
   },
@@ -149,12 +221,38 @@ export const DEFAULT_ROLES = {
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
+      billing_current: { view: false, add: false, edit: false, delete: false },
+      billing_history: { view: false, add: false, edit: false, delete: false },
       staff: { view: true, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
       kitchen: { view: true, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: false, add: false, edit: false, delete: false },
+      'help-support': { view: false, add: false, edit: false, delete: false },
+      Settings: { view: false, add: false, edit: false, delete: false }
+    }
+  },
+  'Kitchen Staff': {
+    permissions: {
+      overview: { view: false, add: false, edit: false, delete: false },
+      'branch-management': { view: false, add: false, edit: false, delete: false },
+      'plans-management': { view: false, add: false, edit: false, delete: false },
+      orders: { view: true, add: false, edit: true, delete: false },
+      menu: { view: false, add: false, edit: false, delete: false },
+      tables: { view: false, add: false, edit: false, delete: false },
+      billing: { view: false, add: false, edit: false, delete: false },
+      billing_current: { view: false, add: false, edit: false, delete: false },
+      billing_history: { view: false, add: false, edit: false, delete: false },
+      staff: { view: true, add: false, edit: false, delete: false },
+      waiter: { view: false, add: false, edit: false, delete: false },
+      kitchen: { view: true, add: false, edit: false, delete: false },
+      Reports: { view: false, add: false, edit: false, delete: false },
+      users: { view: false, add: false, edit: false, delete: false },
+      'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      help_support: { view: false, add: false, edit: false, delete: false },
+      'help-support': { view: false, add: false, edit: false, delete: false },
       Settings: { view: false, add: false, edit: false, delete: false }
     }
   }
@@ -249,9 +347,9 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       case 'billing': case 'billing_payments':
         return ['billing', 'billing_payments', 'billing_current', 'billing_history'];
       case 'billing_current':
-        return ['billing_current', 'billing'];
+        return ['billing_current', 'billing', 'billing_payments'];
       case 'billing_history':
-        return ['billing_history', 'billing'];
+        return ['billing_history', 'billing', 'billing_payments'];
       case 'reports': case 'reports_analytics':
         return ['reports_analytics', 'reports', 'reports_sales', 'reports_items', 'reports_orders', 'reports_inventory', 'reports_staff', 'reports_tax'];
       case 'reports_sales':
@@ -302,6 +400,9 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       if (permissions['billing'] && permissions['billing'][action] !== undefined) {
         return Boolean(permissions['billing'][action]);
       }
+      if (permissions['billing_payments'] && permissions['billing_payments'][action] !== undefined) {
+        return Boolean(permissions['billing_payments'][action]);
+      }
       return false;
     }
 
@@ -345,6 +446,9 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       if (permissions['billing'] && permissions['billing'][action] !== undefined) {
         return Boolean(permissions['billing'][action]);
       }
+      if (permissions['billing_payments'] && permissions['billing_payments'][action] !== undefined) {
+        return Boolean(permissions['billing_payments'][action]);
+      }
     }
     if (moduleName.startsWith('reports_')) {
       if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
@@ -379,8 +483,8 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
     if (moduleName.startsWith('inventory_') && userRoleConfig.permissions['inventory']) {
       return Boolean(userRoleConfig.permissions['inventory'][action]);
     }
-    if (moduleName.startsWith('billing_') && userRoleConfig.permissions['billing']) {
-      return Boolean(userRoleConfig.permissions['billing'][action]);
+    if (moduleName.startsWith('billing_') && (userRoleConfig.permissions['billing'] || userRoleConfig.permissions['billing_payments'])) {
+      return Boolean((userRoleConfig.permissions['billing'] || userRoleConfig.permissions['billing_payments'])[action]);
     }
     if (moduleName.startsWith('reports_') && (userRoleConfig.permissions['reports_analytics'] || userRoleConfig.permissions['reports'])) {
       return Boolean((userRoleConfig.permissions['reports_analytics'] || userRoleConfig.permissions['reports'])[action]);

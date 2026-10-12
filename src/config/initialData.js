@@ -13,11 +13,11 @@ export const initialTables = [
 ];
 
 export const initialStaff = [
-  { id: 'STF-01', _id: 'stf-01', name: 'Ramesh Kumar', staffName: 'Ramesh Kumar', role: 'Waiter', roleName: 'Waiter', employeeCode: 'EMP-01', phone: '9840123456', status: 'Active' },
-  { id: 'STF-02', _id: 'stf-02', name: 'Priya Sharma', staffName: 'Priya Sharma', role: 'Cashier', roleName: 'Cashier', employeeCode: 'EMP-02', phone: '9840234567', status: 'Active' },
-  { id: 'STF-03', _id: 'stf-03', name: 'Suresh Raina', staffName: 'Suresh Raina', role: 'Waiter', roleName: 'Waiter', employeeCode: 'EMP-03', phone: '9840345678', status: 'Active' },
-  { id: 'STF-04', _id: 'stf-04', name: 'Deepak Verma', staffName: 'Deepak Verma', role: 'Chef', roleName: 'Chef', employeeCode: 'EMP-04', phone: '9840456789', status: 'Active' },
-  { id: 'STF-05', _id: 'stf-05', name: 'Karthik Raja', staffName: 'Karthik Raja', role: 'Manager', roleName: 'Manager', employeeCode: 'EMP-05', phone: '9840567890', status: 'Active' }
+  { id: 'STF-01', _id: '675e00000000000000000001', code: 'stf-01', name: 'Ramesh Kumar', staffName: 'Ramesh Kumar', role: 'Waiter', roleName: 'Waiter', employeeCode: 'EMP-01', phone: '9840123456', status: 'Active' },
+  { id: 'STF-02', _id: '675e00000000000000000002', code: 'stf-02', name: 'Priya Sharma', staffName: 'Priya Sharma', role: 'Cashier', roleName: 'Cashier', employeeCode: 'EMP-02', phone: '9840234567', status: 'Active' },
+  { id: 'STF-03', _id: '675e00000000000000000003', code: 'stf-03', name: 'Suresh Raina', staffName: 'Suresh Raina', role: 'Waiter', roleName: 'Waiter', employeeCode: 'EMP-03', phone: '9840345678', status: 'Active' },
+  { id: 'STF-04', _id: '675e00000000000000000004', code: 'stf-04', name: 'Deepak Verma', staffName: 'Deepak Verma', role: 'Chef', roleName: 'Chef', employeeCode: 'EMP-04', phone: '9840456789', status: 'Active' },
+  { id: 'STF-05', _id: '675e00000000000000000005', code: 'stf-05', name: 'Karthik Raja', staffName: 'Karthik Raja', role: 'Manager', roleName: 'Manager', employeeCode: 'EMP-05', phone: '9840567890', status: 'Active' }
 ];
 
 export const initialMenu = [

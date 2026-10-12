@@ -92,7 +92,7 @@ const getSlidebarModules = (isCompany) => [
   { id: 'staff_management', name: 'Staff Management', aliases: ['user_accounts'] },
   ...BILLING_SUBMODULES,
   ...REPORTS_SUBMODULES,
-  { id: 'help_support', name: 'Help & Support' },
+  { id: 'help_support', name: 'Help & Support', aliases: ['help-support', 'help'] },
   { id: 'settings', name: 'Settings' }
 ];
 
@@ -114,7 +114,7 @@ const ALL_MODULES = [
   ...BILLING_SUBMODULES,
   { id: 'reports_analytics', name: 'Reports', isParent: true, aliases: ['reports'] },
   ...REPORTS_SUBMODULES,
-  { id: 'help_support', name: 'Help & Support' },
+  { id: 'help_support', name: 'Help & Support', aliases: ['help-support', 'help'] },
   { id: 'settings', name: 'Settings' }
 ];
 
@@ -235,8 +235,8 @@ export default function RolesPermissionsPanel() {
       } else if (m.aliases && m.aliases.some(a => existingPerms[a])) {
         const found = m.aliases.find(a => existingPerms[a]);
         basePermissions[m.id] = { ...existingPerms[found] };
-      } else if (m.parentId && (existingPerms[m.parentId] || (m.parentId === 'reports_analytics' && existingPerms['reports']))) {
-        const parentObj = existingPerms[m.parentId] || existingPerms['reports'];
+      } else if (m.parentId && (existingPerms[m.parentId] || (m.parentId === 'billing' && existingPerms['billing_payments']) || (m.parentId === 'reports_analytics' && existingPerms['reports']))) {
+        const parentObj = existingPerms[m.parentId] || existingPerms['billing_payments'] || existingPerms['reports'];
         basePermissions[m.id] = { ...parentObj };
       } else {
         basePermissions[m.id] = { view: false, add: false, edit: false, delete: false };
@@ -312,6 +312,8 @@ export default function RolesPermissionsPanel() {
       finalPermissions['reports'][act] = anyReport;
     });
     finalPermissions['billing_payments'] = { ...finalPermissions['billing'] };
+    finalPermissions['help-support'] = { ...finalPermissions['help_support'] };
+    finalPermissions['help'] = { ...finalPermissions['help_support'] };
     if (finalPermissions['staff_management']) {
       finalPermissions['user_accounts'] = { ...finalPermissions['staff_management'] };
       finalPermissions['staff'] = { ...finalPermissions['staff_management'] };
