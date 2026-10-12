@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 // Inline SVGs for Summary Cards
 const PackageIcon = ({ size = 22, color = 'currentColor' }) => (
@@ -36,6 +38,10 @@ const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
 );
 
 export default function CompanyCentralStock({ items: initialItems, onUpdateStock, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
@@ -56,13 +62,18 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   const fetchCentralStock = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({
+        limit: 100,
+        branchId: isBranchFiltered ? selectedBranchId : undefined
+      });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems)) {
           const formatted = rawItems.map(i => ({
             id: i._id || i.id,
             _id: i._id || i.id,
+            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+            branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
             itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
             name: i.name,
             category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'General',
@@ -80,13 +91,16 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchCentralStock();
   }, [fetchCentralStock]);
 
-  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const rawDisplay = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const displayItems = isBranchFiltered
+    ? rawDisplay.filter(i => isBranchMatch(i, selectedBranchId, branches))
+    : rawDisplay;
 
   // Summary Metrics for Central Stock
   const totalItemsCount = displayItems.length;
@@ -118,6 +132,18 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, categoryFilter, itemFilter, stockStatusFilter]);
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const handleSaveStockAdjust = (e) => {
@@ -162,7 +188,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
         </div>
 
         {/* Details Card */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', maxWidth: '800px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 1fr' : '1fr', gap: '24px', maxWidth: canEdit ? '800px' : '500px', marginBottom: '32px' }}>
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Stock Information</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
@@ -203,40 +229,40 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
           </div>
 
           {/* Quick Adjustment Form */}
-          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-            <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Quick Stock Adjustment</h4>
-            <form onSubmit={handleSaveStockAdjust}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  New Current Stock Quantity ({viewingItem.unit})
-                </label>
-                <input
-                  type="number"
-                  value={adjustQty}
-                  placeholder={(viewingItem.currentStock !== undefined ? viewingItem.currentStock : viewingItem.centralStock).toString()}
-                  onChange={e => setAdjustQty(e.target.value)}
-                  style={{ ...filterInputStyle, height: '40px' }}
-                  required
-                />
-              </div>
+          {canEdit && (
+            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+              <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Quick Stock Adjustment</h4>
+              <form onSubmit={handleSaveStockAdjust}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    New Current Stock Quantity ({viewingItem.unit})
+                  </label>
+                  <input
+                    type="number"
+                    value={adjustQty}
+                    placeholder={(viewingItem.currentStock !== undefined ? viewingItem.currentStock : viewingItem.centralStock).toString()}
+                    onChange={e => setAdjustQty(e.target.value)}
+                    style={{ ...filterInputStyle, height: '40px' }}
+                    required
+                  />
+                </div>
 
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Adjustment Reason
-                </label>
-                <select
-                  value={adjustReason}
-                  onChange={e => setAdjustReason(e.target.value)}
-                  style={{ ...filterInputStyle, height: '40px' }}
-                >
-                  <option value="Stock Audit">Physical Stock Audit</option>
-                  <option value="Damaged Stock">Damaged / Expired Goods</option>
-                  <option value="Vendor Return">Vendor Return</option>
-                  <option value="Correction">Manual Correction</option>
-                </select>
-              </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Adjustment Reason
+                  </label>
+                  <select
+                    value={adjustReason}
+                    onChange={e => setAdjustReason(e.target.value)}
+                    style={{ ...filterInputStyle, height: '40px' }}
+                  >
+                    <option value="Stock Audit">Physical Stock Audit</option>
+                    <option value="Damaged Stock">Damaged / Expired Goods</option>
+                    <option value="Vendor Return">Vendor Return</option>
+                    <option value="Correction">Manual Correction</option>
+                  </select>
+                </div>
 
-              {canEdit && (
                 <button
                   type="submit"
                   style={{
@@ -253,9 +279,9 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                 >
                   Update Current Stock
                 </button>
-              )}
-            </form>
-          </div>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     );

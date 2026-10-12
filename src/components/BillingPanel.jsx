@@ -214,6 +214,28 @@ export default function BillingPanel({
 
   const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    const current = page + 1;
+    let startPage = Math.max(1, current - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage + 1 < maxVisible) {
+      startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
   const paginatedBills = displayBillingData.length > limit
     ? filteredBills.slice(page * limit, (page + 1) * limit)
     : filteredBills;
@@ -918,11 +940,11 @@ export default function BillingPanel({
           <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
             Showing {totalBillsCount === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalBillsCount)} of {totalBillsCount} bills
           </span>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button
               type="button"
               disabled={page === 0}
-              onClick={() => setPage(p => p - 1)}
+              onClick={() => setPage(p => Math.max(0, p - 1))}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
@@ -937,22 +959,40 @@ export default function BillingPanel({
             >
               Prev
             </button>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', padding: '0 4px' }}>
-              Page {page + 1} of {totalPages}
-            </span>
+            {getPageNumbers().map(pageNum => (
+              <button
+                key={pageNum}
+                type="button"
+                onClick={() => setPage(pageNum - 1)}
+                style={{
+                  minWidth: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: page + 1 === pageNum ? 700 : 500,
+                  border: page + 1 === pageNum ? 'none' : '1px solid #e2e8f0',
+                  background: page + 1 === pageNum ? '#000000' : '#ffffff',
+                  color: page + 1 === pageNum ? '#ffffff' : '#334155',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {pageNum}
+              </button>
+            ))}
             <button
               type="button"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(p => p + 1)}
+              disabled={page >= totalPages - 1 || totalPages === 0}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
                 fontSize: '13px',
                 fontWeight: 600,
                 border: '1px solid #e2e8f0',
-                background: page >= totalPages - 1 ? '#f8fafc' : '#ffffff',
-                color: page >= totalPages - 1 ? '#cbd5e1' : '#334155',
-                cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer',
+                background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
+                cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >

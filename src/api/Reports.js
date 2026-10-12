@@ -26,7 +26,9 @@ class ReportsApi {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       }
       if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 10;
       }
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/waiter${queryParams ? `?${queryParams}` : ''}`;
@@ -66,7 +68,9 @@ class ReportsApi {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       }
       if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 10;
       }
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/kitchen${queryParams ? `?${queryParams}` : ''}`;
@@ -103,8 +107,8 @@ class ReportsApi {
       }
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal) cleanParams.search = searchVal;
-      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
-      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/tax-settlement${queryParams ? `?${queryParams}` : ''}`;
@@ -134,8 +138,8 @@ class ReportsApi {
       if (filters.paymentMethod && filters.paymentMethod !== 'ALL' && filters.paymentMethod !== 'All') cleanParams.paymentMethod = filters.paymentMethod;
       if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
       if (filters.search) cleanParams.search = filters.search;
-      if (filters.page !== undefined) cleanParams.page = filters.page;
-      if (filters.limit !== undefined) cleanParams.limit = filters.limit;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/sales-revenue${queryParams ? `?${queryParams}` : ''}`;
@@ -164,8 +168,8 @@ class ReportsApi {
       if (filters.orderType && filters.orderType !== 'ALL' && filters.orderType !== 'All') cleanParams.orderType = filters.orderType;
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal) cleanParams.search = searchVal;
-      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
-      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/dish-performance${queryParams ? `?${queryParams}` : ''}`;
@@ -192,8 +196,8 @@ class ReportsApi {
       if (filters.orderStatus && filters.orderStatus !== 'ALL' && filters.orderStatus !== 'All') cleanParams.orderStatus = filters.orderStatus;
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal) cleanParams.search = searchVal;
-      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
-      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/order-analytics${queryParams ? `?${queryParams}` : ''}`;
@@ -221,8 +225,8 @@ class ReportsApi {
       if (filters.stockStatus && filters.stockStatus !== 'ALL' && filters.stockStatus !== 'All') cleanParams.stockStatus = filters.stockStatus;
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal) cleanParams.search = searchVal;
-      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
-      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/inventory-stock${queryParams ? `?${queryParams}` : ''}`;
@@ -249,8 +253,8 @@ class ReportsApi {
       if (filters.role && filters.role !== 'ALL' && filters.role !== 'All') cleanParams.role = filters.role;
       const searchVal = filters.search || filters.searchQuery || filters.searchTerm;
       if (searchVal) cleanParams.search = searchVal;
-      if (filters.page !== undefined) cleanParams.page = Math.max(1, Number(filters.page) || 1);
-      if (filters.limit !== undefined) cleanParams.limit = Number(filters.limit) || 10;
+      cleanParams.page = filters.page !== undefined ? Math.max(0, Number(filters.page) || 0) : 0;
+      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/reports/staff-performance${queryParams ? `?${queryParams}` : ''}`;

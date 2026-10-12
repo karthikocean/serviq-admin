@@ -10,7 +10,7 @@ export default function CategoryListPage() {
   const [categories, setCategories] = useState([]);
 
   const fetchCategories = async () => {
-    const params = { limit: 10 };
+    const params = { page: 0, limit: 10 };
     if (selectedBranchId && selectedBranchId !== 'ALL') {
       params.branchId = selectedBranchId;
     }

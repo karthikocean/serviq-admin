@@ -5,6 +5,7 @@ import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
+import { initialBillingHistory, initialOrders } from '../../config/initialData';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId, hasPermission } = useAppState();
@@ -199,7 +200,7 @@ export default function BillingHistory() {
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment.toUpperCase() : undefined,
         paymentStatus: 'PAID',
         orderType: 'DINE_IN',
-        page: page + 1, // 1-based page index
+        page: page,
         limit: 10,
         sortBy: 'createdAt',
         sortOrder: 'desc'
@@ -225,6 +226,23 @@ export default function BillingHistory() {
       }
     } catch (e) {
       console.error('Failed to fetch billing history from API', e);
+    }
+
+    if (items.length === 0) {
+      let fallbackList = [];
+      if (Array.isArray(activeRestaurant?.billingHistory) && activeRestaurant.billingHistory.length > 0) {
+        fallbackList = activeRestaurant.billingHistory;
+      } else if (Array.isArray(activeRestaurant?.orders) && activeRestaurant.orders.length > 0) {
+        const paid = activeRestaurant.orders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+        fallbackList = paid.length > 0 ? paid : activeRestaurant.orders;
+      }
+
+      if (fallbackList.length === 0) {
+        fallbackList = initialBillingHistory;
+      }
+
+      items = fallbackList;
+      serverTotal = fallbackList.length;
     }
 
     const mapped = items.map((it, idx) => mapItemToInvoice(it, idx));
@@ -386,15 +404,24 @@ export default function BillingHistory() {
     });
   }, [rawHistory, selectedBranchId, selectedPayment, selectedTable, selectedStaff, customerFilter, searchTerm, dateRange, customStartDate, customEndDate]);
 
+  const isServerPaginated = Boolean(totalItems > 0 && rawHistory.length <= limit && totalItems > rawHistory.length);
+  const effectiveTotal = isServerPaginated ? totalItems : filteredHistory.length;
+  const totalPages = Math.max(1, Math.ceil(effectiveTotal / limit));
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   // Compute pagination and current page slice
   const paginatedHistory = useMemo(() => {
-    // If server paginated and returned a single page of items, don't slice again
-    if (totalItems > limit && rawHistory.length <= limit && filteredHistory.length === rawHistory.length) {
+    if (isServerPaginated) {
       return filteredHistory;
     }
     const startIndex = page * limit;
     return filteredHistory.slice(startIndex, startIndex + limit);
-  }, [filteredHistory, rawHistory.length, page, limit, totalItems]);
+  }, [filteredHistory, isServerPaginated, page, limit]);
 
   // Compute Summary
   const summary = useMemo(() => {
@@ -446,7 +473,8 @@ export default function BillingHistory() {
       page={page}
       setPage={setPage}
       limit={limit}
-      totalItems={totalItems || filteredHistory.length}
+      totalItems={effectiveTotal}
+      totalPages={totalPages}
       summary={summary}
       activeRestaurant={activeRestaurant}
       hasPermission={hasPermission}

@@ -1,8 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import InventoryCategoryApi from '../../api/InventoryCategory';
+import { Modal } from '../Modal';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'add') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'edit') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'delete') : true;
@@ -11,9 +19,18 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(0);
+
+  // Categories list from API + defaults
+  const [apiCategories, setApiCategories] = useState([]);
+
+  // Delete Confirmation Modal State
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form View State: null | 'ADD' | 'EDIT'
   const [viewState, setViewState] = useState(null);
@@ -23,13 +40,39 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     category: 'Grains',
     unit: 'kg',
     minStock: '',
-    isActive: true
+    isActive: true,
+    branchId: isBranchFiltered ? selectedBranchId : ''
   });
   const [itemErrors, setItemErrors] = useState({});
 
-  const categories = ['All', 'Grains', 'Oils', 'Spices', 'Meat', 'Dairy', 'Vegetables', 'Beverages', 'Packaging'];
-
   const PAGE_SIZE = 10;
+
+  // -------------------------------------------------------------
+  // DYNAMIC CATEGORIES FETCH
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await InventoryCategoryApi.getCategories({ limit: 0 });
+        if (res?.status) {
+          const raw = res.response?.data || res.response?.categories || res.response || [];
+          const list = (Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : [])).filter(c => !c?.isDelete);
+          setApiCategories(list);
+        }
+      } catch (err) {
+        console.warn('Failed to load inventory categories:', err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  const categories = useMemo(() => {
+    const defaultCats = ['Grains', 'Oils', 'Spices', 'Meat', 'Dairy', 'Vegetables', 'Beverages', 'Packaging'];
+    const fromApi = apiCategories.map(c => c.name || c.categoryName || c.title).filter(Boolean);
+    const fromItems = itemsList.map(i => i.category).filter(Boolean);
+    const set = new Set([...defaultCats, ...fromApi, ...fromItems]);
+    return ['All', ...Array.from(set).filter(c => c !== 'All')];
+  }, [apiCategories, itemsList]);
 
   // -------------------------------------------------------------
   // DYNAMIC API FETCH
@@ -38,64 +81,92 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     setLoading(true);
     try {
       const res = await InventoryApi.getItems({
-        search: searchTerm,
-        category: categoryFilter !== 'All' ? categoryFilter : undefined,
-        page: currentPage,
-        limit: PAGE_SIZE
+        branchId: isBranchFiltered ? selectedBranchId : undefined,
+        limit: 0
       });
 
       if (res?.status && res?.response) {
         const payload = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
-        const formatted = (Array.isArray(payload) ? payload : []).map(i => ({
-          id: i._id || i.id,
-          _id: i._id || i.id,
-          itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
-          name: i.name || '',
-          category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'Grains',
-          unit: i.unit || 'kg',
-          centralStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
-          currentStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
-          minAlertLevel: i.minAlertLevel !== undefined ? i.minAlertLevel : (i.minStock !== undefined ? i.minStock : 0),
-          isActive: i.isActive !== undefined ? Boolean(i.isActive) : true
-        }));
+        const formatted = (Array.isArray(payload) ? payload : []).map(i => {
+          const rawCat = (typeof i.category === 'object' ? i.category?.name : i.category) || 
+                         (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || '';
+          return {
+            id: i._id || i.id,
+            _id: i._id || i.id,
+            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+            branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
+            itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
+            name: i.name || '',
+            category: rawCat || 'Grains',
+            categoryId: typeof i.categoryId === 'object' ? (i.categoryId?._id || i.categoryId?.id) : i.categoryId,
+            unit: i.unit || 'kg',
+            centralStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
+            currentStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
+            minAlertLevel: i.minAlertLevel !== undefined ? i.minAlertLevel : (i.minStock !== undefined ? i.minStock : 0),
+            isActive: i.isActive !== undefined ? Boolean(i.isActive) : (i.status !== undefined ? String(i.status).toLowerCase() === 'active' : true),
+            status: i.status || (i.isActive ? 'Active' : 'Inactive')
+          };
+        });
         setItemsList(formatted);
-
-        if (res.response.totalCount !== undefined) {
-          setTotalItemsCount(res.response.totalCount);
-        } else if (res.response.totalDocs !== undefined) {
-          setTotalItemsCount(res.response.totalDocs);
-        } else {
-          setTotalItemsCount(formatted.length);
-        }
+        setTotalItemsCount(formatted.length);
       } else {
-        setItemsList([]);
-        setTotalItemsCount(0);
+        const fallback = Array.isArray(initialItems) ? initialItems : [];
+        setItemsList(fallback);
+        setTotalItemsCount(fallback.length);
       }
     } catch (err) {
       console.error('Fetch items error:', err);
-      setItemsList([]);
-      setTotalItemsCount(0);
+      const fallback = Array.isArray(initialItems) ? initialItems : [];
+      setItemsList(fallback);
+      setTotalItemsCount(fallback.length);
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, categoryFilter, currentPage]);
+  }, [initialItems, selectedBranchId, isBranchFiltered]);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
 
-  // Client-side fallback filter if API returns full unpaginated list
-  const filteredItems = itemsList.filter(i => {
-    const matchesSearch = !searchTerm.trim() || 
-      i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      (i.itemCode && i.itemCode.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = categoryFilter === 'All' || i.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, categoryFilter, statusFilter, selectedBranchId]);
+
+  // Client-side fallback filter with strict branch scoping
+  const branchScopedItems = isBranchFiltered
+    ? itemsList.filter(i => isBranchMatch(i, selectedBranchId, branches))
+    : itemsList;
+
+  const filteredItems = branchScopedItems.filter(i => {
+    // 1. Search Filter: match name, itemCode, or category
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !term ||
+      (i.name && i.name.toLowerCase().includes(term)) ||
+      (i.itemCode && i.itemCode.toLowerCase().includes(term)) ||
+      (i.category && i.category.toLowerCase().includes(term));
+
+    // 2. Category Filter
+    const itemCat = String(i.category || '').toLowerCase().trim();
+    const filterCat = String(categoryFilter || '').toLowerCase().trim();
+    const matchesCategory = categoryFilter === 'All' || itemCat === filterCat;
+
+    // 3. Status Filter (Active / Inactive)
+    const matchesStatus = statusFilter === 'All' ||
+      (statusFilter === 'Active' && Boolean(i.isActive)) ||
+      (statusFilter === 'Inactive' && !Boolean(i.isActive));
+
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  const paginatedItems = filteredItems.length <= PAGE_SIZE 
-    ? filteredItems 
-    : filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
+  const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   // -------------------------------------------------------------
   // INPUT HANDLERS WITH STRICT VALIDATION
@@ -130,7 +201,14 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setItemForm({ name: '', category: 'Grains', unit: 'kg', minStock: '', isActive: true });
+    setItemForm({
+      name: '',
+      category: 'Grains',
+      unit: 'kg',
+      minStock: '',
+      isActive: true,
+      branchId: isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || '')
+    });
     setItemErrors({});
     setViewState('ADD');
   };
@@ -142,7 +220,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
       category: item.category || 'Grains',
       unit: item.unit || 'kg',
       minStock: item.minAlertLevel !== undefined && item.minAlertLevel !== null ? String(item.minAlertLevel) : '',
-      isActive: item.isActive !== undefined ? Boolean(item.isActive) : true
+      isActive: item.isActive !== undefined ? Boolean(item.isActive) : true,
+      branchId: item.branchId || (branches[0]?._id || branches[0]?.id || '')
     });
     setItemErrors({});
     setViewState('EDIT');
@@ -185,13 +264,18 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
     setIsSubmitting(true);
     try {
+      const targetBranchId = isBranchFiltered ? selectedBranchId : (itemForm.branchId || undefined);
+      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
       const payload = {
         name: itemForm.name.trim(),
         category: itemForm.category,
         unit: itemForm.unit,
         minAlertLevel: Number(itemForm.minStock),
         minStock: Number(itemForm.minStock),
-        isActive: Boolean(itemForm.isActive)
+        isActive: Boolean(itemForm.isActive),
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
+        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
       };
 
       let res;
@@ -216,20 +300,31 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     }
   };
 
-  const handleDelete = async (item) => {
-    if (!window.confirm(`Are you sure you want to delete "${item.name}"?`)) return;
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
 
+    setIsDeleting(true);
     try {
-      const itemId = item._id || item.id;
+      const itemId = itemToDelete._id || itemToDelete.id;
       const res = await InventoryApi.deleteItem(itemId);
       if (res?.status) {
         if (onDeleteItem) {
-          onDeleteItem(item);
+          onDeleteItem(itemToDelete);
         }
+        setItemToDelete(null);
         await fetchItems();
+      } else {
+        // Fallback local deletion
+        setItemsList(prev => prev.filter(i => (i._id || i.id) !== itemId));
+        if (onDeleteItem) {
+          onDeleteItem(itemToDelete);
+        }
+        setItemToDelete(null);
       }
     } catch (err) {
       console.error('Delete item error:', err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -355,7 +450,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
             </div>
           </div>
 
-          {/* Row 3: Status (isActive key) */}
+          {/* Row 3: Status (isActive key) & Target Branch */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
             <div>
               <label style={formLabelStyle}>
@@ -370,7 +465,27 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                 <option value="false">Inactive</option>
               </select>
             </div>
-            <div></div>
+            <div>
+              <label style={formLabelStyle}>
+                Target Branch <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                value={itemForm.branchId}
+                onChange={e => setItemForm({ ...itemForm, branchId: e.target.value })}
+                style={{ ...formInputStyle, background: isBranchFiltered ? '#f8fafc' : '#ffffff' }}
+                disabled={isBranchFiltered}
+              >
+                <option value="">-- All Branches / Global --</option>
+                {branches.map(b => (
+                  <option key={b._id || b.id} value={b._id || b.id}>
+                    {b.branchName || b.name} ({b.branchCode || b.code || 'Main'})
+                  </option>
+                ))}
+              </select>
+              <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
+                {isBranchFiltered ? 'Locked to current branch selected in top bar' : 'Assign item to a specific branch or leave global'}
+              </span>
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -432,8 +547,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
               type="text"
               placeholder="Search items..."
               value={searchTerm}
-              onKeyDown={preventSpaceInput}
-              onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
+              onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
               style={{ ...filterInputStyle, paddingLeft: '32px' }}
             />
           </div>
@@ -449,6 +563,42 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
               ))}
             </select>
           </div>
+
+          <div style={{ width: '140px' }}>
+            <select
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setCurrentPage(0); }}
+              style={filterInputStyle}
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+
+          {(searchTerm || categoryFilter !== 'All' || statusFilter !== 'All') && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setCategoryFilter('All');
+                setStatusFilter('All');
+                setCurrentPage(0);
+              }}
+              style={{
+                background: '#f8fafc',
+                color: '#64748b',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                padding: '7px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Reset
+            </button>
+          )}
         </div>
 
         {canAdd && (
@@ -483,6 +633,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap', width: '60px' }}>S.No</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Item Name</th>
+              <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Branch</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Category</th>
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Unit</th> 
               <th style={{ padding: '14px 16px', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#ffffff', whiteSpace: 'nowrap' }}>Minimum Stock Level</th>
@@ -493,18 +644,20 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#ff5a1f', fontWeight: 700 }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#ff5a1f', fontWeight: 700 }}>
                   Loading inventory items...
                 </td>
               </tr>
             ) : paginatedItems.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '32px', color: '#64748b' }}>
                   No inventory items found.
                 </td>
               </tr>
             ) : (
-              paginatedItems.map((item, index) => (
+              paginatedItems.map((item, index) => {
+                const bName = item.branchName || (branches.find(b => String(b._id || b.id) === String(item.branchId))?.branchName) || 'All Branches';
+                return (
                 <tr key={item._id || item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#64748b' }}>
                     {currentPage * PAGE_SIZE + index + 1}
@@ -516,6 +669,18 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                         {item.itemCode}
                       </span>
                     )}
+                  </td>
+                  <td style={{ padding: '14px 16px', color: '#0f172a', fontWeight: 600 }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '3px 8px',
+                      background: '#f1f5f9',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#334155'
+                    }}>
+                      {bName}
+                    </span>
                   </td>
                   <td style={{ padding: '14px 16px', color: '#475569' }}>{item.category}</td>
                   <td style={{ padding: '14px 16px', color: '#475569', fontWeight: 600 }}>
@@ -564,7 +729,7 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                       {canDelete && (
                       <button
                         type="button"
-                        onClick={() => handleDelete(item)}
+                        onClick={() => setItemToDelete(item)}
                         title="Delete Item"
                         style={{
                           ...actionIconBtnStyle,
@@ -579,7 +744,8 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                     </div>
                   </td>
                 </tr>
-              ))
+              );
+            })
             )}
           </tbody>
         </table>
@@ -587,10 +753,89 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
 
       <PaginationBar
         currentPage={currentPage}
-        totalItems={totalItemsCount || filteredItems.length}
+        totalItems={filteredItems.length}
         pageSize={PAGE_SIZE}
         onPageChange={setCurrentPage}
       />
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(itemToDelete)}
+        onClose={() => !isDeleting && setItemToDelete(null)}
+        title="Confirm Deletion"
+        maxWidth="420px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+            <div style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              backgroundColor: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '15px' }}>
+                Delete Inventory Item
+              </p>
+              <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
+                Are you sure you want to delete <strong style={{ color: '#0f172a' }}>"{itemToDelete?.name}"</strong>{itemToDelete?.itemCode ? ` (${itemToDelete?.itemCode})` : ''}? This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setItemToDelete(null)}
+              style={{
+                background: '#ffffff',
+                color: '#334155',
+                border: '1px solid #cbd5e1',
+                padding: '9px 18px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: isDeleting ? 'not-allowed' : 'pointer'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              style={{
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
+                padding: '9px 20px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.7 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)'
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Item'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

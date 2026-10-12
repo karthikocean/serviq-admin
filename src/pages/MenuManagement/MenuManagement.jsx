@@ -10,7 +10,7 @@ import UploadApi from '../../api/Upload.js';
 import { server } from '../../config/index.js';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import { cleanRelativeImagePath, getImageUrl } from '../../helper/ImageHelper.js';
-import { isBranchMatch } from '../../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
 import './MenuManagement.css';
 
 export default function MenuManagement() {
@@ -59,7 +59,7 @@ export default function MenuManagement() {
   }, [activeRestaurant, selectedBranchId, refreshTrigger]);
 
   const fetchMenuItems = async () => {
-    const params = {};
+    const params = { page: 0, limit: 10 };
     if (selectedBranchId) {
       params.branchId = selectedBranchId;
     } else {
@@ -82,7 +82,7 @@ export default function MenuManagement() {
   };
 
   const fetchCategories = async () => {
-    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, limit: 10 } : { branchId: 'all', limit: 10 };
+    const params = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') ? { branchId: selectedBranchId, page: 0, limit: 10 } : { branchId: 'all', page: 0, limit: 10 };
     const res = await MenuApi.getCategories(params);
     if (res?.status && res.response) {
       const catArray = Array.isArray(res.response.data)
@@ -157,6 +157,16 @@ export default function MenuManagement() {
     setIsAddingCategory(true);
     setCustomCategoryError('');
     try {
+      const isCompanyUser = isUserCompanyUser(currentUser);
+      const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+      const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+      const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+
+      if (allBranchesList.length > 0 && isCompanyScope && !menuForm.branchId) {
+        setCustomCategoryError('Please select a branch in the menu item form first.');
+        return;
+      }
+
       const targetBranchId = menuForm.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
       const payload = {
         name: categoryName,
@@ -214,13 +224,19 @@ export default function MenuManagement() {
 
 
   const openAddMenuModal = () => {
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const initialBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
+
     setMenuForm({
       _id: '',
       name: '',
       desc: '',
       price: '',
       gst: 5,
-      category: categories.length > 0 ? categories[0]._id : '',
+      category: categories.length > 0 ? (categories[0]._id || categories[0].id) : '',
       image: '',
       coverImage: '',
       foodType: 'Veg',
@@ -228,7 +244,7 @@ export default function MenuManagement() {
       egg: false,
       available: true,
       bestseller: false,
-      branchId: selectedBranchId || (activeRestaurant.branches?.length > 0 ? activeRestaurant.branches[0]._id : '')
+      branchId: initialBranch || ''
     });
     setFormErrors({});
     setActivePage('menu-form');
@@ -236,6 +252,17 @@ export default function MenuManagement() {
 
   const openEditMenuModal = (item) => {
     const detectedType = item.foodType || (item.egg ? 'Egg' : (item.veg ? 'Veg' : 'Non-Veg'));
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+
+    let itemBranch = item.branchId?._id || item.branchId?.id || item.branchId || '';
+    if (itemBranch === 'COMPANY' || itemBranch === 'ALL' || itemBranch === 'all') {
+      itemBranch = '';
+    }
+    const initialBranch = isBranchLogin ? userBranchId : (cleanSelectedBranch || itemBranch || '');
+
     setMenuForm({
       _id: item._id || item.id,
       name: item.name,
@@ -250,7 +277,7 @@ export default function MenuManagement() {
       egg: detectedType === 'Egg',
       available: item.available !== undefined ? item.available : true,
       bestseller: item.bestseller !== undefined ? item.bestseller : false,
-      branchId: item.branchId || selectedBranchId
+      branchId: initialBranch
     });
     setFormErrors({});
     setActivePage('menu-form');
@@ -294,13 +321,60 @@ export default function MenuManagement() {
       errors.foodType = 'Food Type selection is required.';
     }
 
+    const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+    let branchMissing = false;
+    if (allBranchesList.length > 0) {
+      const isCompanyUser = isUserCompanyUser(currentUser);
+      const userBranchId = getUserAssignedBranchId(currentUser);
+      const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+      const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+      const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+
+      let effectiveBranchVal = menuForm.branchId;
+      if (!isCompanyScope) {
+        effectiveBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || menuForm.branchId);
+      } else if (effectiveBranchVal === 'COMPANY' || effectiveBranchVal === 'ALL' || effectiveBranchVal === 'all') {
+        effectiveBranchVal = '';
+      }
+
+      if (!effectiveBranchVal) {
+        branchMissing = true;
+      }
+    }
+
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    if (branchMissing) {
+      ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
+      return false;
+    }
+    if (Object.keys(errors).length > 0) {
+      return false;
+    }
+    return true;
   };
 
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+
+    const isCompanyUser = isUserCompanyUser(currentUser);
+    const userBranchId = getUserAssignedBranchId(currentUser);
+    const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+
+    let finalBranchId = menuForm.branchId;
+    if (!isCompanyScope) {
+      finalBranchId = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || menuForm.branchId);
+    } else if (finalBranchId === 'COMPANY' || finalBranchId === 'ALL' || finalBranchId === 'all') {
+      finalBranchId = '';
+    }
+
+    const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+    if (allBranchesList.length > 0 && !finalBranchId) {
+      ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
+      return;
+    }
 
     const itemData = {
       name: menuForm.name.trim(),
@@ -315,7 +389,7 @@ export default function MenuManagement() {
       egg: menuForm.foodType === 'Egg',
       available: menuForm.available,
       bestseller: menuForm.bestseller,
-      branchId: menuForm.branchId
+      branchId: finalBranchId
     };
 
     if (menuForm._id) {
@@ -629,45 +703,24 @@ export default function MenuManagement() {
                     />
                   </div>
 
-                  {activeRestaurant.branches?.length > 0 && (
+                  {((branches && branches.length > 0) || (activeRestaurant.branches?.length > 0)) && (
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: '#0f172a' }}>
                         Branch Assignment <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       {(() => {
-                        const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-                          ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-                          : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-                        const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+                        const isCompanyUser = isUserCompanyUser(currentUser);
+                        const userBranchId = getUserAssignedBranchId(currentUser);
+                        const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+                        const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                        const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+                        const isLocked = !isCompanyScope;
 
-                        const userRole = (roleStr || '').toLowerCase().trim();
-                        const userType = (userTypeStr || '').toUpperCase().trim();
-                        const isCompanyUser =
-                          userType === 'RESTAURANT_OWNER' ||
-                          userType === 'OWNER' ||
-                          userType === 'SUPER ADMIN' ||
-                          userType === 'SUPER_ADMIN' ||
-                          userType === 'ADMIN' ||
-                          userRole === 'restaurant_owner' ||
-                          userRole === 'restaurant owner' ||
-                          userRole === 'owner' ||
-                          userRole === 'super admin' ||
-                          userRole === 'super_admin' ||
-                          userRole === 'admin' ||
-                          (!currentUser?.branchId && !currentUser?.activeBranchId);
-
-                        const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-                          ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-                          : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-                        const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-
-                        const allBranchesList = activeRestaurant?.branches || [];
-                        const isLocked = isBranchLogin;
+                        const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
 
                         let currentBranchVal = menuForm.branchId;
-                        if (isBranchLogin && userBranchId) {
-                          currentBranchVal = userBranchId;
+                        if (!isCompanyScope) {
+                          currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || menuForm.branchId);
                         } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                           currentBranchVal = '';
                         }
@@ -678,7 +731,7 @@ export default function MenuManagement() {
                         let effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (currentBranchVal || '');
 
                         const branchOptions = [
-                          { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                          ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                           ...allBranchesList.map(b => ({
                             value: b._id || b.id,
                             label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
@@ -689,14 +742,16 @@ export default function MenuManagement() {
                           <div>
                             <SearchableSelect
                               value={effectiveVal}
-                              onChange={e => setMenuForm({ ...menuForm, branchId: e.target.value })}
+                              onChange={e => {
+                                setMenuForm({ ...menuForm, branchId: e.target.value });
+                              }}
                               isDisabled={isLocked}
                               options={branchOptions}
                               placeholder="Select Branch..."
                             />
                             {isLocked && (
                               <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                                Branch is locked to your assigned branch.
+                                {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                               </span>
                             )}
                           </div>

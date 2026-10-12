@@ -20,10 +20,21 @@ class MemberApi {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       }
       if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 0;
       }
-      const response = await apiClient.get("/tables", { params: cleanParams });
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.get("/tables", { params: cleanParams });
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.get("/table", { params: cleanParams });
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
     } catch (error) {
@@ -53,8 +64,17 @@ class MemberApi {
 
   async createTable(data) {
     try {
-      const response = await apiClient.post("/tables", data);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.post("/tables", data);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.post("/table", data);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Table Created Successfully!",
           true,
@@ -77,8 +97,17 @@ class MemberApi {
 
   async getTableDetails(id) {
     try {
-      const response = await apiClient.get(`/tables/${id}`);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.get(`/tables/${id}`);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.get(`/table/${id}`);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
     } catch (error) {
@@ -96,8 +125,25 @@ class MemberApi {
 
   async updateTable(id, data) {
     try {
-      const response = await apiClient.patch(`/tables/${id}`, data);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.put(`/tables/${id}`, data);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          try {
+            response = await apiClient.put(`/table/${id}`, data);
+          } catch (err2) {
+            response = await apiClient.patch(`/table/${id}`, data);
+          }
+        } else {
+          try {
+            response = await apiClient.patch(`/tables/${id}`, data);
+          } catch {
+            throw err1;
+          }
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Table Updated Successfully!",
           true,
@@ -119,8 +165,17 @@ class MemberApi {
 
   async deleteTable(id) {
     try {
-      const response = await apiClient.delete(`/tables/${id}`);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.delete(`/tables/${id}`);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          response = await apiClient.delete(`/table/${id}`);
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Table Deleted Successfully!",
           true,

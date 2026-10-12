@@ -206,6 +206,17 @@ export default function WaiterReportsPanel({
   const waiterUnpaidCount = filteredWaiterReports.filter(o => o.billingStatus === 'unpaid').length;
 
   const totalPages = Math.ceil(filteredWaiterReports.length / limit) || 1;
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchWaiter, filterWaiter, filterTable, filterSource, filterPaymentMode, filterPaymentStatus, filterOrderStatus, dateStart, dateEnd]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const paginatedWaiterReports = filteredWaiterReports.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {

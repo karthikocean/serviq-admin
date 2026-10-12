@@ -358,7 +358,15 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
   };
 
   if (typeof itemBranch === 'object' && itemBranch !== null) {
-    // Check entity branch reference fields first
+    // 1. Direct object identifiers (in case itemBranch is a branch itself or entity with _id/branchCode/branchName)
+    if (itemBranch._id) itemIds.push(String(itemBranch._id).toLowerCase().trim());
+    if (itemBranch.id) itemIds.push(String(itemBranch.id).toLowerCase().trim());
+    if (itemBranch.branchCode) itemIds.push(String(itemBranch.branchCode).toLowerCase().trim());
+    if (itemBranch.code) itemIds.push(String(itemBranch.code).toLowerCase().trim());
+    if (itemBranch.branchName) itemIds.push(String(itemBranch.branchName).toLowerCase().trim());
+    if (itemBranch.name) itemIds.push(String(itemBranch.name).toLowerCase().trim());
+
+    // 2. Check entity branch reference fields
     const branchFields = [
       itemBranch.branchId,
       itemBranch.branch,
@@ -378,12 +386,7 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
     }
 
     const validBranchFields = branchFields.filter(f => f !== undefined && f !== null && f !== '');
-    if (validBranchFields.length > 0) {
-      validBranchFields.forEach(f => extractFromBranchObj(f));
-    } else if (itemBranch.branchCode || itemBranch.branchName || itemBranch.managerName || itemBranch.city || itemBranch.address) {
-      // It is an actual branch object
-      extractFromBranchObj(itemBranch);
-    }
+    validBranchFields.forEach(f => extractFromBranchObj(f));
   } else if (typeof itemBranch === 'string') {
     itemIds.push(itemBranch.toLowerCase().trim());
   }
@@ -391,9 +394,102 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
   return itemIds.some(id => targetKeys.has(id));
 };
 
+/**
+ * Extracts a specific assigned branch ID for a user.
+ * Returns empty string if user has no assigned branch or has enterprise/company scope ('ALL'/'COMPANY').
+ */
+export const getUserAssignedBranchId = (user) => {
+  if (!user) return '';
+  const bId = typeof user.branchId === 'object' && user.branchId !== null
+    ? (user.branchId._id || user.branchId.id)
+    : (user.branchId || user.activeBranchId || '');
+  if (
+    !bId ||
+    bId === 'ALL' ||
+    bId === 'All' ||
+    String(bId).toLowerCase() === 'all branches' ||
+    String(bId).toUpperCase() === 'COMPANY'
+  ) {
+    return '';
+  }
+  return String(bId);
+};
+
+/**
+ * Checks whether a user is a Company-level user (Owner, Super Admin, or HQ user without a specific branch).
+ * Sub-branch users assigned to a specific branch are strictly NOT Company users.
+ */
+export const isUserCompanyUser = (user) => {
+  if (!user) return false;
+
+  const roleStr = typeof user.role === 'object' && user.role !== null
+    ? (user.role.roleName || user.role.name || '')
+    : (typeof user.role === 'string' ? user.role : '');
+  const userTypeStr = typeof user.userType === 'string' ? user.userType : '';
+
+  const roleLower = (roleStr || '').toLowerCase().trim();
+  const typeUpper = (userTypeStr || '').toUpperCase().trim();
+
+  // Super Admin / Restaurant Owner accounts always have full company overview scope
+  if (
+    typeUpper === 'RESTAURANT_OWNER' ||
+    typeUpper === 'OWNER' ||
+    typeUpper === 'SUPER ADMIN' ||
+    typeUpper === 'SUPER_ADMIN' ||
+    roleLower === 'restaurant_owner' ||
+    roleLower === 'restaurant owner' ||
+    roleLower === 'owner' ||
+    roleLower === 'super admin' ||
+    roleLower === 'super_admin'
+  ) {
+    return true;
+  }
+
+  const assignedBranchId = getUserAssignedBranchId(user);
+  // Any user tied to a specific sub-branch is a Sub-branch user, NOT a Company user
+  if (assignedBranchId) {
+    return false;
+  }
+
+  // Check branch-scoped user roles
+  if (
+    typeUpper === 'BRANCH_ADMIN' ||
+    typeUpper === 'BRANCH' ||
+    typeUpper === 'STAFF' ||
+    typeUpper === 'WAITER' ||
+    typeUpper === 'KITCHEN' ||
+    roleLower.includes('branch')
+  ) {
+    return false;
+  }
+
+  // If user has no specific branch assigned and has company-level administrative status
+  if (
+    typeUpper === 'ADMIN' ||
+    typeUpper === 'COMPANY' ||
+    typeUpper === 'COMPANY_ADMIN' ||
+    roleLower.includes('admin') ||
+    roleLower.includes('company')
+  ) {
+    return true;
+  }
+
+  return !assignedBranchId;
+};
+
+/**
+ * Checks whether a user is a Sub-Branch user (assigned to a specific branch and not a Company user).
+ */
+export const isSubBranchUser = (user) => {
+  return !isUserCompanyUser(user) && Boolean(getUserAssignedBranchId(user));
+};
+
 export default {
   resolveBranchManagerName,
   resolveBranchContactNumber,
-  isBranchMatch
+  isBranchMatch,
+  getUserAssignedBranchId,
+  isUserCompanyUser,
+  isSubBranchUser
 };
 

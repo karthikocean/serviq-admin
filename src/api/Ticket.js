@@ -15,11 +15,25 @@ export const ticketApi = {
             if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
             if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
             if (params.priority && !cleanParams.priority && params.priority !== 'All' && params.priority !== 'ALL') cleanParams.priority = params.priority;
-            if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+            
+            // Handle branchId parameter cleanly
+            const rawBranchId = params.branchId || cleanParams.branchId;
+            if (rawBranchId) {
+                const bIdStr = typeof rawBranchId === 'object' && rawBranchId !== null 
+                    ? String(rawBranchId._id || rawBranchId.id || '') 
+                    : String(rawBranchId).trim();
+                if (bIdStr && bIdStr !== 'ALL' && bIdStr !== 'All' && String(bIdStr).toUpperCase() !== 'COMPANY' && String(bIdStr).toLowerCase() !== 'all branches') {
+                    cleanParams.branchId = bIdStr;
+                } else {
+                    delete cleanParams.branchId;
+                }
+            } else {
+                delete cleanParams.branchId;
+            }
 
             // Load all current tickets (or specified limit)
             if (!cleanParams.limit) {
-                cleanParams.limit = 100;
+                cleanParams.limit = 10;
             }
 
             const response = await apiClient.get('/tickets', { params: cleanParams });

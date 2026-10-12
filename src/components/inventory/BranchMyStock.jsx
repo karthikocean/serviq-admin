@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { useAppState } from '../../config/AppContext';
+import { isBranchMatch } from '../../helper/BranchHelper';
 
 // Icons for My Stock Summary Cards
 const PackageIcon = ({ size = 22, color = 'currentColor' }) => (
@@ -36,6 +38,10 @@ const AlertOctagonIcon = ({ size = 22, color = 'currentColor' }) => (
 );
 
 export default function BranchMyStock({ items: initialItems, onUpdateBranchStock, hasPermission }) {
+  const { selectedBranchId, activeRestaurant } = useAppState();
+  const branches = activeRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_my_stock', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_my_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
@@ -55,13 +61,18 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
   const fetchBranchStock = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getItems({ limit: 100 });
+      const res = await InventoryApi.getItems({
+        limit: 100,
+        branchId: isBranchFiltered ? selectedBranchId : undefined
+      });
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         if (Array.isArray(rawItems)) {
           const formatted = rawItems.map(i => ({
             id: i._id || i.id,
             _id: i._id || i.id,
+            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+            branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
             itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
             name: i.name,
             category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'General',
@@ -79,13 +90,16 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchBranchStock();
   }, [fetchBranchStock]);
 
-  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const rawDisplay = itemsList.length > 0 ? itemsList : (initialItems || []);
+  const displayItems = isBranchFiltered
+    ? rawDisplay.filter(i => isBranchMatch(i, selectedBranchId, branches))
+    : rawDisplay;
 
   // Summary Metrics for Branch My Stock
   const totalItemsCount = displayItems.length;
@@ -117,6 +131,18 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
   });
 
   const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [searchTerm, categoryFilter, itemFilter, stockStatusFilter, selectedBranchId]);
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const handleSaveStockAdjust = (e) => {
@@ -160,7 +186,7 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', maxWidth: '800px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 1fr' : '1fr', gap: '24px', maxWidth: canEdit ? '800px' : '500px', marginBottom: '32px' }}>
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Stock Summary</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
@@ -196,43 +222,43 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
             </div>
           </div>
 
-          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-            <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Kitchen Adjustment</h4>
-            <form onSubmit={handleSaveStockAdjust}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                  Update Branch Stock Quantity ({viewingItem.unit})
-                </label>
-                <input
-                  type="number"
-                  value={adjustQty}
-                  placeholder={viewingItem.branchStock.toString()}
-                  onChange={e => setAdjustQty(e.target.value)}
-                  style={{ ...filterInputStyle, height: '40px' }}
-                  required
-                />
-              </div>
+          {canEdit && (
+            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
+              <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Branch Kitchen Adjustment</h4>
+              <form onSubmit={handleSaveStockAdjust}>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Update Branch Stock Quantity ({viewingItem.unit})
+                  </label>
+                  <input
+                    type="number"
+                    value={adjustQty}
+                    placeholder={viewingItem.branchStock.toString()}
+                    onChange={e => setAdjustQty(e.target.value)}
+                    style={{ ...filterInputStyle, height: '40px' }}
+                    required
+                  />
+                </div>
 
-              {canEdit && (
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  background: '#ff5a1f',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '10px 16px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                Save Branch Stock
-              </button>
-              )}
-            </form>
-          </div>
+                <button
+                  type="submit"
+                  style={{
+                    width: '100%',
+                    background: '#ff5a1f',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Save Branch Stock
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     );

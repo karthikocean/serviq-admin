@@ -95,6 +95,13 @@ export default function KitchenListPanel({
 
   const kitchenStaff = staff.filter(s => s.role === 'Kitchen');
   const totalPages = Math.ceil(kitchenStaff.length / limit) || 1;
+
+  React.useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const paginatedStaff = kitchenStaff.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {

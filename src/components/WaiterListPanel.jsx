@@ -88,6 +88,13 @@ export default function WaiterListPanel({
   });
 
   const totalPages = Math.ceil(displayWaiters.length / limit) || 1;
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const paginatedWaiters = displayWaiters.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {

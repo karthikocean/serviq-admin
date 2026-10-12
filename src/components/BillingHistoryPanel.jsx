@@ -47,6 +47,7 @@ export default function BillingHistoryPanel({
   page, setPage,
   limit,
   totalItems,
+  totalPages: propTotalPages,
   summary,
   activeRestaurant = {},
   hasPermission
@@ -57,7 +58,7 @@ export default function BillingHistoryPanel({
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
   const restaurantTagline = activeRestaurant?.tagline || 'Good Food • Great Moments';
 
-  const totalPages = Math.ceil((totalItems || 0) / (limit || 10)) || 1;
+  const totalPages = propTotalPages || Math.max(1, Math.ceil((totalItems || 0) / (limit || 10)));
   const getPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;

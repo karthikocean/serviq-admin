@@ -6,17 +6,17 @@ class OrderApi {
     try {
       const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
-        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && String(params[key]).toUpperCase() !== 'ALL' && String(params[key]).toUpperCase() !== 'ALL WAITERS') {
           cleanParams[key] = params[key];
         }
       });
       const searchVal = params.search || params.searchQuery || params.searchTerm;
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
-      if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
-      if (params.billingStatus && !cleanParams.billingStatus && params.billingStatus !== 'All' && params.billingStatus !== 'ALL') cleanParams.billingStatus = params.billingStatus;
-      if (params.waiter && !cleanParams.waiter && params.waiter !== 'All' && params.waiter !== 'ALL') cleanParams.waiter = params.waiter;
-      if (params.table && !cleanParams.table && params.table !== 'All' && params.table !== 'ALL') cleanParams.table = params.table;
-      if (params.category && !cleanParams.category && params.category !== 'All' && params.category !== 'ALL') cleanParams.category = params.category;
+      if (params.status && !cleanParams.status && String(params.status).toUpperCase() !== 'ALL') cleanParams.status = params.status;
+      if (params.billingStatus && !cleanParams.billingStatus && String(params.billingStatus).toUpperCase() !== 'ALL') cleanParams.billingStatus = params.billingStatus;
+      if (params.waiter && !cleanParams.waiter && String(params.waiter).toUpperCase() !== 'ALL' && String(params.waiter).toUpperCase() !== 'ALL WAITERS') cleanParams.waiter = params.waiter;
+      if (params.table && !cleanParams.table && String(params.table).toUpperCase() !== 'ALL') cleanParams.table = params.table;
+      if (params.category && !cleanParams.category && String(params.category).toUpperCase() !== 'ALL') cleanParams.category = params.category;
       if (params.dateStart && !cleanParams.startDate) cleanParams.startDate = params.dateStart;
       if (params.dateEnd && !cleanParams.endDate) cleanParams.endDate = params.dateEnd;
       if (params.fromDate && !cleanParams.startDate) cleanParams.startDate = params.fromDate;
@@ -28,7 +28,9 @@ class OrderApi {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       }
       if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 10;
       }
       const response = await apiClient.get("/orders", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {

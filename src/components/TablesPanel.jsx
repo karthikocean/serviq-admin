@@ -4,6 +4,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 import TableApi from '../api/Table.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 // Clean SVG Icons
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -101,15 +102,19 @@ export default function TablesPanel({
   revokeQrCode,
   deleteQrCode
 }) {
-  const { hasPermission: contextHasPermission } = useAppState();
+  const { hasPermission: contextHasPermission, selectedBranchId, activeRestaurant: contextRestaurant } = useAppState();
   const checkPermission = hasPermissionProp || contextHasPermission || (() => true);
+  const branches = activeRestaurant?.branches || contextRestaurant?.branches || [];
+  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
   const [viewingQrTable, setViewingQrTable] = useState(null);
   const [localQrStatus, setLocalQrStatus] = useState({});
 
-  const displayTables = tables;
+  const displayTables = isBranchFiltered
+    ? tables.filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : tables;
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;
@@ -212,8 +217,18 @@ export default function TablesPanel({
   // Pagination for tables (10 tables per page)
   const [page, setPage] = useState(0);
   const limit = 10;
-  const totalPages = Math.ceil(filteredTables.length / limit) || 1;
+  const totalPages = Math.max(1, Math.ceil(filteredTables.length / limit));
   const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
+
+  useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
 
   const handleDownloadQrPng = async (tableId, qrUrl) => {
     try {
@@ -360,6 +375,12 @@ export default function TablesPanel({
   useEffect(() => {
     setPage(0);
   }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
 
   const totalCount = displayTables.length;
   const freeCount = displayTables.filter(t => (t.status || 'free').toLowerCase() === 'free' || (t.status || '').toLowerCase() === 'available').length;
@@ -634,11 +655,11 @@ export default function TablesPanel({
         {/* Status Filter Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           {[
-            { id: 'All', label: `All Tables (${totalCount})` },
-            { id: 'Free', label: `Free (${freeCount})` },
-            { id: 'Occupied', label: `Occupied (${occupiedCount})` },
-            { id: 'Reserved', label: `Reserved (${reservedCount})` },
-            { id: 'Maintenance', label: `Maintenance / Unavailable (${maintenanceCount})` }
+            { id: 'All', label: `All Tables` },
+            { id: 'Free', label: `Free` },
+            { id: 'Occupied', label: `Occupied` },
+            { id: 'Reserved', label: `Reserved` },
+            { id: 'Maintenance', label: `Maintenance / Unavailable` }
           ].map(tab => (
             <button
               key={tab.id}
@@ -713,25 +734,10 @@ export default function TablesPanel({
                       </td>
 
                       {/* TABLE NO */}
-                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', minWidth: '160px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-                          <div style={{
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '8px',
-                            background: statusProps.bg,
-                            color: statusProps.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
-                          }}>
-                            <TableIcon size={16} color={statusProps.color} />
-                          </div>
-                          <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', wordBreak: 'keep-all', display: 'inline-block' }}>
-                            {tableIdStr}
-                          </span>
-                        </div>
+                      <td style={{ padding: '14px 16px', whiteSpace: 'nowrap', minWidth: '140px' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 800, color: '#0f172a', fontFamily: "'Outfit', sans-serif", whiteSpace: 'nowrap', wordBreak: 'keep-all', display: 'inline-block' }}>
+                          {tableIdStr}
+                        </span>
                       </td>
 
                       {/* SECTION / AREA */}

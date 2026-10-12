@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId, initialTables, initialOrders, initialMenu, initialStaff, initialBillingData, initialBillingHistory } from './initialData';
 import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -10,7 +10,13 @@ import BranchApi from '../api/Branch.js';
 import UserApi from '../api/User.js';
 import SubscriptionApi from '../api/Subscription.js';
 import RoleApi from '../api/Role.js';
-import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
+import { 
+  resolveBranchManagerName, 
+  resolveBranchContactNumber,
+  isUserCompanyUser,
+  getUserAssignedBranchId,
+  isSubBranchUser
+} from '../helper/BranchHelper.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 
 export const AppContext = createContext();
@@ -163,16 +169,17 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   const roleNameStr = roleObj?.roleName || roleObj?.name || (typeof currentUser.role === 'string' ? currentUser.role : '') || '';
   const roleUpper = roleNameStr.toUpperCase().trim();
 
-  const isRestaurantOwner = 
-    userTypeUpper === 'RESTAURANT_OWNER' || 
-    userTypeUpper === 'OWNER' || 
-    userTypeUpper === 'SUPER ADMIN' || 
-    userTypeUpper === 'SUPER_ADMIN' || 
-    roleUpper === 'RESTAURANT_OWNER' || 
-    roleUpper === 'OWNER' || 
-    roleUpper === 'SUPER ADMIN';
+  const isOwnerRoleName = (r) => {
+    const s = String(r || '').toUpperCase().trim();
+    return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
+  };
 
-  // Restaurant Owner & Super Admin always have 100% full access to all modules and all actions
+  // If the user has an explicitly assigned custom or non-owner role (e.g. "testing", "Branch Manager", "Staff"),
+  // they are subject to that role's permissions and MUST NOT bypass as an owner!
+  const hasSpecificNonOwnerRole = Boolean(roleUpper && !isOwnerRoleName(roleUpper));
+  const isRestaurantOwner = !hasSpecificNonOwnerRole && (isOwnerRoleName(userTypeUpper) || isOwnerRoleName(roleUpper));
+
+  // Pure Restaurant Owner & Super Admin (without a specific custom role) have full access
   if (isRestaurantOwner) return true;
 
   // Block permission immediately if staff user account itself is inactive or deleted
@@ -196,7 +203,27 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   if (adminAccessFlag === false) return false;
 
   // Extract embedded permissions object
-  const permissions = roleObj?.permissions || currentUser.permissions || null;
+  let permissions = roleObj?.permissions || currentUser.permissions || null;
+
+  // If permissions is empty on currentUser, lookup in cached roles
+  if (!permissions || Object.keys(permissions).length === 0) {
+    try {
+      const cachedRolesStr = typeof window !== 'undefined' ? sessionStorage.getItem('serviq_roles_cache') : null;
+      if (cachedRolesStr) {
+        const cachedRoles = JSON.parse(cachedRolesStr);
+        if (Array.isArray(cachedRoles)) {
+          const matchedRole = cachedRoles.find(r => 
+            (roleObj?._id && String(r._id) === String(roleObj._id)) ||
+            (roleObj?.id && String(r.id) === String(roleObj.id)) ||
+            (roleNameStr && String(r.roleName || '').trim().toLowerCase() === roleNameStr.trim().toLowerCase())
+          );
+          if (matchedRole?.permissions) {
+            permissions = matchedRole.permissions;
+          }
+        }
+      }
+    } catch (e) {}
+  }
 
   // Map module aliases to check interchangeable alias keys
   const getNormalizedKeys = (key) => {
@@ -308,6 +335,26 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
       }
     }
 
+    // 3. Fallback to parent module permission if submodule is not explicitly keyed
+    if (moduleName.startsWith('inventory_')) {
+      if (permissions['inventory'] && permissions['inventory'][action] !== undefined) {
+        return Boolean(permissions['inventory'][action]);
+      }
+    }
+    if (moduleName.startsWith('billing_')) {
+      if (permissions['billing'] && permissions['billing'][action] !== undefined) {
+        return Boolean(permissions['billing'][action]);
+      }
+    }
+    if (moduleName.startsWith('reports_')) {
+      if (permissions['reports_analytics'] && permissions['reports_analytics'][action] !== undefined) {
+        return Boolean(permissions['reports_analytics'][action]);
+      }
+      if (permissions['reports'] && permissions['reports'][action] !== undefined) {
+        return Boolean(permissions['reports'][action]);
+      }
+    }
+
     // Role permissions are explicitly defined, so anything not explicitly granted is strictly false
     return false;
   }
@@ -328,6 +375,15 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
           return action === 'view' ? modPerm : false;
         }
       }
+    }
+    if (moduleName.startsWith('inventory_') && userRoleConfig.permissions['inventory']) {
+      return Boolean(userRoleConfig.permissions['inventory'][action]);
+    }
+    if (moduleName.startsWith('billing_') && userRoleConfig.permissions['billing']) {
+      return Boolean(userRoleConfig.permissions['billing'][action]);
+    }
+    if (moduleName.startsWith('reports_') && (userRoleConfig.permissions['reports_analytics'] || userRoleConfig.permissions['reports'])) {
+      return Boolean((userRoleConfig.permissions['reports_analytics'] || userRoleConfig.permissions['reports'])[action]);
     }
   }
 
@@ -408,22 +464,40 @@ export const AppProvider = ({ children }) => {
   const [darkMode, setDarkMode] = useState(false);
   const [accentColor, setAccentColor] = useState('#ff7a00');
   const [qrCustomizer, setQrCustomizer] = useState({ color: '#ff7a00', showLogo: true });
-  // Branch filter state (defaults to 'COMPANY' overview scope on open/refresh)
-  const [selectedBranchId, setSelectedBranchId] = useState(() => {
+  // Branch filter state (sub-branch users default and lock to their assigned branch; company users default to 'COMPANY' / All Branches)
+  const [selectedBranchId, _setSelectedBranchId] = useState(() => {
     try {
       const user = JSON.parse(sessionStorage.getItem('currentUser') || 'null');
       if (user) {
-        const uType = (user.userType || '').toUpperCase();
-        const uRole = (typeof user.role === 'object' ? (user.role?.roleName || user.role?.name) : (user.role || '')).toUpperCase();
-        const isOwner = uType === 'RESTAURANT_OWNER' || uType === 'OWNER' || uType === 'SUPER ADMIN' || uType === 'SUPER_ADMIN' || uRole === 'RESTAURANT_OWNER' || uRole === 'OWNER' || uRole === 'SUPER ADMIN';
-        if (!isOwner) {
-          const bId = typeof user.branchId === 'object' && user.branchId !== null ? (user.branchId._id || user.branchId.id) : (user.branchId || user.activeBranchId);
-          if (bId && bId !== 'ALL') return bId;
+        if (isSubBranchUser(user)) {
+          const bId = getUserAssignedBranchId(user);
+          if (bId) return bId;
+        }
+        const saved = sessionStorage.getItem('selectedBranchId');
+        if (saved && isUserCompanyUser(user)) {
+          return saved;
         }
       }
     } catch (e) {}
     return 'COMPANY';
   });
+
+  // Setter for selectedBranchId enforcing sub-branch user lock
+  const setSelectedBranchId = useCallback((branchId) => {
+    if (isSubBranchUser(currentUser)) {
+      const assignedId = getUserAssignedBranchId(currentUser);
+      _setSelectedBranchId(assignedId);
+      try {
+        sessionStorage.setItem('selectedBranchId', String(assignedId));
+      } catch (e) {}
+      return;
+    }
+    const val = branchId || 'COMPANY';
+    _setSelectedBranchId(val);
+    try {
+      sessionStorage.setItem('selectedBranchId', String(val));
+    } catch (e) {}
+  }, [currentUser]);
 
   // Synchronize selectedBranchId to sessionStorage whenever it changes
   useEffect(() => {
@@ -435,6 +509,19 @@ export const AppProvider = ({ children }) => {
       }
     } catch (e) {}
   }, [selectedBranchId]);
+
+  // Ensure sub-branch users are ALWAYS locked to their respective branch by default across all modules
+  useEffect(() => {
+    if (currentUser && isSubBranchUser(currentUser)) {
+      const assignedId = getUserAssignedBranchId(currentUser);
+      if (assignedId && selectedBranchId !== assignedId) {
+        _setSelectedBranchId(assignedId);
+        try {
+          sessionStorage.setItem('selectedBranchId', String(assignedId));
+        } catch (e) {}
+      }
+    }
+  }, [currentUser, selectedBranchId]);
 
   // Synchronize currentUser to sessionStorage whenever it changes
   useEffect(() => {
@@ -559,7 +646,8 @@ export const AppProvider = ({ children }) => {
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
-    if (!Array.isArray(tablesList) || !Array.isArray(ordersList)) return [];
+    const effectiveTables = (Array.isArray(tablesList) && tablesList.length > 0) ? tablesList : initialTables;
+    const effectiveOrders = (Array.isArray(ordersList) && ordersList.length > 0) ? ordersList : initialOrders;
 
     const extractOrderTable = (o) => {
       if (!o) return '';
@@ -574,13 +662,14 @@ export const AppProvider = ({ children }) => {
       return '';
     };
 
-    return tablesList.map(t => {
+    return effectiveTables.map((t, idx) => {
       if (!t) return null;
       const tIdStr = String(t.id || t.tableNumber || t.tableNo || t.name || '').trim();
       const tableNum = tIdStr.replace(/^T-|^Table\s*/i, '').trim();
-      const tableLabel = `Table ${tableNum || tIdStr || '1'}`;
+      const tableLabel = `Table ${tableNum || tIdStr || (idx + 1)}`;
+      const tableId = t._id || t.id || `tbl-${tableNum || (idx + 1)}`;
 
-      const unpaidOrders = ordersList.filter(o => {
+      const unpaidOrders = effectiveOrders.filter(o => {
         if (!o) return false;
         const rawTable = extractOrderTable(o);
         const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
@@ -591,33 +680,74 @@ export const AppProvider = ({ children }) => {
         return isMatch && bStatus !== 'paid';
       });
 
-      if (unpaidOrders.length > 0) {
-        const total = unpaidOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+      const paidOrders = effectiveOrders.filter(o => {
+        if (!o) return false;
+        const rawTable = extractOrderTable(o);
+        const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
+        const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
+          (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
+          (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
+        const bStatus = (o.billingStatus || '').toLowerCase();
+        return isMatch === true;
+      });
+
+      const targetOrders = unpaidOrders.length > 0 ? unpaidOrders : (paidOrders.length > 0 ? paidOrders.slice(0, 1) : []);
+      if (targetOrders.length === 0) return null;
+
+      const isUnpaid = unpaidOrders.length > 0;
+      const primaryOrder = targetOrders[0] || {};
+      const allItems = targetOrders.flatMap(o => Array.isArray(o.items) ? o.items : []);
+      const mappedItems = allItems.map(it => {
+        const q = Number(it.qty ?? it.quantity ?? 1) || 1;
+        const r = Number(it.rate ?? it.price ?? 0) || 0;
         return {
-          table: tableLabel,
-          orders: unpaidOrders.length,
-          total: total,
-          status: 'Unpaid'
+          name: it.name || it.itemName || 'Item',
+          qty: q,
+          rate: r,
+          amount: Number(it.amount ?? it.total ?? (q * r)) || (q * r)
         };
-      } else {
-        const paidOrders = ordersList.filter(o => {
-          if (!o) return false;
-          const rawTable = extractOrderTable(o);
-          const cleanTable = rawTable.replace(/^Table\s*|^T-/i, '').trim();
-          const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
-            (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
-            (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
-          const bStatus = (o.billingStatus || '').toLowerCase();
-          return isMatch && bStatus === 'paid';
-        });
-        const lastPaidTotal = paidOrders.length > 0 ? (Number(paidOrders[paidOrders.length - 1].total) || 0) : 0;
-        return {
-          table: tableLabel,
-          orders: 0,
-          total: lastPaidTotal,
-          status: 'Paid'
-        };
-      }
+      });
+
+      const subtotal = targetOrders.reduce((sum, o) => sum + (Number(o.subtotal ?? o.total) || 0), 0) || mappedItems.reduce((sum, it) => sum + it.amount, 0);
+      const tax = targetOrders.reduce((sum, o) => sum + (Number(o.tax) || 0), 0) || Math.round(subtotal * 0.05);
+      const discount = targetOrders.reduce((sum, o) => sum + (Number(o.discount) || 0), 0);
+      const total = targetOrders.reduce((sum, o) => sum + (Number(o.total ?? o.totalAmount) || 0), 0) || (subtotal + tax - discount);
+      const paidAmount = isUnpaid ? 0 : total;
+      const balanceAmount = isUnpaid ? total : 0;
+      const rawDate = primaryOrder.createdAt || primaryOrder.date || new Date().toISOString();
+
+      return {
+        _id: `bill-${tableId}`,
+        id: `BILL-${tableNum || idx + 1}`,
+        sNo: idx + 1,
+        billNo: `BILL-${tableNum || idx + 1}`,
+        orderId: primaryOrder.orderId || primaryOrder.id || `#ORD-${tableNum}`,
+        orderType: primaryOrder.orderType || 'Dine-In',
+        table: tableLabel,
+        tableNo: tableNum,
+        tableId: tableId,
+        billDateTime: rawDate,
+        date: rawDate.includes('T') ? rawDate.split('T')[0] : rawDate,
+        time: primaryOrder.time || '12:30 PM',
+        subtotal,
+        tax,
+        discount,
+        billAmount: total,
+        total,
+        amount: total,
+        paidAmount,
+        balanceAmount,
+        status: isUnpaid ? 'Unpaid' : 'Paid',
+        paymentStatus: isUnpaid ? 'Unpaid' : 'Paid',
+        paymentMethod: primaryOrder.paymentMethod || 'UPI',
+        cashier: primaryOrder.staff || primaryOrder.waiter || 'Priya Sharma',
+        staff: primaryOrder.waiter || primaryOrder.staff || 'Ramesh Kumar',
+        customerName: primaryOrder.customerName || `Guest (${tableLabel})`,
+        customerPhone: primaryOrder.customerPhone || '',
+        orderIds: targetOrders.map(o => o._id || o.id).filter(Boolean),
+        orders: targetOrders.length,
+        items: mappedItems
+      };
     }).filter(Boolean);
   };
 
@@ -626,7 +756,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const res = await MemberApi.getTables({ limit: 10, ...params });
+      const res = await MemberApi.getTables({ page: 0, limit: 10, ...params });
       if (res && res.status && res.response && res.response.data) {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
@@ -713,12 +843,13 @@ export const AppProvider = ({ children }) => {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
-          const computedBillData = computeBillingData(rawOrders, rest.tables || []);
+          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : initialOrders);
+          const computedBillData = computeBillingData(finalOrders, rest.tables || []);
           return {
             ...prev,
             [targetId]: {
               ...rest,
-              orders: rawOrders,
+              orders: finalOrders,
               billingData: computedBillData
             }
           };
@@ -734,7 +865,7 @@ export const AppProvider = ({ children }) => {
     const targetId = currentRestaurantId || 'rest-1';
     if (!token) return;
     try {
-      const queryParams = { limit: 10, ...params };
+      const queryParams = { page: 0, limit: 10, ...params };
       const res = await MenuApi.getMenuItems(queryParams);
       if (res && res.status && res.response) {
         const menuData = Array.isArray(res.response.data)
@@ -763,7 +894,7 @@ export const AppProvider = ({ children }) => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (!token) return;
     try {
-      const branchParams = { limit: 10, ...params };
+      const branchParams = { page: 0, limit: 10, ...params };
       const branchResponse = await BranchApi.getBranches(branchParams);
 
       if (branchResponse && branchResponse.status && branchResponse.response) {
@@ -1248,14 +1379,13 @@ export const AppProvider = ({ children }) => {
         const initialRoleName = profRoleObj?.roleName || profRoleObj?.name || (typeof profileData.role === 'string' ? profileData.role : '') || '';
         const initialRoleUpper = initialRoleName.toUpperCase().trim();
 
-        const isOwnerAccount = 
-          profUserType === 'RESTAURANT_OWNER' || 
-          profUserType === 'OWNER' || 
-          profUserType === 'SUPER ADMIN' || 
-          profUserType === 'SUPER_ADMIN' || 
-          initialRoleUpper === 'RESTAURANT_OWNER' || 
-          initialRoleUpper === 'OWNER' || 
-          initialRoleUpper === 'SUPER ADMIN';
+        const isOwnerRoleName = (r) => {
+          const s = String(r || '').toUpperCase().trim();
+          return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
+        };
+
+        const hasSpecificNonOwnerRole = Boolean(initialRoleUpper && !isOwnerRoleName(initialRoleUpper));
+        const isOwnerAccount = !hasSpecificNonOwnerRole && (isOwnerRoleName(profUserType) || isOwnerRoleName(initialRoleUpper));
 
         // Check if staff user account itself is inactive or deleted
         const pUserId = String(profileData._id || profileData.id || '').trim();
@@ -1507,6 +1637,17 @@ export const AppProvider = ({ children }) => {
           }
           return updatedUser;
         });
+
+        if (isSubBranchUser(profileData)) {
+          const assignedId = getUserAssignedBranchId(profileData);
+          if (assignedId) {
+            _setSelectedBranchId(assignedId);
+            try {
+              sessionStorage.setItem('selectedBranchId', String(assignedId));
+            } catch (e) {}
+          }
+        }
+
         return res.data;
       } else if (res && !res.status) {
         const rawErr = String(res.message || res.response?.message || res.response?.data?.message || '').toLowerCase();
@@ -1541,13 +1682,16 @@ export const AppProvider = ({ children }) => {
     return null;
   };
 
-  // Automatically fetch live profile, branches, and subscription dashboard from API for current user
+  // Automatically fetch live profile, branches, subscription dashboard, orders, tables, and menu from API for current user
   useEffect(() => {
     const token = sessionStorage.getItem('userToken') || sessionStorage.getItem('token');
     if (token) {
       fetchProfile();
-      fetchBranches({ limit: 10 });
+      fetchBranches({ page: 0, limit: 10 });
       fetchSubscriptionDashboard();
+      fetchOrders({ page: 0, limit: 50 });
+      fetchTables({ page: 0, limit: 50 });
+      fetchMenu({ page: 0, limit: 50 });
     }
   }, [currentUser?.id, currentUser?.restaurantId]);
 
@@ -1956,11 +2100,12 @@ export const AppProvider = ({ children }) => {
           const targetRestId = user.restaurantId;
           setCurrentRestaurantId(targetRestId);
 
-          if (!isRestaurantOwner && userBranchId && userBranchId !== 'ALL') {
-            setSelectedBranchId(userBranchId);
-            sessionStorage.setItem("selectedBranchId", userBranchId);
+          if (isSubBranchUser(user)) {
+            const assignedId = getUserAssignedBranchId(user);
+            _setSelectedBranchId(assignedId);
+            sessionStorage.setItem("selectedBranchId", assignedId);
           } else {
-            setSelectedBranchId('COMPANY');
+            _setSelectedBranchId('COMPANY');
             sessionStorage.setItem("selectedBranchId", 'COMPANY');
           }
 

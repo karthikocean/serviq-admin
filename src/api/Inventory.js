@@ -22,7 +22,9 @@ class InventoryApi {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       }
       if (cleanParams.limit !== undefined) {
-        cleanParams.limit = Number(cleanParams.limit) || 10;
+        cleanParams.limit = Number(cleanParams.limit);
+      } else {
+        cleanParams.limit = 0;
       }
       const response = await apiClient.get("/inventory/items", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
@@ -489,6 +491,124 @@ class InventoryApi {
       }
     } catch (error) {
       console.warn("InventoryApi getStats note:", error);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  // --- INTER-BRANCH TRANSFERS ---
+  async getTransfers(params = {}) {
+    try {
+      const cleanParams = {};
+      Object.keys(params).forEach(key => {
+        if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
+          cleanParams[key] = params[key];
+        }
+      });
+      const response = await apiClient.get("/inventory/transfers", { params: cleanParams });
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.warn("InventoryApi getTransfers note:", error);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async getTransferById(id) {
+    try {
+      const response = await apiClient.get(`/inventory/transfers/${id}`);
+      if (response.status === 200 || response.status === 201) {
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      console.warn("InventoryApi getTransferById note:", error);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async createTransfer(data, options = {}) {
+    try {
+      const response = await apiClient.post("/inventory/transfers", data);
+      if (response.status === 200 || response.status === 201) {
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(
+            response.data.message || "Inter-branch transfer request created successfully!",
+            true
+          );
+        }
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to create transfer request.";
+      if (!options.silent) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async updateTransferStatus(id, data = {}, options = {}) {
+    try {
+      const response = await apiClient.put(`/inventory/transfers/${id}/status`, data);
+      if (response.status === 200 || response.status === 201) {
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(
+            response.data.message || `Transfer marked as ${data.status || 'Updated'}!`,
+            true
+          );
+        }
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update transfer status.";
+      if (!options.silent) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async deleteTransfer(id, options = {}) {
+    try {
+      const response = await apiClient.delete(`/inventory/transfers/${id}`);
+      if (response.status === 200 || response.status === 201) {
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(
+            response.data.message || "Transfer deleted successfully!",
+            true
+          );
+        }
+        return { status: true, response: response.data };
+      }
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to delete transfer.";
+      if (!options.silent) {
+        ShowNotifications.showAlertNotification(errorMessage, false);
+      }
       return {
         status: false,
         response: error?.response?.data || error,

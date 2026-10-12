@@ -8,6 +8,7 @@ import UserApi from '../../api/User';
 import BranchApi from '../../api/Branch';
 import RoleApi from '../../api/Role';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
+import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
 
 export default function TableFormPage() {
   const navigate = useNavigate();
@@ -15,33 +16,18 @@ export default function TableFormPage() {
   const location = useLocation();
   const { activeRestaurant, selectedBranchId, currentUser, addDiningTable, updateDiningTable } = useAppState();
 
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-  const isCompanyUser =
-    userType === 'RESTAURANT_OWNER' ||
-    userType === 'OWNER' ||
-    userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
-    userType === 'ADMIN' ||
-    userRole === 'restaurant_owner' ||
-    userRole === 'restaurant owner' ||
-    userRole === 'owner' ||
-    userRole === 'super admin' ||
-    userRole === 'super_admin' ||
-    userRole === 'admin' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
+  // Get default branch from context
+  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
+    ? selectedBranchId
+    : '';
 
-  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
-  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-  const isBranchLocked = isBranchLogin;
+  // Determine Company vs Branch scope:
+  const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+  const isBranchLocked = !isCompanyScope;
 
   const [branches, setBranches] = useState(() => activeRestaurant?.branches || []);
   const [allRoles, setAllRoles] = useState([]);
@@ -54,11 +40,6 @@ export default function TableFormPage() {
   const isEdit = !!tableId;
   const [existingTable, setExistingTable] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // Get default branch from context
-  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
-    ? selectedBranchId
-    : '';
 
   const defaultBranchId = isBranchLogin ? userBranchId : cleanSelectedBranch;
 
@@ -73,6 +54,42 @@ export default function TableFormPage() {
   });
 
   const [formErrors, setFormErrors] = useState({});
+
+  // Sync form branch and next Table ID when locked to a branch
+  useEffect(() => {
+    if (isBranchLocked) {
+      const lockedBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
+      if (lockedBranch && form.branchId !== lockedBranch) {
+        setForm(prev => ({ ...prev, branchId: lockedBranch }));
+        if (!isEdit) {
+          TableApi.getNextTableId({ branchId: lockedBranch })
+            .then(res => {
+              if (res?.status && res.response?.data?.nextId) {
+                setForm(prev => ({ ...prev, id: res.response.data.nextId }));
+              }
+            })
+            .catch(console.error);
+        }
+      }
+    }
+  }, [isBranchLocked, cleanSelectedBranch, userBranchId, isBranchLogin, isEdit]);
+
+  const handleBranchChange = async (newBranchId) => {
+    setForm(prev => ({ ...prev, branchId: newBranchId }));
+    if (formErrors.branchId) {
+      setFormErrors(prev => ({ ...prev, branchId: '' }));
+    }
+    if (!isEdit && newBranchId) {
+      try {
+        const res = await TableApi.getNextTableId({ branchId: newBranchId });
+        if (res?.status && res.response?.data?.nextId) {
+          setForm(prev => ({ ...prev, id: res.response.data.nextId }));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchBranches();
@@ -369,6 +386,10 @@ export default function TableFormPage() {
   const validate = () => {
     const errors = {};
 
+    if (!isBranchLocked && !form.branchId) {
+      errors.branchId = 'Please select a branch.';
+    }
+
     const seatsNum = parseInt(form.seats);
     if (isNaN(seatsNum) || seatsNum < 1) {
       errors.seats = 'Please enter a valid seating capacity (at least 1 seat).';
@@ -386,9 +407,9 @@ export default function TableFormPage() {
 
     const idStr = form.id ? form.id.trim() : '';
     const restaurantId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId;
-    const effectiveBranchId = form.branchId && form.branchId !== 'ALL'
-      ? form.branchId
-      : (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (branches[0]?._id || branches[0]?.id || currentUser?.activeBranchId || undefined));
+    const effectiveBranchId = isBranchLocked
+      ? (isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || form.branchId))
+      : (form.branchId && form.branchId !== 'ALL' ? form.branchId : (branches[0]?._id || branches[0]?.id || currentUser?.activeBranchId || undefined));
 
     const payload = {
       restaurantId: restaurantId,
@@ -493,11 +514,11 @@ export default function TableFormPage() {
               </label>
               {(() => {
                 const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
-                const isLocked = isBranchLogin;
+                const isLocked = isBranchLocked;
 
                 let currentBranchVal = form.branchId;
-                if (isBranchLogin && userBranchId) {
-                  currentBranchVal = userBranchId;
+                if (isBranchLocked) {
+                  currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || form.branchId);
                 } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                   currentBranchVal = '';
                 }
@@ -508,7 +529,7 @@ export default function TableFormPage() {
                 let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                 const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
@@ -519,14 +540,19 @@ export default function TableFormPage() {
                   <div>
                     <SearchableSelect
                       value={effectiveVal}
-                      onChange={e => setForm(prev => ({ ...prev, branchId: e.target.value }))}
+                      onChange={e => handleBranchChange(e.target.value)}
                       isDisabled={isLocked}
                       options={branchOptions}
                       placeholder="Select Branch..."
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to your assigned branch.
+                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
+                      </span>
+                    )}
+                    {formErrors.branchId && (
+                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {formErrors.branchId}
                       </span>
                     )}
                   </div>

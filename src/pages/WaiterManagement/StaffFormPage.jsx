@@ -6,6 +6,7 @@ import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/V
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import RoleApi from '../../api/Role';
+import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
 
 export default function StaffFormPage() {
   const navigate = useNavigate();
@@ -30,38 +31,18 @@ export default function StaffFormPage() {
     fetchRoles();
   }, []);
 
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-  const isCompanyUser =
-    userType === 'RESTAURANT_OWNER' ||
-    userType === 'OWNER' ||
-    userType === 'SUPER ADMIN' ||
-    userType === 'SUPER_ADMIN' ||
-    userType === 'ADMIN' ||
-    userRole === 'restaurant_owner' ||
-    userRole === 'restaurant owner' ||
-    userRole === 'owner' ||
-    userRole === 'super admin' ||
-    userRole === 'super_admin' ||
-    userRole === 'admin' ||
-    (!currentUser?.branchId && !currentUser?.activeBranchId);
-
-  const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-    ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-    : (currentUser?.branchId || currentUser?.activeBranchId)) || '';
-
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
   // Only lock if user is a branch-level staff/manager with an assigned branch
-  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
   const rawBranches = activeRestaurant?.branches || [];
   const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
     ? selectedBranchId
     : '';
+
+  const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+  const isBranchLocked = !isCompanyScope;
 
   const getInitialBranchId = () => {
     if (isBranchLogin) return userBranchId;
@@ -283,11 +264,11 @@ export default function StaffFormPage() {
               </label>
               {(() => {
                 const allBranchesList = (rawBranches && rawBranches.length > 0) ? rawBranches : (activeRestaurant?.branches || []);
-                const isLocked = isBranchLogin;
+                const isLocked = isBranchLocked;
 
                 let currentBranchVal = form.branchId;
-                if (isBranchLogin && userBranchId) {
-                  currentBranchVal = userBranchId;
+                if (isBranchLocked) {
+                  currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || form.branchId);
                 } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                   currentBranchVal = '';
                 }
@@ -298,7 +279,7 @@ export default function StaffFormPage() {
                 let effectiveVal = currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (currentBranchVal || '');
 
                 const branchOptions = [
-                  { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                  ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name} ${b.branchCode ? `(${b.branchCode})` : ''}`
@@ -316,7 +297,7 @@ export default function StaffFormPage() {
                     />
                     {isLocked && (
                       <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                        Branch is locked to your assigned branch.
+                        {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                       </span>
                     )}
                   </div>

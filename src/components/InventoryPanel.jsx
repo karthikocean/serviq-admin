@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, Navigate } from 'react-router-dom';
 import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications';
+import { isUserCompanyUser } from '../helper/BranchHelper.js';
 
 // Modular Inventory Sub-Components
 import CompanyInventoryItems from './inventory/CompanyInventoryItems';
@@ -31,10 +32,11 @@ const INITIAL_RECEIPTS = [];
 const INITIAL_TRANSACTIONS = [];
 
 export default function InventoryPanel() {
-  const { selectedBranchId, hasPermission } = useAppState();
+  const { currentUser, selectedBranchId, hasPermission } = useAppState();
   const location = useLocation();
 
-  const isCompanySelected = String(selectedBranchId || '').toUpperCase() === 'COMPANY';
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const isCompanySelected = isCompanyUser && (!selectedBranchId || selectedBranchId === 'ALL' || selectedBranchId === 'All' || String(selectedBranchId).toUpperCase() === 'COMPANY');
   const scope = isCompanySelected ? 'COMPANY' : 'BRANCH';
 
   // Shared Datasets
@@ -58,6 +60,7 @@ export default function InventoryPanel() {
     '/inventory/branch-requests',
     '/inventory/distribution',
     '/inventory/stock-distribution',
+    '/inventory/branch-transfer',
     '/inventory/transactions'
   ];
 
@@ -105,8 +108,8 @@ export default function InventoryPanel() {
   };
 
   const handleDeleteCompanyItem = (item) => {
-    setItems(prev => prev.filter(i => i.id !== item.id));
-    ShowNotifications.showAlertNotification(`Item ${item.name} deleted!`, true);
+    const targetId = item._id || item.id;
+    setItems(prev => prev.filter(i => (i._id || i.id) !== targetId));
   };
 
   const handleUpdateCentralStock = (itemId, newQty, reason) => {
@@ -165,6 +168,8 @@ export default function InventoryPanel() {
       item: formData.item,
       quantity: qty,
       unit: formData.unit || 'kg',
+      amount: total,
+      rate: rate,
       source: `Supplier: ${formData.supplier}`,
       destination: 'Central Stock',
       refNo: poNo,
@@ -327,6 +332,8 @@ export default function InventoryPanel() {
       item: formData.item,
       quantity: qty,
       unit: formData.unit || 'kg',
+      amount: total,
+      rate: rate,
       source: `Vendor: ${formData.supplier}`,
       destination: 'Branch Stock',
       refNo: poNo,
@@ -453,7 +460,7 @@ export default function InventoryPanel() {
           )}
 
           {currentPath === '/inventory/vendors' && (
-            <CompanyVendors />
+            <CompanyVendors hasPermission={hasPermission} />
           )}
 
           {currentPath === '/inventory/branch-requests' && (
@@ -469,6 +476,15 @@ export default function InventoryPanel() {
           {(currentPath === '/inventory/distribution' || currentPath === '/inventory/stock-distribution') && (
             <CompanyStockDistribution
               distributions={distributions}
+              hasPermission={hasPermission}
+            />
+          )}
+
+          {currentPath === '/inventory/branch-transfer' && (
+            <BranchTransfer
+              transfers={transfers}
+              items={items}
+              onSaveTransfer={handleSaveTransfer}
               hasPermission={hasPermission}
             />
           )}

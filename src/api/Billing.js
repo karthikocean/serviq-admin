@@ -54,11 +54,11 @@ class BillingApi {
 
       cleanParams.orderType = filters.orderType || 'DINE_IN';
 
-      // 1-based page index
-      const pageNum = filters.page !== undefined ? Number(filters.page) : 1;
-      cleanParams.page = pageNum < 1 ? 1 : pageNum;
+      // 0-based page index (starts with 0, limit is 10)
+      const pageNum = filters.page !== undefined ? Number(filters.page) : 0;
+      cleanParams.page = pageNum < 0 ? 0 : pageNum;
 
-      cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
+      cleanParams.limit = filters.limit !== undefined ? (Number(filters.limit) || 10) : 10;
       cleanParams.sortBy = filters.sortBy || 'createdAt';
       cleanParams.sortOrder = filters.sortOrder || 'desc';
 
@@ -77,9 +77,25 @@ class BillingApi {
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/history${queryParams ? `?${queryParams}` : ''}`;
-      const response = await apiClient.get(url);
+      let response;
+      try {
+        response = await apiClient.get(url);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
+          const orderParams = { limit: cleanParams.limit || 50, page: Math.max(0, cleanParams.page || 0) };
+          if (cleanParams.branchId) orderParams.branchId = cleanParams.branchId;
+          const ordersRes = await apiClient.get('/orders', { params: orderParams }).catch(() => null);
+          if (ordersRes?.data) {
+            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            const paidOrders = rawOrders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+            const resultOrders = paidOrders.length > 0 ? paidOrders : rawOrders;
+            return { status: true, response: { data: resultOrders, total: resultOrders.length } };
+          }
+        }
+        throw err1;
+      }
 
-      if (response.status === 200 || response.status === 201) {
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
     } catch (error) {
@@ -146,7 +162,20 @@ class BillingApi {
 
       const queryParams = new URLSearchParams(cleanParams).toString();
       const url = `/billing/current${queryParams ? `?${queryParams}` : ''}`;
-      const response = await apiClient.get(url);
+      let response;
+      try {
+        response = await apiClient.get(url);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
+          const ordersRes = await apiClient.get('/orders').catch(() => null);
+          if (ordersRes?.data) {
+            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
+          }
+        }
+        throw err1;
+      }
+
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }

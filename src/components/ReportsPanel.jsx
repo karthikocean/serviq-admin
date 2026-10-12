@@ -111,7 +111,7 @@ const AlertTriangleIcon = ({ size = 16, color = 'currentColor' }) => (
 );
 
 import { formatDateDMY, formatDateTimeDMY, extractOrderISODate } from '../helper/DateHelper.js';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import { useAppState } from '../config/AppContext.jsx';
 
 // Safe text extractor
@@ -254,41 +254,10 @@ export default function ReportsPanel({
   }, [branches, activeRestaurant?.branches]);
 
   // Determine if login is Company vs Branch login
-  const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
-    ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
-    : (typeof currentUser?.role === 'string' ? currentUser.role : '');
-  const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-
-  // Company user: Restaurant Owner, Super Admin, Owner role, or unassigned to a specific branch
-  const isCompanyUser = useMemo(() => {
-    return (
-      userType === 'RESTAURANT_OWNER' ||
-      userType === 'OWNER' ||
-      userType === 'SUPER ADMIN' ||
-      userType === 'SUPER_ADMIN' ||
-      userRole === 'restaurant_owner' ||
-      userRole === 'restaurant owner' ||
-      userRole === 'owner' ||
-      userRole === 'super admin' ||
-      userRole === 'super_admin' ||
-      (!currentUser?.branchId && !currentUser?.activeBranchId)
-    );
-  }, [userType, userRole, currentUser]);
-
-  const userBranchId = useMemo(() => {
-    return (
-      typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
-        ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
-        : (currentUser?.branchId || currentUser?.activeBranchId)
-    );
-  }, [currentUser]);
-
-  // Branch Login: User is a branch-level staff/manager (not company owner) with an assigned branch
+  const isCompanyUser = useMemo(() => isUserCompanyUser(currentUser), [currentUser]);
+  const userBranchId = useMemo(() => getUserAssignedBranchId(currentUser), [currentUser]);
   const isBranchLogin = useMemo(() => {
-    return !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
+    return !isCompanyUser && Boolean(userBranchId);
   }, [isCompanyUser, userBranchId]);
 
   const [activeTab, setActiveTab] = useState(activeTabProp || initialTab);
@@ -348,8 +317,8 @@ export default function ReportsPanel({
   const [taxSubTab, setTaxSubTab] = useState('tax-summary'); // 'tax-summary' | 'payment-settlement'
   const [inventorySubTab, setInventorySubTab] = useState('position'); // 'position' | 'movement' | 'low-stock'
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  // Pagination State (0-based page, default limit 10)
+  const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
   // View Order Modal State
@@ -517,7 +486,7 @@ export default function ReportsPanel({
 
   // Reset pagination when active tab or filters change
   useEffect(() => {
-    setCurrentPage(1);
+    setCurrentPage(0);
   }, [
     activeTab,
     inventorySubTab,
@@ -1400,7 +1369,9 @@ export default function ReportsPanel({
     if (currentApiData) {
       if (typeof currentApiData.totalItems === 'number') return currentApiData.totalItems;
       if (typeof currentApiData.totalRecords === 'number') return currentApiData.totalRecords;
+      if (typeof currentApiData.total === 'number') return currentApiData.total;
       if (typeof currentApiData.count === 'number') return currentApiData.count;
+      if (typeof currentApiData.pagination?.total === 'number') return currentApiData.pagination.total;
     }
     return currentTabRecords.length;
   }, [activeTab, taxSubTab, taxSummaryRows.length, paymentSettlementRows.length, currentApiData, currentTabRecords.length]);
@@ -1412,26 +1383,35 @@ export default function ReportsPanel({
     if (currentApiData && typeof currentApiData.totalPages === 'number') {
       return Math.max(1, currentApiData.totalPages);
     }
+    if (currentApiData && typeof currentApiData.pagination?.totalPages === 'number') {
+      return Math.max(1, currentApiData.pagination.totalPages);
+    }
     return Math.max(1, Math.ceil(totalRecordsCount / pageSize));
   }, [activeTab, currentApiData, totalRecordsCount, pageSize]);
+
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
 
   const paginatedRecords = useMemo(() => {
     if (activeTab === 'tax') {
       const records = taxSubTab === 'tax-summary' ? taxSummaryRows : paymentSettlementRows;
       if (records.length > pageSize) {
-        const start = (currentPage - 1) * pageSize;
+        const start = currentPage * pageSize;
         return records.slice(start, start + pageSize);
       }
       return records;
     }
     if (currentApiData && Array.isArray(currentApiData.data)) {
       if (currentApiData.data.length > pageSize && currentApiData.totalPages === undefined) {
-        const start = (currentPage - 1) * pageSize;
+        const start = currentPage * pageSize;
         return currentApiData.data.slice(start, start + pageSize);
       }
       return currentApiData.data;
     }
-    const start = (currentPage - 1) * pageSize;
+    const start = currentPage * pageSize;
     return currentTabRecords.slice(start, start + pageSize);
   }, [activeTab, taxSubTab, taxSummaryRows, paymentSettlementRows, currentApiData, currentTabRecords, currentPage, pageSize]);
 
@@ -1681,7 +1661,7 @@ export default function ReportsPanel({
               border: `1px solid ${(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? '#bfdbfe' : '#fed7aa'}`
             }}>
               {(!branchFilter || branchFilter === 'ALL' || branchFilter === 'All' || String(branchFilter).toUpperCase() === 'COMPANY') ? (
-                <>🏢 Company View: Complete History (All Branches)</>
+                <></>
               ) : (
                 <>📍 Branch View: {allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.name || 
                   allBranchesList.find(b => String(b.id || b._id) === String(branchFilter) || String(b.branchCode) === String(branchFilter))?.branchName || 
@@ -2446,13 +2426,13 @@ export default function ReportsPanel({
             {totalRecordsCount > pageSize && (
               <div className="reports-pagination-bar">
                 <div className="pagination-info">
-                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                  Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
                 </div>
 
                 <div className="pagination-controls">
                   <div className="page-size-selector">
                     <span>Rows per page:</span>
-                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
@@ -2464,24 +2444,24 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 0}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                     >
                       Prev
                     </button>
 
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum = i + 1;
-                      if (totalPages > 5 && currentPage > 3) {
-                        pageNum = currentPage - 3 + i;
+                      if (totalPages > 5 && currentPage + 1 > 3) {
+                        pageNum = (currentPage + 1) - 3 + i;
                         if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                       }
                       return (
                         <button
                           key={pageNum}
                           type="button"
-                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                          onClick={() => setCurrentPage(pageNum)}
+                          className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum - 1)}
                         >
                           {pageNum}
                         </button>
@@ -2491,8 +2471,8 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                     >
                       Next
                     </button>
@@ -2594,13 +2574,13 @@ export default function ReportsPanel({
             {totalRecordsCount > pageSize && (
               <div className="reports-pagination-bar">
                 <div className="pagination-info">
-                  Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+                  Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
                 </div>
 
                 <div className="pagination-controls">
                   <div className="page-size-selector">
                     <span>Rows per page:</span>
-                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                    <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                       <option value={10}>10</option>
                       <option value={25}>25</option>
                       <option value={50}>50</option>
@@ -2612,24 +2592,24 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 0}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                     >
                       Prev
                     </button>
 
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNum = i + 1;
-                      if (totalPages > 5 && currentPage > 3) {
-                        pageNum = currentPage - 3 + i;
+                      if (totalPages > 5 && currentPage + 1 > 3) {
+                        pageNum = (currentPage + 1) - 3 + i;
                         if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                       }
                       return (
                         <button
                           key={pageNum}
                           type="button"
-                          className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                          onClick={() => setCurrentPage(pageNum)}
+                          className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                          onClick={() => setCurrentPage(pageNum - 1)}
                         >
                           {pageNum}
                         </button>
@@ -2639,8 +2619,8 @@ export default function ReportsPanel({
                     <button
                       type="button"
                       className="btn-page-nav"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                     >
                       Next
                     </button>
@@ -3315,13 +3295,13 @@ export default function ReportsPanel({
         {totalRecordsCount > 0 && (
           <div className="reports-pagination-bar">
             <div className="pagination-info">
-              Showing <strong>{Math.min((currentPage - 1) * pageSize + 1, totalRecordsCount)}</strong> to <strong>{Math.min(currentPage * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
+              Showing <strong>{totalRecordsCount === 0 ? 0 : currentPage * pageSize + 1}</strong> to <strong>{Math.min((currentPage + 1) * pageSize, totalRecordsCount)}</strong> of <strong>{totalRecordsCount}</strong> records
             </div>
 
             <div className="pagination-controls">
               <div className="page-size-selector">
                 <span>Rows per page:</span>
-                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
                   <option value={10}>10</option>
                   <option value={25}>25</option>
                   <option value={50}>50</option>
@@ -3333,24 +3313,24 @@ export default function ReportsPanel({
                 <button
                   type="button"
                   className="btn-page-nav"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 0}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
                 >
                   Prev
                 </button>
 
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum = i + 1;
-                  if (totalPages > 5 && currentPage > 3) {
-                    pageNum = currentPage - 3 + i;
+                  if (totalPages > 5 && currentPage + 1 > 3) {
+                    pageNum = (currentPage + 1) - 3 + i;
                     if (pageNum > totalPages) pageNum = totalPages - (4 - i);
                   }
                   return (
                     <button
                       key={pageNum}
                       type="button"
-                      className={`btn-page-nav ${currentPage === pageNum ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(pageNum)}
+                      className={`btn-page-nav ${currentPage === pageNum - 1 ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(pageNum - 1)}
                     >
                       {pageNum}
                     </button>
@@ -3360,8 +3340,8 @@ export default function ReportsPanel({
                 <button
                   type="button"
                   className="btn-page-nav"
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage >= totalPages - 1 || totalPages === 0}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
                 >
                   Next
                 </button>

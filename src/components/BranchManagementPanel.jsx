@@ -571,6 +571,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setPage(0);
   }, [searchTerm, statusFilter]);
 
+  React.useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   // Metrics
   const totalBranchesCount = branches.length;
   const activeBranchesCount = branches.filter(b => b.status === 'Active').length;

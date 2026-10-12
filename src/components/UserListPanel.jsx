@@ -8,6 +8,7 @@ import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
 import SearchableSelect from './SearchableSelect.jsx';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
 
 const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -68,17 +69,15 @@ export default function UserListPanel() {
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userRole = (roleStr || '').toLowerCase().trim();
-  const userType = (userTypeStr || '').toUpperCase().trim();
-  const isAdmin = userRole === 'admin' || userRole === 'super admin' || userRole === 'owner' || userRole === 'restaurant_owner' || userType === 'ADMIN' || userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userType === 'RESTAURANT_OWNER' || userType === 'OWNER';
-  const isCompanyUser = isAdmin || (!currentUser?.branchId && !currentUser?.activeBranchId);
-  const currentBranchId = typeof currentUser?.branchId === 'object' ? (currentUser?.branchId?._id || currentUser?.branchId?.id) : currentUser?.branchId;
-  const userBranchId = currentBranchId || currentUser?.activeBranchId || '';
-  const isBranchLogin = !isCompanyUser && Boolean(userBranchId && userBranchId !== 'ALL' && String(userBranchId).toUpperCase() !== 'COMPANY');
-  const isAllBranches = !selectedBranchId || selectedBranchId === 'ALL' || String(selectedBranchId).toUpperCase() === 'COMPANY';
-  const activeFilteredBranchId = !isAllBranches
-    ? selectedBranchId
-    : (!isAdmin && currentBranchId ? currentBranchId : null);
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isAdmin = isCompanyUser;
+  const currentBranchId = userBranchId;
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+  const isAllBranches = isCompanyUser && (!selectedBranchId || selectedBranchId === 'ALL' || String(selectedBranchId).toUpperCase() === 'COMPANY');
+  const activeFilteredBranchId = isBranchLogin
+    ? userBranchId
+    : (!isAllBranches ? selectedBranchId : null);
 
   const [viewState, setViewState] = useState('list'); // 'list' | 'form'
   const [editingUserId, setEditingUserId] = useState(null);
@@ -188,12 +187,21 @@ export default function UserListPanel() {
       BranchApi.getBranches(),
       RoleApi.getRoles()
     ]);
+    if (branchesRes?.status) setApiBranches(branchesRes.response?.data || branchesRes.response || []);
+    const currentBranches = branchesRes?.status ? (branchesRes.response?.data || branchesRes.response || []) : apiBranches;
+
     if (usersRes?.status) {
-      setApiUsers(usersRes.response.data || []);
-      setTotalPages(usersRes.response.totalPages || 1);
-      setTotalRecords(usersRes.response.total || 0);
+      const uData = usersRes.response?.data || usersRes.response || [];
+      let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
+      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && activeFilteredBranchId !== 'All') {
+        list = list.filter(u => isBranchMatch(u, activeFilteredBranchId, currentBranches));
+      }
+      setApiUsers(list);
+      const totalNum = usersRes.response?.total ?? usersRes.response?.totalRecords ?? usersRes.response?.totalUsers ?? usersRes.response?.count ?? usersRes.response?.pagination?.total ?? (usersRes.response?.data?.total ?? list.length);
+      setTotalRecords(totalNum);
+      const totalP = usersRes.response?.totalPages || usersRes.response?.pagination?.totalPages || usersRes.response?.data?.totalPages || Math.max(1, Math.ceil(totalNum / limit));
+      setTotalPages(totalP);
     }
-    if (branchesRes?.status) setApiBranches(branchesRes.response.data || []);
     if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
       setApiRoles(rolesRes.response.data);
     } else if (rolesRes?.status && Array.isArray(rolesRes.response)) {
@@ -205,11 +213,31 @@ export default function UserListPanel() {
   };
 
   useEffect(() => {
+    setPage(0);
+  }, [searchQuery, roleFilter, statusFilter, activeFilteredBranchId]);
+
+  useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchData();
     }, 300);
     return () => clearTimeout(delayDebounceFn);
   }, [page, searchQuery, roleFilter, statusFilter, activeFilteredBranchId]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
+  const isServerPaginated = Boolean(
+    (totalRecords > apiUsers.length && apiUsers.length <= limit) ||
+    (totalPages > 1 && apiUsers.length <= limit) ||
+    apiUsers.length <= limit
+  );
+
+  const paginatedUsers = (isServerPaginated || apiUsers.length <= limit)
+    ? apiUsers
+    : apiUsers.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -543,11 +571,13 @@ export default function UserListPanel() {
                 </label>
                 {(() => {
                   const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                  const isLocked = isBranchLogin;
+                  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                  const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
+                  const isLocked = !isCompanyScope;
 
                   let currentBranchVal = userForm.branchId;
-                  if (isBranchLogin && userBranchId) {
-                    currentBranchVal = userBranchId;
+                  if (!isCompanyScope) {
+                    currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
                   } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
                     currentBranchVal = '';
                   }
@@ -558,7 +588,7 @@ export default function UserListPanel() {
                   let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
 
                   const branchOptions = [
-                    { value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' },
+                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
                     ...allBranchesList.map(b => ({
                       value: b._id || b.id,
                       label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -579,7 +609,7 @@ export default function UserListPanel() {
                       />
                       {isLocked && (
                         <span style={{ color: '#64748b', fontSize: '11px', marginTop: '4px', display: 'block' }}>
-                          Branch is locked to your assigned branch.
+                          {isBranchLogin ? 'Branch is locked to your assigned branch.' : 'Branch is locked to currently selected branch.'}
                         </span>
                       )}
                     </>
@@ -928,7 +958,7 @@ export default function UserListPanel() {
               </tr>
             </thead>
             <tbody>
-              {apiUsers.map((user, index) => {
+              {paginatedUsers.map((user, index) => {
                 const uRoleId = typeof user.roleId === 'object' ? user.roleId?._id : user.roleId;
                 const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
                 const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
