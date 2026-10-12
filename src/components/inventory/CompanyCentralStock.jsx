@@ -59,15 +59,30 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
 
   const categories = ['All', 'Grains', 'Oils', 'Spices', 'Meat', 'Dairy', 'Vegetables', 'Beverages', 'Packaging'];
 
+  const PAGE_SIZE = 10;
+  const [totalItemsCount, setTotalItemsCount] = useState(0);
+
   const fetchCentralStock = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getItems({
-        limit: 100,
-        branchId: isBranchFiltered ? selectedBranchId : undefined
-      });
+      const queryParams = {
+        branchId: isBranchFiltered ? selectedBranchId : undefined,
+        search: searchTerm ? searchTerm.trim() : undefined,
+        category: categoryFilter !== 'All' ? categoryFilter : undefined,
+        page: currentPage,
+        limit: PAGE_SIZE
+      };
+      if (itemFilter !== 'All') {
+        queryParams.search = itemFilter;
+      }
+      if (stockStatusFilter !== 'All') {
+        queryParams.status = stockStatusFilter;
+      }
+
+      const res = await InventoryApi.getItems(queryParams);
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
+        const serverTotal = res.response.totalItems ?? res.response.total ?? res.response.totalRecords ?? res.response.count ?? (Array.isArray(rawItems) ? rawItems.length : 0);
         if (Array.isArray(rawItems)) {
           const formatted = rawItems.map(i => ({
             id: i._id || i.id,
@@ -84,6 +99,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
             status: i.status || 'Active'
           }));
           setItemsList(formatted);
+          setTotalItemsCount(Number(serverTotal) || formatted.length);
         }
       }
     } catch (err) {
@@ -91,19 +107,18 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     } finally {
       setLoading(false);
     }
-  }, [isBranchFiltered, selectedBranchId]);
+  }, [isBranchFiltered, selectedBranchId, searchTerm, categoryFilter, itemFilter, stockStatusFilter, currentPage, PAGE_SIZE]);
 
   useEffect(() => {
-    fetchCentralStock();
+    const handler = setTimeout(() => {
+      fetchCentralStock();
+    }, 300);
+    return () => clearTimeout(handler);
   }, [fetchCentralStock]);
 
-  const rawDisplay = itemsList.length > 0 ? itemsList : (initialItems || []);
-  const displayItems = isBranchFiltered
-    ? rawDisplay.filter(i => isBranchMatch(i, selectedBranchId, branches))
-    : rawDisplay;
+  const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
 
   // Summary Metrics for Central Stock
-  const totalItemsCount = displayItems.length;
   const totalStockQty = displayItems.reduce((acc, item) => {
     const val = item.currentStock !== undefined ? item.currentStock : (item.centralStock || 0);
     return acc + (Number(val) || 0);
@@ -118,25 +133,13 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     return stock <= 0;
   }).length;
 
-  const filteredItems = displayItems.filter(item => {
-    const matchesSearch = !searchTerm.trim() || item.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'All' || item.category === categoryFilter;
-    const matchesItem = itemFilter === 'All' || item.name === itemFilter;
-
-    const currentStockVal = item.currentStock !== undefined ? item.currentStock : (item.centralStock || 0);
-    const minStockVal = item.minStock || 0;
-    const statusProps = getStockStatus(currentStockVal, minStockVal);
-    const matchesStatus = stockStatusFilter === 'All' || statusProps.label.toLowerCase() === stockStatusFilter.toLowerCase();
-
-    return matchesSearch && matchesCategory && matchesItem && matchesStatus;
-  });
-
-  const PAGE_SIZE = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  // Backend API handles all filtering and pagination
+  const filteredItems = displayItems;
+  const totalPages = Math.max(1, Math.ceil((totalItemsCount || filteredItems.length) / PAGE_SIZE));
 
   useEffect(() => {
     setCurrentPage(0);
-  }, [searchTerm, categoryFilter, itemFilter, stockStatusFilter]);
+  }, [searchTerm, categoryFilter, itemFilter, stockStatusFilter, selectedBranchId]);
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -144,7 +147,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     }
   }, [totalPages, currentPage]);
 
-  const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const paginatedItems = filteredItems;
 
   const handleSaveStockAdjust = (e) => {
     e.preventDefault();

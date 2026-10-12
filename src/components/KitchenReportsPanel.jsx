@@ -80,6 +80,7 @@ export default function KitchenReportsPanel({
 }) {
   const { selectedBranchId } = useAppState();
   const [apiKitchenData, setApiKitchenData] = useState([]);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   // Filters local states
   const [dateStart, setDateStart] = useState('');
@@ -87,6 +88,8 @@ export default function KitchenReportsPanel({
   const [filterStaff, setFilterStaff] = useState('All');
   const [filterDish, setFilterDish] = useState('All');
   const [filterPriority, setFilterPriority] = useState('All');
+  const [page, setPage] = useState(0);
+  const limit = 10;
 
   // Fetch kitchen reports from API when date/filters change
   useEffect(() => {
@@ -98,14 +101,18 @@ export default function KitchenReportsPanel({
           endDate: dateEnd || undefined,
           branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
           staffName: filterStaff !== 'All' ? filterStaff : undefined,
+          dish: filterDish !== 'All' ? filterDish : undefined,
+          priority: filterPriority !== 'All' ? filterPriority : undefined,
+          page: page,
           limit: 10
         };
         const res = await ReportsApi.getKitchenReports(filters);
         if (isMounted && res && res.status) {
-          const d = res.response?.data || res.response || [];
-          if (Array.isArray(d) && d.length > 0) {
-            setApiKitchenData(d);
-          }
+          const d = res.response?.data || res.response?.kots || res.response?.reports || res.response || [];
+          const list = Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : (Array.isArray(d?.kots) ? d.kots : []));
+          setApiKitchenData(list);
+          const serverTotal = res.response?.pagination?.total ?? res.response?.total ?? res.response?.totalRecords ?? res.response?.count ?? (res.response?.data?.total || list.length);
+          setTotalRecords(Number(serverTotal) || list.length);
         }
       } catch (err) {
         console.warn("Error fetching kitchen report API:", err);
@@ -113,7 +120,7 @@ export default function KitchenReportsPanel({
     };
     fetchApiReport();
     return () => { isMounted = false; };
-  }, [dateStart, dateEnd, filterStaff, selectedBranchId]);
+  }, [dateStart, dateEnd, filterStaff, filterDish, filterPriority, selectedBranchId, page]);
 
   // Modals local states
   const [showTimelineModal, setShowTimelineModal] = useState(false);
@@ -171,37 +178,31 @@ export default function KitchenReportsPanel({
     ...orders.flatMap(o => (Array.isArray(o.items) ? o.items : (Array.isArray(o.orderItems) ? o.orderItems : [])).map(i => i?.name || i?.dishName)).filter(Boolean)
   ])).sort();
 
-  // Get filtered orders
-  const filteredKitchenReports = orders.filter(ord => {
-    const date = getOrderDate(ord);
-    const kitchenStaffName = ord.kitchenStaff || ord.chef || ord.preparedBy || 'Kitchen';
-    const priority = getOrderPriority(ord);
-
-    if (dateStart && date && date < dateStart) return false;
-    if (dateEnd && date && date > dateEnd) return false;
-    if ((dateStart || dateEnd) && !date) return false;
-    if (filterStaff !== 'All' && kitchenStaffName !== filterStaff) return false;
-    if (filterDish !== 'All') {
-      const ordItems = Array.isArray(ord.items) ? ord.items : (Array.isArray(ord.orderItems) ? ord.orderItems : []);
-      const hasDish = ordItems.some(item => (item.name || item.dishName) === filterDish);
-      if (!hasDish) return false;
-    }
-    if (filterPriority !== 'All' && priority !== filterPriority) return false;
-
-    return true;
-  });
+  // Display backend reports directly
+  const filteredKitchenReports = apiKitchenData.length > 0 ? apiKitchenData : (Array.isArray(orders) ? orders : []);
 
   // Calculate Metrics
-  const kitchenTotalKots = filteredKitchenReports.length;
+  const kitchenTotalKots = totalRecords || filteredKitchenReports.length;
   const kitchenUrgentCount = filteredKitchenReports.filter(o => getOrderPriority(o) === 'Urgent').length;
   const kitchenPreparingCount = filteredKitchenReports.filter(o => o.status === 'preparing').length;
   const kitchenReadyCount = filteredKitchenReports.filter(o => o.status === 'ready').length;
 
   // 0-based Pagination (limit = 10)
-  const [page, setPage] = useState(0);
-  const limit = 10;
-  const totalPages = Math.ceil(filteredKitchenReports.length / limit) || 1;
-  const paginatedKitchenReports = filteredKitchenReports.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil((totalRecords || filteredKitchenReports.length) / limit));
+
+  useEffect(() => {
+    setPage(0);
+  }, [filterStaff, filterDish, filterPriority, dateStart, dateEnd, selectedBranchId]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
+  const paginatedKitchenReports = (apiKitchenData.length > 0 || filteredKitchenReports.length <= limit)
+    ? filteredKitchenReports
+    : filteredKitchenReports.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];

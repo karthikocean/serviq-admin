@@ -40,6 +40,8 @@ export default function BillingHistoryPanel({
   customStartDate, setCustomStartDate,
   customEndDate, setCustomEndDate,
   selectedPayment, setSelectedPayment,
+  paymentStatus = 'All', setPaymentStatus,
+  orderType = 'All', setOrderType,
   selectedTable = 'All', setSelectedTable, tableOptions = [],
   customerFilter = '', setCustomerFilter,
   selectedStaff = 'All', setSelectedStaff, staffOptions = [],
@@ -112,9 +114,15 @@ export default function BillingHistoryPanel({
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         branchId: selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
+        tableId: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
+        table: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
+        customer: customerFilter ? customerFilter.trim() : undefined,
+        cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
+        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : undefined,
+        orderType: orderType && orderType !== 'All' ? orderType : undefined,
         isExport: 'true',
-        limit: '0' // Tell backend to fetch all for export
+        limit: '10' // Tell backend to fetch all for export
       };
 
       const result = await BillingApi.getBillingHistory(filters);
@@ -330,8 +338,8 @@ export default function BillingHistoryPanel({
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Payment Status</label>
             <SearchableSelect
-              value="All"
-              onChange={() => {}}
+              value={paymentStatus || 'All'}
+              onChange={(e) => setPaymentStatus && setPaymentStatus(e.target.value)}
               options={[
                 { value: 'All', label: 'All Statuses' },
                 { value: 'Paid', label: 'Paid' },
@@ -345,8 +353,8 @@ export default function BillingHistoryPanel({
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Order Type</label>
             <SearchableSelect
-              value="All"
-              onChange={() => {}}
+              value={orderType || 'All'}
+              onChange={(e) => setOrderType && setOrderType(e.target.value)}
               options={[
                 { value: 'All', label: 'All Types' },
                 { value: 'Dine-In', label: 'Dine-In' },

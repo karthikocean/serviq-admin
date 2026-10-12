@@ -21,11 +21,11 @@ export default function Reports() {
     const fetchLiveReportData = async () => {
       try {
         const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
-        const branchParam = isBranchFiltered ? { branchId: selectedBranchId, limit: 100, page: 0 } : { limit: 100, page: 0 };
+        const branchParam = isBranchFiltered ? { branchId: selectedBranchId, limit: 10, page: 0 } : { limit: 10, page: 0 };
 
         const [orderRes, menuRes, userRes] = await Promise.allSettled([
           OrderApi.getOrders(branchParam),
-          MenuApi.getMenuItems({ limit: 100, page: 0 }),
+          MenuApi.getMenuItems({ limit: 10, page: 0 }),
           UserApi.getUsers(branchParam)
         ]);
 

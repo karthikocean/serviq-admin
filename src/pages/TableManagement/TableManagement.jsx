@@ -58,10 +58,7 @@ export default function TableManagement() {
       };
       const tablesRes = await TableApi.getTables(params);
       if (tablesRes.status && tablesRes.response?.data) {
-        let tableList = tablesRes.response.data;
-        if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
-          tableList = tableList.filter(t => isBranchMatch(t, selectedBranchId, activeRestaurant?.branches || []));
-        }
+        const tableList = tablesRes.response.data;
         setTables(tableList);
       } else if (activeRestaurant?.tables) {
         let tableList = activeRestaurant.tables;

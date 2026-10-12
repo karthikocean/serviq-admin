@@ -84,6 +84,7 @@ export default function WaiterReportsPanel({
 }) {
   const { selectedBranchId } = useAppState();
   const [apiReportData, setApiReportData] = useState([]);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   // Filters local states
   const [dateStart, setDateStart] = useState('');
@@ -107,14 +108,24 @@ export default function WaiterReportsPanel({
           endDate: dateEnd || undefined,
           branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
           waiterName: filterWaiter !== 'All' ? filterWaiter : undefined,
+          waiter: filterWaiter !== 'All' ? filterWaiter : undefined,
+          table: filterTable !== 'All' ? filterTable : undefined,
+          source: filterSource !== 'All' ? filterSource : undefined,
+          orderType: filterSource !== 'All' ? filterSource : undefined,
+          paymentMode: filterPaymentMode !== 'All' ? filterPaymentMode : undefined,
+          paymentStatus: filterPaymentStatus !== 'All' ? filterPaymentStatus : undefined,
+          orderStatus: filterOrderStatus !== 'All' ? filterOrderStatus : undefined,
+          status: filterOrderStatus !== 'All' ? filterOrderStatus : undefined,
+          page: page,
           limit: 10
         };
         const res = await ReportsApi.getWaiterReports(filters);
         if (isMounted && res && res.status) {
-          const d = res.response?.data || res.response || [];
-          if (Array.isArray(d) && d.length > 0) {
-            setApiReportData(d);
-          }
+          const d = res.response?.data || res.response?.orders || res.response?.reports || res.response || [];
+          const list = Array.isArray(d) ? d : (Array.isArray(d?.data) ? d.data : (Array.isArray(d?.orders) ? d.orders : []));
+          setApiReportData(list);
+          const serverTotal = res.response?.pagination?.total ?? res.response?.total ?? res.response?.totalRecords ?? res.response?.count ?? (res.response?.data?.total || list.length);
+          setTotalRecords(Number(serverTotal) || list.length);
         }
       } catch (err) {
         console.warn("Error fetching waiter report API:", err);
@@ -122,7 +133,7 @@ export default function WaiterReportsPanel({
     };
     fetchApiReport();
     return () => { isMounted = false; };
-  }, [dateStart, dateEnd, filterWaiter, selectedBranchId]);
+  }, [dateStart, dateEnd, filterWaiter, filterTable, filterSource, filterPaymentMode, filterPaymentStatus, filterOrderStatus, selectedBranchId, page]);
 
   // Modals local states
   const [showTimelineModal, setShowTimelineModal] = useState(false);
@@ -173,43 +184,20 @@ export default function WaiterReportsPanel({
   const waitersList = staff.filter(s => s.role === 'Waiter').map(s => s.name);
   const uniqueTables = Array.from(new Set(orders.map(o => o.table).filter(Boolean))).sort();
 
-  // Get filtered orders
-  const filteredWaiterReports = orders.filter(ord => {
-    const date = getOrderDate(ord);
-    const waiter = ord.waiter || 'Unassigned';
-    const table = ord.table || '';
-    const source = ord.source || ord.orderType || 'Dine-In';
-    const paymentMode = ord.paymentMode || (ord.billingStatus === 'paid' ? 'UPI' : 'Pending');
-    const paymentStatus = ord.billingStatus || 'unpaid';
-    const orderStatus = ord.status || 'new';
-
-    if (dateStart && date && date < dateStart) return false;
-    if (dateEnd && date && date > dateEnd) return false;
-    if ((dateStart || dateEnd) && !date) return false;
-    if (filterWaiter !== 'All' && waiter !== filterWaiter) return false;
-    if (filterTable !== 'All' && table !== filterTable) return false;
-    if (filterSource !== 'All' && source !== filterSource) return false;
-    if (filterPaymentMode !== 'All') {
-      if (filterPaymentMode === 'Pending' && paymentMode !== 'Pending') return false;
-      if (filterPaymentMode !== 'Pending' && paymentMode !== filterPaymentMode) return false;
-    }
-    if (filterPaymentStatus !== 'All' && paymentStatus.toLowerCase() !== filterPaymentStatus.toLowerCase()) return false;
-    if (filterOrderStatus !== 'All' && orderStatus.toLowerCase() !== filterOrderStatus.toLowerCase()) return false;
-
-    return true;
-  });
+  // Display backend reports directly
+  const filteredWaiterReports = apiReportData.length > 0 ? apiReportData : (Array.isArray(orders) ? orders : []);
 
   // Calculate Metrics
-  const waiterRevenue = filteredWaiterReports.reduce((sum, o) => sum + (o.total || 0), 0);
+  const waiterRevenue = filteredWaiterReports.reduce((sum, o) => sum + (Number(o.total || o.totalAmount) || 0), 0);
   const waiterOrdersServiced = filteredWaiterReports.filter(o => o.status === 'completed').length;
   const waiterAvgOrder = filteredWaiterReports.length > 0 ? (waiterRevenue / filteredWaiterReports.length).toFixed(0) : 0;
   const waiterUnpaidCount = filteredWaiterReports.filter(o => o.billingStatus === 'unpaid').length;
 
-  const totalPages = Math.ceil(filteredWaiterReports.length / limit) || 1;
+  const totalPages = Math.max(1, Math.ceil((totalRecords || filteredWaiterReports.length) / limit));
 
   useEffect(() => {
     setPage(0);
-  }, [searchWaiter, filterWaiter, filterTable, filterSource, filterPaymentMode, filterPaymentStatus, filterOrderStatus, dateStart, dateEnd]);
+  }, [filterWaiter, filterTable, filterSource, filterPaymentMode, filterPaymentStatus, filterOrderStatus, dateStart, dateEnd, selectedBranchId]);
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -217,7 +205,9 @@ export default function WaiterReportsPanel({
     }
   }, [totalPages, page]);
 
-  const paginatedWaiterReports = filteredWaiterReports.slice(page * limit, (page + 1) * limit);
+  const paginatedWaiterReports = (apiReportData.length > 0 || filteredWaiterReports.length <= limit)
+    ? filteredWaiterReports
+    : filteredWaiterReports.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];

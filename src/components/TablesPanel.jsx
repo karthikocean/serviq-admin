@@ -111,10 +111,9 @@ export default function TablesPanel({
   const [tableToDelete, setTableToDelete] = useState(null);
   const [viewingQrTable, setViewingQrTable] = useState(null);
   const [localQrStatus, setLocalQrStatus] = useState({});
-
-  const displayTables = isBranchFiltered
-    ? tables.filter(t => isBranchMatch(t, selectedBranchId, branches))
-    : tables;
+  const [serverTables, setServerTables] = useState(null);
+  const [serverTotalCount, setServerTotalCount] = useState(0);
+  const [isTablesLoading, setIsTablesLoading] = useState(false);
 
   const getWaiterName = (table) => {
     if (table.assignedWaiterName) return table.assignedWaiterName;
@@ -195,34 +194,60 @@ export default function TablesPanel({
     }
   };
 
-  // Filtered tables based on search and status
-  const filteredTables = displayTables.filter(t => {
-    const q = searchTerm.toLowerCase().trim();
-    const tableIdStr = String(t.tableNumber || t.tableNo || t.tableNum || t.name || t.id || '').toLowerCase();
-    const waiter = String(getWaiterName(t) || '').toLowerCase();
-    const section = String(t.section || '').toLowerCase();
-    const matchesSearch = !q || tableIdStr.includes(q) || waiter.includes(q) || section.includes(q);
-
-    const statusLower = String(t.status || 'free').toLowerCase();
-    const matchesStatus =
-      statusFilter === 'All' ? true :
-      statusFilter === 'Free' ? (statusLower === 'free' || statusLower === 'available') :
-      statusFilter === 'Occupied' ? (statusLower === 'occupied') :
-      statusFilter === 'Reserved' ? (statusLower === 'reserved') :
-      statusFilter === 'Maintenance' ? (statusLower.includes('maint') || statusLower.includes('unavail')) : true;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Pagination for tables (10 tables per page)
+  // Pagination & Backend Fetch for Tables
   const [page, setPage] = useState(0);
   const limit = 10;
-  const totalPages = Math.max(1, Math.ceil(filteredTables.length / limit));
-  const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
+
+  const fetchFilteredTables = async () => {
+    setIsTablesLoading(true);
+    try {
+      const params = {
+        page: page,
+        limit: 10
+      };
+      if (isBranchFiltered) {
+        params.branchId = selectedBranchId;
+      }
+      if (searchTerm && searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+      if (statusFilter && statusFilter !== 'All') {
+        params.status = statusFilter;
+      }
+
+      const res = await TableApi.getTables(params);
+      if (res && res.status) {
+        const raw = res.response?.data || res.response?.tables || (Array.isArray(res.response) ? res.response : []);
+        const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.tables) ? raw.tables : []));
+        setServerTables(list);
+        const serverTotal = res.response?.pagination?.total ?? res.response?.total ?? res.response?.totalRecords ?? res.response?.count ?? (res.response?.data?.total || list.length);
+        setServerTotalCount(Number(serverTotal) || list.length);
+      }
+    } catch (err) {
+      console.warn("Error fetching tables from backend:", err);
+    } finally {
+      setIsTablesLoading(false);
+    }
+  };
 
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, statusFilter]);
+  }, [searchTerm, statusFilter, selectedBranchId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchFilteredTables();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter, selectedBranchId, page]);
+
+  const displayTables = serverTables !== null ? serverTables : (Array.isArray(tables) ? tables : []);
+  const filteredTables = displayTables;
+  const totalTablesCount = serverTables !== null ? serverTotalCount : filteredTables.length;
+  const totalPages = Math.max(1, Math.ceil(totalTablesCount / limit));
+  const paginatedTables = (serverTables !== null || displayTables.length <= limit)
+    ? filteredTables
+    : filteredTables.slice(page * limit, (page + 1) * limit);
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -991,7 +1016,7 @@ export default function TablesPanel({
           gap: '12px'
         }}>
           <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-            Showing {filteredTables.length === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, filteredTables.length)} of {filteredTables.length} tables
+            Showing {totalTablesCount === 0 ? 0 : page * limit + 1} to {Math.min((page + 1) * limit, totalTablesCount)} of {totalTablesCount} tables
           </div>
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button

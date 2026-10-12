@@ -34,7 +34,7 @@ class StaffApi {
         if (cleanParams.limit !== undefined) {
           cleanParams.limit = Number(cleanParams.limit);
         } else {
-          cleanParams.limit = 0;
+          cleanParams.limit = 10;
         }
       }
       const response = await apiClient.get("/users", { params: cleanParams });

@@ -29,9 +29,16 @@ class SubscriptionApi {
     }
   }
 
-  async getDashboard() {
+  async getDashboard(params = {}) {
     try {
-      const response = await apiClient.get("/subscription/dashboard");
+      const cleanParams = {};
+      Object.keys(params).forEach((key) => {
+        const val = params[key];
+        if (val !== undefined && val !== null && val !== "" && val !== "all" && val !== "ALL") {
+          cleanParams[key] = val;
+        }
+      });
+      const response = await apiClient.get("/subscription/dashboard", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
@@ -42,6 +49,42 @@ class SubscriptionApi {
         error?.message ||
         "Failed to Fetch Subscription Dashboard. Please try again.";
       console.warn("SubscriptionApi getDashboard note:", errorMessage);
+      return {
+        status: false,
+        response: error?.response?.data || error,
+      };
+    }
+  }
+
+  async getSubscriptionHistory(params = {}) {
+    try {
+      const cleanParams = {};
+      Object.keys(params).forEach((key) => {
+        const val = params[key];
+        if (val !== undefined && val !== null && val !== "" && val !== "all" && val !== "ALL") {
+          cleanParams[key] = val;
+        }
+      });
+      let response;
+      try {
+        response = await apiClient.get("/subscription/history", { params: cleanParams });
+      } catch (err1) {
+        try {
+          response = await apiClient.get("/subscription/invoices", { params: cleanParams });
+        } catch (err2) {
+          response = await apiClient.get("/subscription/dashboard", { params: cleanParams });
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
+        return { status: true, response: response.data };
+      }
+      return { status: false, response: response?.data };
+    } catch (error) {
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to Fetch Subscription History.";
+      console.warn("SubscriptionApi getSubscriptionHistory note:", errorMessage);
       return {
         status: false,
         response: error?.response?.data || error,

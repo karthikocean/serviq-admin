@@ -4,9 +4,10 @@ import BillingPanel from '../../components/BillingPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import TableApi from '../../api/Table';
+import UserApi from '../../api/User';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
-import { initialBillingData, initialOrders, initialTables } from '../../config/initialData';
+import { initialBillingData, initialOrders, initialTables, isMongoId } from '../../config/initialData';
 import './Billing.css';
 
 export default function Billing() {
@@ -30,6 +31,42 @@ export default function Billing() {
   const [page, setPage] = useState(0);
   const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
+  const [availableTables, setAvailableTables] = useState([]);
+  const [availableStaff, setAvailableStaff] = useState([]);
+
+  // Fetch tables and staff from backend to map human codes to MongoDB _id
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMetadata = async () => {
+      try {
+        const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
+        const params = {
+          limit: 0,
+          ...(isSingleBranch ? { branchId: selectedBranchId } : {})
+        };
+        const [tablesRes, staffRes] = await Promise.all([
+          TableApi.getTables(params).catch(() => null),
+          UserApi.getUsers(params).catch(() => null)
+        ]);
+        if (isMounted) {
+          if (tablesRes && tablesRes.status) {
+            const raw = tablesRes.response?.data || tablesRes.response?.tables || tablesRes.response || [];
+            const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+            setAvailableTables(list);
+          }
+          if (staffRes && staffRes.status) {
+            const rawS = staffRes.response?.data || staffRes.response?.users || staffRes.response || [];
+            const listS = Array.isArray(rawS) ? rawS : (Array.isArray(rawS?.data) ? rawS.data : []);
+            setAvailableStaff(listS);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch dropdown metadata in Billing:", err);
+      }
+    };
+    fetchMetadata();
+    return () => { isMounted = false; };
+  }, [selectedBranchId]);
 
   useEffect(() => {
     if (activeRestaurant) {
@@ -54,12 +91,77 @@ export default function Billing() {
     setIsLoading(true);
 
     const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
+
+    // Resolve tableId: MUST send table._id (MongoDB ObjectId), NOT string like "TBL-SCB-003"
+    let resolvedTableId = undefined;
+    if (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
+      if (typeof selectedTable === 'object' && selectedTable !== null) {
+        resolvedTableId = selectedTable._id || selectedTable.id;
+      } else if (isMongoId(String(selectedTable))) {
+        resolvedTableId = String(selectedTable);
+      } else {
+        // Resolve custom string code (e.g. TBL-SCB-003) to its table._id ObjectId
+        const found =
+          availableTables.find(t => 
+            t.tableId === selectedTable || 
+            String(t.tableNumber || t.tableNo) === String(selectedTable) ||
+            t.name === selectedTable ||
+            String(t.id) === String(selectedTable)
+          ) ||
+          (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t => 
+            t.tableId === selectedTable || 
+            String(t.tableNumber || t.tableNo) === String(selectedTable) ||
+            t.name === selectedTable
+          ) : null);
+        if (found && (found._id || isMongoId(String(found.id || '')))) {
+          resolvedTableId = String(found._id || found.id);
+        }
+      }
+    }
+
+    // Resolve cashierId / waiterId: MUST send staff._id (MongoDB ObjectId), NOT string like "stf-01"
+    let resolvedStaffId = undefined;
+    if (selectedStaff && selectedStaff !== 'All' && selectedStaff !== 'ALL') {
+      if (typeof selectedStaff === 'object' && selectedStaff !== null) {
+        const sCandidate = selectedStaff._id || selectedStaff.id;
+        if (isMongoId(String(sCandidate))) {
+          resolvedStaffId = String(sCandidate);
+        }
+      } else if (isMongoId(String(selectedStaff))) {
+        resolvedStaffId = String(selectedStaff);
+      } else {
+        // Resolve custom string code (e.g. stf-01, STF-01, or name) to staff._id ObjectId
+        const found =
+          availableStaff.find(s => 
+            (s._id && isMongoId(String(s._id))) && (
+              String(s._id) === String(selectedStaff) ||
+              String(s.id) === String(selectedStaff) ||
+              String(s.employeeCode || s.code) === String(selectedStaff) ||
+              String(s.name || s.staffName || s.fullName) === String(selectedStaff)
+            )
+          ) ||
+          (Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff.find(s => 
+            (s._id && isMongoId(String(s._id))) && (
+              String(s._id) === String(selectedStaff) ||
+              String(s.id) === String(selectedStaff) ||
+              String(s.employeeCode || s.code) === String(selectedStaff) ||
+              String(s.name || s.staffName || s.fullName) === String(selectedStaff)
+            )
+          ) : null);
+        if (found && found._id && isMongoId(String(found._id))) {
+          resolvedStaffId = String(found._id);
+        }
+      }
+    }
+
     const params = {
       branchId: isSingleBranch ? selectedBranchId : undefined,
       search: searchTerm ? searchTerm.trim() : undefined,
-      tableId: selectedTable && selectedTable !== 'All' ? selectedTable : undefined,
+      tableId: resolvedTableId,
       customer: customerFilter ? customerFilter.trim() : undefined,
-      cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
+      cashierId: resolvedStaffId,
+      waiterId: resolvedStaffId,
+      staffId: resolvedStaffId,
       orderType: 'DINE_IN',
       page: page + 1, // 1-based index
       limit: 10,
@@ -234,6 +336,18 @@ export default function Billing() {
 
   if (!activeRestaurant) return null;
 
+  const isOwner = currentUser?.userType === 'RESTAURANT_OWNER' || currentUser?.userType === 'OWNER' || currentUser?.role === 'RESTAURANT_OWNER';
+  const canViewBilling = isOwner || (typeof hasPermission === 'function' ? (hasPermission('billing_current', 'view') || hasPermission('billing', 'view')) : true);
+
+  if (!canViewBilling) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Access Denied</h3>
+        <p style={{ fontSize: '14px' }}>You do not have permission to view Current Billing.</p>
+      </div>
+    );
+  }
+
   return (
     <BillingPanel
       billingData={billingData}
@@ -260,6 +374,8 @@ export default function Billing() {
       setPage={setPage}
       limit={limit}
       totalItems={totalItems}
+      availableTables={availableTables}
+      availableStaff={availableStaff}
     />
   );
 }

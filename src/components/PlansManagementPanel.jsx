@@ -61,7 +61,8 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     purchaseExtraBranchSlots,
     toggleSubscriptionAutoRenew,
     currentUser,
-    hasPermission: contextHasPermission
+    hasPermission: contextHasPermission,
+    selectedBranchId
   } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
@@ -124,9 +125,32 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const [selectedInvoiceForView, setSelectedInvoiceForView] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'addon'
+  const [historyFilter, setHistoryFilter] = useState('all'); // 'all' | 'subscription' | 'addon' | 'upgrade'
   const [historySearch, setHistorySearch] = useState('');
+  const [debouncedHistorySearch, setDebouncedHistorySearch] = useState('');
+  const [historyPage, setHistoryPage] = useState(0);
+  const historyLimit = 10;
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    subscription: 0,
+    addon: 0,
+    upgrade: 0
+  });
   const [localPurchases, setLocalPurchases] = useState([]);
+
+  // Debounce history search input to avoid excessive API requests
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedHistorySearch(historySearch);
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [historySearch]);
+
+  // Reset page when filter or search changes
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [historyFilter, debouncedHistorySearch]);
 
   // Buy Addons Payment Form State
   const [addonCard, setAddonCard] = useState({
@@ -329,8 +353,26 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const fetchDashboardData = useCallback(async (showToast = false) => {
     setIsRefreshing(true);
     try {
+      const initParams = {
+        page: historyPage,
+        limit: historyLimit
+      };
+      if (historyFilter && historyFilter !== 'all') {
+        initParams.type = historyFilter;
+        initParams.filter = historyFilter;
+        initParams.category = historyFilter;
+      }
+      if (debouncedHistorySearch && debouncedHistorySearch.trim()) {
+        initParams.search = debouncedHistorySearch.trim();
+        initParams.searchTerm = debouncedHistorySearch.trim();
+        initParams.searchQuery = debouncedHistorySearch.trim();
+      }
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        initParams.branchId = selectedBranchId;
+      }
+
       const [dashRes, plansRes, branchRes] = await Promise.allSettled([
-        SubscriptionApi.getDashboard(),
+        SubscriptionApi.getDashboard(initParams),
         SubscriptionApi.getPlans(),
         BranchApi.getBranches()
       ]);
@@ -430,11 +472,65 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [formatPlanItem]);
+  }, [formatPlanItem, historyPage, historyLimit, historyFilter, debouncedHistorySearch, selectedBranchId]);
+
+  // Fetch filtered subscription history directly from backend API when filters change
+  const fetchHistoryData = useCallback(async () => {
+    setIsHistoryLoading(true);
+    try {
+      const params = {
+        page: historyPage,
+        limit: historyLimit
+      };
+
+      if (historyFilter && historyFilter !== 'all') {
+        params.type = historyFilter;
+        params.filter = historyFilter;
+        params.category = historyFilter;
+      }
+
+      if (debouncedHistorySearch && debouncedHistorySearch.trim()) {
+        params.search = debouncedHistorySearch.trim();
+        params.searchTerm = debouncedHistorySearch.trim();
+        params.searchQuery = debouncedHistorySearch.trim();
+      }
+
+      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        params.branchId = selectedBranchId;
+      }
+
+      const dashRes = await SubscriptionApi.getDashboard(params);
+      if (dashRes && dashRes.status && dashRes.response) {
+        const data = dashRes.response?.data?.data || dashRes.response?.data || dashRes.response;
+        setDashboardData(prev => {
+          if (!prev) return data;
+          return {
+            ...prev,
+            ...data,
+            history: Array.isArray(data?.history) ? data.history : (Array.isArray(data?.invoices) ? data.invoices : (Array.isArray(data) ? data : (data?.history ?? prev.history))),
+            invoices: Array.isArray(data?.invoices) ? data.invoices : (Array.isArray(data?.history) ? data.history : (data?.invoices ?? prev.invoices)),
+            rechargeHistory: Array.isArray(data?.rechargeHistory) ? data.rechargeHistory : (data?.rechargeHistory ?? prev.rechargeHistory),
+            totalInvoices: data?.total ?? data?.totalInvoices ?? data?.count
+          };
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to fetch filtered subscription history from backend:", err);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, [historyFilter, debouncedHistorySearch, historyPage, historyLimit, selectedBranchId]);
 
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Re-fetch filtered results from backend when filter parameters change
+  useEffect(() => {
+    if (dashboardData) {
+      fetchHistoryData();
+    }
+  }, [historyFilter, debouncedHistorySearch, historyPage, selectedBranchId, fetchHistoryData]);
 
   // Listen to plan & branch updates across modules
   useEffect(() => {
@@ -687,7 +783,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     };
   };
 
-  // Compile full invoices list from all API endpoints, context, lastRecharge, and local purchases
+  // Compile invoices list from backend API response and local purchases
   const allApiInvoices = [
     ...(Array.isArray(dashboardData?.history) ? dashboardData.history : []),
     ...(Array.isArray(dashboardData?.invoices) ? dashboardData.invoices : []),
@@ -698,28 +794,31 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     ...(Array.isArray(activeRestaurant?.subscriptionInvoices) ? activeRestaurant.subscriptionInvoices : [])
   ];
 
-  let rawList = [...localPurchases, ...allApiInvoices];
+  let rawList = [...allApiInvoices];
+  if (historyFilter === 'all' && !debouncedHistorySearch) {
+    rawList = [...localPurchases, ...allApiInvoices];
 
-  // If lastRechargeData exists and its transaction/date is not in list yet, include it
-  if (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.transactionId || lastRechargeData.invoice || lastRechargeData.invoiceId)) {
-    const lastRecInvoiceId = lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId;
-    const isAlreadyPresent = rawList.some(inv => 
-      (lastRecInvoiceId && (inv.id === lastRecInvoiceId || inv.transactionId === lastRecInvoiceId || inv.invoiceNumber === lastRecInvoiceId || inv.invoice === lastRecInvoiceId)) ||
-      (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount || inv.totalAmount) === Number(lastRechargeData.amount))
-    );
+    // If lastRechargeData exists and its transaction/date is not in list yet, include it
+    if (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.transactionId || lastRechargeData.invoice || lastRechargeData.invoiceId)) {
+      const lastRecInvoiceId = lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId;
+      const isAlreadyPresent = rawList.some(inv => 
+        (lastRecInvoiceId && (inv.id === lastRecInvoiceId || inv.transactionId === lastRecInvoiceId || inv.invoiceNumber === lastRecInvoiceId || inv.invoice === lastRecInvoiceId)) ||
+        (lastRechargeData.date && inv.date === lastRechargeData.date && Number(inv.amount || inv.totalAmount) === Number(lastRechargeData.amount))
+      );
 
-    if (!isAlreadyPresent) {
-      rawList.unshift({
-        id: lastRecInvoiceId || `INV-RECHARGE-${Date.now().toString().slice(-6)}`,
-        planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650) ? 'Standard Add-on' : `${currentPlanName}`),
-        type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650) ? 'addon' : 'subscription',
-        description: lastRechargeData.description || ((lastRechargeData.amount === 1650) ? `Additional Branch Slot (Recurring Add-on)` : `${currentPlanName} Subscription Renewal`),
-        branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.total || baseBranchLimit,
-        amount: lastRechargeData.amount || 0,
-        date: lastRechargeData.date || new Date().toISOString(),
-        paymentMethod: lastRechargeData.paymentMethod || 'Online Payment',
-        status: lastRechargeData.status || 'Paid'
-      });
+      if (!isAlreadyPresent) {
+        rawList.unshift({
+          id: lastRecInvoiceId || `INV-RECHARGE-${Date.now().toString().slice(-6)}`,
+          planName: lastRechargeData.planName || ((lastRechargeData.amount === 1650) ? 'Standard Add-on' : `${currentPlanName}`),
+          type: (lastRechargeData.type === 'addon' || lastRechargeData.amount === 1650) ? 'addon' : 'subscription',
+          description: lastRechargeData.description || ((lastRechargeData.amount === 1650) ? `Additional Branch Slot (Recurring Add-on)` : `${currentPlanName} Subscription Renewal`),
+          branchesIncluded: lastRechargeData.branchesIncluded || branchCapacityData?.total || baseBranchLimit,
+          amount: lastRechargeData.amount || 0,
+          date: lastRechargeData.date || new Date().toISOString(),
+          paymentMethod: lastRechargeData.paymentMethod || 'Online Payment',
+          status: lastRechargeData.status || 'Paid'
+        });
+      }
     }
   }
 
@@ -752,6 +851,25 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
   const upgradeInvoices = invoices.filter(inv => !isAddonInvoice(inv) && isUpgradeInvoice(inv));
   const subscriptionInvoices = invoices.filter(inv => !isAddonInvoice(inv) && !isUpgradeInvoice(inv));
 
+  // Sync tab badge counts from un-filtered dataset or backend summary counts
+  useEffect(() => {
+    if (dashboardData?.counts) {
+      setTabCounts({
+        all: Number(dashboardData.counts.all ?? dashboardData.counts.total ?? 0),
+        subscription: Number(dashboardData.counts.subscription ?? 0),
+        addon: Number(dashboardData.counts.addon ?? 0),
+        upgrade: Number(dashboardData.counts.upgrade ?? 0)
+      });
+    } else if (historyFilter === 'all' && !debouncedHistorySearch) {
+      setTabCounts({
+        all: invoices.length,
+        subscription: subscriptionInvoices.length,
+        addon: addonInvoices.length,
+        upgrade: upgradeInvoices.length
+      });
+    }
+  }, [dashboardData, invoices.length, subscriptionInvoices.length, addonInvoices.length, upgradeInvoices.length, historyFilter, debouncedHistorySearch]);
+
   const lastRecharge = (lastRechargeData && (lastRechargeData.amount !== undefined || lastRechargeData.date || lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId)) ? {
     id: lastRechargeData.invoice || lastRechargeData.invoiceId || lastRechargeData.transactionId || invoices[0]?.id || 'PLAN-ACTIVE',
     planName: lastRechargeData.planName || invoices[0]?.planName || currentPlanName,
@@ -772,37 +890,11 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
 
   const totalSpentOnPlans = invoices.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
-  // Filtered Invoices
-  const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch =
-      (inv.id || '').toLowerCase().includes(historySearch.toLowerCase()) ||
-      (inv.description || '').toLowerCase().includes(historySearch.toLowerCase()) ||
-      (inv.planName || '').toLowerCase().includes(historySearch.toLowerCase()) ||
-      (inv.date || '').toLowerCase().includes(historySearch.toLowerCase()) ||
-      (inv.paymentMethod || '').toLowerCase().includes(historySearch.toLowerCase());
+  // Invoices are filtered directly by the backend API request - no frontend filtering
+  const filteredInvoices = invoices;
 
-    const isAddon = isAddonInvoice(inv);
-    const isUpgrade = isUpgradeInvoice(inv);
-
-    if (historyFilter === 'addon') {
-      return matchesSearch && isAddon;
-    }
-    if (historyFilter === 'upgrade') {
-      return matchesSearch && !isAddon && isUpgrade;
-    }
-    if (historyFilter === 'subscription') {
-      return matchesSearch && !isAddon && !isUpgrade;
-    }
-    return matchesSearch;
-  });
-
-  const [historyPage, setHistoryPage] = useState(0);
-  const historyLimit = 10;
-  const historyTotalPages = Math.max(1, Math.ceil(filteredInvoices.length / historyLimit));
-
-  useEffect(() => {
-    setHistoryPage(0);
-  }, [historySearch, historyFilter]);
+  const totalInvoicesCount = Number(dashboardData?.totalInvoices ?? dashboardData?.total ?? dashboardData?.count ?? filteredInvoices.length);
+  const historyTotalPages = Math.max(1, Math.ceil(totalInvoicesCount / historyLimit));
 
   useEffect(() => {
     if (historyPage >= historyTotalPages && historyTotalPages > 0) {
@@ -810,7 +902,9 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     }
   }, [historyTotalPages, historyPage]);
 
-  const paginatedInvoices = filteredInvoices.slice(historyPage * historyLimit, (historyPage + 1) * historyLimit);
+  const paginatedInvoices = (dashboardData?.total !== undefined || dashboardData?.totalInvoices !== undefined || filteredInvoices.length <= historyLimit)
+    ? filteredInvoices
+    : filteredInvoices.slice(historyPage * historyLimit, (historyPage + 1) * historyLimit);
 
   const getHistoryPageNumbers = () => {
     const pages = [];
@@ -1387,15 +1481,18 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
               {[
-                { id: 'all', label: `All History (${invoices.length})` },
-                { id: 'subscription', label: `Plan Subscriptions (${subscriptionInvoices.length})` },
-                { id: 'addon', label: `Branch Add-ons (${addonInvoices.length})` },
-                { id: 'upgrade', label: `Plan Upgrades (${upgradeInvoices.length})` }
+                { id: 'all', label: `All History (${tabCounts.all || invoices.length})` },
+                { id: 'subscription', label: `Plan Subscriptions (${tabCounts.subscription || subscriptionInvoices.length})` },
+                { id: 'addon', label: `Branch Add-ons (${tabCounts.addon || addonInvoices.length})` },
+                { id: 'upgrade', label: `Plan Upgrades (${tabCounts.upgrade || upgradeInvoices.length})` }
               ].map(tab => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setHistoryFilter(tab.id)}
+                  onClick={() => {
+                    setHistoryFilter(tab.id);
+                    setHistoryPage(0);
+                  }}
                   style={{
                     border: 'none',
                     padding: '6px 14px',
@@ -1428,6 +1525,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               onChange={e => {
                 const val = e.target.value.replace(/^\s+/, '');
                 setHistorySearch(val);
+                setHistoryPage(0);
               }}
               style={{
                 width: '100%',
@@ -1463,7 +1561,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 </tr>
               </thead>
               <tbody>
-                {isLoading || isRefreshing ? (
+                {isLoading || isRefreshing || isHistoryLoading ? (
                   <tr>
                     <td colSpan={8} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
                       <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', marginRight: '8px' }}>🔄</span> Loading recharge history...
@@ -1600,7 +1698,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
         </div>
 
         {/* History Table Pagination Controls */}
-        {filteredInvoices.length > 0 && (
+        {totalInvoicesCount > 0 && (
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
@@ -1615,7 +1713,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             gap: '12px'
           }}>
             <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>
-              Showing {filteredInvoices.length === 0 ? 0 : historyPage * historyLimit + 1} to {Math.min((historyPage + 1) * historyLimit, filteredInvoices.length)} of {filteredInvoices.length} invoices
+              Showing {filteredInvoices.length === 0 ? 0 : historyPage * historyLimit + 1} to {Math.min((historyPage + 1) * historyLimit, totalInvoicesCount)} of {totalInvoicesCount} invoices
             </div>
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
               <button

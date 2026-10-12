@@ -6,6 +6,7 @@ import SearchableSelect from './SearchableSelect.jsx';
 import BillingApi from '../api/Billing.js';
 import OrderApi from '../api/Order.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
+import { isMongoId } from '../config/initialData.js';
 import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
 
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
@@ -50,6 +51,8 @@ export default function BillingPanel({
   selectedBillingTable = '',
   setSelectedBillingTable,
   activeRestaurant = {},
+  availableTables = [],
+  availableStaff = [],
   billingPaymentMethod = 'UPI',
   setBillingPaymentMethod,
   fetchBillingData,
@@ -113,104 +116,139 @@ export default function BillingPanel({
 
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
 
-  // Table options derived from data & active restaurant
+  // Table options derived from availableTables, activeRestaurant, and billing data
+  // Option value MUST be the table's MongoDB ObjectId (_id) to avoid Cast to ObjectId failure on backend
   const tableOptions = useMemo(() => {
-    const set = new Set();
-    displayBillingData.forEach(b => {
-      const t = b.table || b.tableNumber || b.tableNo;
-      if (t) set.add(String(t).replace(/^Table\s*/i, '').trim());
-    });
-    if (Array.isArray(activeRestaurant?.tables)) {
-      activeRestaurant.tables.forEach(t => {
-        const tNum = t.tableNumber || t.tableNo || t.name;
-        if (tNum) set.add(String(tNum).replace(/^Table\s*/i, '').trim());
-      });
+    const map = new Map(); // id -> { value, label, code, tableNumber }
+
+    const registerTable = (tbl) => {
+      if (!tbl) return;
+      const mongoId = tbl._id || (isMongoId(String(tbl.id || '')) ? tbl.id : null);
+      if (mongoId) {
+        const idStr = String(mongoId);
+        const tNum = tbl.tableNumber || tbl.tableNo || tbl.name || tbl.tableId;
+        const cleanName = tNum ? (String(tNum).startsWith('Table') ? String(tNum) : `Table ${tNum}`) : `Table`;
+        const codeSuffix = tbl.tableId && String(tbl.tableId) !== String(tNum) ? ` (${tbl.tableId})` : '';
+        map.set(idStr, {
+          value: idStr,
+          label: `${cleanName}${codeSuffix}`,
+          code: tbl.tableId,
+          tableNumber: String(tbl.tableNumber || tbl.tableNo || '')
+        });
+      }
+    };
+
+    if (Array.isArray(availableTables)) {
+      availableTables.forEach(registerTable);
     }
-    const sorted = Array.from(set).sort((a, b) => {
-      const numA = parseInt(a, 10);
-      const numB = parseInt(b, 10);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      return a.localeCompare(b);
+
+    if (Array.isArray(activeRestaurant?.tables)) {
+      activeRestaurant.tables.forEach(registerTable);
+    }
+
+    displayBillingData.forEach(b => {
+      if (typeof b.tableId === 'object' && b.tableId !== null) {
+        registerTable(b.tableId);
+      } else {
+        const mId = isMongoId(String(b.tableId || '')) ? b.tableId : (isMongoId(String(b.rawTableId || '')) ? b.rawTableId : null);
+        if (mId && !map.has(String(mId))) {
+          const tDisplay = b.table || b.tableNumber || b.tableNo || 'Table';
+          const cleanName = String(tDisplay).startsWith('Table') ? String(tDisplay) : `Table ${tDisplay}`;
+          map.set(String(mId), {
+            value: String(mId),
+            label: cleanName,
+            code: b.tableId,
+            tableNumber: String(b.tableNumber || b.tableNo || '')
+          });
+        }
+      }
     });
+
+    const entries = Array.from(map.values());
+    entries.sort((a, b) => {
+      const numA = parseInt(a.label.replace(/\D/g, ''), 10);
+      const numB = parseInt(b.label.replace(/\D/g, ''), 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.label.localeCompare(b.label);
+    });
+
     return [
       { value: 'All', label: 'All Tables' },
-      ...sorted.map(t => ({ value: t, label: `Table ${t}` }))
+      ...entries
     ];
-  }, [displayBillingData, activeRestaurant]);
+  }, [availableTables, activeRestaurant, displayBillingData]);
+
+  // If selectedTable is set to a string code (like TBL-SCB-003) instead of ObjectId, auto-map it to its _id
+  useEffect(() => {
+    if (selectedTable && selectedTable !== 'All' && !isMongoId(String(selectedTable))) {
+      const match = tableOptions.find(opt => opt.code === selectedTable || opt.label.includes(selectedTable) || opt.tableNumber === selectedTable);
+      if (match && isMongoId(String(match.value))) {
+        setSelectedTable(match.value);
+      }
+    }
+  }, [selectedTable, tableOptions, setSelectedTable]);
 
   // Cashier / Staff options
   const staffOptions = useMemo(() => {
     const map = new Map();
+
+    const addStaffOption = (s) => {
+      if (!s) return;
+      const mongoId = (s._id && isMongoId(String(s._id))) ? String(s._id) : (isMongoId(String(s.id)) ? String(s.id) : null);
+      const name = s.name || s.staffName || s.fullName || s.userName;
+      const code = s.id || s.employeeCode || s.code;
+
+      if (mongoId) {
+        const label = name || `Staff (${mongoId.slice(-4)})`;
+        map.set(mongoId, { label, code, name });
+      }
+    };
+
+    if (Array.isArray(availableStaff)) {
+      availableStaff.forEach(addStaffOption);
+    }
     if (Array.isArray(activeRestaurant?.staff)) {
-      activeRestaurant.staff.forEach(s => {
-        const id = s._id || s.id;
-        const name = s.name || s.staffName || s.fullName || s.userName;
-        if (id && name) {
-          map.set(String(id), name);
-        } else if (name) {
-          map.set(name, name);
-        }
-      });
+      activeRestaurant.staff.forEach(addStaffOption);
     }
     displayBillingData.forEach(b => {
-      const id = b.cashierId || b.staffId || b.waiterId;
+      const sId = b.cashierId || b.staffId || b.waiterId;
       const name = b.cashier || b.staff || b.waiter || b.billedBy;
-      if (id && name) {
-        map.set(String(id), String(name));
-      } else if (name && !Array.from(map.values()).includes(String(name))) {
-        map.set(String(name), String(name));
-      }
-    });
-    return [
-      { value: 'All', label: 'All Cashier / Staff' },
-      ...Array.from(map.entries()).map(([value, label]) => ({ value, label }))
-    ];
-  }, [displayBillingData, activeRestaurant]);
-
-  // Filter bills by Dining Table, Customer, Cashier/Staff, and Search
-  const filteredBills = useMemo(() => {
-    return displayBillingData.filter(bill => {
-      // 1. Table Filter
-      if (selectedTable && selectedTable !== 'All') {
-        const bTable = String(bill.table || bill.tableNumber || bill.tableNo || '').replace(/^Table\s*/i, '').trim().toLowerCase();
-        const sTable = String(selectedTable).replace(/^Table\s*/i, '').trim().toLowerCase();
-        const bTableId = String(bill.tableId || '').trim().toLowerCase();
-        if (bTable !== sTable && bTableId !== sTable) return false;
-      }
-
-      // 2. Customer Filter
-      if (customerFilter && customerFilter.trim()) {
-        const cq = customerFilter.toLowerCase().trim();
-        const cName = (bill.customerName || bill.customer?.name || bill.clientName || '').toLowerCase();
-        const cPhone = (bill.customerPhone || bill.customerMobile || bill.phone || '').toLowerCase();
-        if (!cName.includes(cq) && !cPhone.includes(cq)) return false;
-      }
-
-      // 3. Cashier / Staff Filter
-      if (selectedStaff && selectedStaff !== 'All') {
-        const itemStaffId = String(bill.cashierId || bill.staffId || bill.waiterId || '').trim();
-        const itemStaffName = String(bill.staff || bill.cashier || bill.waiter || bill.billedBy || bill.waiterName || '').trim().toLowerCase();
-        const selStaffOpt = staffOptions.find(o => o.value === selectedStaff);
-        const selLabel = (selStaffOpt?.label || selectedStaff).toLowerCase();
-        if (itemStaffId !== selectedStaff && itemStaffName !== String(selectedStaff).toLowerCase() && itemStaffName !== selLabel) {
-          return false;
+      if (sId && isMongoId(String(sId))) {
+        if (!map.has(String(sId))) {
+          map.set(String(sId), { label: name || `Staff (${String(sId).slice(-4)})`, code: sId, name });
         }
       }
-
-      // 4. Search Term
-      if (searchTerm && searchTerm.trim()) {
-        const q = searchTerm.toLowerCase().trim();
-        const matchesBill = (bill.billNo || bill.billNumber || '').toLowerCase().includes(q);
-        const matchesOrd = (bill.orderId || '').toLowerCase().includes(q);
-        const matchesTab = (bill.table || '').toLowerCase().includes(q) || `table ${bill.table}`.toLowerCase().includes(q);
-        const matchesStaff = (bill.staff || bill.cashier || bill.waiter || bill.billedBy || '').toLowerCase().includes(q);
-        const matchesCust = (bill.customerName || '').toLowerCase().includes(q) || (bill.customerPhone || '').toLowerCase().includes(q);
-        if (!matchesBill && !matchesOrd && !matchesTab && !matchesStaff && !matchesCust) return false;
-      }
-
-      return true;
     });
-  }, [displayBillingData, selectedTable, customerFilter, selectedStaff, searchTerm, staffOptions]);
+
+    const entries = Array.from(map.entries()).map(([value, info]) => ({
+      value,
+      label: info.label,
+      code: info.code,
+      name: info.name
+    }));
+
+    return [
+      { value: 'All', label: 'All Cashier / Staff' },
+      ...entries
+    ];
+  }, [availableStaff, activeRestaurant, displayBillingData]);
+
+  // If selectedStaff is set to a string code (like "stf-01" or "STF-01") instead of ObjectId, auto-map it to its _id
+  useEffect(() => {
+    if (selectedStaff && selectedStaff !== 'All' && !isMongoId(String(selectedStaff))) {
+      const match = staffOptions.find(opt => 
+        opt.code === selectedStaff || 
+        opt.name === selectedStaff || 
+        (opt.label && opt.label.toLowerCase().includes(String(selectedStaff).toLowerCase()))
+      );
+      if (match && isMongoId(String(match.value))) {
+        setSelectedStaff(match.value);
+      }
+    }
+  }, [selectedStaff, staffOptions, setSelectedStaff]);
+
+  // Bills are already filtered and paginated by backend API
+  const filteredBills = displayBillingData;
 
   const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
@@ -236,9 +274,9 @@ export default function BillingPanel({
     return pages;
   };
 
-  const paginatedBills = displayBillingData.length > limit
-    ? filteredBills.slice(page * limit, (page + 1) * limit)
-    : filteredBills;
+  const paginatedBills = (propTotalItems > 0 || displayBillingData.length <= limit)
+    ? filteredBills
+    : filteredBills.slice(page * limit, (page + 1) * limit);
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';

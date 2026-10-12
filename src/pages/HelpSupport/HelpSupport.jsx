@@ -170,7 +170,7 @@ const FileTextIcon = ({ size = 14, color = 'currentColor' }) => (
 const STATUS_LIST = ['Open', 'In Progress', 'Escalated', 'Waiting for Response', 'Resolved', 'Closed'];
 
 export default function HelpSupport() {
-  const { activeRestaurant, selectedBranchId, setSelectedBranchId, currentUser } = useAppState();
+  const { activeRestaurant, selectedBranchId, currentUser, hasPermission } = useAppState();
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
@@ -183,8 +183,15 @@ export default function HelpSupport() {
   const userRole = (roleStr || '').toLowerCase().trim();
   const userType = (userTypeStr || '').toUpperCase().trim();
 
-  // Hierarchy Roles
+  // Hierarchy Roles & Permissions
   const isSuperAdmin = userType === 'SUPER ADMIN' || userType === 'SUPER_ADMIN' || userRole === 'super admin' || userRole === 'super_admin';
+  const isRestaurantOwner = userType === 'RESTAURANT_OWNER' || userType === 'RESTAURANT OWNER' || userType === 'OWNER' || userRole === 'restaurant_owner' || userRole === 'restaurant owner' || userRole === 'owner';
+  const isOwnerOrSuper = isSuperAdmin || isRestaurantOwner;
+
+  const canViewHelpSupport = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'view') || hasPermission('help-support', 'view')) : true);
+  const canAddTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'add') || hasPermission('help-support', 'add')) : true);
+  const canEditTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'edit') || hasPermission('help-support', 'edit')) : true);
+  const canDeleteTicket = isOwnerOrSuper || (typeof hasPermission === 'function' ? (hasPermission('help_support', 'delete') || hasPermission('help-support', 'delete')) : true);
 
   const userBranchId = (typeof currentUser?.branchId === 'object' && currentUser?.branchId !== null
     ? (currentUser?.branchId?._id || currentUser?.branchId?.id)
@@ -205,40 +212,31 @@ export default function HelpSupport() {
   // Company Admin: Restaurant Owner / HQ Admin not tied to a single branch
   const isCompanyAdmin = !isSuperAdmin && !isBranchAdmin;
 
-  // Single branch selection detection (not All Branches, not Company overview)
-  const isSpecificBranchSelected = Boolean(
-    selectedBranchId &&
-    selectedBranchId !== 'ALL' &&
-    selectedBranchId !== 'All' &&
-    String(selectedBranchId).toLowerCase() !== 'all branches' &&
-    String(selectedBranchId).toUpperCase() !== 'COMPANY'
-  );
+  // Page-level branch filter state (defaults to 'ALL' for Main Branch logins, or userBranchId for sub-branch logins)
+  const [pageBranchFilter, setPageBranchFilter] = useState('ALL');
 
-  // Company filter active state: Resolve and Share icons are strictly for Company scope
-  const isCompanyFilterActive = !isSpecificBranchSelected;
-  const isBranchFilterActive = isSpecificBranchSelected || !isBranchAdmin;
-
-  // Active target branch ID for filtering:
+  // Active target branch ID for filtering table data:
   // - Sub-branch login -> always strictly locked to userBranchId
-  // - Main Branch login -> selectedBranchId if a specific branch is selected, otherwise empty (all branches/company overview)
+  // - Main Branch login -> pageBranchFilter if chosen; otherwise selectedBranchId from global header if chosen; otherwise empty (all branches)
   const activeBranchTargetId = useMemo(() => {
-    if (!hasSpecificBranch && isSpecificBranchSelected) {
-      return typeof selectedBranchId === 'object' && selectedBranchId !== null
-        ? String(selectedBranchId._id || selectedBranchId.id || selectedBranchId.branchCode || '')
-        : String(selectedBranchId);
-    }
-    if (userBranchId && hasSpecificBranch) {
+    if (hasSpecificBranch && userBranchId) {
       return typeof userBranchId === 'object' && userBranchId !== null
         ? String(userBranchId._id || userBranchId.id || userBranchId.branchCode || '')
         : String(userBranchId);
     }
-    if (isSpecificBranchSelected) {
+    if (pageBranchFilter && pageBranchFilter !== 'ALL' && pageBranchFilter !== 'All' && String(pageBranchFilter).toUpperCase() !== 'COMPANY') {
+      return String(pageBranchFilter);
+    }
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
       return typeof selectedBranchId === 'object' && selectedBranchId !== null
         ? String(selectedBranchId._id || selectedBranchId.id || selectedBranchId.branchCode || '')
         : String(selectedBranchId);
     }
     return '';
-  }, [hasSpecificBranch, userBranchId, isSpecificBranchSelected, selectedBranchId]);
+  }, [hasSpecificBranch, userBranchId, pageBranchFilter, selectedBranchId]);
+
+  // Single branch selection detection
+  const isSpecificBranchSelected = Boolean(activeBranchTargetId);
 
   const [tickets, setTickets] = useState([]);
   const [liveBranches, setLiveBranches] = useState([]);
@@ -247,7 +245,7 @@ export default function HelpSupport() {
   // Fetch branches from API
   const fetchBranches = useCallback(async () => {
     try {
-      const res = await BranchApi.getBranches({ limit: 50 });
+      const res = await BranchApi.getBranches({ limit: 10 });
       if (res?.status) {
         const rawData = res.response?.data || res.response?.branches || res.response || [];
         const list = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
@@ -291,10 +289,14 @@ export default function HelpSupport() {
   // 3. Or it is assigned to a branch that is explicitly configured as the Main Branch (isMainBranch: true / branchType: 'MAIN')
   const isMainBranchLogin = isSuperAdmin || (isCompanyAdmin && !hasSpecificBranch) || isUserBranchMain;
 
+  // Company filter scope: Super Admin or Main Branch login retains their Company powers regardless of branch filter!
+  const isCompanyFilterActive = isMainBranchLogin;
+  const isBranchFilterActive = !isMainBranchLogin;
+
   // Auto Selection Rules for "Ticket Raised To":
-  // - Branch filter active or Non-Main Branch login -> Automatically set "Raised To" = Company (Read Only)
-  // - Company filter scope (Main Branch HQ) -> Automatically set "Raised To" = Super Admin (Read Only)
-  const defaultRaisedTo = (!isMainBranchLogin || !isCompanyFilterActive) ? 'Company' : 'Super Admin';
+  // - Main Branch / Company scope -> Automatically set "Raised To" = Super Admin (Read Only)
+  // - Non-Main Branch login -> Automatically set "Raised To" = Company (Read Only)
+  const defaultRaisedTo = isMainBranchLogin ? 'Super Admin' : 'Company';
 
   // Filters State
   const [statusFilter, setStatusFilter] = useState('All');
@@ -699,16 +701,14 @@ export default function HelpSupport() {
   ], [displayCounts]);
 
   // Check if any filter is active
-  const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0 || (isMainBranchLogin && isSpecificBranchSelected);
+  const isFiltered = statusFilter !== 'All' || priorityFilter !== 'All' || targetFilter !== 'All' || searchQuery.trim().length > 0 || (isMainBranchLogin && pageBranchFilter !== 'ALL');
 
   const handleResetFilters = () => {
     setStatusFilter('All');
     setPriorityFilter('All');
     setTargetFilter('All');
     setSearchQuery('');
-    if (isMainBranchLogin && typeof setSelectedBranchId === 'function') {
-      setSelectedBranchId('COMPANY');
-    }
+    setPageBranchFilter('ALL');
     setCurrentPage(0);
   };
 
@@ -740,6 +740,10 @@ export default function HelpSupport() {
 
   // Raise Ticket Modal Handlers
   const handleOpenRaiseTicket = () => {
+    if (!canAddTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to raise support tickets.", false);
+      return;
+    }
     let initialBranch = '';
     if (!isMainBranchLogin && userBranchId) {
       initialBranch = userBranchId;
@@ -1086,6 +1090,10 @@ export default function HelpSupport() {
 
   // Open Resolve Ticket Modal
   const handleOpenResolveModal = (ticket) => {
+    if (!canEditTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to resolve tickets.", false);
+      return;
+    }
     setResolveTicketModal(ticket);
     const initialStatus = ticket.status === 'In Progress' ? 'In Progress' : 'Resolved';
     setResolutionStatus(initialStatus);
@@ -1229,6 +1237,10 @@ export default function HelpSupport() {
 
   // Open Share / Forward to Super Admin Modal
   const handleOpenForwardModal = (ticket) => {
+    if (!canEditTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to escalate tickets.", false);
+      return;
+    }
     setForwardTicketModal(ticket);
     setForwardNote('');
     setIsForwarding(false);
@@ -1309,6 +1321,10 @@ export default function HelpSupport() {
 
   const handleDeleteTicket = async () => {
     if (!deleteTicketConfirm) return;
+    if (!canDeleteTicket) {
+      ShowNotifications.showAlertNotification("You do not have permission to delete tickets.", false);
+      return;
+    }
     const targetId = deleteTicketConfirm._id || deleteTicketConfirm.id;
     setIsDeleting(true);
     try {
@@ -1346,6 +1362,15 @@ export default function HelpSupport() {
     return 'badge-status-closed';
   };
 
+  if (!canViewHelpSupport) {
+    return (
+      <div className="help-support-container" style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Access Denied</h3>
+        <p style={{ fontSize: '14px' }}>You do not have permission to access Help & Support.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="help-support-container">
       {/* Header Bar */}
@@ -1361,14 +1386,16 @@ export default function HelpSupport() {
           </div>
         </div>
 
-        <button 
-          type="button" 
-          className="btn btn-primary" 
-          onClick={handleOpenRaiseTicket}
-        >
-          <PlusIcon size={14} color="#ffffff" />
-          <span>Raise Ticket</span>
-        </button>
+        {canAddTicket && (
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={handleOpenRaiseTicket}
+          >
+            <PlusIcon size={14} color="#ffffff" />
+            <span>Raise Ticket</span>
+          </button>
+        )}
       </div>
 
       {/* Main Ticket Card */}
@@ -1435,20 +1462,14 @@ export default function HelpSupport() {
               <div style={{ minWidth: '175px' }}>
                 <SearchableSelect
                   isCompact={true}
-                  value={
-                    isSpecificBranchSelected
-                      ? String(selectedBranchId)
-                      : 'COMPANY'
-                  }
+                  value={pageBranchFilter}
                   onChange={e => {
                     const bId = e.target.value;
-                    if (typeof setSelectedBranchId === 'function') {
-                      setSelectedBranchId(bId);
-                    }
+                    setPageBranchFilter(bId);
                     setCurrentPage(0);
                   }}
                   options={[
-                    { value: 'COMPANY', label: 'All Branches' },
+                    { value: 'ALL', label: 'All Branches' },
                     ...allBranches.map(b => ({
                       value: String(b._id || b.id),
                       label: b.branchName || b.name || b.branchCode || 'Branch'
@@ -1527,8 +1548,8 @@ export default function HelpSupport() {
               </button>
             )}
 
-            {/* Branch indicator / lock notification */}
-            {!isMainBranchLogin ? (
+            {/* Branch indicator for sub-branch users */}
+            {!isMainBranchLogin && (
               <span style={{
                 fontSize: '12px',
                 fontWeight: 700,
@@ -1543,39 +1564,6 @@ export default function HelpSupport() {
               }}>
                 <StoreIcon size={13} color="#ea580c" />
                 <span>My Branch: {resolveTicketBranchName({ branchId: userBranchId }, allBranches)}</span>
-              </span>
-            ) : isSpecificBranchSelected && (
-              <span style={{
-                fontSize: '12px',
-                fontWeight: 700,
-                color: '#0284c7',
-                background: '#f0f9ff',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                border: '1px solid #bae6fd',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <StoreIcon size={13} color="#0284c7" />
-                <span>Branch: {resolveTicketBranchName({ branchId: selectedBranchId }, allBranches)}</span>
-                <button
-                  type="button"
-                  onClick={() => typeof setSelectedBranchId === 'function' && setSelectedBranchId('COMPANY')}
-                  title="Clear branch filter"
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#0284c7',
-                    cursor: 'pointer',
-                    padding: 0,
-                    marginLeft: '2px',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  ✕
-                </button>
               </span>
             )}
           </div>
@@ -1630,27 +1618,31 @@ export default function HelpSupport() {
                   const isEscalated = Boolean(ticket.isEscalated || String(ticket.status || '').toLowerCase() === 'escalated');
 
                   // In Company filter: Never remove Resolve or Share icons; keep all 4 icons visible and disable them when not applicable
-                  const isResolveDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
-                  const isShareDisabled = isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isResolveDisabled = !canEditTicket || isResolved || isClosed || isSuperAdminTicket || isEscalated;
+                  const isShareDisabled = !canEditTicket || isResolved || isClosed || isSuperAdminTicket || isEscalated;
 
-                  const resolveTitle = isResolved
-                    ? "Ticket already resolved"
-                    : isClosed
-                      ? "Ticket is closed"
-                      : (isSuperAdminTicket || isEscalated)
-                        ? "Ticket routed to Super Admin"
-                        : "Resolve Ticket (Company)";
-
-                  const shareTitle = (isEscalated || isSuperAdminTicket)
-                    ? "Ticket already escalated to Super Admin"
+                  const resolveTitle = !canEditTicket
+                    ? "You do not have permission to resolve tickets"
                     : isResolved
                       ? "Ticket already resolved"
                       : isClosed
                         ? "Ticket is closed"
-                        : "Share to Super Admin (If unable to solve)";
+                        : (isSuperAdminTicket || isEscalated)
+                          ? "Ticket routed to Super Admin"
+                          : "Resolve Ticket (Company)";
 
-                  // Delete action is available for all
-                  const canDeleteThisTicket = true;
+                  const shareTitle = !canEditTicket
+                    ? "You do not have permission to escalate tickets"
+                    : (isEscalated || isSuperAdminTicket)
+                      ? "Ticket already escalated to Super Admin"
+                      : isResolved
+                        ? "Ticket already resolved"
+                        : isClosed
+                          ? "Ticket is closed"
+                          : "Share to Super Admin (If unable to solve)";
+
+                  // Delete action is available only if user has delete permission
+                  const canDeleteThisTicket = canDeleteTicket;
 
                   return (
                     <tr 

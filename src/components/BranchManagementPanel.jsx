@@ -223,6 +223,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [kdsPage, setKdsPage] = useState(0);
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [liveOrdersPagination, setLiveOrdersPagination] = useState(null);
+  const [page, setPage] = useState(0);
+  const [totalBranchRecords, setTotalBranchRecords] = useState(0);
 
   const fetchBranches = async () => {
     setIsLoading(true);
@@ -230,6 +232,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       const branchParams = {
         search: searchTerm ? searchTerm.trim() : undefined,
         status: statusFilter !== 'All' ? statusFilter : undefined,
+        page: page,
         limit: 10
       };
       const [res, usersRes] = await Promise.allSettled([
@@ -292,6 +295,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           };
         });
         setApiBranches(mappedBranches);
+        const serverTotal = branchResponse.response?.pagination?.total 
+          ?? branchResponse.response?.total 
+          ?? branchResponse.response?.totalRecords 
+          ?? branchResponse.response?.count 
+          ?? (branchResponse.response?.data?.total || mappedBranches.length);
+        setTotalBranchRecords(Number(serverTotal) || mappedBranches.length);
       }
     } catch (e) {
       console.error("Failed to fetch branches or managers", e);
@@ -439,6 +448,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   }, []);
 
   useEffect(() => {
+    setPage(0);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
     if (isRestaurantOwner) {
       const timer = setTimeout(() => {
         fetchBranches();
@@ -446,7 +459,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       fetchLiveSubscription();
       return () => clearTimeout(timer);
     }
-  }, [isRestaurantOwner, searchTerm, statusFilter, fetchLiveSubscription]);
+  }, [isRestaurantOwner, searchTerm, statusFilter, page, fetchLiveSubscription]);
 
   // Listen to plan updates across modules
   useEffect(() => {
@@ -533,24 +546,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : (planName.toLowerCase().includes('basic') ? 799 : 699)));
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
-  // Filtered branches
-  const filteredBranches = branches.filter(b => {
-    const matchesSearch = !searchTerm ||
-      (b.branchName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.branchCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.city || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (b.managerName || b.branchManager || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === 'All' || b.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Pagination for branches
-  const [page, setPage] = useState(0);
+  // Branches are fetched with filters and pagination from backend API
+  const filteredBranches = branches;
   const limit = 10;
-  const totalPages = Math.ceil(filteredBranches.length / limit) || 1;
-  const paginatedBranches = filteredBranches.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil((totalBranchRecords || filteredBranches.length) / limit));
+  const paginatedBranches = (apiBranches && apiBranches.length > 0)
+    ? filteredBranches
+    : filteredBranches.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -768,8 +770,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
   const handleSaveResetPassword = async (e) => {
     e.preventDefault();
-    if (!newPassword || newPassword.length < 6) {
-      setResetPasswordError('Password must be at least 6 characters.');
+    const pwdErr = validatePassword(newPassword, 'New Password');
+    if (pwdErr) {
+      setResetPasswordError(pwdErr);
+      return;
+    }
+    if (!confirmNewPassword) {
+      setResetPasswordError('Please confirm the new password.');
       return;
     }
     if (newPassword !== confirmNewPassword) {
@@ -780,12 +787,39 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setIsSavingResetPassword(true);
     try {
       const branchId = resetPasswordBranch.id || resetPasswordBranch._id;
-      await BranchApi.updateBranch(branchId, { password: newPassword });
+      const res = await BranchApi.updateBranch(branchId, { password: newPassword });
+
+      // Synchronize with branch manager user if found
+      const targetBranch = apiBranches.find(b => (b.id === branchId || b._id === branchId));
+      const matchedUser = (apiUsers || []).find(u => {
+        const uId = String(u._id || u.id || '');
+        if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
+        if (resetPasswordBranch?.rawManagerId && uId === String(resetPasswordBranch.rawManagerId)) return true;
+        const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
+          ? String(u.branchId._id || u.branchId.id || '')
+          : String(u.branchId || u.branch || '');
+        if (uBranchId && uBranchId === String(branchId)) {
+          const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+          if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
+        }
+        return false;
+      });
+      if (matchedUser?._id || matchedUser?.id) {
+        try {
+          await UserApi.changePassword(matchedUser._id || matchedUser.id, newPassword);
+        } catch (uErr) {
+          console.warn("Could not update manager password via UserApi:", uErr);
+        }
+      }
+
       ShowNotifications.showAlertNotification(
         `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
         true
       );
       setResetPasswordBranch(null);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setResetPasswordError('');
     } catch (err) {
       console.error("Failed to reset password", err);
       ShowNotifications.showAlertNotification("Failed to reset password.", false);
@@ -915,10 +949,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.fssaiNumber = 'FSSAI License Number must contain exactly 14 digits.';
     }
 
-    // 15. Manager Password / PIN validation (Optional in form, min 6 characters if provided)
-    if (branchForm.password && String(branchForm.password).trim()) {
-      if (String(branchForm.password).trim().length < 6) {
-        errors.password = 'Password must be at least 6 characters.';
+    // 15. Manager Password validation (Required on Add Branch with standard rules, omitted on Edit)
+    if (!isEditing) {
+      const passErr = validatePassword(branchForm.password, 'Manager Password');
+      if (passErr) {
+        errors.password = passErr;
+      }
+      if (!branchForm.confirmPassword) {
+        errors.confirmPassword = 'Please confirm the password.';
+      } else if (branchForm.password !== branchForm.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match.';
       }
     }
 
@@ -959,9 +999,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
     const restId = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || currentUser?.restaurant?._id || currentUser?.restaurant;
 
-    const managerPasswordVal = (branchForm.password && String(branchForm.password).trim()) 
+    const managerPasswordVal = (!isEditing && branchForm.password && String(branchForm.password).trim()) 
       ? String(branchForm.password).trim() 
-      : '123456';
+      : '';
 
     const payload = {
       name: branchNameTrimmed,
@@ -981,12 +1021,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       managerName: managerVal,
       branchManager: managerVal,
       manager: managerVal,
-      managerPassword: managerPasswordVal,
-      password: managerPasswordVal,
-      newPassword: managerPasswordVal,
-      pin: managerPasswordVal,
-      managerPin: managerPasswordVal,
-      confirmPassword: managerPasswordVal,
+      ...(!isEditing && managerPasswordVal ? {
+        managerPassword: managerPasswordVal,
+        password: managerPasswordVal,
+        newPassword: managerPasswordVal,
+        pin: managerPasswordVal,
+        managerPin: managerPasswordVal,
+        confirmPassword: managerPasswordVal,
+      } : {}),
       street: addressStr,
       address: addressObj,
       addressObj: addressObj,
@@ -1180,7 +1222,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               email: emailStr,
               phoneNumber: phoneStr,
               mobileNumber: phoneStr,
-              password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
+              password: String(branchForm.password).trim(),
               role: 'Manager',
               branchId: createdId,
               status: 'Active'
@@ -2774,58 +2816,126 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     )}
                   </div>
 
-                  {/* Field 8: Manager Password / PIN */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                      Manager Password / PIN <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 500 }}>(Default: 123456)</span>
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="e.g. 123456 (min 6 characters)"
-                        value={branchForm.password}
-                        onChange={e => {
-                          setBranchForm({ ...branchForm, password: e.target.value });
-                          if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 42px 12px 16px',
-                          borderRadius: '8px',
-                          border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                          backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
-                          boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
-                          fontSize: '14px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#64748b',
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '4px'
-                        }}
-                        title={showPassword ? "Hide password" : "Show password"}
-                      >
-                        {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                      </button>
-                    </div>
-                    {formErrors.password && (
-                      <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                        {formErrors.password}
-                      </span>
-                    )}
-                  </div>
+                  {/* Field 8 & 9: Manager Password & Confirm Password (Only on Add Branch - Omitted on Edit) */}
+                  {!isEditing && (
+                    <>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                          Manager Password <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            name="branch_mgr_password_field"
+                            autoComplete="new-password"
+                            placeholder="Enter manager password"
+                            value={branchForm.password}
+                            onChange={e => {
+                              setBranchForm({ ...branchForm, password: e.target.value });
+                              if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '12px 42px 12px 16px',
+                              borderRadius: '8px',
+                              border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                              backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
+                              boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                              fontSize: '14px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '12px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '4px'
+                            }}
+                            title={showPassword ? "Hide password" : "Show password"}
+                          >
+                            {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                          </button>
+                        </div>
+                        {formErrors.password && (
+                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                            {formErrors.password}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                          Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                          <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            name="branch_mgr_confirm_password_field"
+                            autoComplete="new-password"
+                            placeholder="Re-enter password"
+                            value={branchForm.confirmPassword}
+                            onChange={e => {
+                              setBranchForm({ ...branchForm, confirmPassword: e.target.value });
+                              if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '12px 42px 12px 16px',
+                              borderRadius: '8px',
+                              border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                              backgroundColor: formErrors.confirmPassword ? '#fef2f2' : '#ffffff',
+                              boxShadow: formErrors.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                              fontSize: '14px',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            style={{
+                              position: 'absolute',
+                              right: '12px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '4px'
+                            }}
+                            title={showConfirmPassword ? "Hide password" : "Show password"}
+                          >
+                            {showConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                          </button>
+                        </div>
+                        {formErrors.confirmPassword && (
+                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                            {formErrors.confirmPassword}
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <PasswordRequirements
+                          password={branchForm.password}
+                          confirmPassword={branchForm.confirmPassword}
+                          showConfirmMatch={true}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -3651,7 +3761,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       {resetPasswordBranch && (
         <Modal
           isOpen={Boolean(resetPasswordBranch)}
-          onClose={() => !isSavingResetPassword && setResetPasswordBranch(null)}
+          onClose={() => {
+            if (!isSavingResetPassword) {
+              setResetPasswordBranch(null);
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setResetPasswordError('');
+              setShowResetPassword(false);
+              setShowResetConfirmPassword(false);
+            }
+          }}
           title={`🔑 Reset Password — ${resetPasswordBranch.branchName || resetPasswordBranch.name}`}
           maxWidth="460px"
         >
@@ -3667,7 +3786,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <div style={{ position: 'relative' }}>
                 <input
                   type={showResetPassword ? 'text' : 'password'}
-                  placeholder="Enter new password (min 6 chars)"
+                  placeholder="Enter new password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={e => {
                     setNewPassword(e.target.value);
@@ -3695,6 +3815,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     cursor: 'pointer',
                     color: '#64748b'
                   }}
+                  title={showResetPassword ? "Hide password" : "Show password"}
                 >
                   {showResetPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
@@ -3709,6 +3830,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 <input
                   type={showResetConfirmPassword ? 'text' : 'password'}
                   placeholder="Re-enter new password"
+                  autoComplete="new-password"
                   value={confirmNewPassword}
                   onChange={e => {
                     setConfirmNewPassword(e.target.value);
@@ -3736,6 +3858,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     cursor: 'pointer',
                     color: '#64748b'
                   }}
+                  title={showResetConfirmPassword ? "Hide password" : "Show password"}
                 >
                   {showResetConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
@@ -3747,10 +3870,24 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               )}
             </div>
 
+            {/* Real-time Password Requirements Checklist */}
+            <PasswordRequirements
+              password={newPassword}
+              confirmPassword={confirmNewPassword}
+              showConfirmMatch={true}
+            />
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
               <button
                 type="button"
-                onClick={() => setResetPasswordBranch(null)}
+                onClick={() => {
+                  setResetPasswordBranch(null);
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                  setResetPasswordError('');
+                  setShowResetPassword(false);
+                  setShowResetConfirmPassword(false);
+                }}
                 style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
