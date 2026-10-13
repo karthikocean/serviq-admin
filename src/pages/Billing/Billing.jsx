@@ -68,10 +68,19 @@ export default function Billing() {
     return () => { isMounted = false; };
   }, [selectedBranchId]);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   useEffect(() => {
-    if (activeRestaurant) {
+    if (!activeRestaurant) return;
+
+    const isTextTyping = Boolean((searchTerm && searchTerm.trim()) || (customerFilter && customerFilter.trim()));
+    const delay = isTextTyping ? 300 : 0;
+
+    const timer = setTimeout(() => {
       fetchBillingData();
-    }
+    }, delay);
+
+    return () => clearTimeout(timer);
   }, [
     activeRestaurant,
     selectedBranchId,
@@ -79,10 +88,11 @@ export default function Billing() {
     selectedTable,
     customerFilter,
     selectedStaff,
-    page
+    page,
+    refreshTrigger
   ]);
 
-  // Reset page when filter inputs change
+  // Reset page to 0 when filter inputs change
   useEffect(() => {
     setPage(0);
   }, [searchTerm, selectedTable, customerFilter, selectedStaff, selectedBranchId]);
@@ -157,22 +167,27 @@ export default function Billing() {
     const params = {
       branchId: isSingleBranch ? selectedBranchId : undefined,
       search: searchTerm ? searchTerm.trim() : undefined,
+      q: searchTerm ? searchTerm.trim() : undefined,
       tableId: resolvedTableId,
+      table: resolvedTableId,
       customer: customerFilter ? customerFilter.trim() : undefined,
+      customerName: customerFilter ? customerFilter.trim() : undefined,
       cashierId: resolvedStaffId,
       waiterId: resolvedStaffId,
       staffId: resolvedStaffId,
       orderType: 'DINE_IN',
-      page: page + 1, // 1-based index
+      page: page !== undefined ? page : 0,
       limit: 10,
       sortBy: 'createdAt',
       sortOrder: 'desc'
     };
 
     let fetchedTables = [];
+    let apiSuccess = false;
     try {
       const tablesRes = await BillingApi.getCurrentBilling(params);
       if (tablesRes && tablesRes.status && tablesRes.response) {
+        apiSuccess = true;
         const resp = tablesRes.response;
         const d = resp.data || resp.tables || resp;
         const total = Number(resp.totalItems ?? resp.total ?? resp.count ?? (Array.isArray(d) ? d.length : 0));
@@ -201,9 +216,20 @@ export default function Billing() {
             const tax = Number(t.tax ?? 0);
             const discount = Number(t.discount ?? 0);
             const billAmount = Number(t.billAmount ?? t.total ?? (subtotal + tax - discount));
-            const paidAmount = Number(t.paidAmount ?? 0);
-            const balanceAmount = Math.max(0, billAmount - paidAmount);
-            const isPaid = (t.status || '').toLowerCase() === 'paid' || balanceAmount <= 0;
+            const rawPaidAmount = Number(t.paidAmount ?? t.paid ?? 0);
+            const rawStatus = String(t.status || '').toLowerCase();
+            const rawPaymentStatus = String(t.paymentStatus || t.payment_status || '').toLowerCase();
+            const hasPaidFlag = t.isPaid === true || t.paid === true || t.is_paid === true;
+
+            const isPaid = 
+              rawStatus === 'paid' || 
+              rawPaymentStatus === 'paid' || 
+              hasPaidFlag || 
+              (rawPaidAmount >= billAmount && billAmount > 0) ||
+              (rawPaidAmount > 0 && Math.max(0, billAmount - rawPaidAmount) <= 0);
+
+            const paidAmount = isPaid ? (rawPaidAmount > 0 ? rawPaidAmount : billAmount) : rawPaidAmount;
+            const balanceAmount = isPaid ? 0 : Math.max(0, billAmount - paidAmount);
 
             const cleanTable = String(t.table || t.tableNumber || '').trim();
             const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
@@ -257,7 +283,15 @@ export default function Billing() {
       console.warn("Failed to fetch current billing from BillingApi:", e);
     }
 
-    if (fetchedTables.length === 0) {
+    const hasActiveFilters = Boolean(
+      (searchTerm && searchTerm.trim()) ||
+      (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') ||
+      (customerFilter && customerFilter.trim()) ||
+      (selectedStaff && selectedStaff !== 'All' && selectedStaff !== 'ALL')
+    );
+
+    // ONLY fall back to mock data if API completely failed (network/server error) AND no filter is applied
+    if (!apiSuccess && !hasActiveFilters && fetchedTables.length === 0) {
       const sourceBills = (Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0)
         ? activeRestaurant.billingData
         : [];
@@ -335,6 +369,11 @@ export default function Billing() {
         fetchedTables = [];
         setTotalItems(0);
       }
+    } else if (apiSuccess) {
+      // API call succeeded: preserve fetchedTables (which could be empty if filter matched 0 items)
+    } else {
+      fetchedTables = [];
+      setTotalItems(0);
     }
 
     setBillingData(fetchedTables);
@@ -377,6 +416,7 @@ export default function Billing() {
       setBillingPaymentMethod={setBillingPaymentMethod}
       hasPermission={hasPermission}
       fetchBillingData={fetchBillingData}
+      triggerRefresh={() => setRefreshTrigger(prev => prev + 1)}
       isLoading={isLoading}
       currentUser={currentUser}
       searchTerm={searchTerm}

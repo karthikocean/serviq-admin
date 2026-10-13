@@ -56,6 +56,7 @@ export default function BillingPanel({
   billingPaymentMethod = 'UPI',
   setBillingPaymentMethod,
   fetchBillingData,
+  triggerRefresh,
   selectedBranchId,
   currentUser = {},
   hasPermission,
@@ -83,6 +84,31 @@ export default function BillingPanel({
   const [payAmount, setPayAmount] = useState('');
   const [payRefNo, setPayRefNo] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentSuccessTrigger, setPaymentSuccessTrigger] = useState(0);
+
+  // useEffect invoked whenever payment completes to fetch latest correct status from backend
+  useEffect(() => {
+    if (paymentSuccessTrigger > 0) {
+      if (typeof fetchBillingData === 'function') {
+        fetchBillingData();
+      }
+      if (typeof triggerRefresh === 'function') {
+        triggerRefresh();
+      }
+
+      // Supplementary sync fetch after 400ms to guarantee database persistence
+      const syncTimer = setTimeout(() => {
+        if (typeof fetchBillingData === 'function') {
+          fetchBillingData();
+        }
+        if (typeof triggerRefresh === 'function') {
+          triggerRefresh();
+        }
+      }, 400);
+
+      return () => clearTimeout(syncTimer);
+    }
+  }, [paymentSuccessTrigger]);
 
   // Filters State: Dining Table, Customer, Cashier/Staff, and Search
   const [localSearchTerm, setLocalSearchTerm] = useState('');
@@ -228,7 +254,7 @@ export default function BillingPanel({
     }));
 
     return [
-      { value: 'All', label: ' Staff' },
+      { value: 'All', label: 'All Staff' },
       ...entries
     ];
   }, [availableStaff, activeRestaurant, displayBillingData]);
@@ -247,10 +273,11 @@ export default function BillingPanel({
     }
   }, [selectedStaff, staffOptions, setSelectedStaff]);
 
-  // Bills are already filtered and paginated by backend API
+  // Bills are directly returned, filtered, and paginated by backend API (no client-side filtering or slicing)
   const filteredBills = displayBillingData;
+  const paginatedBills = displayBillingData;
 
-  const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
+  const totalBillsCount = propTotalItems !== undefined && propTotalItems >= 0 ? propTotalItems : displayBillingData.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
 
   useEffect(() => {
@@ -260,6 +287,7 @@ export default function BillingPanel({
   }, [totalPages, page]);
 
   const getPageNumbers = () => {
+    if (totalBillsCount === 0) return [];
     const pages = [];
     const maxVisible = 5;
     const current = page + 1;
@@ -273,10 +301,6 @@ export default function BillingPanel({
     }
     return pages;
   };
-
-  const paginatedBills = (propTotalItems > 0 || displayBillingData.length <= limit)
-    ? filteredBills
-    : filteredBills.slice(page * limit, (page + 1) * limit);
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
@@ -458,9 +482,9 @@ export default function BillingPanel({
       );
       setPaymentModalBill(null);
       setInvoiceModalBill(updatedBill); // Show Tax Invoice Popup
-      if (typeof fetchBillingData === 'function') {
-        fetchBillingData();
-      }
+
+      // Invoke useEffect to fetch the latest correct status from backend
+      setPaymentSuccessTrigger(prev => prev + 1);
     } catch (err) {
       console.error("Failed to process table payment:", err);
       ShowNotifications.showAlertNotification(
@@ -813,8 +837,7 @@ export default function BillingPanel({
             data-search="true"
             placeholder="Search Bill No / Order ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.replace(/\s+/g, ''))}
-            onKeyDown={(e) => { if (e.key === ' ' || e.code === 'Space') e.preventDefault(); }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
           />
         </div>
