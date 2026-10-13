@@ -311,49 +311,162 @@ export default function BillingPanel({
     }
 
     setIsProcessingPayment(true);
-    const currentTableId = paymentModalBill.tableId || paymentModalBill._id || paymentModalBill.id;
+
+    // 1. Resolve MongoDB ObjectId for Branch
+    let resolvedBranchId = null;
+    const branchCandidates = [
+      paymentModalBill.branchId,
+      typeof paymentModalBill.branch === 'object' ? paymentModalBill.branch?._id || paymentModalBill.branch?.id : paymentModalBill.branch,
+      selectedBranchId,
+      activeRestaurant?.branches?.[0]?._id,
+      activeRestaurant?.branches?.[0]?.id,
+      currentUser?.branchId?._id,
+      currentUser?.branchId
+    ];
+
+    for (const b of branchCandidates) {
+      if (b && isMongoId(String(b))) {
+        resolvedBranchId = String(b);
+        break;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      const bFound = (activeRestaurant?.branches || []).find(b => 
+        String(b.id || b._id) === String(selectedBranchId) ||
+        String(b.branchCode) === String(selectedBranchId) ||
+        String(b.branchName || b.name) === String(selectedBranchId)
+      );
+      if (bFound && (bFound._id || bFound.id)) {
+        resolvedBranchId = String(bFound._id || bFound.id);
+      }
+    }
+
+    // 2. Resolve MongoDB ObjectId for Table
+    let resolvedTableId = null;
+    const tableCandidates = [
+      paymentModalBill.tableId,
+      paymentModalBill.table_id,
+      paymentModalBill.rawTableId,
+      paymentModalBill._id,
+      paymentModalBill.id
+    ];
+
+    for (const t of tableCandidates) {
+      if (t && isMongoId(String(t))) {
+        resolvedTableId = String(t);
+        break;
+      }
+    }
+
+    if (!resolvedTableId) {
+      const targetTblStr = String(paymentModalBill.table || paymentModalBill.tableNumber || paymentModalBill.tableId || '')
+        .replace(/^Table\s*/i, '')
+        .trim();
+      const matchedTable = 
+        (availableTables || []).find(t => 
+          String(t._id || '') === String(paymentModalBill.tableId) ||
+          String(t.id || '') === String(paymentModalBill.tableId) ||
+          String(t.tableId || '') === String(paymentModalBill.tableId) ||
+          String(t.tableNumber || t.tableNo || '').trim() === targetTblStr ||
+          String(t.name || '').trim() === targetTblStr
+        ) ||
+        (activeRestaurant?.tables || []).find(t => 
+          String(t._id || '') === String(paymentModalBill.tableId) ||
+          String(t.id || '') === String(paymentModalBill.tableId) ||
+          String(t.tableId || '') === String(paymentModalBill.tableId) ||
+          String(t.tableNumber || t.tableNo || '').trim() === targetTblStr ||
+          String(t.name || '').trim() === targetTblStr
+        );
+      if (matchedTable) {
+        resolvedTableId = String(matchedTable._id || (isMongoId(String(matchedTable.id || '')) ? matchedTable.id : ''));
+      }
+    }
+
+    if (!resolvedTableId) {
+      resolvedTableId = paymentModalBill.tableId || paymentModalBill._id || paymentModalBill.id;
+    }
+
+    if (!resolvedBranchId) {
+      ShowNotifications.showAlertNotification("Branch ID is required to process table billing.", false);
+      setIsProcessingPayment(false);
+      return;
+    }
+    if (!resolvedTableId) {
+      ShowNotifications.showAlertNotification("Table ID is required to process table billing.", false);
+      setIsProcessingPayment(false);
+      return;
+    }
+
+    const normalizedPaymentMethod = (payMethod || 'cash').toLowerCase();
+
+    const payload = {
+      branchId: resolvedBranchId,
+      tableId: resolvedTableId,
+      paymentMethod: normalizedPaymentMethod,
+      amount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? paymentModalBill.total ?? 0),
+      ...(payRefNo && payRefNo.trim() ? { referenceNumber: payRefNo.trim() } : {})
+    };
 
     try {
-      if (currentTableId) {
-        await BillingApi.processTablePayment({
-          branchId: selectedBranchId,
-          tableId: currentTableId,
-          paymentMethod: payMethod.toLowerCase(),
-          amount: parseFloat(payAmount),
-          referenceNumber: payRefNo
-        }).catch(() => null);
+      const apiRes = await BillingApi.processTablePayment(payload);
+
+      if (!apiRes || apiRes.status === false) {
+        setIsProcessingPayment(false);
+        return;
       }
+
+      const backendData = apiRes.response?.data || apiRes.response || {};
+      const generatedInvoiceNo = 
+        backendData.invoiceNo || 
+        backendData.invoiceNumber || 
+        backendData.taxInvoiceNo || 
+        backendData.billNo ||
+        backendData.invoice?.invoiceNo ||
+        paymentModalBill.invoiceNo || 
+        paymentModalBill.billNo || 
+        '-';
+
+      const staffName = currentUser?.name || currentUser?.fullName || currentUser?.username || 'Staff';
 
       // Construct Invoice Data
       const updatedBill = {
         ...paymentModalBill,
         status: 'Paid',
         paymentStatus: 'Paid',
-        paidAmount: parseFloat(payAmount),
+        paidAmount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? paymentModalBill.total ?? 0),
         balanceAmount: 0,
         paymentMethod: payMethod,
         referenceNumber: payRefNo,
-        invoiceNo: paymentModalBill.invoiceNo || paymentModalBill.billNo || paymentModalBill.id || '-',
+        invoiceNo: generatedInvoiceNo,
         billedBy: staffName,
         paidAt: new Date().toISOString()
       };
 
       if (typeof setBillingData === 'function') {
         setBillingData(prev => prev.map(b => {
-          if (b.table === paymentModalBill.table || b.tableId === currentTableId || b.billNo === paymentModalBill.billNo) {
+          if (b.table === paymentModalBill.table || b.tableId === resolvedTableId || b.billNo === paymentModalBill.billNo) {
             return updatedBill;
           }
           return b;
         }));
       }
 
-      ShowNotifications.showAlertNotification(`Payment collected successfully!`, true);
+      ShowNotifications.showAlertNotification(
+        apiRes.response?.message || `Payment collected successfully!`,
+        true
+      );
       setPaymentModalBill(null);
       setInvoiceModalBill(updatedBill); // Show Tax Invoice Popup
-      if (typeof fetchBillingData === 'function') fetchBillingData();
+      if (typeof fetchBillingData === 'function') {
+        fetchBillingData();
+      }
     } catch (err) {
-      console.error(err);
-      ShowNotifications.showAlertNotification("Failed to collect payment", false);
+      console.error("Failed to process table payment:", err);
+      ShowNotifications.showAlertNotification(
+        err?.response?.data?.message || err?.message || "Failed to collect payment",
+        false
+      );
     } finally {
       setIsProcessingPayment(false);
     }
