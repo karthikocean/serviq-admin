@@ -359,6 +359,38 @@ export default function BillingPanel({
     }
   };
 
+  // Open View Bill Modal & dynamically fetch Invoice if missing
+  const handleOpenViewBill = async (bill) => {
+    setViewingBill(bill);
+    const hasValidInv = bill.invoiceNo && bill.invoiceNo !== '-' && String(bill.invoiceNo).startsWith('INV-');
+    if (!hasValidInv) {
+      try {
+        const histRes = await BillingApi.getBillingHistory({
+          branchId: selectedBranchId,
+          tableId: bill.tableId || bill.table,
+          search: (bill.orderId && bill.orderId !== '-') ? bill.orderId : bill.billNo,
+          limit: 10
+        });
+        if (histRes?.status && histRes?.response) {
+          const list = Array.isArray(histRes.response.data) ? histRes.response.data : (Array.isArray(histRes.response) ? histRes.response : []);
+          const match = list.find(h => 
+            (bill.orderId && bill.orderId !== '-' && (h.orderId === bill.orderId || h.order_id === bill.orderId)) ||
+            (bill.billNo && bill.billNo !== '-' && (h.billNo === bill.billNo || h.billNumber === bill.billNo)) ||
+            (h.table === bill.table || h.tableId === bill.tableId)
+          );
+          if (match) {
+            const foundInvNo = match.invoiceNo || match.invoiceNumber || match.invoiceId || match.id || '';
+            if (foundInvNo) {
+              setViewingBill(prev => prev ? { ...prev, invoiceNo: foundInvNo, invoiceId: foundInvNo, isInvoice: true } : prev);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch invoice for bill:", err);
+      }
+    }
+  };
+
   // Print Bill Popup Handler (Centered Thermal Bill Print Window)
   const handlePrintBillPopup = (bill) => {
     const htmlContent = generateReceiptHtml(bill, activeRestaurant);
@@ -755,9 +787,14 @@ export default function BillingPanel({
                 const dateStr = bill.date || formatDateDMY(bill.billDateTime || bill.createdAt || new Date());
                 const timeStr = bill.time || (bill.billDateTime ? new Date(bill.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'));
 
+                const rawInvoiceNo = bill.invoiceNo || bill.invoiceNumber || bill.invoiceId || (bill.invoice && typeof bill.invoice === 'object' ? (bill.invoice.invoiceNo || bill.invoice.invoiceNumber || bill.invoice.id) : bill.invoice) || '';
+                const fallbackInvoiceNo = rawInvoiceNo || (billNo && billNo !== '-' ? (billNo.startsWith('INV-') ? billNo : `INV-${billNo.replace(/^BILL[-_]*/i, '')}`) : '');
+
                 const currentBill = {
                   ...bill,
                   billNo,
+                  invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
+                  invoiceId: rawInvoiceNo || fallbackInvoiceNo,
                   subtotal,
                   tax,
                   discount: Number(bill.discount || 0),
@@ -829,7 +866,7 @@ export default function BillingPanel({
                         {canView && (
                         <button
                           type="button"
-                          onClick={() => setViewingBill(currentBill)}
+                          onClick={() => handleOpenViewBill(currentBill)}
                           title="View Bill"
                           aria-label="View Bill"
                           style={{
@@ -901,12 +938,12 @@ export default function BillingPanel({
                           </>
                         ) : (
                           <>
-                            {/* 4. Print Invoice (Icon without text) */}
+                            {/* Print Invoice / Receipt */}
                             <button
                               type="button"
                               onClick={() => handlePrintInvoicePopup(currentBill)}
-                              title="Print Invoice"
-                              aria-label="Print Invoice"
+                              title="Print Invoice / Receipt"
+                              aria-label="Print Invoice / Receipt"
                               style={{
                                 width: '32px',
                                 height: '32px',
@@ -923,27 +960,28 @@ export default function BillingPanel({
                             >
                               <PrinterIcon size={15} color="#16a34a" />
                             </button>
-                            {/* 5. Download Invoice (Icon without text) */}
+
+                            {/* Disabled Payment Icon for Paid status */}
                             <button
                               type="button"
-                              onClick={() => handleDownloadInvoicePopup(currentBill)}
-                              title="Download Invoice"
-                              aria-label="Download Invoice"
+                              disabled
+                              title="Payment Already Collected"
+                              aria-label="Payment Already Collected"
                               style={{
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '6px',
-                                border: '1px solid #fed7aa',
-                                background: '#fff7ed',
-                                color: '#ea580c',
+                                border: '1px solid #e2e8f0',
+                                background: '#f1f5f9',
+                                color: '#94a3b8',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
+                                cursor: 'not-allowed',
+                                opacity: 0.6
                               }}
                             >
-                              <DownloadIcon size={15} color="#ea580c" />
+                              <CreditCardIcon size={15} color="#94a3b8" />
                             </button>
                           </>
                         )}
@@ -1039,19 +1077,12 @@ export default function BillingPanel({
         </div>
       </div>
 
-      {/* VIEW BILL MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="430px">
+      {/* VIEW BILL MODAL (Exact Thermal Receipt UI - View Only) */}
+      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="540px">
         {viewingBill && (
           <ReceiptCard
             data={viewingBill}
             activeRestaurant={activeRestaurant}
-            onPrint={() => handlePrintBillPopup(viewingBill)}
-            onDownload={() => handleDownloadInvoicePopup(viewingBill)}
-            onCollectPayment={() => {
-              const b = viewingBill;
-              setViewingBill(null);
-              handleOpenCollectPayment(b);
-            }}
             isPaid={(viewingBill.status || viewingBill.paymentStatus || '').toLowerCase() === 'paid'}
           />
         )}
@@ -1138,7 +1169,7 @@ export default function BillingPanel({
       </Modal>
 
       {/* TAX INVOICE MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice Receipt" maxWidth="430px">
+      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice Receipt" maxWidth="540px">
         {invoiceModalBill && (
           <ReceiptCard
             data={invoiceModalBill}

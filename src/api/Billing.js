@@ -265,11 +265,20 @@ class BillingApi {
       if (response.status === 200 || response.status === 201) {
         return { status: true, response: response.data };
       }
+      return { status: true, response: response?.data || { success: true } };
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
         "Failed to process payment.";
+
+      if (String(errorMessage).toLowerCase().includes('no unpaid orders')) {
+        return {
+          status: true,
+          response: error?.response?.data || { success: true, message: "No unpaid orders found. Table is already settled." },
+          alreadyPaid: true
+        };
+      }
 
       ShowNotifications.showAlertNotification(errorMessage, false);
 

@@ -211,12 +211,18 @@ export default function Billing() {
             const mongoOrderId = t.orderId || t.order_id || t.id || t._id;
             const mongoTableId = t.tableId || t.id || t._id;
 
+            const rawBillNo = t.billNo || t.billNumber || '-';
+            const rawInvoiceNo = t.invoiceNo || t.invoiceNumber || t.invoiceId || t.taxInvoiceNo || (t.invoice && typeof t.invoice === 'object' ? (t.invoice.invoiceNo || t.invoice.invoiceNumber || t.invoice.id) : t.invoice) || '';
+            const fallbackInvoiceNo = rawInvoiceNo || (rawBillNo && rawBillNo !== '-' ? (rawBillNo.startsWith('INV-') ? rawBillNo : `INV-${rawBillNo.replace(/^BILL[-_]*/i, '')}`) : '');
+
             return {
               ...t,
               id: t.id || t._id,
               _id: t._id || t.id,
               sNo: t.sNo ?? (idx + 1),
-              billNo: t.billNo || t.billNumber || '-',
+              billNo: rawBillNo,
+              invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
+              invoiceId: rawInvoiceNo || fallbackInvoiceNo,
               orderId: t.orderId || t.order_id || '-',
               orderType: t.orderType || 'Dine-In',
               tableId: mongoTableId,
@@ -283,12 +289,18 @@ export default function Billing() {
           const tId = b.tableId || b._id || b.id || `tbl-${idx + 1}`;
           const ordId = b.orderId || b.order_id || `#ORD-${1000 + idx + 1}`;
 
+          const rawBillNo = b.billNo || b.billNumber || `BILL-${200 + idx + 1}`;
+          const rawInvoiceNo = b.invoiceNo || b.invoiceNumber || b.invoiceId || (b.invoice && typeof b.invoice === 'object' ? (b.invoice.invoiceNo || b.invoice.invoiceNumber) : b.invoice) || '';
+          const fallbackInvoiceNo = rawInvoiceNo || (rawBillNo ? (rawBillNo.startsWith('INV-') ? rawBillNo : `INV-${rawBillNo.replace(/^BILL[-_]*/i, '')}`) : `INV-${200 + idx + 1}`);
+
           return {
             ...b,
             id: b.id || b._id || `bill-${idx + 1}`,
             _id: b._id || b.id || `bill-${idx + 1}`,
             sNo: b.sNo ?? (idx + 1),
-            billNo: b.billNo || b.billNumber || `BILL-${200 + idx + 1}`,
+            billNo: rawBillNo,
+            invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
+            invoiceId: rawInvoiceNo || fallbackInvoiceNo,
             orderId: ordId,
             orderType: b.orderType || 'Dine-In',
             tableId: tId,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BranchApi from '../api/Branch.js';
 import SubscriptionApi from '../api/Subscription.js';
@@ -208,6 +208,34 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // View page operational sub-tab state
   const [selectedBranchForTree, setSelectedBranchForTree] = useState(null);
   const [opSubTab, setOpSubTab] = useState('tables');
+  const viewTopRef = useRef(null);
+
+  // Auto-scroll to top when opening branch view page or form
+  useEffect(() => {
+    if (activeView === 'hierarchy' || activeView === 'form') {
+      const resetScrollToTop = () => {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        const contentBody = document.querySelector('.content-body');
+        if (contentBody) contentBody.scrollTop = 0;
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) mainContent.scrollTop = 0;
+        if (viewTopRef.current) {
+          viewTopRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+        }
+      };
+
+      resetScrollToTop();
+      const rafId = requestAnimationFrame(resetScrollToTop);
+      const timer = setTimeout(resetScrollToTop, 50);
+
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(timer);
+      };
+    }
+  }, [activeView, selectedBranchForTree]);
 
   // Delete modal state
   const [branchToDelete, setBranchToDelete] = useState(null);
@@ -720,7 +748,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       gstNumber: branch.gstNumber || branch.gstin || '',
       fssaiNumber: branch.fssaiNumber || branch.fssai || '',
       billPrefix: branch.billPrefix || branch.invoicePrefix || '',
-      isMainBranch: branch.isMainBranch || false
+      isMainBranch: !!(branch.isMainBranch || branch.branchType === 'MAIN' || branch.type === 'MAIN')
     });
     setFormErrors({});
     setShowPassword(false);
@@ -739,6 +767,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setKdsPage(0);
     setOrdersFilter('all');
     setActiveView('hierarchy');
+
+    // Immediate scroll reset
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const contentBody = document.querySelector('.content-body');
+    if (contentBody) contentBody.scrollTop = 0;
   };
 
   const handleDeleteBranchClick = (branch) => {
@@ -991,6 +1026,27 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       const firstError = Object.values(errors)[0];
       ShowNotifications.showAlertNotification(firstError || "Please check the required fields in the form.", false);
       return;
+    }
+
+    // Verify only one branch can be the Main Branch
+    if (branchForm.isMainBranch) {
+      const allExisting = (apiBranches && apiBranches.length > 0)
+        ? apiBranches
+        : (activeRestaurant?.branches || []);
+      const currentIdStr = String(branchForm.id || '');
+      const existingMain = allExisting.find(b => {
+        const bId = String(b.id || b._id || '');
+        const isOther = !currentIdStr || bId !== currentIdStr;
+        return isOther && Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN');
+      });
+      if (existingMain) {
+        const mainName = existingMain.branchName || existingMain.name || 'Another branch';
+        ShowNotifications.showAlertNotification(
+          `"${mainName}" is already set as the Main Branch. Only one branch can be the Main Branch.`,
+          false
+        );
+        return;
+      }
     }
 
     const branchNameTrimmed = (branchForm.branchName || branchForm.name || '').trim();
@@ -1792,7 +1848,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'hierarchy') {
     return (
-      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
         {/* Top Header Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -1902,6 +1958,80 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             </div>
 
           </div>
+
+          {/* Tax, Compliance & Billing Configuration Section */}
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                  Tax, Compliance & Billing
+                </span>
+              </div>
+              {(currentViewBranch?.isMainBranch || currentViewBranch?.branchType === 'MAIN') && (
+                <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  ★ Main Branch
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', background: '#f8fafc', padding: '16px 22px', borderRadius: '12px', border: '1px solid #eef2f6' }}>
+              
+              {/* 1. GSTIN */}
+              <div>
+                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+                  GSTIN (Tax ID)
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                  <span style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+                    {currentViewBranch?.gstNumber || currentViewBranch?.gstinNumber || currentViewBranch?.gstin || 'Not Configured'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. FSSAI License */}
+              <div>
+                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+                  FSSAI License No.
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
+                  <span style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+                    {currentViewBranch?.fssaiNumber || currentViewBranch?.fssaiLicense || currentViewBranch?.fssai || 'Not Configured'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Invoice / Bill Prefix */}
+              <div>
+                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+                  Invoice / Bill Prefix
+                </span>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: '#ea580c', fontFamily: 'monospace' }}>
+                  <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
+                    {currentViewBranch?.billPrefix || currentViewBranch?.invoicePrefix || 'Default (Auto)'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 4. Branch Type */}
+              <div>
+                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+                  Branch Type
+                </span>
+                <div style={{ minHeight: '27px', display: 'flex', alignItems: 'center' }}>
+                  {(currentViewBranch?.isMainBranch || currentViewBranch?.branchType === 'MAIN') ? (
+                    <span style={{ background: '#fef3c7', border: '1px solid #fde68a', color: '#b45309', padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      ★ Main Branch
+                    </span>
+                  ) : (
+                    <span style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', padding: '3px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      Sub Branch
+                    </span>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
         </div>
 
         {/* Operational Sub-Tabs (Tables, Orders, Staff, Kitchen) */}
@@ -1913,7 +2043,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => { setOpSubTab('tables'); setTablesPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'tables' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'tables' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Tables ({tablesTotal})
+              Tables 
             </button>
 
             <button
@@ -1921,7 +2051,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => { setOpSubTab('orders'); setOrdersPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'orders' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'orders' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Orders ({allOrdersCount})
+              Orders 
             </button>
 
             <button
@@ -1929,7 +2059,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               onClick={() => { setOpSubTab('staff'); setStaffPage(0); }}
               style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: opSubTab === 'staff' ? 'var(--primary)' : '#f1f5f9', color: opSubTab === 'staff' ? '#fff' : '#475569', fontWeight: 700, fontSize: '13px', cursor: 'pointer', transition: 'all 0.2s' }}
             >
-              Staff ({staffTotal})
+              Staff 
             </button>
           </div>
 
@@ -2226,10 +2356,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               {/* Status Filter Chips */}
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
                 {[
-                  { key: 'all', label: 'All History', count: allOrdersCount },
-                  { key: 'queue', label: 'Order Queue', count: inQueueCount },
-                  { key: 'preparing', label: 'Preparing', count: preparingCount },
-                  { key: 'ready', label: 'Ready to Serve', count: readyCount }
+                  { key: 'all', label: 'All History'},
+                  { key: 'queue', label: 'Order Queue' },
+                  { key: 'preparing', label: 'Preparing' },
+                  { key: 'ready', label: 'Ready to Serve' }
                 ].map(chip => {
                   const isSelected = ordersFilter === chip.key;
                   return (
@@ -2528,7 +2658,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'form') {
     return (
-      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {/* Header Card with Back Button */}
         <div style={{
           background: '#ffffff',
@@ -2722,6 +2852,74 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         {formErrors.totalTables}
                       </span>
                     )}
+                  </div>
+
+                  {/* Field 6: Main Branch Checkbox */}
+                  <div style={{ gridColumn: '1 / -1', marginTop: '6px' }}>
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '14px 18px',
+                      background: branchForm.isMainBranch ? '#fff7ed' : '#ffffff',
+                      border: branchForm.isMainBranch ? '1.5px solid #ea580c' : '1px solid #cbd5e1',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      userSelect: 'none',
+                      boxShadow: branchForm.isMainBranch ? '0 2px 10px rgba(234, 88, 12, 0.08)' : 'none'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={!!branchForm.isMainBranch}
+                        onChange={e => {
+                          const willBeMain = e.target.checked;
+                          if (willBeMain) {
+                            const allExisting = (apiBranches && apiBranches.length > 0)
+                              ? apiBranches
+                              : (activeRestaurant?.branches || []);
+                            const currentIdStr = String(branchForm.id || '');
+                            const existingMain = allExisting.find(b => {
+                              const bId = String(b.id || b._id || '');
+                              const isOther = !currentIdStr || bId !== currentIdStr;
+                              return isOther && Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN');
+                            });
+                            if (existingMain) {
+                              const mainName = existingMain.branchName || existingMain.name || 'Another branch';
+                              ShowNotifications.showAlertNotification(
+                                `"${mainName}" is already set as the Main Branch. Only one branch can be the Main Branch.`,
+                                false
+                              );
+                              return;
+                            }
+                          }
+                          setBranchForm({ ...branchForm, isMainBranch: willBeMain });
+                        }}
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          accentColor: '#ea580c',
+                          cursor: 'pointer',
+                          marginTop: '2px',
+                          flexShrink: 0
+                        }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                            Set as Main Branch
+                          </span>
+                          {branchForm.isMainBranch && (
+                            <span style={{ fontSize: '10px', background: '#fef3c7', color: '#b45309', padding: '1px 7px', borderRadius: '12px', fontWeight: 800, border: '1px solid #fde68a' }}>
+                              ★ Primary Headquarter
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                          Mark this branch as the primary / headquarter location for centralized operations and full visibility.
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
               </div>

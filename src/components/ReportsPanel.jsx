@@ -1427,7 +1427,21 @@ export default function ReportsPanel({
       exportData = list.map((ord, idx) => {
         const orderNo = getFormattedOrderNo(ord, idx);
         const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo !== '-' ? `BILL-${orderNo.replace('#', '')}` : '-');
-        const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo !== '-' ? `INV-${orderNo.replace('#', '')}` : '-');
+        const rawInv = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoice && typeof ord.invoice === 'object' ? (ord.invoice.invoiceNo || ord.invoice.invoiceNumber || ord.invoice.id) : ord.invoice) || '';
+        let invoiceNo = rawInv ? String(rawInv).trim() : '';
+        if (!invoiceNo || invoiceNo === '-') {
+          const rawBill = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '');
+          if (rawBill && rawBill !== '-') {
+            invoiceNo = rawBill.startsWith('INV-') ? rawBill : `INV-${String(rawBill).replace(/^[#BILL-_]*/i, '')}`;
+          } else if (orderNo && orderNo !== '-') {
+            invoiceNo = `INV-${String(orderNo).replace(/^[#ORD-_]*/i, '')}`;
+          } else if (ord._id || ord.id) {
+            const rawId = String(ord._id || ord.id);
+            invoiceNo = rawId.length === 24 ? `INV-${rawId.slice(-6).toUpperCase()}` : `INV-${rawId}`;
+          } else {
+            invoiceNo = `INV-${1000 + idx + 1}`;
+          }
+        }
         const gross = Number(ord.grossRevenue ?? ord.grossAmount ?? ord.subtotal ?? ord.totalAmount ?? 0);
         const disc = Number(ord.totalDiscount ?? ord.discount ?? ord.discountAmount ?? 0);
         const tax = Number(ord.taxCollected ?? ord.tax ?? ord.taxAmount ?? ord.gst ?? 0);
@@ -1975,7 +1989,7 @@ export default function ReportsPanel({
             <select
               className="filter-control"
               value={branchFilter}
-              onChange={e => { setBranchFilter(e.target.value); setCurrentPage(1); }}
+              onChange={e => { setBranchFilter(e.target.value); setCurrentPage(0); }}
               disabled={isBranchLogin}
               title={isBranchLogin ? "Branch filter is locked to your assigned branch account" : "Filter by branch"}
             >
@@ -1988,7 +2002,6 @@ export default function ReportsPanel({
               ) : (
                 <>
                   <option value="ALL">🏢 All Branches (Company - Complete History)</option>
-                  <option value="MAIN">{activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch'}</option>
                   {allBranchesList.map(b => (
                     <option key={b.id || b._id} value={b.id || b._id}>
                       {b.name || b.branchName || b.branchCode}
@@ -2042,7 +2055,7 @@ export default function ReportsPanel({
           {(activeTab === 'sales' || (activeTab === 'tax' && taxSubTab === 'payment-settlement')) && (
             <div className="filter-item">
               <label>Payment Method</label>
-              <select className="filter-control" value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setCurrentPage(1); }}>
+              <select className="filter-control" value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setCurrentPage(0); }}>
                 <option value="ALL">All Payment Methods</option>
                 <option value="Cash">Cash</option>
                 <option value="UPI">UPI</option>
@@ -2056,7 +2069,7 @@ export default function ReportsPanel({
           {(activeTab === 'tax' && taxSubTab === 'tax-summary') && (
             <div className="filter-item">
               <label>Tax Type</label>
-              <select className="filter-control" value={taxTypeFilter} onChange={e => { setTaxTypeFilter(e.target.value); setCurrentPage(1); }}>
+              <select className="filter-control" value={taxTypeFilter} onChange={e => { setTaxTypeFilter(e.target.value); setCurrentPage(0); }}>
                 <option value="ALL">All Taxes</option>
                 <option value="GST 5%">GST 5%</option>
                 <option value="CGST">CGST</option>
@@ -2226,7 +2239,7 @@ export default function ReportsPanel({
           <button
             type="button"
             className={`btn-subtab ${inventorySubTab === 'position' ? 'active' : ''}`}
-            onClick={() => { setInventorySubTab('position'); setCurrentPage(1); }}
+            onClick={() => { setInventorySubTab('position'); setCurrentPage(0); }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -2250,7 +2263,7 @@ export default function ReportsPanel({
           <button
             type="button"
             className={`btn-subtab ${inventorySubTab === 'movement' ? 'active' : ''}`}
-            onClick={() => { setInventorySubTab('movement'); setCurrentPage(1); }}
+            onClick={() => { setInventorySubTab('movement'); setCurrentPage(0); }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -2274,7 +2287,7 @@ export default function ReportsPanel({
           <button
             type="button"
             className={`btn-subtab ${inventorySubTab === 'low-stock' ? 'active' : ''}`}
-            onClick={() => { setInventorySubTab('low-stock'); setCurrentPage(1); }}
+            onClick={() => { setInventorySubTab('low-stock'); setCurrentPage(0); }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -2303,7 +2316,7 @@ export default function ReportsPanel({
           <button
             type="button"
             className={`btn-subtab ${taxSubTab === 'tax-summary' ? 'active' : ''}`}
-            onClick={() => { setTaxSubTab('tax-summary'); setCurrentPage(1); }}
+            onClick={() => { setTaxSubTab('tax-summary'); setCurrentPage(0); }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -2327,7 +2340,7 @@ export default function ReportsPanel({
           <button
             type="button"
             className={`btn-subtab ${taxSubTab === 'payment-settlement' ? 'active' : ''}`}
-            onClick={() => { setTaxSubTab('payment-settlement'); setCurrentPage(1); }}
+            onClick={() => { setTaxSubTab('payment-settlement'); setCurrentPage(0); }}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -2780,7 +2793,20 @@ export default function ReportsPanel({
                       const orderNo = getFormattedOrderNo(ord, idx);
                       const rawId = ord._id || ord.orderId || ord.id || '';
                       const billNo = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '') || (orderNo !== '-' ? `BILL-${orderNo.replace('#', '')}` : '-');
-                      const invoiceNo = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoiceGenerated && orderNo !== '-' ? `INV-${orderNo.replace('#', '')}` : '-');
+                      const rawInv = ord.invoiceNo || ord.invoiceNumber || ord.invoiceId || ord.invoice_no || ord.gstInvoiceNo || ord.taxInvoiceNo || (ord.invoice && typeof ord.invoice === 'object' ? (ord.invoice.invoiceNo || ord.invoice.invoiceNumber || ord.invoice.id) : ord.invoice) || '';
+                      let invoiceNo = rawInv ? String(rawInv).trim() : '';
+                      if (!invoiceNo || invoiceNo === '-') {
+                        const rawBill = ord.billNo || ord.billNumber || ord.bill_no || (ord.billId ? String(ord.billId) : '');
+                        if (rawBill && rawBill !== '-') {
+                          invoiceNo = rawBill.startsWith('INV-') ? rawBill : `INV-${String(rawBill).replace(/^[#BILL-_]*/i, '')}`;
+                        } else if (orderNo && orderNo !== '-') {
+                          invoiceNo = `INV-${String(orderNo).replace(/^[#ORD-_]*/i, '')}`;
+                        } else if (rawId) {
+                          invoiceNo = String(rawId).length === 24 ? `INV-${String(rawId).slice(-6).toUpperCase()}` : `INV-${rawId}`;
+                        } else {
+                          invoiceNo = `INV-${1000 + idx + 1}`;
+                        }
+                      }
                       const date = ord.createdAt || ord.date || ord.orderDate || ord.timestamp;
                       const paymentMode = ord.paymentMethod || ord.paymentMode || ord.mode || 'N/A';
                       const gross = Number(ord.grossRevenue ?? ord.grossAmount ?? ord.subtotal ?? ord.totalAmount ?? 0);
@@ -2790,7 +2816,7 @@ export default function ReportsPanel({
 
                       return (
                         <tr key={ord.id || ord._id || idx}>
-                          <td>{(currentPage - 1) * pageSize + idx + 1}</td>
+                          <td>{currentPage * pageSize + idx + 1}</td>
                           <td>{formatDateTimeDMY(date)}</td>
                           <td><strong style={{ color: '#0f172a' }} title={rawId ? `Order ID: ${rawId}` : undefined}>{orderNo}</strong></td>
                           <td><span style={{ fontWeight: 600, color: '#334155' }}>{billNo}</span></td>
@@ -2837,7 +2863,7 @@ export default function ReportsPanel({
                     </tr>
                   ) : (
                     paginatedRecords.map((item, idx) => {
-                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                      const serialNo = currentPage * pageSize + idx + 1;
                       const dishName = item.dishName || item.name || item.foodItem || item.itemName || item.title || 'Unknown Item';
                       const cat = toDisplayText(item.category || item.categoryName, 'General');
                       const foodType = item.foodType || resolveFoodType(item);
@@ -2906,7 +2932,7 @@ export default function ReportsPanel({
                     </tr>
                   ) : (
                     paginatedRecords.map((ord, idx) => {
-                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                      const serialNo = currentPage * pageSize + idx + 1;
                       const orderNo = getFormattedOrderNo(ord, idx);
                       const rawId = ord._id || ord.orderId || ord.id || '';
                       const date = ord.createdAt || ord.date;
@@ -2981,7 +3007,7 @@ export default function ReportsPanel({
                       </tr>
                     ) : (
                       paginatedRecords.map((t, idx) => {
-                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        const serialNo = currentPage * pageSize + idx + 1;
                         const isPositive = t.type === 'Purchase' || t.type === 'Direct Purchase' || (t.type === 'Adjustment' && Number(t.quantity) > 0);
                         const isNegative = t.type === 'Consumption' || t.type === 'Wastage' || t.type === 'Distribution' || (t.type === 'Adjustment' && Number(t.quantity) < 0);
                         return (
@@ -3016,7 +3042,7 @@ export default function ReportsPanel({
                       </tr>
                     ) : (
                       paginatedRecords.map((item, idx) => {
-                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        const serialNo = currentPage * pageSize + idx + 1;
                         return (
                           <tr key={item.id || idx}>
                             <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
@@ -3050,7 +3076,7 @@ export default function ReportsPanel({
                       </tr>
                     ) : (
                       paginatedRecords.map((item, idx) => {
-                        const serialNo = (currentPage - 1) * pageSize + idx + 1;
+                        const serialNo = currentPage * pageSize + idx + 1;
                         const itemName = item.name || item.itemName || 'Inventory Item';
                         const cat = toDisplayText(item.category || item.categoryName, 'General');
                         const unit = item.unit || 'pcs';
@@ -3100,8 +3126,8 @@ export default function ReportsPanel({
                     </tr>
                   ) : (
                     paginatedRecords.map((s, idx) => {
-                      const serialNo = (currentPage - 1) * pageSize + idx + 1;
-                      const staffId = s.staffId || s.employeeCode || s.staffCode || getFormattedStaffId(s, (currentPage - 1) * pageSize + idx);
+                      const serialNo = currentPage * pageSize + idx + 1;
+                      const staffId = s.staffId || s.employeeCode || s.staffCode || getFormattedStaffId(s, currentPage * pageSize + idx);
                       const staffName = s.waiterName || s.name || s.staffName || 'Staff Member';
                       const role = s.role || 'Staff';
                       const ordersHandled = Number(s.ordersHandled ?? s.ordersServed ?? 0);
@@ -3378,7 +3404,17 @@ export default function ReportsPanel({
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Invoice No.</span>
-                <strong style={{ fontSize: '13px', color: '#0f172a' }}>{viewOrder.invoiceNo || viewOrder.invoiceNumber || viewOrder.invoiceId || viewOrder.gstInvoiceNo || '-'}</strong>
+                <strong style={{ fontSize: '13px', color: '#0f172a' }}>
+                  {(() => {
+                    const rawInv = viewOrder.invoiceNo || viewOrder.invoiceNumber || viewOrder.invoiceId || viewOrder.gstInvoiceNo || (viewOrder.invoice && typeof viewOrder.invoice === 'object' ? (viewOrder.invoice.invoiceNo || viewOrder.invoice.invoiceNumber) : viewOrder.invoice) || '';
+                    if (rawInv && rawInv !== '-') return String(rawInv).trim();
+                    const rawBill = viewOrder.billNo || viewOrder.billNumber || viewOrder.bill_no || '';
+                    if (rawBill && rawBill !== '-') return rawBill.startsWith('INV-') ? rawBill : `INV-${String(rawBill).replace(/^[#BILL-_]*/i, '')}`;
+                    const ordNo = getFormattedOrderNo(viewOrder);
+                    if (ordNo && ordNo !== '-') return `INV-${String(ordNo).replace(/^[#ORD-_]*/i, '')}`;
+                    return '-';
+                  })()}
+                </strong>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: '#64748b', display: 'block' }}>Customer Name</span>

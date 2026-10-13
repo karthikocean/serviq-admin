@@ -464,7 +464,19 @@ export default function BillingHistoryPanel({
                   <>
                     {billingHistory.map((invoice, idx) => {
                       const billNo = invoice.billNo || invoice.billNumber || '-';
-                      const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.id || '-';
+                      let invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.invoiceId || '';
+                      if (!invNo || invNo === '-') {
+                        if (billNo && billNo !== '-') {
+                          invNo = billNo.startsWith('INV-') ? billNo : `INV-${billNo.replace(/^BILL[-_]*/i, '')}`;
+                        } else if (invoice.orderId && invoice.orderId !== '-') {
+                          invNo = `INV-${String(invoice.orderId).replace(/^[#ORD-_]*/i, '')}`;
+                        } else if (invoice.id || invoice._id) {
+                          const rawId = String(invoice.id || invoice._id);
+                          invNo = rawId.length === 24 ? `INV-${rawId.slice(-6).toUpperCase()}` : `INV-${rawId}`;
+                        } else {
+                          invNo = invoice.orderId ? `INV-${String(invoice.orderId).replace(/^[#ORD-_]*/i, '')}` : `INV-${1000 + idx + 1}`;
+                        }
+                      }
                       const totAmt = Number(invoice.amount ?? invoice.totalAmount ?? 0);
                       const paidAmt = Number(invoice.paidAmount ?? totAmt);
 
@@ -553,12 +565,12 @@ export default function BillingHistoryPanel({
                               </button>
                               )}
 
-                              {/* 2. Print Invoice (Icon without text) */}
+                              {/* 2. Print Invoice / Receipt */}
                               <button
                                 type="button"
                                 onClick={() => handlePrintInvoiceDirect(invoice)}
-                                title="Print Invoice"
-                                aria-label="Print Invoice"
+                                title="Print Invoice / Receipt"
+                                aria-label="Print Invoice / Receipt"
                                 style={{
                                   width: '32px',
                                   height: '32px',
@@ -574,29 +586,6 @@ export default function BillingHistoryPanel({
                                 }}
                               >
                                 <PrinterIcon size={15} color="#0f172a" />
-                              </button>
-
-                              {/* 3. Download Invoice (Icon without text) */}
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadInvoiceDirect(invoice)}
-                                title="Download Invoice"
-                                aria-label="Download Invoice"
-                                style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  borderRadius: '6px',
-                                  border: '1px solid #bbf7d0',
-                                  background: '#f0fdf4',
-                                  color: '#16a34a',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease'
-                                }}
-                              >
-                                <DownloadIcon size={15} color="#16a34a" />
                               </button>
                             </div>
                           </td>
@@ -686,14 +675,12 @@ export default function BillingHistoryPanel({
         </div>
       </div>
 
-      {/* INVOICE DETAILS MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice Receipt" maxWidth="430px">
+      {/* INVOICE DETAILS MODAL (Exact Thermal Receipt UI - View Only) */}
+      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice Receipt" maxWidth="540px">
         {selectedInvoice && (
           <ReceiptCard
             data={selectedInvoice}
             activeRestaurant={activeRestaurant}
-            onPrint={() => handlePrintInvoiceDirect(selectedInvoice)}
-            onDownload={() => handleDownloadInvoiceDirect(selectedInvoice)}
             isPaid={true}
           />
         )}

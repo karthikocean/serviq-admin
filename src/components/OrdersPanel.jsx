@@ -4752,28 +4752,6 @@ export default function OrdersPanel({
                   </span>
                 </div>
               </div>
-
-              {/* Modal Actions */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setViewingOrder(null)}
-                  style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', border: '1px solid #cbd5e1', color: '#475569' }}
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-black"
-                  onClick={() => {
-                    handlePrintBill(viewingOrder);
-                  }}
-                  style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', border: 'none', cursor: 'pointer' }}
-                >
-                  <PrintIcon size={14} /> Print Receipt
-                </button>
-              </div>
             </div>
           </Modal>
         );

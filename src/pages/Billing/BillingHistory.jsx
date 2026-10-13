@@ -74,10 +74,28 @@ export default function BillingHistory() {
 
   // Safe mapping function for any invoice / order / bill record
   const mapItemToInvoice = (item, index = 0) => {
-    const rawId = item.invoiceId || item.invoiceNo || item.invoiceNumber || item.billNumber || item.billNo || item._id || item.id || '';
-    const displayInvoiceId = rawId ? (String(rawId).startsWith('INV-') ? String(rawId) : (String(rawId).length === 24 ? `INV-${String(rawId).slice(-6).toUpperCase()}` : `INV-${rawId}`)) : '-';
+    const rawInvoice = item.invoiceId || item.invoiceNo || item.invoiceNumber || item.taxInvoiceNo || item.gstInvoiceNo || (item.invoice && typeof item.invoice === 'object' ? (item.invoice.invoiceNo || item.invoice.invoiceNumber || item.invoice.id) : item.invoice) || '';
+    const rawBill = item.billNo || item.billNumber || '';
 
-    const rawBillNo = item.billNo || item.billNumber || item.invoiceNo || item.invoiceId || displayInvoiceId;
+    let displayInvoiceId = rawInvoice ? String(rawInvoice).trim() : '';
+    if (!displayInvoiceId) {
+      if (rawBill) {
+        displayInvoiceId = rawBill.startsWith('INV-') ? rawBill : `INV-${rawBill.replace(/^BILL[-_]*/i, '')}`;
+      } else if (item.orderRefId || item.orderNumber || item.orderId) {
+        const ord = String(item.orderRefId || item.orderNumber || item.orderId).replace(/^[#ORD-_]*/i, '');
+        displayInvoiceId = `INV-${ord}`;
+      } else if (item._id || item.id) {
+        const rawId = String(item._id || item.id);
+        displayInvoiceId = rawId.length === 24 ? `INV-${rawId.slice(-6).toUpperCase()}` : `INV-${rawId}`;
+      } else {
+        displayInvoiceId = `INV-${1000 + index + 1}`;
+      }
+    }
+
+    let rawBillNo = rawBill ? String(rawBill).trim() : '';
+    if (!rawBillNo) {
+      rawBillNo = displayInvoiceId.startsWith('INV-') ? `BILL-${displayInvoiceId.replace(/^INV[-_]*/i, '')}` : displayInvoiceId;
+    }
 
     const rawOrderId = item.orderRefId || item.orderNumber || item.orderId || (item.order?._id || item.order?.orderId || item.order?.orderNumber) || item._id || item.id || '';
     const displayOrderId = rawOrderId ? (String(rawOrderId).startsWith('#ORD-') ? String(rawOrderId) : (String(rawOrderId).startsWith('ORD-') ? `#${rawOrderId}` : (String(rawOrderId).length === 24 ? `#ORD-${String(rawOrderId).slice(-6).toUpperCase()}` : `#ORD-${rawOrderId}`))) : '-';
