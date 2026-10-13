@@ -8,7 +8,7 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
 import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 import '../pages/OrderManagement/OrderManagement.css';
@@ -603,62 +603,111 @@ export default function OrdersPanel({
       <html>
       <head>
         <title>KOT - ${kotNoStr}</title>
+        <meta charset="utf-8" />
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
           @page { size: portrait; margin: 4mm; }
-          * { box-sizing: border-box; }
-          body { font-family: 'Courier New', Courier, monospace; width: 280px; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+          body {
+            font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            background: #ffffff;
+            color: #000000;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 13px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           @media print {
-            html, body { width: 100% !important; margin: 0 !important; padding: 4px !important; display: flex !important; justify-content: center !important; }
-            .kot-container { width: 280px !important; max-width: 280px !important; margin: 0 auto !important; }
+            html, body {
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .kot-container {
+              width: 380px !important;
+              max-width: 380px !important;
+              min-width: 340px !important;
+              margin: 0 auto !important;
+              box-shadow: none !important;
+              border: none !important;
+              padding: 6px 10px !important;
+            }
             @page { size: portrait; margin: 4mm; }
           }
-          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-          .title { font-size: 16px; font-weight: bold; margin: 0; }
-          .subtitle { font-size: 12px; font-weight: bold; margin-top: 2px; }
-          .info { margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-          th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; padding: 4px 0; }
-          td { padding: 4px 0; font-size: 11px; vertical-align: top; }
-          .notes { font-size: 10px; font-style: italic; color: #333; margin-top: 2px; }
-          .footer { text-align: center; border-top: 1px dashed #000; margin-top: 12px; padding-top: 8px; font-size: 10px; }
+          .kot-container {
+            width: 100%;
+            max-width: 380px;
+            background: #ffffff;
+            color: #000000;
+            padding: 14px 16px;
+          }
+          .header { text-align: center; border-bottom: 1.5px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+          .title { font-size: 18px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 13px; font-weight: 700; margin-top: 4px; letter-spacing: 1.5px; }
+          .info { margin-bottom: 10px; border-bottom: 1.5px dashed #000; padding-bottom: 10px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th { text-align: left; border-bottom: 1.5px solid #000; font-size: 13px; font-weight: 700; padding: 6px 0; text-transform: uppercase; }
+          td { padding: 6px 0; font-size: 13px; vertical-align: top; }
+          .notes { font-size: 11.5px; font-style: italic; color: #444; margin-top: 2px; }
+          .footer { text-align: center; border-top: 1.5px dashed #000; margin-top: 14px; padding-top: 8px; font-size: 12px; font-weight: 600; }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ RESTAURANT'}</div>
-          <div class="subtitle">KITCHEN ORDER TICKET (KOT)</div>
-        </div>
-        <div class="info">
-          <div class="info-row"><span><strong>KOT No:</strong> ${kotNoStr}</span><span><strong>Order ID:</strong> #${orderIdStr}</span></div>
-          <div class="info-row"><span><strong>Table:</strong> ${tableStr}</span><span><strong>Type:</strong> ${ord.orderType || 'Dine-In'}</span></div>
-          <div class="info-row"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div>
-          ${(ord.orderType && ord.orderType !== 'Dine-In') ? '' : `<div class="info-row"><span><strong>Waiter:</strong> ${waiterStr}</span></div>`}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 55%;">Item</th>
-              <th style="width: 15%; text-align: center;">Qty</th>
-              <th style="width: 30%; text-align: right;">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map(it => `
+        <div class="kot-container">
+          <div class="header">
+            <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ RESTAURANT'}</div>
+            <div class="subtitle">KITCHEN ORDER TICKET (KOT)</div>
+          </div>
+          <div class="info">
+            <div class="info-row"><span><strong>KOT No:</strong> ${kotNoStr}</span><span><strong>Order ID:</strong> #${orderIdStr}</span></div>
+            <div class="info-row"><span><strong>Table:</strong> ${tableStr}</span><span><strong>Type:</strong> ${ord.orderType || 'Dine-In'}</span></div>
+            <div class="info-row"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div>
+            ${(ord.orderType && ord.orderType !== 'Dine-In') ? '' : `<div class="info-row"><span><strong>Waiter:</strong> ${waiterStr}</span></div>`}
+          </div>
+          <table>
+            <thead>
               <tr>
-                <td><strong>${it.name || 'Item'}</strong>${it.addOns ? `<div class="notes">+ ${it.addOns}</div>` : ''}</td>
-                <td style="text-align: center;"><strong>${it.qty || it.quantity || 1}</strong></td>
-                <td style="text-align: right; font-size: 10px;">${it.notes || '-'}</td>
+                <th style="width: 55%;">Item</th>
+                <th style="width: 15%; text-align: center;">Qty</th>
+                <th style="width: 30%; text-align: right;">Notes</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        ${ord.notes ? `<div style="margin-top: 8px; font-size: 11px; border-top: 1px dotted #000; padding-top: 4px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
-        <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
+            </thead>
+            <tbody>
+              ${items.map(it => `
+                <tr>
+                  <td><strong style="font-size: 13.5px;">${it.name || 'Item'}</strong>${it.addOns ? `<div class="notes">+ ${it.addOns}</div>` : ''}</td>
+                  <td style="text-align: center; font-size: 14px;"><strong>${it.qty || it.quantity || 1}</strong></td>
+                  <td style="text-align: right; font-size: 11.5px;">${it.notes || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${ord.notes ? `<div style="margin-top: 10px; font-size: 12px; border-top: 1px dotted #000; padding-top: 6px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
+          <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
+        </div>
         <script>
-          window.onload = function() {
-            setTimeout(function() { window.print(); }, 100);
-          };
+          function triggerPrint() {
+            window.focus();
+            setTimeout(function() {
+              window.print();
+            }, 200);
+          }
+          if (document.readyState === 'complete') {
+            triggerPrint();
+          } else {
+            window.addEventListener('load', triggerPrint);
+          }
           window.onafterprint = function() {
             try { window.close(); } catch(e) {}
           };
@@ -667,14 +716,14 @@ export default function OrdersPanel({
       </html>
     `;
 
-    openCenteredPrintWindow(html, `KOT - ${kotNoStr}`, 460, 680);
+    openCenteredPrintWindow(html, `KOT - ${kotNoStr}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Helper for Printing Bill (Exact Thermal Receipt UI - Centered Popup Window)
   const handlePrintBill = (ord) => {
     if (!ord) return;
     const html = generateReceiptHtml(ord, activeRestaurant);
-    openCenteredPrintWindow(html, `Print Bill - ${ord?.billNo || ord?.id || 'Doc'}`, 480, 700);
+    openCenteredPrintWindow(html, `Print Bill - ${ord?.billNo || ord?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Extract menu items from activeRestaurant

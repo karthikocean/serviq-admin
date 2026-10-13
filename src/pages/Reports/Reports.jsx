@@ -5,7 +5,6 @@ import ReportsPanel from '../../components/ReportsPanel';
 import OrderApi from '../../api/Order';
 import MenuApi from '../../api/Menu';
 import UserApi from '../../api/User';
-import { initialOrders, initialMenu, initialStaff, initialInventory } from '../../config/initialData';
 import './Reports.css';
 
 export default function Reports() {
@@ -80,25 +79,25 @@ export default function Reports() {
   const orders = useMemo(() => {
     if (liveOrders.length > 0) return liveOrders;
     if (Array.isArray(activeRestaurant?.orders) && activeRestaurant.orders.length > 0) return activeRestaurant.orders;
-    return initialOrders;
+    return [];
   }, [liveOrders, activeRestaurant?.orders]);
 
   const menu = useMemo(() => {
     if (liveMenu.length > 0) return liveMenu;
     if (Array.isArray(activeRestaurant?.menu) && activeRestaurant.menu.length > 0) return activeRestaurant.menu;
-    return initialMenu;
+    return [];
   }, [liveMenu, activeRestaurant?.menu]);
 
   const staff = useMemo(() => {
     if (liveStaff.length > 0) return liveStaff;
     if (Array.isArray(activeRestaurant?.staff) && activeRestaurant.staff.length > 0) return activeRestaurant.staff;
     if (Array.isArray(activeRestaurant?.users) && activeRestaurant.users.length > 0) return activeRestaurant.users;
-    return initialStaff;
+    return [];
   }, [liveStaff, activeRestaurant?.staff, activeRestaurant?.users]);
 
   const inventory = useMemo(() => {
     if (Array.isArray(activeRestaurant?.inventory) && activeRestaurant.inventory.length > 0) return activeRestaurant.inventory;
-    return initialInventory;
+    return [];
   }, [activeRestaurant?.inventory]);
 
   const handleTabChange = (tabId) => {

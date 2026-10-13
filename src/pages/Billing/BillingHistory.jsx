@@ -7,7 +7,7 @@ import TableApi from '../../api/Table';
 import UserApi from '../../api/User';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
-import { initialBillingHistory, initialOrders, isMongoId } from '../../config/initialData';
+import { isMongoId } from '../../config/initialData';
 
 export default function BillingHistory() {
   const { activeRestaurant, selectedBranchId, currentUser, hasPermission } = useAppState();
@@ -315,7 +315,7 @@ export default function BillingHistory() {
       console.error('Failed to fetch billing history from API', e);
     }
 
-    // Only fall back to local mock data if the API network call completely failed
+    // Fall back to local active restaurant records only if API call failed
     if (!apiSuccess) {
       let fallbackList = [];
       if (Array.isArray(activeRestaurant?.billingHistory) && activeRestaurant.billingHistory.length > 0) {
@@ -323,10 +323,6 @@ export default function BillingHistory() {
       } else if (Array.isArray(activeRestaurant?.orders) && activeRestaurant.orders.length > 0) {
         const paid = activeRestaurant.orders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
         fallbackList = paid.length > 0 ? paid : activeRestaurant.orders;
-      }
-
-      if (fallbackList.length === 0) {
-        fallbackList = initialBillingHistory;
       }
 
       items = fallbackList;
@@ -471,7 +467,7 @@ export default function BillingHistory() {
     }));
 
     return [
-      { value: 'All', label: 'All Cashier / Staff' },
+      { value: 'All', label: 'All Staff' },
       ...entries
     ];
   }, [availableStaff, activeRestaurant, rawHistory]);

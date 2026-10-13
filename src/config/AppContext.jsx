@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId, initialTables, initialOrders, initialMenu, initialStaff, initialBillingData, initialBillingHistory } from './initialData';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
 import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -744,8 +744,8 @@ export const AppProvider = ({ children }) => {
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
-    const effectiveTables = (Array.isArray(tablesList) && tablesList.length > 0) ? tablesList : initialTables;
-    const effectiveOrders = (Array.isArray(ordersList) && ordersList.length > 0) ? ordersList : initialOrders;
+    const effectiveTables = Array.isArray(tablesList) ? tablesList : [];
+    const effectiveOrders = Array.isArray(ordersList) ? ordersList : [];
 
     const extractOrderTable = (o) => {
       if (!o) return '';
@@ -838,8 +838,8 @@ export const AppProvider = ({ children }) => {
         status: isUnpaid ? 'Unpaid' : 'Paid',
         paymentStatus: isUnpaid ? 'Unpaid' : 'Paid',
         paymentMethod: primaryOrder.paymentMethod || 'UPI',
-        cashier: primaryOrder.staff || primaryOrder.waiter || 'Priya Sharma',
-        staff: primaryOrder.waiter || primaryOrder.staff || 'Ramesh Kumar',
+        cashier: primaryOrder.staff || primaryOrder.waiter || '-',
+        staff: primaryOrder.waiter || primaryOrder.staff || '-',
         customerName: primaryOrder.customerName || `Guest (${tableLabel})`,
         customerPhone: primaryOrder.customerPhone || '',
         orderIds: targetOrders.map(o => o._id || o.id).filter(Boolean),
@@ -941,7 +941,7 @@ export const AppProvider = ({ children }) => {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
-          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : initialOrders);
+          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : []);
           const computedBillData = computeBillingData(finalOrders, rest.tables || []);
           return {
             ...prev,

@@ -5,7 +5,7 @@ import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import '../pages/Billing/Billing.css';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -213,7 +213,7 @@ export default function BillingHistoryPanel({
 
   const handlePrintInvoiceDirect = (invoice) => {
     const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Receipt - ${invoice?.id || invoice?.billNo || 'Doc'}`, 480, 700);
+    openCenteredPrintWindow(htmlContent, `Receipt - ${invoice?.id || invoice?.billNo || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   const handleDownloadInvoiceDirect = (invoice) => {
@@ -294,7 +294,7 @@ export default function BillingHistoryPanel({
             <SearchableSelect
               value={selectedStaff}
               onChange={(e) => setSelectedStaff && setSelectedStaff(e.target.value)}
-              options={staffOptions.length > 0 ? staffOptions : [{ value: 'All', label: 'All Cashier / Staff' }]}
+              options={staffOptions.length > 0 ? staffOptions : [{ value: 'All', label: 'All Staff' }]}
               placeholder="Select Staff..."
             />
           </div>
@@ -420,33 +420,33 @@ export default function BillingHistoryPanel({
         {/* MAIN HISTORY TABLE WITH ALL 13 REQUIRED COLUMNS */}
         <div className="billing-table-card">
           <div className="billing-table-responsive">
-            <table className="billing-table" style={{ minWidth: '1615px' }}>
+            <table className="billing-table" style={{ minWidth: '1890px' }}>
               <colgroup>
-                <col style={{ width: '50px' }} />   {/* 1. S.NO */}
-                <col style={{ width: '125px' }} />  {/* 2. BILL NO. */}
-                <col style={{ width: '145px' }} />  {/* 3. INVOICE NO. */}
-                <col style={{ width: '125px' }} />  {/* 4. ORDER ID */}
-                <col style={{ width: '110px' }} />  {/* 5. ORDER TYPE */}
+                <col style={{ width: '65px' }} />   {/* 1. S.NO */}
+                <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
+                <col style={{ width: '175px' }} />  {/* 3. INVOICE NO. */}
+                <col style={{ width: '175px' }} />  {/* 4. ORDER ID */}
+                <col style={{ width: '125px' }} />  {/* 5. ORDER TYPE */}
                 <col style={{ width: '170px' }} />  {/* 6. TABLE */}
                 <col style={{ width: '160px' }} />  {/* 7. BILL DATE & TIME */}
-                <col style={{ width: '120px' }} />  {/* 8. TOTAL AMOUNT */}
-                <col style={{ width: '120px' }} />  {/* 9. PAID AMOUNT */}
-                <col style={{ width: '115px' }} />  {/* 10. PAYMENT METHOD */}
-                <col style={{ width: '115px' }} />  {/* 11. PAYMENT STATUS */}
-                <col style={{ width: '125px' }} />  {/* 12. BILLED BY */}
-                <col style={{ width: '135px' }} />  {/* 13. ACTIONS */}
+                <col style={{ width: '145px' }} />  {/* 8. TOTAL AMOUNT */}
+                <col style={{ width: '145px' }} />  {/* 9. PAID AMOUNT */}
+                <col style={{ width: '135px' }} />  {/* 10. PAYMENT METHOD */}
+                <col style={{ width: '135px' }} />  {/* 11. PAYMENT STATUS */}
+                <col style={{ width: '140px' }} />  {/* 12. BILLED BY */}
+                <col style={{ width: '145px' }} />  {/* 13. ACTIONS */}
               </colgroup>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'center' }}>S.NO</th>
-                  <th style={{ textAlign: 'left' }}>BILL NO.</th>
-                  <th style={{ textAlign: 'left' }}>INVOICE NO.</th>
-                  <th style={{ textAlign: 'left' }}>ORDER ID</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>BILL NO.</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>INVOICE NO.</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>ORDER ID</th>
                   <th style={{ textAlign: 'center' }}>ORDER TYPE</th>
                   <th style={{ textAlign: 'center' }}>TABLE</th>
                   <th style={{ textAlign: 'center' }}>BILL DATE & TIME</th>
-                  <th style={{ textAlign: 'right' }}>TOTAL AMOUNT</th>
-                  <th style={{ textAlign: 'right' }}>PAID AMOUNT</th>
+                  <th style={{ textAlign: 'right', paddingRight: '16px' }}>TOTAL AMOUNT</th>
+                  <th style={{ textAlign: 'right', paddingRight: '16px' }}>PAID AMOUNT</th>
                   <th style={{ textAlign: 'center' }}>PAYMENT METHOD</th>
                   <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                   <th style={{ textAlign: 'left' }}>BILLED BY</th>
@@ -473,13 +473,13 @@ export default function BillingHistoryPanel({
                           <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
                             {page * limit + idx + 1}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {billNo}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {invNo}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', color: '#475569', fontWeight: 600, paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {invoice.orderId || invoice.order_id || '-'}
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -498,10 +498,10 @@ export default function BillingHistoryPanel({
                               {invoice.time || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (invoice.billDateTime ? new Date(invoice.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'))}
                             </div>
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                             ₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 700, color: '#16a34a', fontVariantNumeric: 'tabular-nums' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 700, color: '#16a34a', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                             ₹{paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td style={{ textAlign: 'center' }}>

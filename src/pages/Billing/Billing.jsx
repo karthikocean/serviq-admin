@@ -7,7 +7,7 @@ import TableApi from '../../api/Table';
 import UserApi from '../../api/User';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
-import { initialBillingData, initialOrders, initialTables, isMongoId } from '../../config/initialData';
+import { isMongoId } from '../../config/initialData';
 import './Billing.css';
 
 export default function Billing() {
@@ -254,70 +254,75 @@ export default function Billing() {
     if (fetchedTables.length === 0) {
       const sourceBills = (Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0)
         ? activeRestaurant.billingData
-        : initialBillingData;
+        : [];
 
-      fetchedTables = sourceBills.map((b, idx) => {
-        const rawBillDate = b.billDateTime || b.createdAt || b.date || new Date().toISOString();
-        const dateObj = new Date(rawBillDate);
-        const dateStr = !isNaN(dateObj.getTime()) ? formatDateDMY(dateObj) : (b.date || formatDateDMY(new Date()));
-        const timeStr = b.time || (!isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
+      if (sourceBills.length > 0) {
+        fetchedTables = sourceBills.map((b, idx) => {
+          const rawBillDate = b.billDateTime || b.createdAt || b.date || new Date().toISOString();
+          const dateObj = new Date(rawBillDate);
+          const dateStr = !isNaN(dateObj.getTime()) ? formatDateDMY(dateObj) : (b.date || formatDateDMY(new Date()));
+          const timeStr = b.time || (!isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '12:30 PM');
 
-        const rawItems = (Array.isArray(b.items) ? b.items : []).map(it => ({
-          name: it.name || it.itemName || 'Item',
-          qty: Number(it.qty ?? it.quantity ?? 1) || 1,
-          rate: Number(it.rate ?? it.price ?? 0) || 0,
-          amount: Number(it.amount ?? it.total ?? ((Number(it.qty ?? 1)) * (Number(it.rate ?? it.price ?? 0)))) || 0
-        }));
+          const rawItems = (Array.isArray(b.items) ? b.items : []).map(it => ({
+            name: it.name || it.itemName || 'Item',
+            qty: Number(it.qty ?? it.quantity ?? 1) || 1,
+            rate: Number(it.rate ?? it.price ?? 0) || 0,
+            amount: Number(it.amount ?? it.total ?? ((Number(it.qty ?? 1)) * (Number(it.rate ?? it.price ?? 0)))) || 0
+          }));
 
-        const subtotal = Number(b.subtotal ?? rawItems.reduce((acc, curr) => acc + curr.amount, 0));
-        const tax = Number(b.tax ?? Math.round(subtotal * 0.05));
-        const discount = Number(b.discount ?? 0);
-        const billAmount = Number(b.billAmount ?? b.total ?? b.amount ?? (subtotal + tax - discount));
-        const paidAmount = Number(b.paidAmount ?? ((b.status || '').toLowerCase() === 'paid' ? billAmount : 0));
-        const balanceAmount = Number(b.balanceAmount ?? Math.max(0, billAmount - paidAmount));
-        const isPaid = (b.status || b.paymentStatus || '').toLowerCase() === 'paid' || balanceAmount <= 0;
+          const subtotal = Number(b.subtotal ?? rawItems.reduce((acc, curr) => acc + curr.amount, 0));
+          const tax = Number(b.tax ?? Math.round(subtotal * 0.05));
+          const discount = Number(b.discount ?? 0);
+          const billAmount = Number(b.billAmount ?? b.total ?? b.amount ?? (subtotal + tax - discount));
+          const paidAmount = Number(b.paidAmount ?? ((b.status || '').toLowerCase() === 'paid' ? billAmount : 0));
+          const balanceAmount = Number(b.balanceAmount ?? Math.max(0, billAmount - paidAmount));
+          const isPaid = (b.status || b.paymentStatus || '').toLowerCase() === 'paid' || balanceAmount <= 0;
 
-        const cleanTable = String(b.table || b.tableNumber || b.tableNo || '').trim();
-        const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
-        const tId = b.tableId || b._id || b.id || `tbl-${idx + 1}`;
-        const ordId = b.orderId || b.order_id || `#ORD-${1000 + idx + 1}`;
+          const cleanTable = String(b.table || b.tableNumber || b.tableNo || '').trim();
+          const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
+          const tId = b.tableId || b._id || b.id || `tbl-${idx + 1}`;
+          const ordId = b.orderId || b.order_id || `#ORD-${1000 + idx + 1}`;
 
-        return {
-          ...b,
-          id: b.id || b._id || `bill-${idx + 1}`,
-          _id: b._id || b.id || `bill-${idx + 1}`,
-          sNo: b.sNo ?? (idx + 1),
-          billNo: b.billNo || b.billNumber || `BILL-${200 + idx + 1}`,
-          orderId: ordId,
-          orderType: b.orderType || 'Dine-In',
-          tableId: tId,
-          table: tableDisplay,
-          billDateTime: rawBillDate,
-          date: dateStr,
-          time: timeStr,
-          createdAt: rawBillDate,
-          subtotal,
-          tax,
-          discount,
-          billAmount,
-          total: billAmount,
-          amount: billAmount,
-          paidAmount,
-          balanceAmount,
-          status: isPaid ? 'Paid' : (b.status || 'Unpaid'),
-          paymentStatus: isPaid ? 'Paid' : (b.paymentStatus || 'Unpaid'),
-          cashier: b.cashier || b.staff || 'Priya Sharma',
-          staff: b.staff || b.cashier || 'Ramesh Kumar',
-          items: rawItems,
-          order_id: ordId,
-          rawOrderId: ordId,
-          orderIds: [tId, ordId].filter(Boolean),
-          customerName: b.customerName || `Guest (${tableDisplay})`,
-          customerPhone: b.customerPhone || ''
-        };
-      });
+          return {
+            ...b,
+            id: b.id || b._id || `bill-${idx + 1}`,
+            _id: b._id || b.id || `bill-${idx + 1}`,
+            sNo: b.sNo ?? (idx + 1),
+            billNo: b.billNo || b.billNumber || `BILL-${200 + idx + 1}`,
+            orderId: ordId,
+            orderType: b.orderType || 'Dine-In',
+            tableId: tId,
+            table: tableDisplay,
+            billDateTime: rawBillDate,
+            date: dateStr,
+            time: timeStr,
+            createdAt: rawBillDate,
+            subtotal,
+            tax,
+            discount,
+            billAmount,
+            total: billAmount,
+            amount: billAmount,
+            paidAmount,
+            balanceAmount,
+            status: isPaid ? 'Paid' : (b.status || 'Unpaid'),
+            paymentStatus: isPaid ? 'Paid' : (b.paymentStatus || 'Unpaid'),
+            cashier: b.cashier || b.staff || '-',
+            staff: b.staff || b.cashier || '-',
+            items: rawItems,
+            order_id: ordId,
+            rawOrderId: ordId,
+            orderIds: [tId, ordId].filter(Boolean),
+            customerName: b.customerName || `Guest (${tableDisplay})`,
+            customerPhone: b.customerPhone || ''
+          };
+        });
 
-      setTotalItems(fetchedTables.length);
+        setTotalItems(fetchedTables.length);
+      } else {
+        fetchedTables = [];
+        setTotalItems(0);
+      }
     }
 
     setBillingData(fetchedTables);

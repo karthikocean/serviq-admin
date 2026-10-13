@@ -692,12 +692,12 @@ export default function HelpSupport() {
 
   // Status Filter Options with live counts
   const statusOptions = useMemo(() => [
-    { value: 'All', label: `All Status (${displayCounts.All ?? 0})` },
-    { value: 'Open', label: `Open (${displayCounts.Open ?? 0})` },
-    { value: 'In Progress', label: `In Progress (${displayCounts['In Progress'] ?? 0})` },
-    { value: 'Waiting for Response', label: `Waiting (${displayCounts['Waiting for Response'] ?? 0})` },
-    { value: 'Resolved', label: `Resolved (${displayCounts.Resolved ?? 0})` },
-    { value: 'Closed', label: `Closed (${displayCounts.Closed ?? 0})` }
+    { value: 'All', label: `All Status ` },
+    { value: 'Open', label: `Open` },
+    { value: 'In Progress', label: `In Progress` },
+    { value: 'Waiting for Response', label: `Waiting ` },
+    { value: 'Resolved', label: `Resolved` },
+    { value: 'Closed', label: `Closed` }
   ], [displayCounts]);
 
   // Check if any filter is active

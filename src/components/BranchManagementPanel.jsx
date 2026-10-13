@@ -78,6 +78,23 @@ const TrashIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const BuildingStoreIcon = ({ size = 16, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+    <path d="M2 7h20" />
+    <circle cx="12" cy="12" r="2" />
+  </svg>
+);
+
+const MapPinIcon = ({ size = 12, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+    <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);
+
 const TreeIcon = ({ size = 18, color = 'currentColor' }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7"></rect>
@@ -3308,12 +3325,24 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       {/* 4. Branch List Table */}
       <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table style={{ width: '100%', minWidth: '1050px', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table style={{ width: '100%', minWidth: '1380px', borderCollapse: 'collapse', fontSize: '13px' }}>
+          <colgroup>
+            <col style={{ width: '60px' }} />   {/* S/NO */}
+            <col style={{ width: '135px' }} />  {/* Branch Code */}
+            <col style={{ width: '300px' }} />  {/* Branch Name */}
+            <col style={{ width: '180px' }} />  {/* Manager */}
+            <col style={{ width: '135px' }} />  {/* Mobile */}
+            <col style={{ width: '130px' }} />  {/* City */}
+            <col style={{ width: '85px' }} />   {/* Tables */}
+            <col style={{ width: '105px' }} />  {/* Status */}
+            <col style={{ width: '125px' }} />  {/* Created Date */}
+            <col style={{ width: '125px' }} />  {/* Actions */}
+          </colgroup>
           <thead>
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10', width: '50px' }}>S/NO</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>S/NO</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Code</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Name</th>
+              <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Name</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Manager</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Mobile</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>City</th>
@@ -3350,24 +3379,85 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     </span>
                   </td>
 
-                  {/* 2. Branch Name */}
-                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                        <span>{b.branchName || b.name}</span>
-                        {b.isMainBranch && (
-                          <span style={{ fontSize: '10px', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '4px', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: '2px', border: '1px solid #fde68a', flexShrink: 0 }} title="Main Branch">
-                            ★ Main
+                  {/* 2. Branch Name (Professional Style) */}
+                  <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      {/* Store emblem badge */}
+                      <div style={{
+                        width: '38px',
+                        height: '38px',
+                        minWidth: '38px',
+                        minHeight: '38px',
+                        borderRadius: '9px',
+                        background: b.isMainBranch ? '#fff7ed' : '#f8fafc',
+                        border: b.isMainBranch ? '1.5px solid #fed7aa' : '1px solid #e2e8f0',
+                        color: b.isMainBranch ? '#ea580c' : '#475569',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <BuildingStoreIcon size={18} color={b.isMainBranch ? '#ea580c' : '#475569'} />
+                      </div>
+
+                      {/* Name and Address info */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            fontSize: '13.5px',
+                            letterSpacing: '-0.1px',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {b.branchName || b.name}
                           </span>
+                          {b.isMainBranch && (
+                            <span style={{
+                              fontSize: '10px',
+                              background: '#fef3c7',
+                              color: '#b45309',
+                              padding: '2px 7px',
+                              borderRadius: '12px',
+                              fontWeight: 800,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              border: '1px solid #fde68a',
+                              flexShrink: 0,
+                              lineHeight: 1.2
+                            }} title="Main Branch">
+                              ★ Main
+                            </span>
+                          )}
+                        </div>
+                        {b.address && (
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              color: '#64748b',
+                              lineHeight: '1.35',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '240px'
+                            }}
+                            title={typeof b.address === 'object' && b.address !== null
+                              ? (b.address.street || b.address.city || '')
+                              : b.address}
+                          >
+                            <MapPinIcon size={12} color="#94a3b8" />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {typeof b.address === 'object' && b.address !== null
+                                ? (b.address.street || b.address.city || '')
+                                : b.address}
+                            </span>
+                          </div>
                         )}
                       </div>
-                      {b.address && (
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
-                          {typeof b.address === 'object' && b.address !== null
-                            ? (b.address.street || b.address.city || '')
-                            : b.address}
-                        </div>
-                      )}
                     </div>
                   </td>
 

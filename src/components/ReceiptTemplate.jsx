@@ -117,8 +117,10 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
       color: #000000;
       padding: 16px;
       display: flex;
-      justify-content: center;
-      font-size: 12.5px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      font-size: 13px;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -129,18 +131,19 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
         padding: 0 !important;
         background: #ffffff !important;
         display: flex !important;
-        justify-content: center !important;
+        flex-direction: column !important;
+        align-items: center !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
       .receipt-box {
         box-shadow: none !important;
         border: none !important;
-        width: 320px !important;
-        max-width: 320px !important;
-        min-width: 320px !important;
+        width: 380px !important;
+        max-width: 380px !important;
+        min-width: 340px !important;
         margin: 0 auto !important;
-        padding: 4px 6px !important;
+        padding: 6px 10px !important;
       }
       @page {
         size: portrait;
@@ -149,9 +152,9 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
     }
     .receipt-box {
       width: 100%;
-      max-width: 340px;
+      max-width: 380px;
       background: #ffffff;
-      padding: 12px 16px;
+      padding: 14px 18px;
       color: #000000;
     }
     .dashed-line {
@@ -306,18 +309,28 @@ export const generateReceiptHtml = (data = {}, activeRestaurant = {}) => {
 </html>`;
 };
 
+// Standard print popup dimensions ensuring full, large print preview visibility
+export const STANDARD_PRINT_WIDTH = 920;
+export const STANDARD_PRINT_HEIGHT = 860;
+
 // Opens a print popup window centered on the user's active screen/browser
-export const openCenteredPrintWindow = (htmlContent, title = 'Print', width = 480, height = 700) => {
+export const openCenteredPrintWindow = (htmlContent, title = 'Print', width = STANDARD_PRINT_WIDTH, height = STANDARD_PRINT_HEIGHT) => {
   const dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : (window.screenX || 0);
   const dualScreenTop = window.screenTop !== undefined ? window.screenTop : (window.screenY || 0);
 
   const screenW = window.outerWidth || window.innerWidth || (window.screen ? window.screen.width : 1280);
   const screenH = window.outerHeight || window.innerHeight || (window.screen ? window.screen.height : 800);
 
-  const left = Math.max(0, Math.round(dualScreenLeft + (screenW - width) / 2));
-  const top = Math.max(0, Math.round(dualScreenTop + (screenH - height) / 2));
+  // Responsive boundary safety to fit gracefully inside smaller screens while maximizing preview size
+  const availW = (window.screen && window.screen.availWidth) ? window.screen.availWidth - 40 : 1200;
+  const availH = (window.screen && window.screen.availHeight) ? window.screen.availHeight - 60 : 860;
+  const finalWidth = Math.min(width, availW);
+  const finalHeight = Math.min(height, availH);
 
-  const features = `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+  const left = Math.max(0, Math.round(dualScreenLeft + (screenW - finalWidth) / 2));
+  const top = Math.max(0, Math.round(dualScreenTop + (screenH - finalHeight) / 2));
+
+  const features = `width=${finalWidth},height=${finalHeight},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
 
   const printWin = window.open('', '_blank', features);
   if (printWin) {

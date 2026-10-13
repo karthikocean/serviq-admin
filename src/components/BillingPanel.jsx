@@ -7,7 +7,7 @@ import BillingApi from '../api/Billing.js';
 import OrderApi from '../api/Order.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import { isMongoId } from '../config/initialData.js';
-import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -228,7 +228,7 @@ export default function BillingPanel({
     }));
 
     return [
-      { value: 'All', label: 'All Cashier / Staff' },
+      { value: 'All', label: ' Staff' },
       ...entries
     ];
   }, [availableStaff, activeRestaurant, displayBillingData]);
@@ -362,7 +362,7 @@ export default function BillingPanel({
   // Print Bill Popup Handler (Centered Thermal Bill Print Window)
   const handlePrintBillPopup = (bill) => {
     const htmlContent = generateReceiptHtml(bill, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, 480, 700);
+    openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Modern Tax Invoice HTML Generator (matching Admin theme and screenshot design)
@@ -607,17 +607,16 @@ export default function BillingPanel({
     `;
   };
 
-  // Print Tax Invoice Popup Handler (Opens centered on screen)
+  // Print Tax Invoice Popup Handler (Opens centered on screen matching standard 920x860 print window)
   const handlePrintInvoicePopup = (invoice) => {
-    const htmlContent = generateTaxInvoiceHtml(invoice);
-    const script = `<script>window.onload = function() { setTimeout(function(){ window.print(); }, 100); }; window.onafterprint = function() { try{ window.close(); }catch(e){} };</script>`;
-    openCenteredPrintWindow(htmlContent + script, 'Tax Invoice', 760, 840);
+    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
+    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.billNo || invoice?.invoiceNo || invoice?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Download Invoice HTML Handler
   const handleDownloadInvoicePopup = (bill) => {
-    const htmlContent = generateTaxInvoiceHtml(bill);
-    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.id || 'INV-Doc';
+    const htmlContent = generateReceiptHtml(bill, activeRestaurant);
+    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.id || 'INV-Doc';
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -713,31 +712,31 @@ export default function BillingPanel({
       {/* CURRENT BILLING LIST TABLE */}
       <div className="billing-table-card">
         <div className="billing-table-responsive">
-          <table className="billing-table" style={{ minWidth: '1350px' }}>
+          <table className="billing-table" style={{ minWidth: '1610px' }}>
             <colgroup>
-              <col style={{ width: '60px' }} />   {/* 1. S.NO */}
-              <col style={{ width: '130px' }} />  {/* 2. BILL NO. */}
-              <col style={{ width: '130px' }} />  {/* 3. ORDER ID */}
-              <col style={{ width: '115px' }} />  {/* 4. ORDER TYPE */}
+              <col style={{ width: '65px' }} />   {/* 1. S.NO */}
+              <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
+              <col style={{ width: '175px' }} />  {/* 3. ORDER ID */}
+              <col style={{ width: '130px' }} />  {/* 4. ORDER TYPE */}
               <col style={{ width: '170px' }} />  {/* 5. TABLE */}
               <col style={{ width: '160px' }} />  {/* 6. BILL DATE & TIME */}
-              <col style={{ width: '135px' }} />  {/* 7. BILL AMOUNT */}
-              <col style={{ width: '135px' }} />  {/* 8. PAID AMOUNT */}
-              <col style={{ width: '135px' }} />  {/* 9. BALANCE AMOUNT */}
-              <col style={{ width: '130px' }} />  {/* 10. PAYMENT STATUS */}
-              <col style={{ width: '145px' }} />  {/* 11. ACTIONS */}
+              <col style={{ width: '150px' }} />  {/* 7. BILL AMOUNT */}
+              <col style={{ width: '145px' }} />  {/* 8. PAID AMOUNT */}
+              <col style={{ width: '155px' }} />  {/* 9. BALANCE AMOUNT */}
+              <col style={{ width: '135px' }} />  {/* 10. PAYMENT STATUS */}
+              <col style={{ width: '140px' }} />  {/* 11. ACTIONS */}
             </colgroup>
             <thead>
               <tr>
                 <th style={{ textAlign: 'center' }}>S.NO</th>
-                <th style={{ textAlign: 'left' }}>BILL NO.</th>
-                <th style={{ textAlign: 'left' }}>ORDER ID</th>
+                <th style={{ textAlign: 'left', paddingLeft: '16px' }}>BILL NO.</th>
+                <th style={{ textAlign: 'left', paddingLeft: '16px' }}>ORDER ID</th>
                 <th style={{ textAlign: 'center' }}>ORDER TYPE</th>
                 <th style={{ textAlign: 'center' }}>TABLE</th>
                 <th style={{ textAlign: 'center' }}>BILL DATE & TIME</th>
-                <th style={{ textAlign: 'right' }}>BILL AMOUNT</th>
-                <th style={{ textAlign: 'right' }}>PAID AMOUNT</th>
-                <th style={{ textAlign: 'right' }}>BALANCE AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>BILL AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>PAID AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>BALANCE AMOUNT</th>
                 <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                 <th style={{ textAlign: 'center' }} className="sticky-actions-header">ACTIONS</th>
               </tr>
@@ -783,10 +782,10 @@ export default function BillingPanel({
                     <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
                       {bill.sNo || (page * limit + index + 1)}
                     </td>
-                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                       {billNo}
                     </td>
-                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                       {bill.orderId || bill.order_id || '-'}
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -801,13 +800,13 @@ export default function BillingPanel({
                       <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', lineHeight: 1.2 }}>{dateStr}</div>
                       <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', lineHeight: 1.2 }}>{timeStr}</div>
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{billAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{balanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'center' }}>
