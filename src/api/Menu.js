@@ -10,8 +10,8 @@ const sanitizeParams = (params = {}) => {
     if (val !== undefined && val !== null && val !== '') {
       if (key === 'branchId') {
         const sVal = String(val).toUpperCase();
-        if (sVal !== 'ALL' && sVal !== 'COMPANY' && isValidMongoId(val)) {
-          cleanParams[key] = val;
+        if (sVal !== 'ALL' && sVal !== 'COMPANY') {
+          cleanParams[key] = String(val).trim();
         }
       } else {
         const sVal = String(val).toUpperCase();
@@ -29,8 +29,10 @@ const sanitizePayload = (data = {}) => {
   const cleanData = { ...data };
   if (cleanData.branchId) {
     const sBranch = String(cleanData.branchId).toUpperCase();
-    if (sBranch === 'COMPANY' || sBranch === 'ALL' || !isValidMongoId(cleanData.branchId)) {
+    if (sBranch === 'COMPANY' || sBranch === 'ALL') {
       delete cleanData.branchId;
+    } else {
+      cleanData.branchId = String(cleanData.branchId).trim();
     }
   }
   return cleanData;

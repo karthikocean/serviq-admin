@@ -143,7 +143,8 @@ const initialBranchState = {
   gstNumber: '',
   fssaiNumber: '',
   billPrefix: '',
-  isMainBranch: false
+  isMainBranch: false,
+  useCustomMenu: false
 };
 
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
@@ -308,7 +309,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             gstNumber: b.gstNumber || b.gstin || '',
             fssaiNumber: b.fssaiNumber || b.fssai || '',
             billPrefix: b.billPrefix || b.invoicePrefix || '',
-            isMainBranch: b.isMainBranch || false
+            isMainBranch: b.isMainBranch || false,
+            useCustomMenu: Boolean(b.useCustomMenu)
           };
         });
         setApiBranches(mappedBranches);
@@ -619,7 +621,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       city: '',
       username: `branch_${autoCode.toLowerCase().replace('-', '_')}`,
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      useCustomMenu: false
     });
     setFormErrors({});
     setShowPassword(false);
@@ -668,11 +671,26 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
   };
 
-  const handleOpenEditForm = (branch) => {
+  const handleOpenEditForm = async (branch) => {
     if (!hasPermission('branch-management', 'edit')) {
       ShowNotifications.showAlertNotification("You do not have permission to edit branches.", false);
       return;
     }
+
+    const targetId = branch.id || branch._id;
+    let freshBranch = branch;
+    try {
+      const detailsRes = await BranchApi.getBranchDetails(targetId);
+      if (detailsRes?.status && detailsRes.response) {
+        const d = detailsRes.response.data || detailsRes.response.branch || detailsRes.response;
+        if (d && typeof d === 'object') {
+          freshBranch = { ...branch, ...d };
+        }
+      }
+    } catch (err) {
+      console.warn("Could not fetch fresh branch details, using local data:", err);
+    }
+
     const extractRawManagerName = (val) => {
       if (!val) return '';
       if (typeof val === 'object') {
@@ -686,41 +704,46 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return '';
     };
 
-    const resolvedFallbackMgr = resolveBranchManagerName(branch, apiUsers, []);
+    const resolvedFallbackMgr = resolveBranchManagerName(freshBranch, apiUsers, []);
     const managerNameFromBranch = (
-      extractRawManagerName(branch.managerName) ||
-      extractRawManagerName(branch.branchManager) ||
-      extractRawManagerName(branch.manager) ||
-      extractRawManagerName(branch.branchManagerName) ||
-      extractRawManagerName(branch.contactPerson) ||
+      extractRawManagerName(freshBranch.managerName) ||
+      extractRawManagerName(freshBranch.branchManager) ||
+      extractRawManagerName(freshBranch.manager) ||
+      extractRawManagerName(freshBranch.branchManagerName) ||
+      extractRawManagerName(freshBranch.contactPerson) ||
       (resolvedFallbackMgr !== 'Unassigned' ? resolvedFallbackMgr : '') ||
       ''
     );
 
+    const isCustomMenuVal = freshBranch.useCustomMenu !== undefined 
+      ? Boolean(freshBranch.useCustomMenu) 
+      : Boolean(branch.useCustomMenu);
+
     setBranchForm({
-      id: branch.id || branch._id,
-      managerId: branch.managerId || branch.rawManagerId || '',
-      branchName: branch.branchName || branch.name || '',
-      branchCode: branch.branchCode || branch.code || '',
+      id: freshBranch.id || freshBranch._id || targetId,
+      managerId: freshBranch.managerId || freshBranch.rawManagerId || '',
+      branchName: freshBranch.branchName || freshBranch.name || '',
+      branchCode: freshBranch.branchCode || freshBranch.code || '',
       managerName: managerNameFromBranch,
       branchManager: managerNameFromBranch,
-      mobileNumber: branch.mobileNumber || branch.contactNumber || branch.phone || branch.managerMobile || '',
-      email: branch.email || branch.managerEmail || '',
+      mobileNumber: freshBranch.mobileNumber || freshBranch.contactNumber || freshBranch.phone || freshBranch.managerMobile || '',
+      email: freshBranch.email || freshBranch.managerEmail || '',
       password: '',
       confirmPassword: '',
-      address: typeof branch.address === 'string' ? branch.address : (branch.address?.street || ''),
-      country: branch.country || branch.address?.country || 'India',
-      state: branch.state || branch.address?.state || 'Tamil Nadu',
-      city: branch.city || branch.address?.city || '',
-      pincode: branch.pincode || branch.address?.pincode || '',
-      openingDate: branch.openingDate ? branch.openingDate.split('T')[0] : (branch.branchOpeningDate ? branch.branchOpeningDate.split('T')[0] : new Date().toISOString().split('T')[0]),
-      status: branch.status || 'Active',
-      totalTables: branch.totalTables || 10,
-      username: branch.username || '',
-      gstNumber: branch.gstNumber || branch.gstin || '',
-      fssaiNumber: branch.fssaiNumber || branch.fssai || '',
-      billPrefix: branch.billPrefix || branch.invoicePrefix || '',
-      isMainBranch: branch.isMainBranch || false
+      address: typeof freshBranch.address === 'string' ? freshBranch.address : (freshBranch.address?.street || ''),
+      country: freshBranch.country || freshBranch.address?.country || 'India',
+      state: freshBranch.state || freshBranch.address?.state || 'Tamil Nadu',
+      city: freshBranch.city || freshBranch.address?.city || '',
+      pincode: freshBranch.pincode || freshBranch.address?.pincode || '',
+      openingDate: freshBranch.openingDate ? freshBranch.openingDate.split('T')[0] : (freshBranch.branchOpeningDate ? freshBranch.branchOpeningDate.split('T')[0] : new Date().toISOString().split('T')[0]),
+      status: freshBranch.status || 'Active',
+      totalTables: freshBranch.totalTables || 10,
+      username: freshBranch.username || '',
+      gstNumber: freshBranch.gstNumber || freshBranch.gstin || '',
+      fssaiNumber: freshBranch.fssaiNumber || freshBranch.fssai || '',
+      billPrefix: freshBranch.billPrefix || freshBranch.invoicePrefix || '',
+      isMainBranch: freshBranch.isMainBranch || false,
+      useCustomMenu: isCustomMenuVal
     });
     setFormErrors({});
     setShowPassword(false);
@@ -1064,6 +1087,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       branchCapacity: totalTablesVal,
       isMainBranch: !!branchForm.isMainBranch,
       branchType: branchForm.isMainBranch ? 'MAIN' : 'SUB',
+      useCustomMenu: !!branchForm.useCustomMenu,
       ...(branchForm.gstNumber && branchForm.gstNumber.trim() ? { gstinNumber: branchForm.gstNumber.trim().toUpperCase(), gstNumber: branchForm.gstNumber.trim().toUpperCase() } : {}),
       ...(branchForm.fssaiNumber && branchForm.fssaiNumber.trim() ? { fssaiLicense: branchForm.fssaiNumber.trim(), fssaiNumber: branchForm.fssaiNumber.trim() } : {}),
       ...(branchForm.billPrefix && branchForm.billPrefix.trim() ? { billPrefix: branchForm.billPrefix.trim().toUpperCase() } : {}),
@@ -1164,7 +1188,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           name: branchNameTrimmed,
           branchName: branchNameTrimmed,
           managerName: managerVal,
-          branchManager: managerVal
+          branchManager: managerVal,
+          useCustomMenu: !!branchForm.useCustomMenu
         };
 
         setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...updatedBranchObj } : b));
@@ -1254,7 +1279,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           id: createdId,
           _id: createdId,
           branchManager: managerVal,
-          managerName: managerVal
+          managerName: managerVal,
+          useCustomMenu: Boolean(branchForm.useCustomMenu)
         };
 
         setApiBranches(prev => [...(prev || []), newBranchObj]);
@@ -3207,6 +3233,30 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </div>
               </div>
 
+              {/* Section 6: Menu Configuration */}
+              <div style={{ background: '#f8fafc', padding: '20px 24px', borderRadius: '14px', border: '1px solid #e2e8f0', marginTop: '16px' }}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  6. Menu Configuration
+                </h3>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                  <input
+                    type="checkbox"
+                    id="branchUseCustomMenu"
+                    checked={!!branchForm.useCustomMenu}
+                    onChange={e => setBranchForm({ ...branchForm, useCustomMenu: e.target.checked })}
+                    style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="branchUseCustomMenu" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                    <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                      Create separate / custom menu for this branch
+                    </span>
+                    <span style={{ display: 'block', fontSize: '12px', color: '#64748b', marginTop: '3px', lineHeight: 1.4 }}>
+                      If unchecked, this branch will use the standard company menu. Enable this to create and manage an independent custom menu for this branch.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
             </div>
 
             {/* Actions */}
@@ -3325,11 +3375,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       {/* 4. Branch List Table */}
       <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
-        <table style={{ width: '100%', minWidth: '1380px', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <table style={{ width: '100%', minWidth: '1500px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <colgroup>
             <col style={{ width: '60px' }} />   {/* S/NO */}
             <col style={{ width: '135px' }} />  {/* Branch Code */}
-            <col style={{ width: '300px' }} />  {/* Branch Name */}
+            <col style={{ width: '280px' }} />  {/* Branch Name */}
+            <col style={{ width: '160px' }} />  {/* Menu Type */}
             <col style={{ width: '180px' }} />  {/* Manager */}
             <col style={{ width: '135px' }} />  {/* Mobile */}
             <col style={{ width: '130px' }} />  {/* City */}
@@ -3343,6 +3394,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>S/NO</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Code</th>
               <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Name</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Menu Type</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Manager</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Mobile</th>
               <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>City</th>
@@ -3355,7 +3407,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           <tbody>
             {filteredBranches.length === 0 ? (
               <tr>
-                <td colSpan="10" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                <td colSpan="11" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
                   No branches found matching your search.
                 </td>
               </tr>
@@ -3461,7 +3513,44 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     </div>
                   </td>
 
-                  {/* 3. Manager */}
+                  {/* 3. Menu Type (Dedicated Column) */}
+                  <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    {b.useCustomMenu ? (
+                      <span style={{
+                        fontSize: '11px',
+                        background: '#ecfdf5',
+                        color: '#065f46',
+                        padding: '5px 12px',
+                        borderRadius: '20px',
+                        fontWeight: 700,
+                        border: '1px solid #a7f3d0',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                      }} title="This branch has its own independent menu">
+                        <span style={{ fontSize: '12px' }}>🍽️</span> Custom Menu
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '11px',
+                        background: '#eff6ff',
+                        color: '#1e40af',
+                        padding: '5px 12px',
+                        borderRadius: '20px',
+                        fontWeight: 700,
+                        border: '1px solid #bfdbfe',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                      }} title="This branch uses Company Menu">
+                        <span style={{ fontSize: '12px' }}>🏢</span> Company Menu
+                      </span>
+                    )}
+                  </td>
+
+                  {/* 4. Manager */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'left' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {(() => {
