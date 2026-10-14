@@ -33,6 +33,7 @@ const DownloadIcon = ({ size = 16, color = 'currentColor' }) => (
 
 export default function BillingHistoryPanel({
   billingHistory = [],
+  allFilteredHistory = [],
   branches = [],
   isLoading,
   searchTerm, setSearchTerm,
@@ -52,6 +53,7 @@ export default function BillingHistoryPanel({
   totalPages: propTotalPages,
   summary,
   activeRestaurant = {},
+  currentUser = {},
   hasPermission
 }) {
   const canView = typeof hasPermission === 'function' ? hasPermission('billing_history', 'view') : true;
@@ -119,7 +121,9 @@ export default function BillingHistoryPanel({
         customer: customerFilter ? customerFilter.trim() : undefined,
         cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
-        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : undefined,
+        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : 'Paid',
+        status: 'Paid',
+        billingStatus: 'Paid',
         orderType: orderType && orderType !== 'All' ? orderType : undefined,
         isExport: 'true',
         limit: '10' // Tell backend to fetch all for export
@@ -143,8 +147,12 @@ export default function BillingHistoryPanel({
     }
 
     // Fallback to local table data if API didn't return full list
-    if (itemsToExport.length === 0 && billingHistory.length > 0) {
-      itemsToExport = billingHistory;
+    if (itemsToExport.length === 0) {
+      if (allFilteredHistory.length > 0) {
+        itemsToExport = allFilteredHistory;
+      } else if (billingHistory.length > 0) {
+        itemsToExport = billingHistory;
+      }
     }
 
     if (itemsToExport.length === 0) {
@@ -208,26 +216,27 @@ export default function BillingHistoryPanel({
 
   // Helper to generate Receipt HTML for Printing and Downloading (Exact Thermal Receipt UI)
   const generateInvoiceHtml = (invoice) => {
-    return generateReceiptHtml(invoice, activeRestaurant);
+    return generateReceiptHtml(invoice, activeRestaurant, currentUser);
   };
 
   const handlePrintInvoiceDirect = (invoice) => {
-    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Receipt - ${invoice?.id || invoice?.billNo || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
+    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.invoiceNo || invoice?.id || invoice?.billNo || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   const handleDownloadInvoiceDirect = (invoice) => {
-    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Receipt-${String(invoice.id || invoice.billNo || 'doc').replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+    const invNo = invoice.invoiceNo || invoice.id || invoice.billNo || 'doc';
+    a.download = `TaxInvoice-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    ShowNotifications.showAlertNotification(`Receipt ${invoice.id || ''} downloaded successfully!`, true);
+    ShowNotifications.showAlertNotification(`Tax Invoice downloaded successfully!`, true);
   };
 
   // Calculate Summaries
@@ -276,28 +285,7 @@ export default function BillingHistoryPanel({
             />
           </div>
 
-          {/* Row 1, Col 3: 3. Customer Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Customer</label>
-            <input
-              type="text"
-              placeholder="Name or Phone..."
-              value={customerFilter}
-              onChange={(e) => setCustomerFilter && setCustomerFilter(e.target.value)}
-              style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid var(--border)', boxSizing: 'border-box', fontSize: '13px' }}
-            />
-          </div>
 
-          {/* Row 2, Col 1: 4. Cashier / Staff Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Cashier / Staff</label>
-            <SearchableSelect
-              value={selectedStaff}
-              onChange={(e) => setSelectedStaff && setSelectedStaff(e.target.value)}
-              options={staffOptions.length > 0 ? staffOptions : [{ value: 'All', label: 'All Staff' }]}
-              placeholder="Select Staff..."
-            />
-          </div>
 
           {/* Row 2, Col 2: 5. Date Range */}
           <div>
@@ -338,12 +326,11 @@ export default function BillingHistoryPanel({
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Payment Status</label>
             <SearchableSelect
-              value={paymentStatus || 'All'}
+              value={paymentStatus || 'Paid'}
               onChange={(e) => setPaymentStatus && setPaymentStatus(e.target.value)}
               options={[
-                { value: 'All', label: 'All Statuses' },
                 { value: 'Paid', label: 'Paid' },
-                { value: 'Unpaid', label: 'Unpaid' }
+                { value: 'All', label: 'All Paid Bills' }
               ]}
               placeholder="Select Status..."
             />
@@ -675,13 +662,16 @@ export default function BillingHistoryPanel({
         </div>
       </div>
 
-      {/* INVOICE DETAILS MODAL (Exact Thermal Receipt UI - View Only) */}
-      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice Receipt" maxWidth="540px">
+      {/* INVOICE DETAILS MODAL (Sample Invoice Format - After Payment) */}
+      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice (After Payment)" maxWidth="480px">
         {selectedInvoice && (
           <ReceiptCard
             data={selectedInvoice}
             activeRestaurant={activeRestaurant}
+            currentUser={currentUser}
             isPaid={true}
+            onPrint={() => handlePrintInvoiceDirect(selectedInvoice)}
+            onDownload={() => handleDownloadInvoiceDirect(selectedInvoice)}
           />
         )}
       </Modal>

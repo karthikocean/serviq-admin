@@ -1029,6 +1029,7 @@ export const AppProvider = ({ children }) => {
               const resolvedMgr = (b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned');
 
               return {
+                ...b,
                 id: b._id || b.id,
                 _id: b._id || b.id,
                 branchName: b.branchName || b.name,
@@ -1044,7 +1045,9 @@ export const AppProvider = ({ children }) => {
                 pincode: typeof b.address === 'object' && b.address !== null ? (b.address.pincode || '') : (b.pincode || ''),
                 openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
                 status: b.status || 'Active',
-                totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0)
+                totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0),
+                isMainBranch: Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN' || String(b.branchName || b.name || '').toLowerCase().includes('main')),
+                branchType: b.branchType || (b.isMainBranch ? 'MAIN' : 'SUB')
               };
             });
 
@@ -1054,7 +1057,7 @@ export const AppProvider = ({ children }) => {
               prevBranches.length === mappedBranches.length &&
               prevBranches.every((pb, idx) => {
                 const mb = mappedBranches[idx];
-                return pb && mb && (pb.id === mb.id || pb._id === mb._id) && pb.branchName === mb.branchName && pb.status === mb.status;
+                return pb && mb && (pb.id === mb.id || pb._id === mb._id) && pb.branchName === mb.branchName && pb.status === mb.status && pb.isMainBranch === mb.isMainBranch;
               })
             ) {
               return prev;

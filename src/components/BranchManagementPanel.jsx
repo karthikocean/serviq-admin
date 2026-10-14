@@ -336,7 +336,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
             gstNumber: b.gstNumber || b.gstin || '',
             fssaiNumber: b.fssaiNumber || b.fssai || '',
             billPrefix: b.billPrefix || b.invoicePrefix || '',
-            isMainBranch: b.isMainBranch || false
+            isMainBranch: Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN' || String(b.branchName || b.name || '').toLowerCase().includes('main'))
           };
         });
         setApiBranches(mappedBranches);
@@ -1967,11 +1967,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   Tax, Compliance & Billing
                 </span>
               </div>
-              {(currentViewBranch?.isMainBranch || currentViewBranch?.branchType === 'MAIN') && (
-                <span style={{ fontSize: '11px', background: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: '12px', fontWeight: 800, border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  ★ Main Branch
-                </span>
-              )}
+             
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', background: '#f8fafc', padding: '16px 22px', borderRadius: '12px', border: '1px solid #eef2f6' }}>

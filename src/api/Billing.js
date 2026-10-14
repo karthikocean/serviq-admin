@@ -93,7 +93,7 @@ class BillingApi {
       cleanParams.sortOrder = filters.sortOrder || 'desc';
 
       if (filters.isExport) cleanParams.isExport = filters.isExport;
-      if (filters.limit === 0 || filters.limit === '0') cleanParams.limit = 0;
+      if (filters.limit === 0 || filters.limit === '0') cleanParams.limit = 10;
 
       // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
@@ -112,12 +112,25 @@ class BillingApi {
         response = await apiClient.get(url);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
-          const orderParams = { ...cleanParams };
-          if (!orderParams.limit) orderParams.limit = 50;
-          const ordersRes = await apiClient.get('/orders', { params: orderParams }).catch(() => null);
+          let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+          const getOrderList = (res) => {
+            if (!res?.data) return [];
+            if (Array.isArray(res.data)) return res.data;
+            if (Array.isArray(res.data?.data)) return res.data.data;
+            if (Array.isArray(res.data?.orders)) return res.data.orders;
+            return [];
+          };
+          let rawOrders = getOrderList(ordersRes);
+          if (rawOrders.length === 0) {
+            ordersRes = await apiClient.get('/orders').catch(() => null);
+            rawOrders = getOrderList(ordersRes);
+          }
           if (ordersRes?.data) {
-            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
-            const paidOrders = rawOrders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+            const paidOrders = rawOrders.filter(o => {
+              const payStatus = String(o.billingStatus || o.paymentStatus || '').toLowerCase();
+              if (payStatus === 'unpaid') return false;
+              return payStatus === 'paid' || o.isPaid || o.status === 'paid' || o.status === 'done';
+            });
             const resultOrders = paidOrders.length > 0 ? paidOrders : rawOrders;
             return { status: true, response: { data: resultOrders, total: resultOrders.length } };
           }
@@ -198,7 +211,9 @@ class BillingApi {
         }
       }
 
-      cleanParams.orderType = filters.orderType || 'DINE_IN';
+      if (filters.orderType && filters.orderType !== 'All' && filters.orderType !== 'ALL') {
+        cleanParams.orderType = filters.orderType;
+      }
 
       // 0-based page index (starts with 0, limit is 10)
       const pageNum = filters.page !== undefined ? Number(filters.page) : 0;
@@ -229,17 +244,39 @@ class BillingApi {
             const fallbackBillingUrl = `/billing${queryParams ? `?${queryParams}` : ''}`;
             response = await apiClient.get(fallbackBillingUrl);
           } catch (err2) {
-            const ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
-            if (ordersRes?.data) {
-              const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+            const getOrderList = (res) => {
+              if (!res?.data) return [];
+              if (Array.isArray(res.data)) return res.data;
+              if (Array.isArray(res.data?.data)) return res.data.data;
+              if (Array.isArray(res.data?.orders)) return res.data.orders;
+              return [];
+            };
+            let rawOrders = getOrderList(ordersRes);
+            if (rawOrders.length === 0) {
+              ordersRes = await apiClient.get('/orders').catch(() => null);
+              rawOrders = getOrderList(ordersRes);
+            }
+            if (rawOrders.length > 0 || ordersRes?.data) {
               return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
             }
             throw err2;
           }
         } else if (!err1?.response) {
-          const ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
-          if (ordersRes?.data) {
-            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+          let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+          const getOrderList = (res) => {
+            if (!res?.data) return [];
+            if (Array.isArray(res.data)) return res.data;
+            if (Array.isArray(res.data?.data)) return res.data.data;
+            if (Array.isArray(res.data?.orders)) return res.data.orders;
+            return [];
+          };
+          let rawOrders = getOrderList(ordersRes);
+          if (rawOrders.length === 0) {
+            ordersRes = await apiClient.get('/orders').catch(() => null);
+            rawOrders = getOrderList(ordersRes);
+          }
+          if (rawOrders.length > 0 || ordersRes?.data) {
             return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
           }
         }
@@ -268,8 +305,32 @@ class BillingApi {
 
   async processTablePayment(payload) {
     try {
-      const response = await apiClient.post(`/billing/process-table`, payload);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.post(`/billing/process-table`, payload);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          const tableLabel = payload.tableLabel || payload.table || payload.tableNumber || (payload.tableId ? `Table ${payload.tableId}` : '');
+          try {
+            response = await apiClient.post(`/billing/pay`, {
+              tableLabel,
+              ...payload
+            });
+          } catch (err2) {
+            if (err2?.response?.status === 404) {
+              response = await apiClient.post(`/admin/billing/pay`, {
+                tableLabel,
+                ...payload
+              });
+            } else {
+              throw err2;
+            }
+          }
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
       return { status: true, response: response?.data || { success: true } };

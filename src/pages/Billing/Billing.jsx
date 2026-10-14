@@ -4,11 +4,11 @@ import BillingPanel from '../../components/BillingPanel';
 import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import TableApi from '../../api/Table';
-import UserApi from '../../api/User';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
-import { isMongoId } from '../../config/initialData';
+import { isMongoId, initialBillingData } from '../../config/initialData';
 import './Billing.css';
+
 
 export default function Billing() {
   const {
@@ -26,39 +26,26 @@ export default function Billing() {
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTable, setSelectedTable] = useState('All');
-  const [customerFilter, setCustomerFilter] = useState('');
-  const [selectedStaff, setSelectedStaff] = useState('All');
   const [page, setPage] = useState(0);
   const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
   const [availableTables, setAvailableTables] = useState([]);
-  const [availableStaff, setAvailableStaff] = useState([]);
 
-  // Fetch tables and staff from backend to map human codes to MongoDB _id
+  // Fetch tables from backend to map human codes to MongoDB _id
   useEffect(() => {
     let isMounted = true;
     const fetchMetadata = async () => {
       try {
         const isSingleBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && selectedBranchId !== 'COMPANY' && selectedBranchId !== 'Company';
         const params = {
-          limit: 0,
+          limit: 10,
           ...(isSingleBranch ? { branchId: selectedBranchId } : {})
         };
-        const [tablesRes, staffRes] = await Promise.all([
-          TableApi.getTables(params).catch(() => null),
-          UserApi.getUsers(params).catch(() => null)
-        ]);
-        if (isMounted) {
-          if (tablesRes && tablesRes.status) {
-            const raw = tablesRes.response?.data || tablesRes.response?.tables || tablesRes.response || [];
-            const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
-            setAvailableTables(list);
-          }
-          if (staffRes && staffRes.status) {
-            const rawS = staffRes.response?.data || staffRes.response?.users || staffRes.response || [];
-            const listS = Array.isArray(rawS) ? rawS : (Array.isArray(rawS?.data) ? rawS.data : []);
-            setAvailableStaff(listS);
-          }
+        const tablesRes = await TableApi.getTables(params).catch(() => null);
+        if (isMounted && tablesRes && tablesRes.status) {
+          const raw = tablesRes.response?.data || tablesRes.response?.tables || tablesRes.response || [];
+          const list = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+          setAvailableTables(list);
         }
       } catch (err) {
         console.warn("Failed to fetch dropdown metadata in Billing:", err);
@@ -69,11 +56,26 @@ export default function Billing() {
   }, [selectedBranchId]);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [recentlyPaidKeys, setRecentlyPaidKeys] = useState(() => new Set());
+
+  const onBillPaid = (paidBill) => {
+    if (!paidBill) return;
+    setRecentlyPaidKeys(prev => {
+      const next = new Set(prev);
+      if (paidBill.id) next.add(String(paidBill.id));
+      if (paidBill._id) next.add(String(paidBill._id));
+      if (paidBill.billNo) next.add(String(paidBill.billNo));
+      if (paidBill.billNumber) next.add(String(paidBill.billNumber));
+      if (paidBill.orderId && paidBill.orderId !== '-') next.add(String(paidBill.orderId));
+      if (paidBill.tableId) next.add(String(paidBill.tableId));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!activeRestaurant) return;
 
-    const isTextTyping = Boolean((searchTerm && searchTerm.trim()) || (customerFilter && customerFilter.trim()));
+    const isTextTyping = Boolean(searchTerm && searchTerm.trim());
     const delay = isTextTyping ? 300 : 0;
 
     const timer = setTimeout(() => {
@@ -86,8 +88,6 @@ export default function Billing() {
     selectedBranchId,
     searchTerm,
     selectedTable,
-    customerFilter,
-    selectedStaff,
     page,
     refreshTrigger
   ]);
@@ -95,7 +95,7 @@ export default function Billing() {
   // Reset page to 0 when filter inputs change
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, selectedTable, customerFilter, selectedStaff, selectedBranchId]);
+  }, [searchTerm, selectedTable, selectedBranchId]);
 
   const fetchBillingData = async () => {
     setIsLoading(true);
@@ -129,40 +129,6 @@ export default function Billing() {
       }
     }
 
-    // Resolve cashierId / waiterId: MUST send staff._id (MongoDB ObjectId), NOT string like "stf-01"
-    let resolvedStaffId = undefined;
-    if (selectedStaff && selectedStaff !== 'All' && selectedStaff !== 'ALL') {
-      if (typeof selectedStaff === 'object' && selectedStaff !== null) {
-        const sCandidate = selectedStaff._id || selectedStaff.id;
-        if (isMongoId(String(sCandidate))) {
-          resolvedStaffId = String(sCandidate);
-        }
-      } else if (isMongoId(String(selectedStaff))) {
-        resolvedStaffId = String(selectedStaff);
-      } else {
-        // Resolve custom string code (e.g. stf-01, STF-01, or name) to staff._id ObjectId
-        const found =
-          availableStaff.find(s => 
-            (s._id && isMongoId(String(s._id))) && (
-              String(s._id) === String(selectedStaff) ||
-              String(s.id) === String(selectedStaff) ||
-              String(s.employeeCode || s.code) === String(selectedStaff) ||
-              String(s.name || s.staffName || s.fullName) === String(selectedStaff)
-            )
-          ) ||
-          (Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff.find(s => 
-            (s._id && isMongoId(String(s._id))) && (
-              String(s._id) === String(selectedStaff) ||
-              String(s.id) === String(selectedStaff) ||
-              String(s.employeeCode || s.code) === String(selectedStaff) ||
-              String(s.name || s.staffName || s.fullName) === String(selectedStaff)
-            )
-          ) : null);
-        if (found && found._id && isMongoId(String(found._id))) {
-          resolvedStaffId = String(found._id);
-        }
-      }
-    }
 
     const params = {
       branchId: isSingleBranch ? selectedBranchId : undefined,
@@ -170,14 +136,8 @@ export default function Billing() {
       q: searchTerm ? searchTerm.trim() : undefined,
       tableId: resolvedTableId,
       table: resolvedTableId,
-      customer: customerFilter ? customerFilter.trim() : undefined,
-      customerName: customerFilter ? customerFilter.trim() : undefined,
-      cashierId: resolvedStaffId,
-      waiterId: resolvedStaffId,
-      staffId: resolvedStaffId,
-      orderType: 'DINE_IN',
       page: page !== undefined ? page : 0,
-      limit: 10,
+      limit: 50,
       sortBy: 'createdAt',
       sortOrder: 'desc'
     };
@@ -197,7 +157,7 @@ export default function Billing() {
             const rawBillDate = t.billDateTime || t.createdAt || t.date || new Date().toISOString();
             const dateObj = new Date(rawBillDate);
             const dateStr = !isNaN(dateObj.getTime()) ? formatDateDMY(dateObj) : formatDateDMY(new Date());
-            const timeStr = !isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const timeStr = t.time || (!isNaN(dateObj.getTime()) ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
             const rawItems = (Array.isArray(t.items) ? t.items : []).map(it => {
               const q = Number(it.qty ?? it.quantity ?? 1) || 1;
@@ -218,38 +178,46 @@ export default function Billing() {
             const billAmount = Number(t.billAmount ?? t.total ?? (subtotal + tax - discount));
             const rawPaidAmount = Number(t.paidAmount ?? t.paid ?? 0);
             const rawStatus = String(t.status || '').toLowerCase();
-            const rawPaymentStatus = String(t.paymentStatus || t.payment_status || '').toLowerCase();
+            const rawPaymentStatus = String(t.paymentStatus || t.payment_status || t.billingStatus || '').toLowerCase();
             const hasPaidFlag = t.isPaid === true || t.paid === true || t.is_paid === true;
 
-            const isPaid = 
-              rawStatus === 'paid' || 
+            // If billing/payment status explicitly indicates unpaid or pending, it is NOT paid
+            const isExplicitlyUnpaid = 
+              rawPaymentStatus === 'unpaid' || 
+              rawPaymentStatus === 'pending' || 
+              rawPaymentStatus === 'pending_payment';
+
+            const isPaid = !isExplicitlyUnpaid && (
               rawPaymentStatus === 'paid' || 
+              rawStatus === 'paid' || 
+              rawStatus === 'done' || // backend payBill sets status to 'done'
               hasPaidFlag || 
               (rawPaidAmount >= billAmount && billAmount > 0) ||
-              (rawPaidAmount > 0 && Math.max(0, billAmount - rawPaidAmount) <= 0);
+              (rawPaidAmount > 0 && Math.max(0, billAmount - rawPaidAmount) <= 0)
+            );
 
             const paidAmount = isPaid ? (rawPaidAmount > 0 ? rawPaidAmount : billAmount) : rawPaidAmount;
             const balanceAmount = isPaid ? 0 : Math.max(0, billAmount - paidAmount);
 
-            const cleanTable = String(t.table || t.tableNumber || '').trim();
+            const cleanTable = String(t.table || t.tableNumber || t.tableNo || '').trim();
             const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
 
-            const mongoOrderId = t.orderId || t.order_id || t.id || t._id;
-            const mongoTableId = t.tableId || t.id || t._id;
+            const mongoOrderId = t.orderId || t.order_id || t.id || t._id || `${1000 + idx + 1}`;
+            const mongoTableId = t.tableId || t.id || t._id || `tbl-${idx + 1}`;
 
-            const rawBillNo = t.billNo || t.billNumber || '-';
+            const rawBillNo = t.billNo || t.billNumber || `BILL-${mongoOrderId}`;
             const rawInvoiceNo = t.invoiceNo || t.invoiceNumber || t.invoiceId || t.taxInvoiceNo || (t.invoice && typeof t.invoice === 'object' ? (t.invoice.invoiceNo || t.invoice.invoiceNumber || t.invoice.id) : t.invoice) || '';
-            const fallbackInvoiceNo = rawInvoiceNo || (rawBillNo && rawBillNo !== '-' ? (rawBillNo.startsWith('INV-') ? rawBillNo : `INV-${rawBillNo.replace(/^BILL[-_]*/i, '')}`) : '');
+            const fallbackInvoiceNo = rawInvoiceNo || (rawBillNo && rawBillNo !== '-' ? (rawBillNo.startsWith('INV-') ? rawBillNo : `INV-${rawBillNo.replace(/^BILL[-_]*/i, '')}`) : `INV-${mongoOrderId}`);
 
             return {
               ...t,
-              id: t.id || t._id,
-              _id: t._id || t.id,
+              id: t.id || t._id || `bill-${idx + 1}`,
+              _id: t._id || t.id || `bill-${idx + 1}`,
               sNo: t.sNo ?? (idx + 1),
               billNo: rawBillNo,
               invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
               invoiceId: rawInvoiceNo || fallbackInvoiceNo,
-              orderId: t.orderId || t.order_id || '-',
+              orderId: t.orderId || t.order_id || mongoOrderId,
               orderType: t.orderType || 'Dine-In',
               tableId: mongoTableId,
               table: tableDisplay,
@@ -265,10 +233,11 @@ export default function Billing() {
               amount: billAmount,
               paidAmount,
               balanceAmount,
-              status: isPaid ? 'Paid' : (t.status || 'Unpaid'),
-              paymentStatus: isPaid ? 'Paid' : (t.status || 'Unpaid'),
-              cashier: t.cashier || t.staff || '-',
-              staff: t.cashier || t.staff || '-',
+              isPaid,
+              status: isPaid ? 'Paid' : 'Unpaid',
+              paymentStatus: isPaid ? 'Paid' : 'Unpaid',
+              cashier: t.cashier || t.staff || t.waiter || '-',
+              staff: t.cashier || t.staff || t.waiter || '-',
               items: rawItems,
               order_id: mongoOrderId,
               rawOrderId: mongoOrderId,
@@ -277,6 +246,34 @@ export default function Billing() {
               customerPhone: t.customerPhone || t.customerMobile || t.phone || ''
             };
           });
+
+          // Strict requirement: Only Unpaid / Pending payment bills should ever appear in Current Billing
+          fetchedTables = fetchedTables.filter(b => {
+            const isRecentlyPaid = 
+              recentlyPaidKeys.has(String(b.id)) ||
+              recentlyPaidKeys.has(String(b._id)) ||
+              recentlyPaidKeys.has(String(b.billNo)) ||
+              recentlyPaidKeys.has(String(b.billNumber)) ||
+              (b.orderId && b.orderId !== '-' && recentlyPaidKeys.has(String(b.orderId))) ||
+              (b.tableId && recentlyPaidKeys.has(String(b.tableId)));
+            if (isRecentlyPaid) return false;
+
+            const payStatus = String(b.paymentStatus || b.billingStatus || '').toLowerCase();
+            if (payStatus === 'unpaid' || payStatus === 'pending' || payStatus === 'pending_payment') {
+              return true;
+            }
+
+            const isPaid = 
+              b.isPaid === true ||
+              b.paid === true ||
+              payStatus === 'paid' ||
+              String(b.status || '').toLowerCase() === 'paid' ||
+              String(b.status || '').toLowerCase() === 'done' ||
+              (Number(b.paidAmount || 0) >= Number(b.billAmount || b.total || 0) && Number(b.billAmount || b.total || 0) > 0) ||
+              (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
+            return !isPaid;
+          });
+          setTotalItems(fetchedTables.length);
         }
       }
     } catch (e) {
@@ -285,19 +282,19 @@ export default function Billing() {
 
     const hasActiveFilters = Boolean(
       (searchTerm && searchTerm.trim()) ||
-      (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') ||
-      (customerFilter && customerFilter.trim()) ||
-      (selectedStaff && selectedStaff !== 'All' && selectedStaff !== 'ALL')
+      (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL')
     );
 
-    // ONLY fall back to mock data if API completely failed (network/server error) AND no filter is applied
-    if (!apiSuccess && !hasActiveFilters && fetchedTables.length === 0) {
+    // Fall back to stored tenant billing data or initial dataset ONLY if API call failed
+    if (!apiSuccess && fetchedTables.length === 0) {
       const sourceBills = (Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0)
         ? activeRestaurant.billingData
-        : [];
+        : (Array.isArray(initialBillingData) && initialBillingData.length > 0
+            ? initialBillingData
+            : []);
 
       if (sourceBills.length > 0) {
-        fetchedTables = sourceBills.map((b, idx) => {
+        let pool = sourceBills.map((b, idx) => {
           const rawBillDate = b.billDateTime || b.createdAt || b.date || new Date().toISOString();
           const dateObj = new Date(rawBillDate);
           const dateStr = !isNaN(dateObj.getTime()) ? formatDateDMY(dateObj) : (b.date || formatDateDMY(new Date()));
@@ -364,16 +361,78 @@ export default function Billing() {
           };
         });
 
+        // Filter fallback pool to only include Unpaid bills
+        pool = pool.filter(b => {
+          const payStatus = String(b.paymentStatus || b.billingStatus || '').toLowerCase();
+          if (payStatus === 'unpaid' || payStatus === 'pending' || payStatus === 'pending_payment') {
+            return true;
+          }
+          const isPaidBill = 
+            b.isPaid === true ||
+            b.paid === true ||
+            payStatus === 'paid' ||
+            String(b.status || '').toLowerCase() === 'paid' ||
+            String(b.status || '').toLowerCase() === 'done' ||
+            (Number(b.paidAmount || 0) >= Number(b.billAmount || b.total || 0) && Number(b.billAmount || b.total || 0) > 0) ||
+            (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
+          return !isPaidBill;
+        });
+
+        // If filters are active, apply client-side filtering on the fallback pool
+        if (hasActiveFilters) {
+          if (searchTerm && searchTerm.trim()) {
+            const st = searchTerm.trim().toLowerCase();
+            pool = pool.filter(b => 
+              String(b.billNo || '').toLowerCase().includes(st) ||
+              String(b.orderId || '').toLowerCase().includes(st) ||
+              String(b.table || '').toLowerCase().includes(st) ||
+              String(b.customerName || '').toLowerCase().includes(st)
+            );
+          }
+          if (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
+            const st = String(selectedTable).toLowerCase();
+            pool = pool.filter(b => 
+              String(b.tableId || '').toLowerCase() === st ||
+              String(b.table || '').toLowerCase().includes(st) ||
+              String(b.tableNumber || '').toLowerCase() === st
+            );
+          }
+        }
+
+        fetchedTables = pool;
         setTotalItems(fetchedTables.length);
-      } else {
-        fetchedTables = [];
-        setTotalItems(0);
       }
-    } else if (apiSuccess) {
-      // API call succeeded: preserve fetchedTables (which could be empty if filter matched 0 items)
-    } else {
-      fetchedTables = [];
-      setTotalItems(0);
+    }
+
+    // Ensure client-side filtering is applied to API results as well if filters are active
+    if (hasActiveFilters && fetchedTables.length > 0) {
+      if (searchTerm && searchTerm.trim()) {
+        const st = searchTerm.trim().toLowerCase();
+        fetchedTables = fetchedTables.filter(b => 
+          String(b.billNo || '').toLowerCase().includes(st) ||
+          String(b.orderId || '').toLowerCase().includes(st) ||
+          String(b.table || '').toLowerCase().includes(st) ||
+          String(b.customerName || '').toLowerCase().includes(st) ||
+          (Array.isArray(b.items) && b.items.some(dish => String(dish.name || '').toLowerCase().includes(st)))
+        );
+      }
+      if (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
+        const st = String(selectedTable).trim().toLowerCase();
+        const numOnly = st.replace(/\D/g, '');
+        fetchedTables = fetchedTables.filter(b => {
+          const tId = String(b.tableId || '').toLowerCase();
+          const tName = String(b.table || '').toLowerCase();
+          const tNum = String(b.tableNumber || b.tableNo || '').toLowerCase();
+          const bNum = (tName || tNum || tId).replace(/\D/g, '');
+          if (tId === st || tId.includes(st) || st.includes(tId)) return true;
+          if (tName === st || tName.includes(st) || st.includes(tName)) return true;
+          if (tNum === st || tNum.includes(st) || st.includes(tNum)) return true;
+          if (numOnly && bNum && parseInt(numOnly, 10) === parseInt(bNum, 10)) return true;
+          return false;
+        });
+      }
+
+      setTotalItems(fetchedTables.length);
     }
 
     setBillingData(fetchedTables);
@@ -423,16 +482,12 @@ export default function Billing() {
       setSearchTerm={setSearchTerm}
       selectedTable={selectedTable}
       setSelectedTable={setSelectedTable}
-      customerFilter={customerFilter}
-      setCustomerFilter={setCustomerFilter}
-      selectedStaff={selectedStaff}
-      setSelectedStaff={setSelectedStaff}
       page={page}
       setPage={setPage}
       limit={limit}
       totalItems={totalItems}
       availableTables={availableTables}
-      availableStaff={availableStaff}
+      onBillPaid={onBillPaid}
     />
   );
 }

@@ -11,6 +11,7 @@ import { formatDateDMY } from '../helper/DateHelper.js';
 import { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
 import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
+import { isMongoId } from '../config/initialData.js';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -381,11 +382,11 @@ export default function OrdersPanel({
   useEffect(() => {
     const loadTablesForPanel = async () => {
       try {
-        const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-        const query = isBranchFiltered ? `?branchId=${selectedBranchId}` : '';
+        const isValidBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && /^[0-9a-fA-F]{24}$/.test(String(selectedBranchId));
+        const query = isValidBranch ? `?branchId=${selectedBranchId}&limit=100` : '?limit=100';
         const res = await apiClient.get(`/tables${query}`).catch(() => null);
         if (res && (res.status === 200 || res.data?.success)) {
-          const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.response?.data || []);
+          const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.tables || res.data?.response?.data || []);
           if (Array.isArray(fetched) && fetched.length > 0) {
             setApiTables(fetched);
           }
@@ -852,18 +853,18 @@ export default function OrdersPanel({
 
   const fetchModalDataForBranch = async (branchId) => {
     try {
-      const isBranchFiltered = branchId && branchId !== 'ALL' && branchId !== 'all';
-      const branchParam = isBranchFiltered ? `branchId=${branchId}&` : '';
+      const isValidBranch = branchId && branchId !== 'ALL' && branchId !== 'all' && String(branchId).toUpperCase() !== 'COMPANY' && /^[0-9a-fA-F]{24}$/.test(String(branchId));
+      const branchParam = isValidBranch ? `branchId=${branchId}&` : '';
       const menuParams = { limit: 10 };
-      if (isBranchFiltered) {
+      if (isValidBranch) {
         menuParams.branchId = branchId;
       }
 
       const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
         MenuApi.getMenuItems(menuParams).catch(() => null),
         apiClient.get(`/menu/categories?${branchParam}limit=10`).catch(() => null),
-        apiClient.get(`/tables?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null),
-        apiClient.get(`/users?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null)
+        apiClient.get(`/tables?${branchParam}limit=100`).catch(() => null),
+        apiClient.get(`/users?${branchParam}limit=100`).catch(() => null)
       ]);
 
       let fetchedMenuItems = [];
@@ -953,16 +954,31 @@ export default function OrdersPanel({
         else if (Array.isArray(td?.data)) fetchedTables = td.data;
         else if (Array.isArray(td?.data?.tables)) fetchedTables = td.data.tables;
         else if (Array.isArray(td?.tables)) fetchedTables = td.tables;
+        else if (Array.isArray(td?.response?.data)) fetchedTables = td.response.data;
         if (fetchedTables.length > 0) {
           setApiTables(fetchedTables);
         }
+      }
+
+      if (fetchedTables.length === 0) {
+        try {
+          const fallbackTblRes = await apiClient.get('/tables?limit=100').catch(() => null);
+          if (fallbackTblRes && (fallbackTblRes.status === 200 || fallbackTblRes.data?.success)) {
+            const ftd = fallbackTblRes.data;
+            const fallbackArr = Array.isArray(ftd) ? ftd : (ftd?.data || ftd?.tables || ftd?.response?.data || []);
+            if (Array.isArray(fallbackArr) && fallbackArr.length > 0) {
+              fetchedTables = fallbackArr;
+              setApiTables(fallbackArr);
+            }
+          }
+        } catch (e) { }
       }
 
       // Find first available table if possible
       const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
       const firstTable = availableT
         ? (availableT.tableNumber || availableT.tableNo || availableT.name)
-        : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
+        : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo || fetchedTables[0].name) : (displayTables.length > 0 ? displayTables[0] : '01'));
 
       setNewOrderTable(firstTable);
 
@@ -1322,25 +1338,59 @@ export default function OrdersPanel({
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     const total = parseFloat((subtotal + tax).toFixed(2));
 
-    // 1. Robust table matching for Dine-In
-    const matchedTable = newOrderType === 'Dine-In'
-      ? (apiTables.find(t =>
-        (t._id && String(t._id) === String(newOrderTable)) ||
-        (t.id && String(t.id) === String(newOrderTable)) ||
-        (t.tableNumber !== undefined && String(t.tableNumber).trim() === String(newOrderTable).trim()) ||
-        (t.tableNo !== undefined && String(t.tableNo).trim() === String(newOrderTable).trim()) ||
-        (t.name && String(t.name).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ||
-        (t.tableNumber !== undefined && `TBL-${String(t.tableNumber).padStart(3, '0')}`.toLowerCase() === String(newOrderTable).toLowerCase()) ||
-        (t.tableNumber !== undefined && `Table ${t.tableNumber}`.toLowerCase() === String(newOrderTable).toLowerCase())
-      ) || (apiTables.length > 0 ? apiTables[0] : null))
-      : null;
+    // 1. Gather all table candidates from state, props, and tenant config
+    let allAvailableTables = [
+      ...(Array.isArray(apiTables) ? apiTables : []),
+      ...(Array.isArray(tables) ? tables : []),
+      ...(Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables : [])
+    ];
 
-    // 2. Waiter matching ONLY for Dine-In
+    // If no tables with valid MongoDB _id exist, fetch fresh from backend right now
+    if (!allAvailableTables.some(t => t && t._id && /^[0-9a-fA-F]{24}$/.test(String(t._id)))) {
+      try {
+        const freshTablesRes = await apiClient.get('/tables?limit=100').catch(() => null);
+        if (freshTablesRes && (freshTablesRes.status === 200 || freshTablesRes.data?.success)) {
+          const freshData = freshTablesRes.data;
+          const freshList = Array.isArray(freshData) ? freshData : (freshData?.data || freshData?.tables || freshData?.response?.data || []);
+          if (Array.isArray(freshList) && freshList.length > 0) {
+            allAvailableTables = [...freshList, ...allAvailableTables];
+            setApiTables(freshList);
+          }
+        }
+      } catch (tblErr) {
+        console.warn("Direct table resolution fetch note:", tblErr);
+      }
+    }
+
+    // 2. Robust table matching for Dine-In
+    let matchedTable = null;
+    const targetTblStr = String(newOrderTable || '').trim().toLowerCase();
+    const numOnly = targetTblStr.replace(/\D/g, '');
+
+    matchedTable = allAvailableTables.find(t => {
+      if (!t) return false;
+      const tId = String(t._id || t.id || '').trim().toLowerCase();
+      const tNum = String(t.tableNumber || t.tableNo || '').trim().toLowerCase();
+      const tName = String(t.name || '').trim().toLowerCase();
+      const tCode = String(t.tableId || '').trim().toLowerCase();
+      const bNum = (tNum || tName || tId).replace(/\D/g, '');
+
+      if (tId && tId === targetTblStr) return true;
+      if (tNum && tNum === targetTblStr) return true;
+      if (tName && tName === targetTblStr) return true;
+      if (tCode && tCode === targetTblStr) return true;
+      if (tNum && `table ${tNum}` === targetTblStr) return true;
+      if (tNum && `tbl-${tNum.padStart(3, '0')}`.toLowerCase() === targetTblStr) return true;
+      if (numOnly && bNum && parseInt(numOnly, 10) === parseInt(bNum, 10)) return true;
+      return false;
+    }) || (allAvailableTables.length > 0 ? allAvailableTables[0] : null);
+
+    // 3. Waiter matching ONLY for Dine-In
     const matchedWaiter = newOrderType === 'Dine-In' && newOrderWaiter && newOrderWaiter !== 'Unassigned' && newOrderWaiter !== 'None'
       ? (allWaiters.find(w => w.name === newOrderWaiter) || staff.find(w => w.name === newOrderWaiter))
       : null;
 
-    // 3. Format items avoiding empty-string menuId (which fails ObjectId validation)
+    // 4. Format items avoiding empty-string menuId (which fails ObjectId validation)
     const formattedItems = newOrderItems.map(item => {
       const itObj = {
         name: item.name,
@@ -1361,7 +1411,42 @@ export default function OrdersPanel({
       return itObj;
     });
 
+    // 5. Strictly resolve tableId as required by backend schema (expected string, received undefined)
+    let resolvedTableId = '';
+    let resolvedTable = '';
+    let resolvedTableNumber = '';
+
+    const firstTableWithMongoId = allAvailableTables.find(t => t && t._id && /^[0-9a-fA-F]{24}$/.test(String(t._id)));
+    const anyFallbackTable = firstTableWithMongoId || allAvailableTables[0];
+
+    if (newOrderType === 'Dine-In') {
+      if (matchedTable) {
+        resolvedTableId = String(matchedTable._id || matchedTable.id || matchedTable.tableId || '');
+        resolvedTable = String(matchedTable.tableNumber || matchedTable.tableNo || matchedTable.name || newOrderTable || '01');
+        resolvedTableNumber = String(matchedTable.tableNumber || matchedTable.tableNo || newOrderTable || '01');
+      } else {
+        resolvedTableId = String(anyFallbackTable?._id || anyFallbackTable?.id || newOrderTable || '01');
+        resolvedTable = String(newOrderTable || '01');
+        resolvedTableNumber = String(newOrderTable || '01');
+      }
+      if (resolvedTableId && !/^[0-9a-fA-F]{24}$/.test(resolvedTableId) && firstTableWithMongoId?._id) {
+        resolvedTableId = String(firstTableWithMongoId._id);
+      }
+    } else {
+      // For Takeaway or Delivery: Backend schema strictly expects tableId as string
+      resolvedTableId = String(firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || (newOrderType === 'Takeaway' ? 'takeaway' : 'delivery'));
+      resolvedTable = newOrderType;
+      resolvedTableNumber = newOrderType;
+    }
+
+    if (!resolvedTableId) {
+      resolvedTableId = String(firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || '65b000000000000000000001');
+    }
+
     const payload = {
+      tableId: String(resolvedTableId),
+      table: resolvedTable,
+      tableNumber: resolvedTableNumber,
       orderType: newOrderType,
       type: newOrderType,
       orderSource: newOrderSource || 'Admin / POS',
@@ -1384,17 +1469,14 @@ export default function OrdersPanel({
       : (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : getFallbackBranchId());
     if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
       payload.branchId = String(effectiveBranch);
+    } else if (matchedTable?.branchId) {
+      const tbBranch = typeof matchedTable.branchId === 'object' ? matchedTable.branchId?._id : matchedTable.branchId;
+      if (tbBranch && /^[0-9a-fA-F]{24}$/.test(String(tbBranch))) {
+        payload.branchId = String(tbBranch);
+      }
     }
 
     if (newOrderType === 'Dine-In') {
-      if (matchedTable) {
-        payload.tableId = matchedTable._id || matchedTable.id;
-        payload.table = matchedTable.tableNumber || matchedTable.tableNo || matchedTable.name || String(newOrderTable);
-        payload.tableNumber = matchedTable.tableNumber || matchedTable.tableNo || String(newOrderTable);
-      } else {
-        payload.table = String(newOrderTable || '01');
-      }
-
       if (matchedWaiter) {
         const validWaiterId = matchedWaiter._id || matchedWaiter.id;
         if (validWaiterId && /^[0-9a-fA-F]{24}$/.test(String(validWaiterId))) {
@@ -1406,9 +1488,6 @@ export default function OrdersPanel({
         payload.waiter = 'Unassigned';
       }
     } else {
-      // Takeaway or Delivery: No waiter assigned, table identifier is the order type
-      payload.table = newOrderType;
-      payload.tableNumber = newOrderType;
       payload.waiter = 'Unassigned';
 
       if (customerName && customerName.trim()) {
@@ -1457,19 +1536,13 @@ export default function OrdersPanel({
     } catch (error) {
       console.error("Order creation error:", error, "Server data:", error.response?.data);
       const serverData = error.response?.data;
-      let errorMsg = serverData?.message || serverData?.error;
-      if (!errorMsg && serverData?.errors) {
-        if (Array.isArray(serverData.errors)) {
-          errorMsg = serverData.errors.map(e => e.msg || e.message || String(e)).join(', ');
-        } else if (typeof serverData.errors === 'object') {
-          errorMsg = Object.values(serverData.errors).map(e => e.message || e.msg || String(e)).join(', ');
-        }
-      }
-      if (!errorMsg && typeof serverData === 'string') {
-        errorMsg = serverData;
-      }
-      if (!errorMsg) {
-        errorMsg = error.message || "Failed to create order via API";
+      let errorMsg = '';
+      if (Array.isArray(serverData?.errors) && serverData.errors.length > 0) {
+        errorMsg = serverData.errors.map(e => `${e.field ? `[${e.field}]: ` : ''}${e.message || e.msg || String(e)}`).join(', ');
+      } else if (serverData?.errors && typeof serverData.errors === 'object') {
+        errorMsg = Object.values(serverData.errors).map(e => e.message || e.msg || String(e)).join(', ');
+      } else {
+        errorMsg = serverData?.message || serverData?.error || error.message || "Failed to create order via API";
       }
 
       // Check if table is occupied
@@ -1484,17 +1557,15 @@ export default function OrdersPanel({
         }
       }
 
-      // Fallback: If non-Dine-In order failed because backend schema requires tableId
-      if (newOrderType !== 'Dine-In' && typeof errorMsg === 'string' && (errorMsg.toLowerCase().includes('table') || errorMsg.toLowerCase().includes('tableid'))) {
+      // Auto-retry if backend validation failed due to tableId
+      if (serverData?.errors?.some(e => String(e.field || '').includes('tableId') || String(e.message || '').includes('tableId'))) {
         try {
-          const fallbackTable = apiTables[0];
-          if (fallbackTable?._id) {
-            const fallbackPayload = {
-              ...payload,
-              tableId: fallbackTable._id,
-              table: fallbackTable.tableNumber || fallbackTable.name || '01'
-            };
-            const retryRes = await apiClient.post('/orders', fallbackPayload);
+          const freshRes = await apiClient.get('/tables?limit=10').catch(() => null);
+          const tList = Array.isArray(freshRes?.data) ? freshRes.data : (freshRes?.data?.data || freshRes?.data?.tables || []);
+          const firstTbl = tList.find(t => t && t._id);
+          if (firstTbl?._id && String(payload.tableId) !== String(firstTbl._id)) {
+            const retryPayload = { ...payload, tableId: String(firstTbl._id) };
+            const retryRes = await apiClient.post('/orders', retryPayload);
             if (retryRes.data?.success || retryRes.status === 200 || retryRes.status === 201) {
               ShowNotifications.showAlertNotification(`Order created successfully!`, true);
               setIsCreateOrderModalOpen(false);
@@ -2034,7 +2105,13 @@ export default function OrdersPanel({
     const totalPayable = calculateNewOrderTotal();
 
     // Table display list
-    const allTableCards = apiTables.length > 0 ? apiTables : displayTables.map(tNo => ({ tableNumber: tNo }));
+    const allTableCards = (Array.isArray(apiTables) && apiTables.length > 0)
+      ? apiTables
+      : ((Array.isArray(tables) && tables.length > 0)
+          ? tables
+          : ((Array.isArray(activeRestaurant?.tables) && activeRestaurant.tables.length > 0)
+              ? activeRestaurant.tables
+              : displayTables.map(tNo => ({ tableNumber: tNo }))));
 
     return (
       <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box', background: '#f8fafc', minHeight: '100vh' }}>
@@ -2495,7 +2572,7 @@ export default function OrdersPanel({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <DeliveryIcon size={18} color="#2563eb" />
                     <span style={{ fontSize: '13px', fontWeight: 800, color: '#1e40af' }}>
-                      Delivery Details (Required for Delivery)
+                      Delivery Details 
                     </span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -4997,7 +5074,7 @@ export default function OrdersPanel({
               </div>
             )}
 
-            {/* Delivery Fields (Required for Delivery) */}
+            {/* Delivery Fields  */}
             {newOrderType === 'Delivery' && (
               <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>

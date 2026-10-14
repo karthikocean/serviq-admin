@@ -52,7 +52,6 @@ export default function BillingPanel({
   setSelectedBillingTable,
   activeRestaurant = {},
   availableTables = [],
-  availableStaff = [],
   billingPaymentMethod = 'UPI',
   setBillingPaymentMethod,
   fetchBillingData,
@@ -64,14 +63,11 @@ export default function BillingPanel({
   setSearchTerm: propSetSearchTerm,
   selectedTable: propSelectedTable,
   setSelectedTable: propSetSelectedTable,
-  customerFilter: propCustomerFilter,
-  setCustomerFilter: propSetCustomerFilter,
-  selectedStaff: propSelectedStaff,
-  setSelectedStaff: propSetSelectedStaff,
   page: propPage,
   setPage: propSetPage,
   limit: propLimit = 10,
-  totalItems: propTotalItems = 0
+  totalItems: propTotalItems = 0,
+  onBillPaid
 }) {
   const canView = typeof hasPermission === 'function' ? hasPermission('billing_current', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? (hasPermission('billing_current', 'edit') || hasPermission('billing_current', 'add')) : true;
@@ -119,14 +115,6 @@ export default function BillingPanel({
   const selectedTable = propSelectedTable !== undefined ? propSelectedTable : localSelectedTable;
   const setSelectedTable = propSetSelectedTable || setLocalSelectedTable;
 
-  const [localCustomerFilter, setLocalCustomerFilter] = useState('');
-  const customerFilter = propCustomerFilter !== undefined ? propCustomerFilter : localCustomerFilter;
-  const setCustomerFilter = propSetCustomerFilter || setLocalCustomerFilter;
-
-  const [localSelectedStaff, setLocalSelectedStaff] = useState('All');
-  const selectedStaff = propSelectedStaff !== undefined ? propSelectedStaff : localSelectedStaff;
-  const setSelectedStaff = propSetSelectedStaff || setLocalSelectedStaff;
-
   // Pagination for List Table
   const [localPage, setLocalPage] = useState(0);
   const page = propPage !== undefined ? propPage : localPage;
@@ -138,7 +126,7 @@ export default function BillingPanel({
     if (propPage === undefined) {
       setLocalPage(0);
     }
-  }, [searchTerm, selectedTable, customerFilter, selectedStaff]);
+  }, [searchTerm, selectedTable]);
 
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
 
@@ -214,70 +202,39 @@ export default function BillingPanel({
     }
   }, [selectedTable, tableOptions, setSelectedTable]);
 
-  // Cashier / Staff options
-  const staffOptions = useMemo(() => {
-    const map = new Map();
 
-    const addStaffOption = (s) => {
-      if (!s) return;
-      const mongoId = (s._id && isMongoId(String(s._id))) ? String(s._id) : (isMongoId(String(s.id)) ? String(s.id) : null);
-      const name = s.name || s.staffName || s.fullName || s.userName;
-      const code = s.id || s.employeeCode || s.code;
 
-      if (mongoId) {
-        const label = name || `Staff (${mongoId.slice(-4)})`;
-        map.set(mongoId, { label, code, name });
-      }
-    };
+  // Strict rule: Only bills with unpaid status must show in Current Billing
+  const isUnpaidBill = (b) => {
+    if (!b) return false;
+    const statusStr = String(b.status || '').toLowerCase();
+    const payStatusStr = String(b.paymentStatus || b.payment_status || b.billingStatus || '').toLowerCase();
+    const billAmt = Number(b.billAmount ?? b.total ?? b.amount ?? 0);
+    const paidAmt = Number(b.paidAmount ?? b.paid ?? 0);
+    const balAmt = b.balanceAmount !== undefined ? Number(b.balanceAmount) : Math.max(0, billAmt - paidAmt);
 
-    if (Array.isArray(availableStaff)) {
-      availableStaff.forEach(addStaffOption);
+    // If explicitly marked as unpaid, it should definitely be shown in Current Billing
+    if (payStatusStr === 'unpaid' || payStatusStr === 'pending' || payStatusStr === 'pending_payment') {
+      return true;
     }
-    if (Array.isArray(activeRestaurant?.staff)) {
-      activeRestaurant.staff.forEach(addStaffOption);
-    }
-    displayBillingData.forEach(b => {
-      const sId = b.cashierId || b.staffId || b.waiterId;
-      const name = b.cashier || b.staff || b.waiter || b.billedBy;
-      if (sId && isMongoId(String(sId))) {
-        if (!map.has(String(sId))) {
-          map.set(String(sId), { label: name || `Staff (${String(sId).slice(-4)})`, code: sId, name });
-        }
-      }
-    });
 
-    const entries = Array.from(map.entries()).map(([value, info]) => ({
-      value,
-      label: info.label,
-      code: info.code,
-      name: info.name
-    }));
+    const isPaid = 
+      statusStr === 'paid' ||
+      statusStr === 'done' ||
+      payStatusStr === 'paid' ||
+      b.isPaid === true ||
+      b.paid === true ||
+      b.is_paid === true ||
+      (paidAmt >= billAmt && billAmt > 0) ||
+      (balAmt <= 0 && paidAmt > 0);
 
-    return [
-      { value: 'All', label: 'All Staff' },
-      ...entries
-    ];
-  }, [availableStaff, activeRestaurant, displayBillingData]);
+    return !isPaid;
+  };
 
-  // If selectedStaff is set to a string code (like "stf-01" or "STF-01") instead of ObjectId, auto-map it to its _id
-  useEffect(() => {
-    if (selectedStaff && selectedStaff !== 'All' && !isMongoId(String(selectedStaff))) {
-      const match = staffOptions.find(opt => 
-        opt.code === selectedStaff || 
-        opt.name === selectedStaff || 
-        (opt.label && opt.label.toLowerCase().includes(String(selectedStaff).toLowerCase()))
-      );
-      if (match && isMongoId(String(match.value))) {
-        setSelectedStaff(match.value);
-      }
-    }
-  }, [selectedStaff, staffOptions, setSelectedStaff]);
+  const filteredBills = displayBillingData.filter(isUnpaidBill);
+  const paginatedBills = filteredBills;
 
-  // Bills are directly returned, filtered, and paginated by backend API (no client-side filtering or slicing)
-  const filteredBills = displayBillingData;
-  const paginatedBills = displayBillingData;
-
-  const totalBillsCount = propTotalItems !== undefined && propTotalItems >= 0 ? propTotalItems : displayBillingData.length;
+  const totalBillsCount = propTotalItems !== undefined && propTotalItems >= 0 ? filteredBills.length : filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
 
   useEffect(() => {
@@ -467,13 +424,33 @@ export default function BillingPanel({
         paidAt: new Date().toISOString()
       };
 
+      if (typeof onBillPaid === 'function') {
+        onBillPaid(paymentModalBill);
+      }
+
       if (typeof setBillingData === 'function') {
-        setBillingData(prev => prev.map(b => {
-          if (b.table === paymentModalBill.table || b.tableId === resolvedTableId || b.billNo === paymentModalBill.billNo) {
-            return updatedBill;
-          }
-          return b;
+        // Immediately remove paid bill from Current Billing view
+        setBillingData(prev => prev.filter(b => {
+          const isTarget = (
+            (paymentModalBill.id && (b.id === paymentModalBill.id || b._id === paymentModalBill.id)) ||
+            (paymentModalBill._id && (b._id === paymentModalBill._id || b.id === paymentModalBill._id)) ||
+            (paymentModalBill.billNo && (b.billNo === paymentModalBill.billNo || b.billNumber === paymentModalBill.billNo)) ||
+            (paymentModalBill.orderId && b.orderId && b.orderId !== '-' && b.orderId === paymentModalBill.orderId) ||
+            (resolvedTableId && (b.tableId === resolvedTableId || b.id === resolvedTableId || b._id === resolvedTableId)) ||
+            (paymentModalBill.tableId && (b.tableId === paymentModalBill.tableId || b.id === paymentModalBill.tableId || b._id === paymentModalBill.tableId)) ||
+            (paymentModalBill.table && b.table === paymentModalBill.table)
+          );
+          return !isTarget;
         }));
+      }
+
+      if (typeof setSelectedBillingTable === 'function') {
+        setSelectedBillingTable(prev => {
+          if (prev && (prev === paymentModalBill.tableId || prev === paymentModalBill._id || prev === resolvedTableId || prev === paymentModalBill.table)) {
+            return '';
+          }
+          return prev;
+        });
       }
 
       ShowNotifications.showAlertNotification(
@@ -528,9 +505,9 @@ export default function BillingPanel({
     }
   };
 
-  // Print Bill Popup Handler (Centered Thermal Bill Print Window)
+  // Print Bill Popup Handler (Centered Thermal Bill Print Window - Before Payment)
   const handlePrintBillPopup = (bill) => {
-    const htmlContent = generateReceiptHtml(bill, activeRestaurant);
+    const htmlContent = generateReceiptHtml({ ...bill, isPaid: false }, activeRestaurant, currentUser);
     openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
@@ -776,26 +753,27 @@ export default function BillingPanel({
     `;
   };
 
-  // Print Tax Invoice Popup Handler (Opens centered on screen matching standard 920x860 print window)
+  // Print Tax Invoice Popup Handler (After Payment)
   const handlePrintInvoicePopup = (invoice) => {
-    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.billNo || invoice?.invoiceNo || invoice?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
+    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.invoiceNo || invoice?.billNo || invoice?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
-  // Download Invoice HTML Handler
+  // Download Invoice/Bill HTML Handler
   const handleDownloadInvoicePopup = (bill) => {
-    const htmlContent = generateReceiptHtml(bill, activeRestaurant);
-    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.id || 'INV-Doc';
+    const isInvoice = (bill.status || bill.paymentStatus || '').toLowerCase() === 'paid' || bill.isInvoice;
+    const htmlContent = generateReceiptHtml({ ...bill, isPaid: isInvoice }, activeRestaurant, currentUser);
+    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.id || 'Doc';
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `TaxInvoice-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+    a.download = `${isInvoice ? 'TaxInvoice' : 'Bill'}-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    ShowNotifications.showAlertNotification("Tax Invoice downloaded successfully!", true);
+    ShowNotifications.showAlertNotification(`${isInvoice ? 'Tax Invoice' : 'Bill'} downloaded successfully!`, true);
   };
 
   return (
@@ -816,10 +794,10 @@ export default function BillingPanel({
         <span style={{ fontSize: '13px', color: '#64748b' }}>Manage active restaurant table billing, collect payments, and print invoices.</span>
       </div>
 
-      {/* FILTER BAR: DINING TABLE, CUSTOMER, CASHIER/STAFF & SEARCH */}
+      {/* FILTER BAR: SEARCH & DINING TABLE */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '12px',
         alignItems: 'flex-end',
         marginBottom: '20px',
@@ -850,29 +828,6 @@ export default function BillingPanel({
             onChange={(e) => setSelectedTable(e.target.value)}
             options={tableOptions}
             placeholder="Select Table..."
-          />
-        </div>
-
-        {/* Customer */}
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Customer</label>
-          <input
-            type="text"
-            placeholder="Name or Phone..."
-            value={customerFilter}
-            onChange={(e) => setCustomerFilter(e.target.value)}
-            style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
-          />
-        </div>
-
-        {/* Cashier / Staff */}
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Cashier / Staff</label>
-          <SearchableSelect
-            value={selectedStaff}
-            onChange={(e) => setSelectedStaff(e.target.value)}
-            options={staffOptions}
-            placeholder="Select Staff..."
           />
         </div>
       </div>
@@ -1213,13 +1168,15 @@ export default function BillingPanel({
         </div>
       </div>
 
-      {/* VIEW BILL MODAL (Exact Thermal Receipt UI - View Only) */}
-      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="540px">
+      {/* VIEW BILL MODAL (Sample Bill Format - Before Payment) */}
+      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="480px">
         {viewingBill && (
           <ReceiptCard
             data={viewingBill}
             activeRestaurant={activeRestaurant}
-            isPaid={(viewingBill.status || viewingBill.paymentStatus || '').toLowerCase() === 'paid'}
+            currentUser={currentUser}
+            isPaid={false}
+            showActions={false}
           />
         )}
       </Modal>
@@ -1304,12 +1261,13 @@ export default function BillingPanel({
         )}
       </Modal>
 
-      {/* TAX INVOICE MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice Receipt" maxWidth="540px">
+      {/* TAX INVOICE MODAL (Sample Invoice Format - After Payment) */}
+      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice (After Payment)" maxWidth="480px">
         {invoiceModalBill && (
           <ReceiptCard
             data={invoiceModalBill}
             activeRestaurant={activeRestaurant}
+            currentUser={currentUser}
             onPrint={() => handlePrintInvoicePopup(invoiceModalBill)}
             onDownload={() => handleDownloadInvoicePopup(invoiceModalBill)}
             isPaid={true}
