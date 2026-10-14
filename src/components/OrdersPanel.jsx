@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
@@ -10,7 +10,7 @@ import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
 import { isMongoId } from '../config/initialData.js';
 import '../pages/OrderManagement/OrderManagement.css';
 
@@ -301,6 +301,7 @@ export default function OrdersPanel({
   const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [orderValidationErrors, setOrderValidationErrors] = useState({});
   const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
   const [newOrderSource, setNewOrderSource] = useState('Admin / POS'); // Admin / POS, Customer Website, Waiter App, Online / Delivery Partner
   const [newOrderNotes, setNewOrderNotes] = useState('');
@@ -1027,6 +1028,7 @@ export default function OrdersPanel({
     setItemQuantityInput(1);
     setItemNotesInput('');
     setItemAddonsInput('');
+    setOrderValidationErrors({});
     setIsCreateOrderModalOpen(true);
   };
 
@@ -1284,43 +1286,82 @@ export default function OrdersPanel({
 
   const handleCreateOrderSubmit = async (e) => {
     if (e) e.preventDefault();
+    const errors = {};
+
     if (newOrderItems.length === 0) {
       ShowNotifications.showAlertNotification("Please add at least one item to the order.", false);
       return;
     }
 
-    if (newOrderType === 'Dine-In' && !newOrderTable) {
-      ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
-      return;
-    }
-
-    if (newOrderType === 'Delivery') {
-      if (!customerName.trim()) {
-        ShowNotifications.showAlertNotification("Customer Name is required for Delivery.", false);
+    if (newOrderType === 'Dine-In') {
+      if (!newOrderTable) {
+        errors.newOrderTable = "Please select a dining table for Dine-In order.";
+        ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
+        setOrderValidationErrors(errors);
         return;
       }
-      if (!customerMobile.trim()) {
-        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
-        return;
-      }
-      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
-      if (digitsOnly.length !== 10) {
-        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
-        return;
-      }
-      if (!deliveryAddress.trim()) {
-        ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
-        return;
-      }
-    } else {
       if (customerMobile.trim()) {
         const digitsOnly = customerMobile.trim().replace(/\D/g, '');
         if (digitsOnly.length !== 10) {
+          errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
           ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+          setOrderValidationErrors(errors);
           return;
         }
       }
     }
+
+    if (newOrderType === 'Takeaway') {
+      if (!customerName || !customerName.trim()) {
+        errors.customerName = "Customer Name is required for Takeaway.";
+        ShowNotifications.showAlertNotification("Customer Name is required for Takeaway.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!customerMobile || !customerMobile.trim()) {
+        errors.customerMobile = "Customer Mobile Number is required for Takeaway.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Takeaway.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+      if (digitsOnly.length !== 10) {
+        errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+    }
+
+    if (newOrderType === 'Delivery') {
+      if (!customerName || !customerName.trim()) {
+        errors.customerName = "Customer Name is required for Delivery.";
+        ShowNotifications.showAlertNotification("Customer Name is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!customerMobile || !customerMobile.trim()) {
+        errors.customerMobile = "Customer Mobile Number is required for Delivery.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+      if (digitsOnly.length !== 10) {
+        errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!deliveryAddress || !deliveryAddress.trim()) {
+        errors.deliveryAddress = "Delivery Address is required for Delivery.";
+        ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+    }
+
+    setOrderValidationErrors({});
 
     // Check if selected table is occupied before sending (for Dine-In)
     if (newOrderType === 'Dine-In') {
@@ -1411,7 +1452,7 @@ export default function OrdersPanel({
       return itObj;
     });
 
-    // 5. Strictly resolve tableId as required by backend schema (expected string, received undefined)
+    // 5. Strictly resolve tableId for Dine-In ONLY (do NOT send tableId for Takeaway or Delivery)
     let resolvedTableId = '';
     let resolvedTable = '';
     let resolvedTableNumber = '';
@@ -1433,20 +1474,11 @@ export default function OrdersPanel({
         resolvedTableId = String(firstTableWithMongoId._id);
       }
     } else {
-      // For Takeaway or Delivery: Backend schema strictly expects tableId as string
-      resolvedTableId = String(firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || (newOrderType === 'Takeaway' ? 'takeaway' : 'delivery'));
       resolvedTable = newOrderType;
       resolvedTableNumber = newOrderType;
     }
 
-    if (!resolvedTableId) {
-      resolvedTableId = String(firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || '65b000000000000000000001');
-    }
-
     const payload = {
-      tableId: String(resolvedTableId),
-      table: resolvedTable,
-      tableNumber: resolvedTableNumber,
       orderType: newOrderType,
       type: newOrderType,
       orderSource: newOrderSource || 'Admin / POS',
@@ -1458,6 +1490,15 @@ export default function OrdersPanel({
       tax,
       total
     };
+
+    if (newOrderType === 'Dine-In') {
+      payload.tableId = String(resolvedTableId || firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || '65b000000000000000000001');
+      payload.table = resolvedTable;
+      payload.tableNumber = resolvedTableNumber;
+    } else {
+      // For Takeaway and Delivery, do NOT send tableId!
+      payload.table = newOrderType;
+    }
 
     if (newOrderNotes && newOrderNotes.trim()) {
       payload.notes = newOrderNotes.trim();
@@ -1557,8 +1598,8 @@ export default function OrdersPanel({
         }
       }
 
-      // Auto-retry if backend validation failed due to tableId
-      if (serverData?.errors?.some(e => String(e.field || '').includes('tableId') || String(e.message || '').includes('tableId'))) {
+      // Auto-retry if backend validation failed due to tableId (Dine-In ONLY)
+      if (newOrderType === 'Dine-In' && serverData?.errors?.some(e => String(e.field || '').includes('tableId') || String(e.message || '').includes('tableId'))) {
         try {
           const freshRes = await apiClient.get('/tables?limit=10').catch(() => null);
           const tList = Array.isArray(freshRes?.data) ? freshRes.data : (freshRes?.data?.data || freshRes?.data?.tables || []);
@@ -1678,11 +1719,17 @@ export default function OrdersPanel({
     const isNoneWaiter = !editOrderWaiter || editOrderWaiter === 'Unassigned' || editOrderWaiter === 'None';
     const waiterId = isNoneWaiter ? null : (waiter ? (waiter._id || waiter.id) : (editingOrder.waiterId?._id || editingOrder.waiterId || null));
 
+    const isDineIn = !editingOrder.orderType || editingOrder.orderType === 'Dine-In';
+
     const payload = {
-      table: editOrderTable,
-      tableId: table ? table._id : (editingOrder.tableId?._id || editingOrder.tableId),
-      waiter: (!editingOrder.orderType || editingOrder.orderType === 'Dine-In') ? (isNoneWaiter ? 'Unassigned' : editOrderWaiter) : 'Unassigned',
-      waiterId: (!editingOrder.orderType || editingOrder.orderType === 'Dine-In') ? waiterId : null,
+      ...(isDineIn ? {
+        table: editOrderTable,
+        tableId: table ? table._id : (editingOrder.tableId?._id || editingOrder.tableId)
+      } : {
+        table: editingOrder.orderType || 'Takeaway'
+      }),
+      waiter: isDineIn ? (isNoneWaiter ? 'Unassigned' : editOrderWaiter) : 'Unassigned',
+      waiterId: isDineIn ? waiterId : null,
       notes: editOrderNotes,
       status: editOrderStatus,
       customerName: editCustomerName ? editCustomerName.trim() : (editingOrder.customerName || ''),
@@ -1815,8 +1862,8 @@ export default function OrdersPanel({
 
       // 4. Construct params object for backend query
       const params = {
-        page,
-        limit
+        page: 0,
+        limit: 100
       };
 
       if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
@@ -1944,27 +1991,187 @@ export default function OrdersPanel({
     selectedBranchId
   ]);
 
-  // Display orders directly from backend response without client-side .filter()
-  const filteredOrders = serverOrders !== null ? serverOrders : (Array.isArray(orders) ? orders : []);
+  // Robust, complete filtering across all 7 filters
+  const filteredOrders = useMemo(() => {
+    let result = Array.isArray(serverOrders) ? serverOrders : (Array.isArray(orders) ? orders : []);
 
-  const isServerPaginated = Boolean(
-    serverOrders !== null ||
-    ((propTotalCount || 0) > 0 && filteredOrders.length <= limit) ||
-    ((propTotalPages || 1) > 1 && filteredOrders.length <= limit) ||
-    (filteredOrders.length <= limit && (propTotalCount || 0) > filteredOrders.length)
-  );
+    // 1. Search Query Filter (debouncedSearch or searchOrderId)
+    const rawSearch = (debouncedSearch || searchOrderId || '').trim().toLowerCase();
+    if (rawSearch) {
+      result = result.filter(ord => {
+        const oId = String(ord.orderId || ord.id || '').toLowerCase();
+        const oNum = oId.replace(/\D/g, '');
+        const cleanSearch = rawSearch.replace(/\D/g, '');
+        if (oId.includes(rawSearch) || (cleanSearch && oNum && oNum.includes(cleanSearch))) return true;
 
-  const effectiveTotalCount = serverOrders !== null
-    ? serverTotalCount
-    : (propTotalCount !== undefined ? propTotalCount : filteredOrders.length);
+        const custName = String(ord.customerName || ord.customer?.name || ord.clientName || '').toLowerCase();
+        if (custName.includes(rawSearch)) return true;
 
-  const effectiveTotalPages = serverOrders !== null
-    ? serverTotalPages
-    : (propTotalPages !== undefined ? propTotalPages : Math.max(1, Math.ceil(effectiveTotalCount / limit)));
+        const custPhone = String(ord.customerMobile || ord.customerPhone || ord.phone || '').toLowerCase();
+        if (custPhone.includes(rawSearch)) return true;
 
-  const paginatedOrders = (serverOrders !== null || isServerPaginated || filteredOrders.length <= limit)
-    ? filteredOrders
-    : filteredOrders.slice(page * limit, (page + 1) * limit);
+        const tblStr = String(ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '').toLowerCase();
+        if (tblStr.includes(rawSearch)) return true;
+
+        const waiter = String(getResolvedWaiterName(ord) || '').toLowerCase();
+        if (waiter.includes(rawSearch)) return true;
+
+        if (Array.isArray(ord.items)) {
+          const hasDish = ord.items.some(it => String(it.name || it.itemName || '').toLowerCase().includes(rawSearch));
+          if (hasDish) return true;
+        }
+
+        const notes = String(ord.notes || '').toLowerCase();
+        if (notes.includes(rawSearch)) return true;
+
+        return false;
+      });
+    }
+
+    // 2. Order Status Filter
+    if (orderFilter && String(orderFilter).toLowerCase() !== 'all') {
+      const targetStatus = String(orderFilter).toLowerCase();
+      result = result.filter(ord => {
+        const s = String(ord.status || 'new').toLowerCase();
+        return s === targetStatus;
+      });
+    }
+
+    // 3. Order Type Filter (Dine-In, Takeaway, Delivery)
+    if (orderTypeFilter && String(orderTypeFilter).toLowerCase() !== 'all') {
+      const targetType = String(orderTypeFilter).toLowerCase().replace(/[^a-z]/g, '');
+      result = result.filter(ord => {
+        const rawType = String(ord.orderType || ord.type || 'Dine-In').toLowerCase().replace(/[^a-z]/g, '');
+        return rawType === targetType;
+      });
+    }
+
+    // 4. Dining Table Filter
+    if (selectedTableFilter && selectedTableFilter !== 'All' && selectedTableFilter !== 'ALL') {
+      const targetTbl = String(selectedTableFilter).replace(/^Table\s*/i, '').trim().toLowerCase();
+      const numOnlyTarget = targetTbl.replace(/\D/g, '');
+      result = result.filter(ord => {
+        const oType = String(ord.orderType || ord.type || 'Dine-In').toLowerCase();
+        if (oType.includes('takeaway') || oType.includes('delivery')) return false;
+
+        const rawTbl = String(ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '').replace(/^Table\s*/i, '').trim().toLowerCase();
+        const numOnlyRaw = rawTbl.replace(/\D/g, '');
+        if (rawTbl === targetTbl) return true;
+        if (numOnlyTarget && numOnlyRaw && parseInt(numOnlyTarget, 10) === parseInt(numOnlyRaw, 10)) return true;
+        return rawTbl.includes(targetTbl);
+      });
+    }
+
+    // 5. Assigned Waiter Filter
+    const targetWaiter = String(currentSelectedWaiterName || selectedWaiterFilter?.name || selectedWaiterFilter || 'All Waiters').trim();
+    if (targetWaiter && targetWaiter !== 'All Waiters' && targetWaiter !== 'All') {
+      result = result.filter(ord => {
+        const ordWaiter = getResolvedWaiterName(ord);
+        if (targetWaiter === 'Unassigned') {
+          return !ordWaiter || ordWaiter === 'Unassigned' || ordWaiter === '-' || ordWaiter === 'None';
+        }
+        return ordWaiter.toLowerCase() === targetWaiter.toLowerCase();
+      });
+    }
+
+    // 6. Payment Status Filter (Paid vs Unpaid)
+    if (paymentStatusFilter && String(paymentStatusFilter).toLowerCase() !== 'all') {
+      const targetPay = String(paymentStatusFilter).toLowerCase();
+      result = result.filter(ord => {
+        const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
+        if (targetPay === 'paid') return isPaid;
+        if (targetPay === 'unpaid') return !isPaid;
+        return true;
+      });
+    }
+
+    // 7. Date Range Filter
+    if (dateRangeFilter && dateRangeFilter !== 'All' && dateRangeFilter !== 'All Time') {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      let startD = '';
+      let endD = '';
+
+      if (dateRangeFilter === 'Today') {
+        startD = todayStr;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'Yesterday') {
+        const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        startD = `${yest.getFullYear()}-${pad(yest.getMonth() + 1)}-${pad(yest.getDate())}`;
+        endD = startD;
+      } else if (dateRangeFilter === 'This Week') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startD = `${sevenDaysAgo.getFullYear()}-${pad(sevenDaysAgo.getMonth() + 1)}-${pad(sevenDaysAgo.getDate())}`;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'This Month') {
+        startD = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'Custom') {
+        startD = customStartDate || '';
+        endD = customEndDate || '';
+      }
+
+      if (startD || endD) {
+        result = result.filter(ord => {
+          const rawDate = ord.createdAt || ord.date;
+          if (!rawDate) return true;
+          const dObj = new Date(rawDate);
+          if (isNaN(dObj.getTime())) return true;
+          const ordDateStr = `${dObj.getFullYear()}-${pad(dObj.getMonth() + 1)}-${pad(dObj.getDate())}`;
+          if (startD && ordDateStr < startD) return false;
+          if (endD && ordDateStr > endD) return false;
+          return true;
+        });
+      }
+    }
+
+    // 8. Branch Filter: If 'All Branches' / 'COMPANY', show all data. If specific sub-branch, show ONLY that sub-branch's data.
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') {
+      result = result.filter(ord => {
+        let matches = isBranchMatch(ord, selectedBranchId, activeRestaurant?.branches || []);
+        if (!matches && (ord.tableId || ord.table)) {
+          const tbl = (Array.isArray(tables) ? tables : []).find(t =>
+            String(t._id || t.id || '') === String(ord.tableId?._id || ord.tableId?.id || ord.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(ord.table || ord.tableNumber || '') ||
+            String(t.tableId || '') === String(ord.tableId || '')
+          ) || (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+            String(t._id || t.id || '') === String(ord.tableId?._id || ord.tableId?.id || ord.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(ord.table || ord.tableNumber || '') ||
+            String(t.tableId || '') === String(ord.tableId || '')
+          ) : null);
+          if (tbl && (tbl.branchId || tbl.branch)) {
+            matches = isBranchMatch(tbl.branchId || tbl.branch, selectedBranchId, activeRestaurant?.branches || []);
+          }
+        }
+        return matches;
+      });
+    }
+
+    return result;
+  }, [
+    serverOrders,
+    orders,
+    debouncedSearch,
+    searchOrderId,
+    orderFilter,
+    orderTypeFilter,
+    selectedTableFilter,
+    currentSelectedWaiterName,
+    selectedWaiterFilter,
+    paymentStatusFilter,
+    dateRangeFilter,
+    customStartDate,
+    customEndDate,
+    selectedBranchId,
+    activeRestaurant?.branches,
+    tables
+  ]);
+
+  const effectiveTotalCount = filteredOrders.length;
+  const effectiveTotalPages = Math.max(1, Math.ceil(effectiveTotalCount / limit));
+  const paginatedOrders = filteredOrders.slice(page * limit, (page + 1) * limit);
 
   const getOrderPageNumbers = () => {
     const pages = [];
@@ -2219,6 +2426,7 @@ export default function OrdersPanel({
                       type="button"
                       onClick={() => {
                         setNewOrderType(type.id);
+                        setOrderValidationErrors({});
                         if (type.id !== 'Dine-In') {
                           setNewOrderTable('');
                           setNewOrderWaiter('Unassigned');
@@ -2584,19 +2792,27 @@ export default function OrdersPanel({
                         type="text"
                         required
                         value={customerName}
-                        onChange={e => setCustomerName(e.target.value)}
+                        onChange={e => {
+                          setCustomerName(e.target.value);
+                          if (orderValidationErrors.customerName) setOrderValidationErrors(prev => ({ ...prev, customerName: null }));
+                        }}
                         placeholder="Enter customer full name..."
                         style={{
                           width: '100%',
                           padding: '10px 14px',
                           borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
+                          border: orderValidationErrors.customerName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                           fontSize: '13px',
                           outline: 'none',
                           background: '#ffffff',
                           boxSizing: 'border-box'
                         }}
                       />
+                      {orderValidationErrors.customerName && (
+                        <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                          {orderValidationErrors.customerName}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
@@ -2607,19 +2823,27 @@ export default function OrdersPanel({
                         required
                         maxLength={10}
                         value={customerMobile}
-                        onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        onChange={e => {
+                          setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10));
+                          if (orderValidationErrors.customerMobile) setOrderValidationErrors(prev => ({ ...prev, customerMobile: null }));
+                        }}
                         placeholder="Enter 10-digit mobile number"
                         style={{
                           width: '100%',
                           padding: '10px 14px',
                           borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
+                          border: orderValidationErrors.customerMobile ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                           fontSize: '13px',
                           outline: 'none',
                           background: '#ffffff',
                           boxSizing: 'border-box'
                         }}
                       />
+                      {orderValidationErrors.customerMobile && (
+                        <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                          {orderValidationErrors.customerMobile}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -2630,13 +2854,16 @@ export default function OrdersPanel({
                       required
                       rows={2}
                       value={deliveryAddress}
-                      onChange={e => setDeliveryAddress(e.target.value)}
+                      onChange={e => {
+                        setDeliveryAddress(e.target.value);
+                        if (orderValidationErrors.deliveryAddress) setOrderValidationErrors(prev => ({ ...prev, deliveryAddress: null }));
+                      }}
                       placeholder="Enter full delivery address with door number, street, landmark, and pincode..."
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.deliveryAddress ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         background: '#ffffff',
@@ -2645,55 +2872,78 @@ export default function OrdersPanel({
                         resize: 'vertical'
                       }}
                     />
+                    {orderValidationErrors.deliveryAddress && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.deliveryAddress}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Takeaway Customer details (Optional / Quick) */}
+              {/* Takeaway Customer details (Mandatory) */}
               {newOrderType === 'Takeaway' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Customer Name
+                      Customer Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                      placeholder="Customer name (optional)"
+                      onChange={e => {
+                        setCustomerName(e.target.value);
+                        if (orderValidationErrors.customerName) setOrderValidationErrors(prev => ({ ...prev, customerName: null }));
+                      }}
+                      placeholder="Enter customer full name..."
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.customerName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         boxSizing: 'border-box',
                         background: '#ffffff'
                       }}
                     />
+                    {orderValidationErrors.customerName && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.customerName}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Customer Mobile Number
+                      Customer Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="tel"
+                      required
                       maxLength={10}
                       value={customerMobile}
-                      onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="10-digit mobile number (optional)"
+                      onChange={e => {
+                        setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10));
+                        if (orderValidationErrors.customerMobile) setOrderValidationErrors(prev => ({ ...prev, customerMobile: null }));
+                      }}
+                      placeholder="Enter 10-digit mobile number"
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.customerMobile ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         boxSizing: 'border-box',
                         background: '#ffffff'
                       }}
                     />
+                    {orderValidationErrors.customerMobile && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.customerMobile}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -4686,6 +4936,14 @@ export default function OrdersPanel({
         const calcTotal = itemSubtotal + calcTax;
         const displayTotal = viewingOrder.total ? Number(viewingOrder.total) : calcTotal;
 
+        const customerNameVal = viewingOrder.customerName || viewingOrder.customer?.name || viewingOrder.customer?.customerName || viewingOrder.clientName || viewingOrder.guestName || '';
+        const customerPhoneVal = viewingOrder.customerMobile || viewingOrder.customerPhone || viewingOrder.phone || viewingOrder.customer?.phone || viewingOrder.customer?.mobile || viewingOrder.customer?.phoneNumber || viewingOrder.mobile || '';
+        const deliveryAddressVal = viewingOrder.deliveryAddress || viewingOrder.address || viewingOrder.customer?.address || '';
+        const orderTypeVal = viewingOrder.orderType || viewingOrder.type || (tableNum === 'Takeaway' ? 'Takeaway' : (tableNum === 'Delivery' ? 'Delivery' : 'Dine-In'));
+        const isTakeaway = String(orderTypeVal).toLowerCase() === 'takeaway' || String(tableNum).toLowerCase() === 'takeaway';
+        const isDelivery = String(orderTypeVal).toLowerCase() === 'delivery' || String(tableNum).toLowerCase() === 'delivery';
+        const isNonDineIn = isTakeaway || isDelivery || String(tableNum).toLowerCase().includes('n/a') || tableNum === '-' || !viewingOrder.tableId;
+
         return (
           <Modal
             isOpen={!!viewingOrder}
@@ -4695,75 +4953,202 @@ export default function OrdersPanel({
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
 
-              {/* Meta Card */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                background: '#f8fafc',
-                padding: '14px 18px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Table
-                  </span>
-                  <strong style={{ fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>
-                    {String(tableNum).startsWith('Table') ? tableNum : `Table ${tableNum}`}
-                  </strong>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Assigned Waiter
-                  </span>
-                  <strong style={{ fontSize: '13px', color: (viewingOrder.orderType && viewingOrder.orderType !== 'Dine-In') ? '#94a3b8' : (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    {(viewingOrder.orderType && viewingOrder.orderType !== 'Dine-In') ? (
-                      '-'
-                    ) : (waiterName && waiterName !== 'Unassigned') ? (
-                      <>
-                        <UserIcon size={14} color="#64748b" />
-                        <span>{waiterName}</span>
-                      </>
-                    ) : 'None (Unassigned)'}
-                  </strong>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Order Status
-                  </span>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '3px 10px',
-                    borderRadius: '16px',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    textTransform: 'capitalize',
-                    background:
-                      orderStatus === 'completed' ? '#dcfce7' :
-                        orderStatus === 'served' ? '#e0f2fe' :
-                          orderStatus === 'ready' ? '#f1f5f9' :
-                            orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
-                    color:
-                      orderStatus === 'completed' ? '#15803d' :
-                        orderStatus === 'served' ? '#0369a1' :
-                          orderStatus === 'ready' ? '#334155' :
-                            orderStatus === 'preparing' ? '#c2410c' : '#b45309',
-                    border: '1px solid',
-                    borderColor:
-                      orderStatus === 'completed' ? '#bbf7d0' :
-                        orderStatus === 'served' ? '#bae6fd' :
-                          orderStatus === 'ready' ? '#cbd5e1' :
-                            orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+              {/* Meta Card: Customer details for Takeaway/Delivery, Table/Waiter for Dine-In */}
+              {isNonDineIn ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  background: '#f8fafc',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px'
                   }}>
-                    ● {orderStatus}
-                  </span>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Customer Name
+                      </span>
+                      <strong style={{ fontSize: '14px', color: '#0f172a', fontWeight: 800 }}>
+                        {customerNameVal || 'Customer'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Mobile Number
+                      </span>
+                      <strong style={{ fontSize: '13px', color: customerPhoneVal ? '#0f172a' : '#94a3b8', fontWeight: 700 }}>
+                        {customerPhoneVal || '-'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Order Status
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 10px',
+                          borderRadius: '16px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          textTransform: 'capitalize',
+                          background:
+                            orderStatus === 'completed' ? '#dcfce7' :
+                              orderStatus === 'served' ? '#e0f2fe' :
+                                orderStatus === 'ready' ? '#f1f5f9' :
+                                  orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
+                          color:
+                            orderStatus === 'completed' ? '#15803d' :
+                              orderStatus === 'served' ? '#0369a1' :
+                                orderStatus === 'ready' ? '#334155' :
+                                  orderStatus === 'preparing' ? '#c2410c' : '#b45309',
+                          border: '1px solid',
+                          borderColor:
+                            orderStatus === 'completed' ? '#bbf7d0' :
+                              orderStatus === 'served' ? '#bae6fd' :
+                                orderStatus === 'ready' ? '#cbd5e1' :
+                                  orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+                        }}>
+                          ● {orderStatus}
+                        </span>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          background: isDelivery ? '#eff6ff' : '#fff7ed',
+                          color: isDelivery ? '#1d4ed8' : '#ea580c',
+                          border: `1px solid ${isDelivery ? '#bfdbfe' : '#fed7aa'}`
+                        }}>
+                          {orderTypeVal}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {deliveryAddressVal && (
+                    <div style={{
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                        Delivery Address
+                      </span>
+                      <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 600 }}>
+                        {deliveryAddressVal}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  background: '#f8fafc',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px'
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Table
+                      </span>
+                      <strong style={{ fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>
+                        {String(tableNum).startsWith('Table') ? tableNum : `Table ${tableNum}`}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Assigned Waiter
+                      </span>
+                      <strong style={{ fontSize: '13px', color: (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        {(waiterName && waiterName !== 'Unassigned') ? (
+                          <>
+                            <UserIcon size={14} color="#64748b" />
+                            <span>{waiterName}</span>
+                          </>
+                        ) : 'None (Unassigned)'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Order Status
+                      </span>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '3px 10px',
+                        borderRadius: '16px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        textTransform: 'capitalize',
+                        background:
+                          orderStatus === 'completed' ? '#dcfce7' :
+                            orderStatus === 'served' ? '#e0f2fe' :
+                              orderStatus === 'ready' ? '#f1f5f9' :
+                                orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
+                        color:
+                          orderStatus === 'completed' ? '#15803d' :
+                            orderStatus === 'served' ? '#0369a1' :
+                              orderStatus === 'ready' ? '#334155' :
+                                orderStatus === 'preparing' ? '#c2410c' : '#b45309',
+                        border: '1px solid',
+                        borderColor:
+                          orderStatus === 'completed' ? '#bbf7d0' :
+                            orderStatus === 'served' ? '#bae6fd' :
+                              orderStatus === 'ready' ? '#cbd5e1' :
+                                orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+                      }}>
+                        ● {orderStatus}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(customerNameVal || customerPhoneVal) && (
+                    <div style={{
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      gap: '16px',
+                      fontSize: '12px'
+                    }}>
+                      {customerNameVal && (
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>Customer: </span>
+                          <strong style={{ color: '#0f172a' }}>{customerNameVal}</strong>
+                        </div>
+                      )}
+                      {customerPhoneVal && (
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>Mobile: </span>
+                          <strong style={{ color: '#0f172a' }}>{customerPhoneVal}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {viewingOrder.notes && (
                 <div style={{ padding: '10px 14px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', fontSize: '12px', color: '#d48806', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>

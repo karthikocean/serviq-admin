@@ -239,6 +239,8 @@ export default function Billing() {
               cashier: t.cashier || t.staff || t.waiter || '-',
               staff: t.cashier || t.staff || t.waiter || '-',
               items: rawItems,
+              branchId: typeof t.branchId === 'object' && t.branchId !== null ? (t.branchId._id || t.branchId.id || '') : (t.branchId || t.branch || (typeof t.tableId === 'object' ? t.tableId?.branchId : null) || ''),
+              branch: t.branch || t.branchId || (typeof t.tableId === 'object' ? t.tableId?.branchId : null) || '',
               order_id: mongoOrderId,
               rawOrderId: mongoOrderId,
               orderIds: [mongoTableId, mongoOrderId].filter(Boolean),
@@ -273,6 +275,29 @@ export default function Billing() {
               (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
             return !isPaid;
           });
+
+          // Branch filter: If a specific sub-branch is selected, only show bills for that branch
+          if (isSingleBranch) {
+            fetchedTables = fetchedTables.filter(b => {
+              let matches = isBranchMatch(b, selectedBranchId, activeRestaurant?.branches || []);
+              if (!matches && (b.table || b.tableId)) {
+                const tbl = availableTables.find(t => 
+                  String(t._id || t.id || '') === String(b.tableId || '') ||
+                  String(t.tableNumber || t.tableNo || '') === String(b.table || b.tableNumber || '') ||
+                  String(t.tableId || '') === String(b.tableId || '')
+                ) || (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+                  String(t._id || t.id || '') === String(b.tableId || '') ||
+                  String(t.tableNumber || t.tableNo || '') === String(b.table || b.tableNumber || '') ||
+                  String(t.tableId || '') === String(b.tableId || '')
+                ) : null);
+                if (tbl && (tbl.branchId || tbl.branch)) {
+                  matches = isBranchMatch(tbl.branchId || tbl.branch, selectedBranchId, activeRestaurant?.branches || []);
+                }
+              }
+              return matches;
+            });
+          }
+
           setTotalItems(fetchedTables.length);
         }
       }
@@ -377,6 +402,28 @@ export default function Billing() {
             (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
           return !isPaidBill;
         });
+
+        // Filter fallback pool by branch if a specific sub-branch is selected
+        if (isSingleBranch) {
+          pool = pool.filter(b => {
+            let matches = isBranchMatch(b, selectedBranchId, activeRestaurant?.branches || []);
+            if (!matches && (b.table || b.tableId)) {
+              const tbl = availableTables.find(t => 
+                String(t._id || t.id || '') === String(b.tableId || '') ||
+                String(t.tableNumber || t.tableNo || '') === String(b.table || b.tableNumber || '') ||
+                String(t.tableId || '') === String(b.tableId || '')
+              ) || (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+                String(t._id || t.id || '') === String(b.tableId || '') ||
+                String(t.tableNumber || t.tableNo || '') === String(b.table || b.tableNumber || '') ||
+                String(t.tableId || '') === String(b.tableId || '')
+              ) : null);
+              if (tbl && (tbl.branchId || tbl.branch)) {
+                matches = isBranchMatch(tbl.branchId || tbl.branch, selectedBranchId, activeRestaurant?.branches || []);
+              }
+            }
+            return matches;
+          });
+        }
 
         // If filters are active, apply client-side filtering on the fallback pool
         if (hasActiveFilters) {

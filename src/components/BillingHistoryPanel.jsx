@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
+import apiClient from '../config/index.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import '../pages/Billing/Billing.css';
@@ -31,6 +32,15 @@ const DownloadIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const TrashIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    <line x1="10" y1="11" x2="10" y2="17"></line>
+    <line x1="14" y1="11" x2="14" y2="17"></line>
+  </svg>
+);
+
 export default function BillingHistoryPanel({
   billingHistory = [],
   allFilteredHistory = [],
@@ -54,9 +64,11 @@ export default function BillingHistoryPanel({
   summary,
   activeRestaurant = {},
   currentUser = {},
-  hasPermission
+  hasPermission,
+  onDeleteInvoice
 }) {
   const canView = typeof hasPermission === 'function' ? hasPermission('billing_history', 'view') : true;
+  const canDelete = typeof hasPermission === 'function' ? (hasPermission('billing_history', 'delete') || hasPermission('billing', 'delete') || hasPermission('orders', 'delete')) : true;
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
@@ -80,7 +92,34 @@ export default function BillingHistoryPanel({
 
   // State for Modals
   const [selectedInvoice, setSelectedInvoice] = useState(null); // For Invoice View Modal
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null); // For Delete Confirmation Modal
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Handle Confirm Delete Bill
+  const handleConfirmDelete = async () => {
+    if (!invoiceToDelete) return;
+    setIsDeleting(true);
+    try {
+      if (typeof onDeleteInvoice === 'function') {
+        await onDeleteInvoice(invoiceToDelete);
+      } else {
+        const targetId = invoiceToDelete.rawOrderId || invoiceToDelete.orderId || invoiceToDelete.order_id || invoiceToDelete._id || invoiceToDelete.id;
+        const cleanId = String(targetId || '').replace(/^[#ORD-_]*/i, '');
+        if (cleanId) {
+          await apiClient.delete(`/orders/${cleanId}`).catch(() => null);
+          await apiClient.delete(`/billing/${cleanId}`).catch(() => null);
+        }
+        ShowNotifications.showAlertNotification("Bill deleted successfully.", true);
+      }
+    } catch (err) {
+      console.error("Delete bill error:", err);
+      ShowNotifications.showAlertNotification("Failed to delete bill.", false);
+    } finally {
+      setIsDeleting(false);
+      setInvoiceToDelete(null);
+    }
+  };
 
   // Direct Excel Export (Fetches full filtered dataset without pagination)
   const handleExportExcel = async () => {
@@ -574,6 +613,31 @@ export default function BillingHistoryPanel({
                               >
                                 <PrinterIcon size={15} color="#0f172a" />
                               </button>
+
+                              {/* 3. Delete Bill / Invoice */}
+                              {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setInvoiceToDelete(invoice)}
+                                title="Delete Bill / Invoice"
+                                aria-label="Delete Bill / Invoice"
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #fecaca',
+                                  background: '#fef2f2',
+                                  color: '#dc2626',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <TrashIcon size={15} color="#dc2626" />
+                              </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -670,9 +734,65 @@ export default function BillingHistoryPanel({
             activeRestaurant={activeRestaurant}
             currentUser={currentUser}
             isPaid={true}
-            onPrint={() => handlePrintInvoiceDirect(selectedInvoice)}
-            onDownload={() => handleDownloadInvoiceDirect(selectedInvoice)}
+            showActions={false}
           />
+        )}
+      </Modal>
+
+      {/* DELETE BILL CONFIRMATION MODAL */}
+      <Modal
+        isOpen={!!invoiceToDelete}
+        onClose={() => { if (!isDeleting) setInvoiceToDelete(null); }}
+        title="Confirm Delete Bill"
+        maxWidth="420px"
+      >
+        {invoiceToDelete && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '6px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>
+              Are you sure you want to delete bill <strong>{invoiceToDelete.billNo || invoiceToDelete.invoiceNo}</strong>
+              {invoiceToDelete.table && invoiceToDelete.table !== '-' ? ` (${invoiceToDelete.table})` : ''}
+              {invoiceToDelete.amount ? ` for ₹${Number(invoiceToDelete.amount).toFixed(2)}` : ''}?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setInvoiceToDelete(null)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                style={{
+                  background: '#dc2626',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </section>

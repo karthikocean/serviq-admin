@@ -5,6 +5,8 @@ import BillingApi from '../../api/Billing';
 import OrderApi from '../../api/Order';
 import TableApi from '../../api/Table';
 import UserApi from '../../api/User';
+import apiClient from '../../config/index.js';
+import ShowNotifications from '../../helper/ShowNotifications.js';
 import { formatDateDMY } from '../../helper/DateHelper.js';
 import { isBranchMatch } from '../../helper/BranchHelper.js';
 import { isMongoId, initialBillingHistory } from '../../config/initialData';
@@ -155,7 +157,8 @@ export default function BillingHistory() {
       table: cleanTable,
       tableId: item.tableId || cleanTable,
       tableNumber: rawTableNum,
-      branchId: item.branchId || item.branch || (typeof item.branchId === 'object' ? item.branchId?._id : selectedBranchId) || '',
+      branchId: typeof item.branchId === 'object' && item.branchId !== null ? (item.branchId._id || item.branchId.id || '') : (item.branchId || item.branch || item.restaurantBranchId || (typeof item.tableId === 'object' ? item.tableId?.branchId : null) || ''),
+      branch: item.branch || item.branchId || (typeof item.tableId === 'object' ? item.tableId?.branchId : null) || '',
       date: dateStr,
       time: timeStr,
       rawDate: new Date(rawDate),
@@ -354,6 +357,10 @@ export default function BillingHistory() {
       if (items.length === 0 && fallbackList.length > 0) {
         let pool = fallbackList;
 
+        if (isSpecificBranch) {
+          pool = pool.filter(h => isBranchMatch(h, selectedBranchId, activeRestaurant?.branches || []));
+        }
+
         if (searchTerm && searchTerm.trim()) {
           const st = searchTerm.trim().toLowerCase();
           pool = pool.filter(h =>
@@ -402,13 +409,17 @@ export default function BillingHistory() {
 
     // Strict requirement: Only Paid bills should be displayed in Billing History
     const paidOnlyItems = items.filter(it => {
-      const statusStr = String(it.status || it.paymentStatus || it.billingStatus || '').toLowerCase();
+      const payStatus = String(it.paymentStatus || it.billingStatus || '').toLowerCase();
+      if (payStatus === 'unpaid' || payStatus === 'pending' || payStatus === 'pending_payment') {
+        return false;
+      }
+      const statusStr = String(it.status || '').toLowerCase();
       const isPaid = 
         it.isPaid === true ||
         it.paid === true ||
         it.is_paid === true ||
+        payStatus === 'paid' ||
         statusStr === 'paid' ||
-        statusStr === 'completed' ||
         statusStr === 'done' ||
         (Number(it.paidAmount || 0) >= Number(it.billAmount || it.total || it.totalAmount || 0) && Number(it.billAmount || it.total || it.totalAmount || 0) > 0) ||
         (Number(it.balanceAmount || 0) <= 0 && Number(it.paidAmount || 0) > 0);
@@ -753,6 +764,27 @@ export default function BillingHistory() {
         }
       }
 
+      // 9. Branch Filter: If 'All Branches' / 'COMPANY', show all data. If specific sub-branch, show ONLY that sub-branch's data.
+      const isSpecificBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches';
+      if (isSpecificBranch) {
+        let matchesBranch = isBranchMatch(it, selectedBranchId, activeRestaurant?.branches || []);
+        if (!matchesBranch && (it.table || it.tableId)) {
+          const tbl = availableTables.find(t => 
+            String(t._id || t.id || '') === String(it.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(it.table || it.tableNumber || '') ||
+            String(t.tableId || '') === String(it.tableId || '')
+          ) || (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+            String(t._id || t.id || '') === String(it.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(it.table || it.tableNumber || '') ||
+            String(t.tableId || '') === String(it.tableId || '')
+          ) : null);
+          if (tbl && (tbl.branchId || tbl.branch)) {
+            matchesBranch = isBranchMatch(tbl.branchId || tbl.branch, selectedBranchId, activeRestaurant?.branches || []);
+          }
+        }
+        if (!matchesBranch) return false;
+      }
+
       return true;
     });
   }, [
@@ -768,7 +800,10 @@ export default function BillingHistory() {
     customEndDate,
     selectedPayment,
     paymentStatus,
-    orderType
+    orderType,
+    selectedBranchId,
+    activeRestaurant?.branches,
+    availableTables
   ]);
 
   const effectiveTotal = filteredHistory.length;
@@ -813,6 +848,39 @@ export default function BillingHistory() {
     );
   }
 
+  const handleDeleteInvoice = async (invoice) => {
+    if (!invoice) return;
+    try {
+      const targetId = invoice.rawOrderId || invoice.orderId || invoice.order_id || invoice._id || invoice.id;
+      const cleanId = String(targetId || '').replace(/^[#ORD-_]*/i, '');
+      if (cleanId) {
+        await apiClient.delete(`/orders/${cleanId}`).catch(() => null);
+        await apiClient.delete(`/billing/${cleanId}`).catch(() => null);
+      }
+
+      setRawHistory(prev => prev.filter(item => {
+        const match =
+          (invoice.id && (item.id === invoice.id || item._id === invoice.id)) ||
+          (invoice._id && (item._id === invoice._id || item.id === invoice._id)) ||
+          (invoice.billNo && (item.billNo === invoice.billNo || item.billNumber === invoice.billNo)) ||
+          (invoice.invoiceNo && (item.invoiceNo === invoice.invoiceNo || item.invoiceId === invoice.invoiceNo)) ||
+          (targetId && (item.orderId === targetId || item._id === targetId || item.id === targetId));
+        return !match;
+      }));
+
+      if (Array.isArray(activeRestaurant?.billingHistory)) {
+        activeRestaurant.billingHistory = activeRestaurant.billingHistory.filter(item => {
+          return item.billNo !== invoice.billNo && item.invoiceNo !== invoice.invoiceNo && item.id !== invoice.id;
+        });
+      }
+
+      ShowNotifications.showAlertNotification("Bill deleted successfully.", true);
+    } catch (err) {
+      console.error("Failed to delete bill:", err);
+      ShowNotifications.showAlertNotification("Failed to delete bill.", false);
+    }
+  };
+
   return (
     <BillingHistoryPanel
       billingHistory={paginatedHistory}
@@ -851,6 +919,7 @@ export default function BillingHistory() {
       activeRestaurant={activeRestaurant}
       currentUser={currentUser}
       hasPermission={hasPermission}
+      onDeleteInvoice={handleDeleteInvoice}
     />
   );
 }
