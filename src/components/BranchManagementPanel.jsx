@@ -1062,154 +1062,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setIsSavingResetPassword(true);
     try {
       const branchId = resetPasswordBranch.id || resetPasswordBranch._id;
-      const targetBranch = apiBranches.find(b => (b.id === branchId || b._id === branchId));
 
-      let matchedUser = null;
-      const candidateUserIds = [
-        targetBranch?.rawManagerId,
-        resetPasswordBranch?.rawManagerId,
-        targetBranch?.managerId,
-        resetPasswordBranch?.managerId,
-        resetPasswordBranch?.userId,
-        resetPasswordBranch?.adminId
-      ].filter(Boolean);
-
-      // 1. Direct match by candidate user ID in existing apiUsers
-      if (candidateUserIds.length > 0 && Array.isArray(apiUsers)) {
-        matchedUser = apiUsers.find(u => {
-          const uId = String(u._id || u.id || '');
-          return candidateUserIds.some(cid => String(cid) === uId);
-        });
-      }
-
-      // 2. Query branch users from server for this branch
-      if (!matchedUser && branchId) {
-        try {
-          const branchUsersRes = await UserApi.getUsers({ branchId, limit: 100 });
-          const bUsers = (branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data))
-            ? branchUsersRes.response.data
-            : (Array.isArray(branchUsersRes?.response?.users)
-                ? branchUsersRes.response.users
-                : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []));
-
-          if (bUsers.length > 0) {
-            matchedUser = bUsers.find(u => {
-              const uId = String(u._id || u.id || '');
-              if (candidateUserIds.some(cid => String(cid) === uId)) return true;
-              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
-              return roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner');
-            }) || bUsers[0];
-          }
-        } catch (bErr) {
-          console.warn("Branch users query failed:", bErr);
-        }
-      }
-
-      // 3. Match across existing apiUsers by branchId, email, phone, or manager name
-      const bEmail = String(resetPasswordBranch.email || resetPasswordBranch.managerEmail || '').toLowerCase().trim();
-      const bPhone = String(resetPasswordBranch.mobileNumber || resetPasswordBranch.contactNumber || resetPasswordBranch.phone || '').replace(/\D/g, '');
-      const bMgrName = String(resetPasswordBranch.branchManager || resetPasswordBranch.managerName || '').toLowerCase().trim();
-
-      if (!matchedUser && Array.isArray(apiUsers)) {
-        matchedUser = apiUsers.find(u => {
-          const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
-            ? String(u.branchId._id || u.branchId.id || '')
-            : String(u.branchId || u.branch || '');
-          if (uBranchId && uBranchId === String(branchId)) {
-            const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
-            if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
-          }
-          const uEmail = String(u.email || '').toLowerCase().trim();
-          const uPhone = String(u.phone || u.mobileNumber || u.phoneNumber || '').replace(/\D/g, '');
-          const uName = String(u.name || u.username || '').toLowerCase().trim();
-          if (bEmail && uEmail && bEmail === uEmail) return true;
-          if (bPhone && uPhone && (bPhone === uPhone || uPhone.endsWith(bPhone) || bPhone.endsWith(uPhone))) return true;
-          if (bMgrName && uName && bMgrName === uName && bMgrName !== 'unassigned') return true;
-          return false;
-        });
-      }
-
-      // 4. Fetch users globally from server if still not found
-      if (!matchedUser) {
-        try {
-          const allUsersRes = await UserApi.getUsers({ limit: 500 });
-          const allUsers = (allUsersRes?.status && Array.isArray(allUsersRes.response?.data))
-            ? allUsersRes.response.data
-            : (Array.isArray(allUsersRes?.response?.users)
-                ? allUsersRes.response.users
-                : (Array.isArray(allUsersRes?.response) ? allUsersRes.response : []));
-
-          matchedUser = allUsers.find(u => {
-            const uId = String(u._id || u.id || '');
-            if (candidateUserIds.some(cid => String(cid) === uId)) return true;
-            const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
-              ? String(u.branchId._id || u.branchId.id || '')
-              : String(u.branchId || u.branch || '');
-            if (uBranchId && uBranchId === String(branchId)) {
-              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || '')).toLowerCase();
-              if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
-            }
-            const uEmail = String(u.email || '').toLowerCase().trim();
-            const uPhone = String(u.phone || u.mobileNumber || '').replace(/\D/g, '');
-            if (bEmail && uEmail && bEmail === uEmail) return true;
-            if (bPhone && uPhone && (bPhone === uPhone || uPhone.endsWith(bPhone))) return true;
-            if (bMgrName && String(u.name || '').toLowerCase().trim() === bMgrName) return true;
-            return false;
-          });
-        } catch (allErr) {
-          console.warn("Global users query failed:", allErr);
-        }
-      }
-
-      let passwordUpdated = false;
-
-      // If manager user found: update their password
-      if (matchedUser?._id || matchedUser?.id) {
-        const uId = matchedUser._id || matchedUser.id;
-        const res = await UserApi.changePassword(uId, newPassword);
-        if (res?.status) {
-          passwordUpdated = true;
-        } else {
-          // Fallback: try updateUser
-          const updateFallback = await UserApi.updateUser(uId, {
-            password: newPassword,
-            newPassword: newPassword,
-            pin: newPassword
-          });
-          if (updateFallback?.status) {
-            passwordUpdated = true;
-          }
-        }
-      } else {
-        // If no user exists yet for this branch manager, create a new manager user with the new password
-        const mgrName = (resetPasswordBranch.branchManager && resetPasswordBranch.branchManager !== 'Unassigned')
-          ? resetPasswordBranch.branchManager
-          : ((resetPasswordBranch.managerName && resetPasswordBranch.managerName !== 'Unassigned') ? resetPasswordBranch.managerName : `${resetPasswordBranch.branchName || 'Branch'} Manager`);
-        const mgrEmail = resetPasswordBranch.email || `${String(resetPasswordBranch.branchCode || 'branch').toLowerCase().replace(/[^a-z0-9]/g, '')}@restaurant.com`;
-        const mgrPhone = resetPasswordBranch.mobileNumber || resetPasswordBranch.phone || resetPasswordBranch.contactNumber || '';
-
-        const createRes = await UserApi.createUser({
-          name: mgrName,
-          email: mgrEmail,
-          phoneNumber: mgrPhone,
-          mobileNumber: mgrPhone,
-          phone: mgrPhone,
-          password: newPassword,
-          role: 'Manager',
-          branchId: branchId,
-          status: 'Active'
-        });
-
-        if (createRes?.status) {
-          passwordUpdated = true;
-          const createdUser = createRes.response?.data?.user || createRes.response?.data || createRes.response;
-          if (createdUser?._id) {
-            setApiUsers(prev => [...prev, createdUser]);
-          }
-        }
-      }
-
-      if (passwordUpdated) {
+      // 1. Primary: Direct reset endpoint on BranchApi
+      const branchRes = await BranchApi.resetPassword(branchId, newPassword);
+      if (branchRes?.status) {
         ShowNotifications.showAlertNotification(
           `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
           true
@@ -1218,12 +1074,31 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         setNewPassword('');
         setConfirmNewPassword('');
         setResetPasswordError('');
-      } else {
-        ShowNotifications.showAlertNotification(
-          "Could not update password. Please check the branch manager account and try again.",
-          false
-        );
+        return;
       }
+
+      // 2. Fallback: try UserApi.changePassword if candidate user ID is known
+      const targetBranch = apiBranches.find(b => (b.id === branchId || b._id === branchId));
+      const uId = resetPasswordBranch.managerId || resetPasswordBranch.rawManagerId || targetBranch?.managerId || targetBranch?.rawManagerId;
+      if (uId) {
+        const res = await UserApi.changePassword(uId, newPassword);
+        if (res?.status) {
+          ShowNotifications.showAlertNotification(
+            `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
+            true
+          );
+          setResetPasswordBranch(null);
+          setNewPassword('');
+          setConfirmNewPassword('');
+          setResetPasswordError('');
+          return;
+        }
+      }
+
+      ShowNotifications.showAlertNotification(
+        branchRes?.message || "Could not update password. Please check the branch manager account and try again.",
+        false
+      );
     } catch (err) {
       console.error("Failed to reset password:", err);
       ShowNotifications.showAlertNotification("Failed to reset password. Please try again.", false);
