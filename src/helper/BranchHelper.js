@@ -509,18 +509,62 @@ export const isSubBranchUser = (user) => {
 };
 
 /**
- * Checks whether a branch is designated as the Main Branch.
+ * Resolves the single primary designated Main Branch from a list of branches.
+ * Exactly one branch should be considered the Main Branch.
  */
-export const isBranchMain = (branch) => {
+export const getMainBranch = (branchesList = []) => {
+  if (!Array.isArray(branchesList) || branchesList.length === 0) return null;
+
+  // 1. Look for explicit boolean or type flags
+  const explicitMain = branchesList.find(b => 
+    Boolean(
+      b?.isMainBranch === true ||
+      b?.isMain === true ||
+      b?.isHeadOffice === true ||
+      b?.isHQ === true ||
+      String(b?.branchType || '').toUpperCase() === 'MAIN' ||
+      String(b?.type || '').toUpperCase() === 'MAIN'
+    )
+  );
+  if (explicitMain) return explicitMain;
+
+  // 2. Only if no branch has explicit flags, look for exact branch name matches (never substring)
+  const exactNameMain = branchesList.find(b => {
+    const name = String(b?.branchName || b?.name || '').trim().toLowerCase();
+    return name === 'main branch' || name === 'headquarters' || name === 'head office';
+  });
+  if (exactNameMain) return exactNameMain;
+
+  return null;
+};
+
+/**
+ * Checks whether a branch is designated as the Main Branch.
+ * If allBranches list is provided, guarantees that ONLY the single designated main branch returns true.
+ */
+export const isBranchMain = (branch, allBranches = null) => {
   if (!branch) return false;
+
+  // If the full branch list is available, resolve the single designated main branch
+  if (Array.isArray(allBranches) && allBranches.length > 0) {
+    const mainBranch = getMainBranch(allBranches);
+    if (!mainBranch) return false;
+    const bId = String(branch._id || branch.id || branch.branchCode || '');
+    const mainId = String(mainBranch._id || mainBranch.id || mainBranch.branchCode || '');
+    return Boolean(bId && mainId && bId === mainId);
+  }
+
+  // Standalone check (when branch list is not provided):
+  // Check explicit database / backend flags ONLY.
+  // Never do loose substring checking on branch name to prevent normal branches
+  // named "main" or containing "main" from being falsely treated as the Main Branch.
   return Boolean(
     branch.isMainBranch === true ||
     branch.isMain === true ||
     branch.isHeadOffice === true ||
     branch.isHQ === true ||
     String(branch.branchType || '').toUpperCase() === 'MAIN' ||
-    String(branch.type || '').toUpperCase() === 'MAIN' ||
-    String(branch.branchName || branch.name || '').toLowerCase().includes('main')
+    String(branch.type || '').toUpperCase() === 'MAIN'
   );
 };
 
@@ -531,6 +575,7 @@ export default {
   getUserAssignedBranchId,
   isUserCompanyUser,
   isSubBranchUser,
+  getMainBranch,
   isBranchMain
 };
 
