@@ -163,6 +163,21 @@ export default function MenuManagement() {
       }
 
       const targetBranchId = menuForm.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
+
+      if (targetBranchId && targetBranchId !== 'ALL') {
+        const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, targetBranchId));
+        const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+        const isBranchCustomEnabled = Boolean(
+          branchCustomFlag === true ||
+          String(branchCustomFlag).toLowerCase() === 'true'
+        );
+        if (!isBranchCustomEnabled) {
+          setCustomCategoryError(`Branch "${targetBranchObj?.branchName || 'Selected'}" has useCustomMenu disabled. Custom categories cannot be created for this branch.`);
+          setIsAddingCategory(false);
+          return;
+        }
+      }
+
       const payload = {
         name: categoryName,
         description: '',
@@ -488,6 +503,23 @@ export default function MenuManagement() {
   const gstAmount = (basePriceNum * gstRateNum) / 100;
   const totalCustomerPrice = basePriceNum + gstAmount;
 
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
+  const isBranchScoped = isBranchLogin || Boolean(cleanSelectedBranch);
+  const activeBranchTargetId = isBranchLogin ? userBranchId : (cleanSelectedBranch || menuForm.branchId || '');
+
+  const activeBranchObj = (isBranchScoped && activeBranchTargetId)
+    ? branches.find(b => isBranchMatch(b, activeBranchTargetId))
+    : null;
+
+  const branchCustomFlag = activeBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+  const isCustomMenuEnabled = Boolean(
+    branchCustomFlag === true ||
+    String(branchCustomFlag).toLowerCase() === 'true'
+  );
+
   return (
     <div style={{ width: '100%' }}>
       {activePage === 'menu-form' ? (
@@ -812,7 +844,7 @@ export default function MenuManagement() {
                             value: cat._id || cat.id,
                             label: cat.name
                           })),
-                        { value: 'custom', label: '+ Add Custom Category...' }
+                        ...((!isBranchScoped || isCustomMenuEnabled) ? [{ value: 'custom', label: '+ Add Custom Category...' }] : [])
                       ]}
                       placeholder="Select Category..."
                     />
