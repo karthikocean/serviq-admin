@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import BranchApi from '../api/Branch.js';
 import SubscriptionApi from '../api/Subscription.js';
@@ -121,6 +121,40 @@ const PowerIcon = ({ size = 14, color = 'currentColor' }) => (
   </svg>
 );
 
+const saveBranchMetadataToStorage = (branchId, data, branchCode = '') => {
+  if (!branchId && !branchCode) return;
+  try {
+    const existing = JSON.parse(localStorage.getItem('serviq_branch_metadata') || '{}');
+    const idKey = branchId ? String(branchId) : '';
+    const codeKey = branchCode ? String(branchCode).trim().toUpperCase() : '';
+    const metadataToSave = {
+      ...(idKey && existing[idKey] ? existing[idKey] : {}),
+      ...(codeKey && existing[codeKey] ? existing[codeKey] : {}),
+      ...data
+    };
+    if (idKey) existing[idKey] = metadataToSave;
+    if (data?.id) existing[String(data.id)] = metadataToSave;
+    if (data?._id) existing[String(data._id)] = metadataToSave;
+    if (codeKey) existing[codeKey] = metadataToSave;
+    if (data?.branchCode) existing[String(data.branchCode).trim().toUpperCase()] = metadataToSave;
+    if (data?.code) existing[String(data.code).trim().toUpperCase()] = metadataToSave;
+    localStorage.setItem('serviq_branch_metadata', JSON.stringify(existing));
+  } catch (e) {}
+};
+
+const getBranchMetadataFromStorage = (branchId, branchCode = '') => {
+  try {
+    const existing = JSON.parse(localStorage.getItem('serviq_branch_metadata') || '{}');
+    const idKey = branchId ? String(branchId) : '';
+    const codeKey = branchCode ? String(branchCode).trim().toUpperCase() : '';
+    const byId = idKey ? (existing[idKey] || {}) : {};
+    const byCode = codeKey ? (existing[codeKey] || {}) : {};
+    return { ...byCode, ...byId };
+  } catch (e) {
+    return {};
+  }
+};
+
 const initialBranchState = {
   id: '',
   branchName: '',
@@ -156,23 +190,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
 
-  const userType = (userTypeStr || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
-  const isRestaurantOwner = 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER' || 
-    userType === 'SUPER ADMIN' || 
-    userType === 'SUPER_ADMIN' || 
-    userRoleLower === 'restaurant_owner' || 
-    userRoleLower === 'restaurant owner' || 
-    userRoleLower === 'owner' || 
-    userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+  const isRestaurantOwner = userTypeStr.toUpperCase().trim() === 'RESTAURANT_OWNER';
 
   const role = roleStr || 'Admin';
-  const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
+  const hasPermission = (moduleName, action = 'view') => isRestaurantOwner;
 
-  if (!isRestaurantOwner && !hasPermission('branch-management', 'view')) {
+  if (!isRestaurantOwner) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
@@ -182,7 +205,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           Access Denied
         </h2>
         <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-          You do not have permission to view or manage branches.
+          Branch Management is restricted to Restaurant Owners only.
         </p>
         <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
           Return to Dashboard
@@ -201,6 +224,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showEditPasswordFields, setShowEditPasswordFields] = useState(false);
 
   // Subscription Quota & Plan Limit Modal state
   const [isPlanLimitModalOpen, setIsPlanLimitModalOpen] = useState(false);
@@ -313,33 +337,45 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           const countryStr = b.country || addr.country || '';
           const pincodeStr = b.pincode || addr.pincode || '';
 
+          const bCodeStr = b.branchCode || b.code || '';
+          const meta = getBranchMetadataFromStorage(bId, bCodeStr);
+          const resolvedGst = b.gstNumber || b.gstinNumber || b.gstin || b.taxId || b.taxNumber || meta.gstNumber || meta.gstinNumber || meta.gstin || '';
+          const resolvedFssai = b.fssaiNumber || b.fssaiLicense || b.fssai || b.fssaiNo || meta.fssaiNumber || meta.fssaiLicense || '';
+          const autoCodePref = bCodeStr ? `${String(bCodeStr).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-` : 'INV-';
+          const resolvedBillPrefix = b.billPrefix || b.invoicePrefix || b.billingPrefix || b.prefix || meta.billPrefix || meta.invoicePrefix || autoCodePref;
+
           return {
             id: bId,
             _id: bId,
-            rawManagerId: b.managerId || b.branchManagerId || b.userId || b.adminId || (typeof b.manager === 'object' ? (b.manager?._id || b.manager?.id) : b.manager) || '',
-            managerId: b.managerId || b.branchManagerId || b.userId || b.adminId || '',
-            branchName: b.branchName || b.name || '',
-            branchCode: b.branchCode || b.code || '',
-            branchManager: resolvedMgr,
-            managerName: resolvedMgr,
-            mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
-            email: b.email || b.managerEmail || '',
-            password: '',
-            confirmPassword: '',
-            address: streetStr,
-            country: countryStr,
-            state: stateStr,
-            city: cityStr,
-            pincode: pincodeStr,
-            openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate ? b.openingDate.split('T')[0] : ''),
-            status: b.status || 'Active',
-            totalTables: b.totalTables || (Array.isArray(b.tables) ? b.tables.length : 0),
-            gstNumber: b.gstNumber || b.gstin || '',
-            fssaiNumber: b.fssaiNumber || b.fssai || '',
-            billPrefix: b.billPrefix || b.invoicePrefix || '',
-            isMainBranch: b.isMainBranch || false,
-            useCustomMenu: Boolean(b.useCustomMenu)
-          };
+              rawManagerId: b.managerId || b.branchManagerId || b.userId || b.adminId || (typeof b.manager === 'object' ? (b.manager?._id || b.manager?.id) : b.manager) || '',
+              managerId: b.managerId || b.branchManagerId || b.userId || b.adminId || '',
+              branchName: b.branchName || b.name || '',
+              branchCode: b.branchCode || b.code || '',
+              branchManager: resolvedMgr,
+              managerName: resolvedMgr,
+              mobileNumber: contactNum !== 'N/A' ? contactNum : (b.contactNumber || b.mobileNumber || b.phone || b.managerMobile || ''),
+              email: b.email || b.managerEmail || '',
+              password: '',
+              confirmPassword: '',
+              address: streetStr,
+              country: countryStr,
+              state: stateStr,
+              city: cityStr,
+              pincode: pincodeStr,
+              openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate ? b.openingDate.split('T')[0] : ''),
+              status: b.status || 'Active',
+              totalTables: b.totalTables || (Array.isArray(b.tables) ? b.tables.length : 0),
+              gstNumber: resolvedGst,
+              gstinNumber: resolvedGst,
+              gstin: resolvedGst,
+              fssaiNumber: resolvedFssai,
+              fssaiLicense: resolvedFssai,
+              fssai: resolvedFssai,
+              billPrefix: resolvedBillPrefix,
+              invoicePrefix: resolvedBillPrefix,
+              isMainBranch: b.isMainBranch || false,
+              useCustomMenu: Boolean(b.useCustomMenu)
+            };
         });
         setApiBranches(mappedBranches);
         const serverTotal = branchResponse.response?.pagination?.total 
@@ -360,13 +396,33 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     const branchId = targetBranch._id || targetBranch.id;
     setIsLoadingOpData(true);
     try {
-      const [usersRes, globalUsersRes, ordersRes, tablesRes, categoriesRes] = await Promise.allSettled([
+      const [branchDetailsRes, usersRes, globalUsersRes, ordersRes, tablesRes, categoriesRes] = await Promise.allSettled([
+        BranchApi.getBranchDetails(branchId),
         UserApi.getUsers({ branchId, limit: 10 }),
         UserApi.getUsers({ limit: 10}),
         OrderApi.getOrders({ branchId, limit: 10}),
         TableApi.getTables({ branchId, limit: 10}),
         MenuApi.getCategories({ limit: 10 })
       ]);
+
+      if (branchDetailsRes.status === 'fulfilled' && branchDetailsRes.value?.status && branchDetailsRes.value?.response) {
+        const d = branchDetailsRes.value.response.data || branchDetailsRes.value.response.branch || branchDetailsRes.value.response;
+        if (d && typeof d === 'object') {
+          const gst = d.gstNumber || d.gstinNumber || d.gstin || d.taxId || d.taxNumber || '';
+          const fssai = d.fssaiNumber || d.fssaiLicense || d.fssai || d.fssaiNo || '';
+          const bPref = d.billPrefix || d.invoicePrefix || d.billingPrefix || '';
+          setSelectedBranchForTree(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              ...d,
+              ...(gst ? { gstNumber: gst, gstinNumber: gst, gstin: gst } : {}),
+              ...(fssai ? { fssaiNumber: fssai, fssaiLicense: fssai, fssai: fssai } : {}),
+              ...(bPref ? { billPrefix: bPref, invoicePrefix: bPref } : {})
+            };
+          });
+        }
+      }
 
       let branchUsers = [];
       if (usersRes.status === 'fulfilled' && usersRes.value?.status) {
@@ -655,6 +711,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setFormErrors({});
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setShowEditPasswordFields(false);
     setIsEditing(false);
     setActiveView('form');
   };
@@ -706,13 +763,23 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     }
 
     const targetId = branch.id || branch._id;
-    let freshBranch = branch;
+    const targetCode = (branch.branchCode || branch.code || '').trim();
+    let freshBranch = { ...branch };
     try {
       const detailsRes = await BranchApi.getBranchDetails(targetId);
       if (detailsRes?.status && detailsRes.response) {
         const d = detailsRes.response.data || detailsRes.response.branch || detailsRes.response;
         if (d && typeof d === 'object') {
-          freshBranch = { ...branch, ...d };
+          // Merge keeping existing non-empty values from branch if d has empty/null/undefined
+          const merged = { ...branch };
+          Object.keys(d).forEach(k => {
+            if (d[k] !== undefined && d[k] !== null && d[k] !== '') {
+              merged[k] = d[k];
+            } else if (merged[k] === undefined || merged[k] === null) {
+              merged[k] = d[k];
+            }
+          });
+          freshBranch = merged;
         }
       }
     } catch (err) {
@@ -739,6 +806,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       extractRawManagerName(freshBranch.manager) ||
       extractRawManagerName(freshBranch.branchManagerName) ||
       extractRawManagerName(freshBranch.contactPerson) ||
+      extractRawManagerName(branch.managerName) ||
+      extractRawManagerName(branch.branchManager) ||
       (resolvedFallbackMgr !== 'Unassigned' ? resolvedFallbackMgr : '') ||
       ''
     );
@@ -747,40 +816,147 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ? Boolean(freshBranch.useCustomMenu) 
       : Boolean(branch.useCustomMenu);
 
+    const cachedMeta = {
+      ...getBranchMetadataFromStorage(targetCode),
+      ...getBranchMetadataFromStorage(branch.id),
+      ...getBranchMetadataFromStorage(branch._id),
+      ...getBranchMetadataFromStorage(targetId)
+    };
+    const restBranches = activeRestaurant?.branches || [];
+    const matchedRestBranch = restBranches.find(rb => String(rb.id || rb._id) === String(targetId)) || {};
+
+    const resolvedGst = (
+      (freshBranch.gstNumber && String(freshBranch.gstNumber).trim()) ||
+      (freshBranch.gstinNumber && String(freshBranch.gstinNumber).trim()) ||
+      (freshBranch.gstin && String(freshBranch.gstin).trim()) ||
+      (freshBranch.taxId && String(freshBranch.taxId).trim()) ||
+      (freshBranch.taxNumber && String(freshBranch.taxNumber).trim()) ||
+      (branch.gstNumber && String(branch.gstNumber).trim()) ||
+      (branch.gstinNumber && String(branch.gstinNumber).trim()) ||
+      (branch.gstin && String(branch.gstin).trim()) ||
+      (matchedRestBranch.gstNumber && String(matchedRestBranch.gstNumber).trim()) ||
+      (matchedRestBranch.gstinNumber && String(matchedRestBranch.gstinNumber).trim()) ||
+      (matchedRestBranch.gstin && String(matchedRestBranch.gstin).trim()) ||
+      (cachedMeta?.gstNumber && String(cachedMeta.gstNumber).trim()) ||
+      (cachedMeta?.gstinNumber && String(cachedMeta.gstinNumber).trim()) ||
+      (cachedMeta?.gstin && String(cachedMeta.gstin).trim()) ||
+      ''
+    );
+
+    const resolvedFssai = (
+      (freshBranch.fssaiNumber && String(freshBranch.fssaiNumber).trim()) ||
+      (freshBranch.fssaiLicense && String(freshBranch.fssaiLicense).trim()) ||
+      (freshBranch.fssai && String(freshBranch.fssai).trim()) ||
+      (freshBranch.fssaiNo && String(freshBranch.fssaiNo).trim()) ||
+      (branch.fssaiNumber && String(branch.fssaiNumber).trim()) ||
+      (branch.fssaiLicense && String(branch.fssaiLicense).trim()) ||
+      (branch.fssai && String(branch.fssai).trim()) ||
+      (matchedRestBranch.fssaiNumber && String(matchedRestBranch.fssaiNumber).trim()) ||
+      (matchedRestBranch.fssaiLicense && String(matchedRestBranch.fssaiLicense).trim()) ||
+      (matchedRestBranch.fssai && String(matchedRestBranch.fssai).trim()) ||
+      (cachedMeta?.fssaiNumber && String(cachedMeta.fssaiNumber).trim()) ||
+      (cachedMeta?.fssaiLicense && String(cachedMeta.fssaiLicense).trim()) ||
+      ''
+    );
+
+    const rawBillPrefix = (
+      (freshBranch.billPrefix && String(freshBranch.billPrefix).trim()) ||
+      (freshBranch.invoicePrefix && String(freshBranch.invoicePrefix).trim()) ||
+      (freshBranch.billingPrefix && String(freshBranch.billingPrefix).trim()) ||
+      (freshBranch.prefix && String(freshBranch.prefix).trim()) ||
+      (freshBranch.bill_prefix && String(freshBranch.bill_prefix).trim()) ||
+      (freshBranch.invoice_prefix && String(freshBranch.invoice_prefix).trim()) ||
+      (freshBranch.billNoPrefix && String(freshBranch.billNoPrefix).trim()) ||
+      (freshBranch.invoiceNoPrefix && String(freshBranch.invoiceNoPrefix).trim()) ||
+      (freshBranch.billingConfig?.billPrefix && String(freshBranch.billingConfig.billPrefix).trim()) ||
+      (freshBranch.billingConfig?.prefix && String(freshBranch.billingConfig.prefix).trim()) ||
+      (freshBranch.billing?.billPrefix && String(freshBranch.billing.billPrefix).trim()) ||
+      (freshBranch.billing?.prefix && String(freshBranch.billing.prefix).trim()) ||
+      (freshBranch.settings?.billPrefix && String(freshBranch.settings.billPrefix).trim()) ||
+      (freshBranch.settings?.prefix && String(freshBranch.settings.prefix).trim()) ||
+      (branch.billPrefix && String(branch.billPrefix).trim()) ||
+      (branch.invoicePrefix && String(branch.invoicePrefix).trim()) ||
+      (branch.billingPrefix && String(branch.billingPrefix).trim()) ||
+      (branch.prefix && String(branch.prefix).trim()) ||
+      (branch.bill_prefix && String(branch.bill_prefix).trim()) ||
+      (branch.invoice_prefix && String(branch.invoice_prefix).trim()) ||
+      (matchedRestBranch.billPrefix && String(matchedRestBranch.billPrefix).trim()) ||
+      (matchedRestBranch.invoicePrefix && String(matchedRestBranch.invoicePrefix).trim()) ||
+      (matchedRestBranch.billingPrefix && String(matchedRestBranch.billingPrefix).trim()) ||
+      (matchedRestBranch.prefix && String(matchedRestBranch.prefix).trim()) ||
+      (cachedMeta?.billPrefix && String(cachedMeta.billPrefix).trim()) ||
+      (cachedMeta?.invoicePrefix && String(cachedMeta.invoicePrefix).trim()) ||
+      (cachedMeta?.billingPrefix && String(cachedMeta.billingPrefix).trim()) ||
+      (cachedMeta?.prefix && String(cachedMeta.prefix).trim()) ||
+      ''
+    );
+
+    const branchCodeVal = (
+      freshBranch.branchCode ||
+      freshBranch.code ||
+      branch.branchCode ||
+      branch.code ||
+      targetCode ||
+      matchedRestBranch.branchCode ||
+      matchedRestBranch.code ||
+      cachedMeta?.branchCode ||
+      ''
+    ).trim();
+
+    const fallbackAutoPrefix = branchCodeVal
+      ? `${String(branchCodeVal).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-`
+      : 'INV-';
+
+    const resolvedBillPrefix = (rawBillPrefix && String(rawBillPrefix).trim())
+      ? String(rawBillPrefix).trim().toUpperCase()
+      : fallbackAutoPrefix;
+
+    const rawAddress = (typeof freshBranch.address === 'string' && freshBranch.address.trim()) ? freshBranch.address.trim() : ((typeof branch.address === 'string' && branch.address.trim()) ? branch.address.trim() : ((typeof matchedRestBranch.address === 'string' && matchedRestBranch.address.trim()) ? matchedRestBranch.address.trim() : ''));
+    const streetFallback = freshBranch.address?.street || freshBranch.address?.addressLine1 || freshBranch.street || branch.address?.street || branch.street || matchedRestBranch.address?.street || cachedMeta?.address || '';
+    const resolvedAddress = rawAddress || streetFallback || '';
+
+    const resolvedCity = freshBranch.city || freshBranch.address?.city || branch.city || branch.address?.city || matchedRestBranch.city || matchedRestBranch.address?.city || cachedMeta?.city || '';
+    const resolvedState = freshBranch.state || freshBranch.address?.state || branch.state || branch.address?.state || matchedRestBranch.state || matchedRestBranch.address?.state || cachedMeta?.state || 'Tamil Nadu';
+    const resolvedCountry = freshBranch.country || freshBranch.address?.country || branch.country || branch.address?.country || matchedRestBranch.country || cachedMeta?.country || 'India';
+    const resolvedPincode = freshBranch.pincode || freshBranch.address?.pincode || freshBranch.postalCode || branch.pincode || branch.address?.pincode || branch.postalCode || matchedRestBranch.pincode || cachedMeta?.pincode || '';
+
+    const rawTables = freshBranch.totalTables || freshBranch.tablesCount || freshBranch.capacity || branch.totalTables || branch.tablesCount || matchedRestBranch.totalTables || (Array.isArray(freshBranch.tables) && freshBranch.tables.length > 0 ? freshBranch.tables.length : (Array.isArray(branch.tables) && branch.tables.length > 0 ? branch.tables.length : 10));
+
     setBranchForm({
       id: freshBranch.id || freshBranch._id || targetId,
-      managerId: freshBranch.managerId || freshBranch.rawManagerId || '',
-      branchName: freshBranch.branchName || freshBranch.name || '',
-      branchCode: freshBranch.branchCode || freshBranch.code || '',
+      managerId: freshBranch.managerId || freshBranch.rawManagerId || branch.managerId || branch.rawManagerId || '',
+      branchName: freshBranch.branchName || freshBranch.name || branch.branchName || branch.name || matchedRestBranch.branchName || matchedRestBranch.name || '',
+      branchCode: branchCodeVal,
       managerName: managerNameFromBranch,
       branchManager: managerNameFromBranch,
-      mobileNumber: freshBranch.mobileNumber || freshBranch.contactNumber || freshBranch.phone || freshBranch.managerMobile || '',
-      email: freshBranch.email || freshBranch.managerEmail || '',
+      mobileNumber: freshBranch.mobileNumber || freshBranch.contactNumber || freshBranch.phone || freshBranch.managerMobile || branch.mobileNumber || branch.contactNumber || branch.phone || matchedRestBranch.mobileNumber || matchedRestBranch.contactNumber || '',
+      email: freshBranch.email || freshBranch.managerEmail || branch.email || branch.managerEmail || matchedRestBranch.email || '',
       password: '',
       confirmPassword: '',
-      address: typeof freshBranch.address === 'string' ? freshBranch.address : (freshBranch.address?.street || ''),
-      country: freshBranch.country || freshBranch.address?.country || 'India',
-      state: freshBranch.state || freshBranch.address?.state || 'Tamil Nadu',
-      city: freshBranch.city || freshBranch.address?.city || '',
-      pincode: freshBranch.pincode || freshBranch.address?.pincode || '',
-      openingDate: freshBranch.openingDate ? freshBranch.openingDate.split('T')[0] : (freshBranch.branchOpeningDate ? freshBranch.branchOpeningDate.split('T')[0] : new Date().toISOString().split('T')[0]),
-      status: freshBranch.status || 'Active',
-      totalTables: freshBranch.totalTables || 10,
-      username: freshBranch.username || '',
-      gstNumber: freshBranch.gstNumber || freshBranch.gstin || '',
-      fssaiNumber: freshBranch.fssaiNumber || freshBranch.fssai || '',
-      billPrefix: freshBranch.billPrefix || freshBranch.invoicePrefix || '',
-      isMainBranch: freshBranch.isMainBranch || false,
+      address: resolvedAddress,
+      country: resolvedCountry,
+      state: resolvedState,
+      city: resolvedCity,
+      pincode: resolvedPincode,
+      openingDate: freshBranch.openingDate ? String(freshBranch.openingDate).split('T')[0] : (freshBranch.branchOpeningDate ? String(freshBranch.branchOpeningDate).split('T')[0] : (branch.openingDate ? String(branch.openingDate).split('T')[0] : new Date().toISOString().split('T')[0])),
+      status: freshBranch.status || branch.status || matchedRestBranch.status || 'Active',
+      totalTables: Number(rawTables) || 10,
+      username: freshBranch.username || branch.username || '',
+      gstNumber: resolvedGst,
+      fssaiNumber: resolvedFssai,
+      billPrefix: resolvedBillPrefix,
+      isMainBranch: Boolean(freshBranch.isMainBranch || freshBranch.branchType === 'MAIN' || branch.isMainBranch || matchedRestBranch.isMainBranch),
       useCustomMenu: isCustomMenuVal
     });
     setFormErrors({});
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setShowEditPasswordFields(false);
     setIsEditing(true);
     setActiveView('form');
   };
 
-  const handleOpenHierarchy = (branch = null) => {
+  const handleOpenHierarchy = async (branch = null) => {
     const targetBranch = branch || (branches.length > 0 ? branches[0] : null);
     setSelectedBranchForTree(targetBranch);
     setOpSubTab('tables');
@@ -797,6 +973,30 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     document.body.scrollTop = 0;
     const contentBody = document.querySelector('.content-body');
     if (contentBody) contentBody.scrollTop = 0;
+
+    const targetId = targetBranch?.id || targetBranch?._id;
+    if (targetId) {
+      try {
+        const detailsRes = await BranchApi.getBranchDetails(targetId);
+        if (detailsRes?.status && detailsRes.response) {
+          const d = detailsRes.response.data || detailsRes.response.branch || detailsRes.response;
+          if (d && typeof d === 'object') {
+            const gst = d.gstNumber || d.gstinNumber || d.gstin || d.taxId || d.taxNumber || targetBranch?.gstNumber || targetBranch?.gstinNumber || targetBranch?.gstin || '';
+            const fssai = d.fssaiNumber || d.fssaiLicense || d.fssai || d.fssaiNo || targetBranch?.fssaiNumber || targetBranch?.fssaiLicense || targetBranch?.fssai || '';
+            const bPref = d.billPrefix || d.invoicePrefix || d.billingPrefix || targetBranch?.billPrefix || targetBranch?.invoicePrefix || '';
+            setSelectedBranchForTree(prev => ({
+              ...prev,
+              ...d,
+              ...(gst ? { gstNumber: gst, gstinNumber: gst, gstin: gst } : {}),
+              ...(fssai ? { fssaiNumber: fssai, fssaiLicense: fssai, fssai: fssai } : {}),
+              ...(bPref ? { billPrefix: bPref, invoicePrefix: bPref } : {})
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch fresh branch details for view:", err);
+      }
+    }
   };
 
   const handleDeleteBranchClick = (branch) => {
@@ -862,42 +1062,171 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setIsSavingResetPassword(true);
     try {
       const branchId = resetPasswordBranch.id || resetPasswordBranch._id;
-      const res = await BranchApi.updateBranch(branchId, { password: newPassword });
-
-      // Synchronize with branch manager user if found
       const targetBranch = apiBranches.find(b => (b.id === branchId || b._id === branchId));
-      const matchedUser = (apiUsers || []).find(u => {
-        const uId = String(u._id || u.id || '');
-        if (targetBranch?.rawManagerId && uId === String(targetBranch.rawManagerId)) return true;
-        if (resetPasswordBranch?.rawManagerId && uId === String(resetPasswordBranch.rawManagerId)) return true;
-        const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
-          ? String(u.branchId._id || u.branchId.id || '')
-          : String(u.branchId || u.branch || '');
-        if (uBranchId && uBranchId === String(branchId)) {
-          const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
-          if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
-        }
-        return false;
-      });
-      if (matchedUser?._id || matchedUser?.id) {
+
+      let matchedUser = null;
+      const candidateUserIds = [
+        targetBranch?.rawManagerId,
+        resetPasswordBranch?.rawManagerId,
+        targetBranch?.managerId,
+        resetPasswordBranch?.managerId,
+        resetPasswordBranch?.userId,
+        resetPasswordBranch?.adminId
+      ].filter(Boolean);
+
+      // 1. Direct match by candidate user ID in existing apiUsers
+      if (candidateUserIds.length > 0 && Array.isArray(apiUsers)) {
+        matchedUser = apiUsers.find(u => {
+          const uId = String(u._id || u.id || '');
+          return candidateUserIds.some(cid => String(cid) === uId);
+        });
+      }
+
+      // 2. Query branch users from server for this branch
+      if (!matchedUser && branchId) {
         try {
-          await UserApi.changePassword(matchedUser._id || matchedUser.id, newPassword);
-        } catch (uErr) {
-          console.warn("Could not update manager password via UserApi:", uErr);
+          const branchUsersRes = await UserApi.getUsers({ branchId, limit: 100 });
+          const bUsers = (branchUsersRes?.status && Array.isArray(branchUsersRes.response?.data))
+            ? branchUsersRes.response.data
+            : (Array.isArray(branchUsersRes?.response?.users)
+                ? branchUsersRes.response.users
+                : (Array.isArray(branchUsersRes?.response) ? branchUsersRes.response : []));
+
+          if (bUsers.length > 0) {
+            matchedUser = bUsers.find(u => {
+              const uId = String(u._id || u.id || '');
+              if (candidateUserIds.some(cid => String(cid) === uId)) return true;
+              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+              return roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner');
+            }) || bUsers[0];
+          }
+        } catch (bErr) {
+          console.warn("Branch users query failed:", bErr);
         }
       }
 
-      ShowNotifications.showAlertNotification(
-        `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
-        true
-      );
-      setResetPasswordBranch(null);
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setResetPasswordError('');
+      // 3. Match across existing apiUsers by branchId, email, phone, or manager name
+      const bEmail = String(resetPasswordBranch.email || resetPasswordBranch.managerEmail || '').toLowerCase().trim();
+      const bPhone = String(resetPasswordBranch.mobileNumber || resetPasswordBranch.contactNumber || resetPasswordBranch.phone || '').replace(/\D/g, '');
+      const bMgrName = String(resetPasswordBranch.branchManager || resetPasswordBranch.managerName || '').toLowerCase().trim();
+
+      if (!matchedUser && Array.isArray(apiUsers)) {
+        matchedUser = apiUsers.find(u => {
+          const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
+            ? String(u.branchId._id || u.branchId.id || '')
+            : String(u.branchId || u.branch || '');
+          if (uBranchId && uBranchId === String(branchId)) {
+            const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || u.userType || '')).toLowerCase();
+            if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
+          }
+          const uEmail = String(u.email || '').toLowerCase().trim();
+          const uPhone = String(u.phone || u.mobileNumber || u.phoneNumber || '').replace(/\D/g, '');
+          const uName = String(u.name || u.username || '').toLowerCase().trim();
+          if (bEmail && uEmail && bEmail === uEmail) return true;
+          if (bPhone && uPhone && (bPhone === uPhone || uPhone.endsWith(bPhone) || bPhone.endsWith(uPhone))) return true;
+          if (bMgrName && uName && bMgrName === uName && bMgrName !== 'unassigned') return true;
+          return false;
+        });
+      }
+
+      // 4. Fetch users globally from server if still not found
+      if (!matchedUser) {
+        try {
+          const allUsersRes = await UserApi.getUsers({ limit: 500 });
+          const allUsers = (allUsersRes?.status && Array.isArray(allUsersRes.response?.data))
+            ? allUsersRes.response.data
+            : (Array.isArray(allUsersRes?.response?.users)
+                ? allUsersRes.response.users
+                : (Array.isArray(allUsersRes?.response) ? allUsersRes.response : []));
+
+          matchedUser = allUsers.find(u => {
+            const uId = String(u._id || u.id || '');
+            if (candidateUserIds.some(cid => String(cid) === uId)) return true;
+            const uBranchId = typeof u.branchId === 'object' && u.branchId !== null
+              ? String(u.branchId._id || u.branchId.id || '')
+              : String(u.branchId || u.branch || '');
+            if (uBranchId && uBranchId === String(branchId)) {
+              const roleStr = String(typeof u.role === 'object' && u.role !== null ? (u.role.roleName || u.role.name || '') : (u.role || '')).toLowerCase();
+              if (roleStr.includes('manager') || roleStr.includes('admin') || roleStr.includes('owner')) return true;
+            }
+            const uEmail = String(u.email || '').toLowerCase().trim();
+            const uPhone = String(u.phone || u.mobileNumber || '').replace(/\D/g, '');
+            if (bEmail && uEmail && bEmail === uEmail) return true;
+            if (bPhone && uPhone && (bPhone === uPhone || uPhone.endsWith(bPhone))) return true;
+            if (bMgrName && String(u.name || '').toLowerCase().trim() === bMgrName) return true;
+            return false;
+          });
+        } catch (allErr) {
+          console.warn("Global users query failed:", allErr);
+        }
+      }
+
+      let passwordUpdated = false;
+
+      // If manager user found: update their password
+      if (matchedUser?._id || matchedUser?.id) {
+        const uId = matchedUser._id || matchedUser.id;
+        const res = await UserApi.changePassword(uId, newPassword);
+        if (res?.status) {
+          passwordUpdated = true;
+        } else {
+          // Fallback: try updateUser
+          const updateFallback = await UserApi.updateUser(uId, {
+            password: newPassword,
+            newPassword: newPassword,
+            pin: newPassword
+          });
+          if (updateFallback?.status) {
+            passwordUpdated = true;
+          }
+        }
+      } else {
+        // If no user exists yet for this branch manager, create a new manager user with the new password
+        const mgrName = (resetPasswordBranch.branchManager && resetPasswordBranch.branchManager !== 'Unassigned')
+          ? resetPasswordBranch.branchManager
+          : ((resetPasswordBranch.managerName && resetPasswordBranch.managerName !== 'Unassigned') ? resetPasswordBranch.managerName : `${resetPasswordBranch.branchName || 'Branch'} Manager`);
+        const mgrEmail = resetPasswordBranch.email || `${String(resetPasswordBranch.branchCode || 'branch').toLowerCase().replace(/[^a-z0-9]/g, '')}@restaurant.com`;
+        const mgrPhone = resetPasswordBranch.mobileNumber || resetPasswordBranch.phone || resetPasswordBranch.contactNumber || '';
+
+        const createRes = await UserApi.createUser({
+          name: mgrName,
+          email: mgrEmail,
+          phoneNumber: mgrPhone,
+          mobileNumber: mgrPhone,
+          phone: mgrPhone,
+          password: newPassword,
+          role: 'Manager',
+          branchId: branchId,
+          status: 'Active'
+        });
+
+        if (createRes?.status) {
+          passwordUpdated = true;
+          const createdUser = createRes.response?.data?.user || createRes.response?.data || createRes.response;
+          if (createdUser?._id) {
+            setApiUsers(prev => [...prev, createdUser]);
+          }
+        }
+      }
+
+      if (passwordUpdated) {
+        ShowNotifications.showAlertNotification(
+          `Password reset successfully for branch "${resetPasswordBranch.branchName || resetPasswordBranch.name}".`,
+          true
+        );
+        setResetPasswordBranch(null);
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResetPasswordError('');
+      } else {
+        ShowNotifications.showAlertNotification(
+          "Could not update password. Please check the branch manager account and try again.",
+          false
+        );
+      }
     } catch (err) {
-      console.error("Failed to reset password", err);
-      ShowNotifications.showAlertNotification("Failed to reset password.", false);
+      console.error("Failed to reset password:", err);
+      ShowNotifications.showAlertNotification("Failed to reset password. Please try again.", false);
     } finally {
       setIsSavingResetPassword(false);
     }
@@ -1024,8 +1353,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.fssaiNumber = 'FSSAI License Number must contain exactly 14 digits.';
     }
 
-    // 15. Manager Password validation (Required on Add Branch with standard rules, omitted on Edit)
-    if (!isEditing) {
+    // 15. Manager Password validation (Required on Add Branch, or when updating password on Edit)
+    if (!isEditing || (isEditing && (branchForm.password || branchForm.confirmPassword))) {
       const passErr = validatePassword(branchForm.password, 'Manager Password');
       if (passErr) {
         errors.password = passErr;
@@ -1144,9 +1473,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       isMainBranch: !!branchForm.isMainBranch,
       branchType: branchForm.isMainBranch ? 'MAIN' : 'SUB',
       useCustomMenu: !!branchForm.useCustomMenu,
-      ...(branchForm.gstNumber && branchForm.gstNumber.trim() ? { gstinNumber: branchForm.gstNumber.trim().toUpperCase(), gstNumber: branchForm.gstNumber.trim().toUpperCase() } : {}),
-      ...(branchForm.fssaiNumber && branchForm.fssaiNumber.trim() ? { fssaiLicense: branchForm.fssaiNumber.trim(), fssaiNumber: branchForm.fssaiNumber.trim() } : {}),
-      ...(branchForm.billPrefix && branchForm.billPrefix.trim() ? { billPrefix: branchForm.billPrefix.trim().toUpperCase() } : {}),
+      gstNumber: (branchForm.gstNumber || '').trim().toUpperCase(),
+      gstinNumber: (branchForm.gstNumber || '').trim().toUpperCase(),
+      gstin: (branchForm.gstNumber || '').trim().toUpperCase(),
+      fssaiNumber: (branchForm.fssaiNumber || '').trim(),
+      fssaiLicense: (branchForm.fssaiNumber || '').trim(),
+      fssai: (branchForm.fssaiNumber || '').trim(),
+      billPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      billingPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      bill_prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      invoice_prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      billingConfig: {
+        billPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+        invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-')
+      },
       ...(restId ? { restaurantId: restId, restaurant: restId } : {})
     };
 
@@ -1237,6 +1579,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           }
         }
 
+        const autoPrefix = (branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-';
+        const gstVal = (branchForm.gstNumber || '').trim().toUpperCase();
+        const fssaiVal = (branchForm.fssaiNumber || '').trim();
+        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase() || autoPrefix;
+
         const updatedBranchObj = {
           ...payload,
           id: branchForm.id,
@@ -1245,8 +1592,21 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           branchName: branchNameTrimmed,
           managerName: managerVal,
           branchManager: managerVal,
+          gstNumber: gstVal,
+          gstinNumber: gstVal,
+          gstin: gstVal,
+          fssaiNumber: fssaiVal,
+          fssaiLicense: fssaiVal,
+          fssai: fssaiVal,
+          billPrefix: billPrefixVal,
+          invoicePrefix: billPrefixVal,
+          billingPrefix: billPrefixVal,
+          prefix: billPrefixVal,
           useCustomMenu: !!branchForm.useCustomMenu
         };
+
+        // Cache immediately so entered metadata is never lost
+        saveBranchMetadataToStorage(branchForm.id, updatedBranchObj, branchForm.branchCode);
 
         setApiBranches(prev => prev.map(b => (b.id === branchForm.id || b._id === branchForm.id) ? { ...b, ...updatedBranchObj } : b));
         const restIdForState = activeRestaurant?._id || activeRestaurant?.id || 'mirchi';
@@ -1330,14 +1690,32 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           }
         }
 
+        const autoPrefix = (branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-';
+        const gstVal = (branchForm.gstNumber || '').trim().toUpperCase();
+        const fssaiVal = (branchForm.fssaiNumber || '').trim();
+        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase() || autoPrefix;
+
         const newBranchObj = {
           ...payload,
           id: createdId,
           _id: createdId,
           branchManager: managerVal,
           managerName: managerVal,
+          gstNumber: gstVal,
+          gstinNumber: gstVal,
+          gstin: gstVal,
+          fssaiNumber: fssaiVal,
+          fssaiLicense: fssaiVal,
+          fssai: fssaiVal,
+          billPrefix: billPrefixVal,
+          invoicePrefix: billPrefixVal,
+          billingPrefix: billPrefixVal,
+          prefix: billPrefixVal,
           useCustomMenu: Boolean(branchForm.useCustomMenu)
         };
+
+        // Cache immediately so entered metadata is never lost
+        saveBranchMetadataToStorage(createdId, newBranchObj, branchForm.branchCode);
 
         setApiBranches(prev => [...(prev || []), newBranchObj]);
         const restIdForState = activeRestaurant?._id || activeRestaurant?.id || currentUser?.restaurantId || 'mirchi';
@@ -1404,7 +1782,21 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   };
 
   // Target branch currently viewed in hierarchy mode
-  const currentViewBranch = selectedBranchForTree || (branches.length > 0 ? branches[0] : null);
+  const baseCurrentViewBranch = selectedBranchForTree || (branches.length > 0 ? branches[0] : null);
+  const currentViewBranch = useMemo(() => {
+    if (!baseCurrentViewBranch) return null;
+    const bId = baseCurrentViewBranch.id || baseCurrentViewBranch._id;
+    const bCode = (baseCurrentViewBranch.branchCode || baseCurrentViewBranch.code || '').trim();
+    const meta = getBranchMetadataFromStorage(bId, bCode);
+    const autoCodePref = bCode ? `${String(bCode).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-` : 'INV-';
+    return {
+      ...meta,
+      ...baseCurrentViewBranch,
+      gstNumber: baseCurrentViewBranch.gstNumber || baseCurrentViewBranch.gstinNumber || baseCurrentViewBranch.gstin || meta.gstNumber || meta.gstinNumber || meta.gstin || '',
+      fssaiNumber: baseCurrentViewBranch.fssaiNumber || baseCurrentViewBranch.fssaiLicense || baseCurrentViewBranch.fssai || meta.fssaiNumber || meta.fssaiLicense || '',
+      billPrefix: baseCurrentViewBranch.billPrefix || baseCurrentViewBranch.invoicePrefix || meta.billPrefix || meta.invoicePrefix || autoCodePref
+    };
+  }, [baseCurrentViewBranch]);
 
   useEffect(() => {
     if (activeView === 'hierarchy' && currentViewBranch) {
@@ -1916,6 +2308,31 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               </p>
             </div>
           </div>
+
+          {hasPermission('branch-management', 'edit') && (
+            <button
+              type="button"
+              onClick={() => handleOpenEditForm(currentViewBranch)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '9px 18px',
+                background: 'var(--primary)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 700,
+                fontSize: '13px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(255, 90, 31, 0.25)',
+                transition: 'all 0.2s'
+              }}
+            >
+              <PencilIcon size={14} color="#ffffff" />
+              Edit Branch
+            </button>
+          )}
         </div>
 
         {/* Full-Width Branch Information Card */}
@@ -2005,7 +2422,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </span>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
                   <span style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
-                    {currentViewBranch?.gstNumber || currentViewBranch?.gstinNumber || currentViewBranch?.gstin || 'Not Configured'}
+                    {currentViewBranch?.gstNumber || currentViewBranch?.gstinNumber || currentViewBranch?.gstin || currentViewBranch?.taxId || currentViewBranch?.taxNumber || 'Not Configured'}
                   </span>
                 </div>
               </div>
@@ -2017,7 +2434,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </span>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
                   <span style={{ background: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
-                    {currentViewBranch?.fssaiNumber || currentViewBranch?.fssaiLicense || currentViewBranch?.fssai || 'Not Configured'}
+                    {currentViewBranch?.fssaiNumber || currentViewBranch?.fssaiLicense || currentViewBranch?.fssai || currentViewBranch?.fssaiNo || 'Not Configured'}
                   </span>
                 </div>
               </div>
@@ -2029,7 +2446,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </span>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#ea580c', fontFamily: 'monospace' }}>
                   <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
-                    {currentViewBranch?.billPrefix || currentViewBranch?.invoicePrefix || 'Default (Auto)'}
+                    {currentViewBranch?.billPrefix || currentViewBranch?.invoicePrefix || currentViewBranch?.billingPrefix || 'Default (Auto)'}
                   </span>
                 </div>
               </div>
@@ -3053,8 +3470,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                     )}
                   </div>
 
-                  {/* Field 8 & 9: Manager Password & Confirm Password (Only on Add Branch - Omitted on Edit) */}
-                  {!isEditing && (
+                  {/* Field 8 & 9: Manager Password & Confirm Password */}
+                  {!isEditing ? (
                     <>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
@@ -3172,6 +3589,167 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         />
                       </div>
                     </>
+                  ) : (
+                    <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
+                            Reset / Forgot Manager Password
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                            Update or reset the login password for branch manager <strong>{branchForm.managerName || branchForm.branchManager || 'Manager'}</strong>.
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextState = !showEditPasswordFields;
+                            setShowEditPasswordFields(nextState);
+                            if (!nextState) {
+                              setBranchForm(prev => ({ ...prev, password: '', confirmPassword: '' }));
+                              setFormErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
+                            }
+                          }}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            border: '1.5px solid #7c3aed',
+                            background: showEditPasswordFields ? '#ede9fe' : '#ffffff',
+                            color: '#7c3aed',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <KeyIcon size={14} color="#7c3aed" />
+                          {showEditPasswordFields ? 'Cancel Password Reset' : 'Reset / Forgot Password'}
+                        </button>
+                      </div>
+
+                      {showEditPasswordFields && (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                              New Password <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                name="branch_mgr_edit_password_field"
+                                autoComplete="new-password"
+                                placeholder="Enter new password"
+                                value={branchForm.password}
+                                onChange={e => {
+                                  setBranchForm({ ...branchForm, password: e.target.value });
+                                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 42px 12px 16px',
+                                  borderRadius: '8px',
+                                  border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                                  backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
+                                  boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                                  fontSize: '14px',
+                                  boxSizing: 'border-box'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                  position: 'absolute',
+                                  right: '12px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#64748b',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  padding: '4px'
+                                }}
+                                title={showPassword ? "Hide password" : "Show password"}
+                              >
+                                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                              </button>
+                            </div>
+                            {formErrors.password && (
+                              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                                {formErrors.password}
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                              Confirm New Password <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type={showConfirmPassword ? 'text' : 'password'}
+                                name="branch_mgr_edit_confirm_password_field"
+                                autoComplete="new-password"
+                                placeholder="Confirm new password"
+                                value={branchForm.confirmPassword}
+                                onChange={e => {
+                                  setBranchForm({ ...branchForm, confirmPassword: e.target.value });
+                                  if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 42px 12px 16px',
+                                  borderRadius: '8px',
+                                  border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                                  backgroundColor: formErrors.confirmPassword ? '#fef2f2' : '#ffffff',
+                                  boxShadow: formErrors.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                                  fontSize: '14px',
+                                  boxSizing: 'border-box'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                style={{
+                                  position: 'absolute',
+                                  right: '12px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#64748b',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  padding: '4px'
+                                }}
+                                title={showConfirmPassword ? "Hide password" : "Show password"}
+                              >
+                                {showConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                              </button>
+                            </div>
+                            {formErrors.confirmPassword && (
+                              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                                {formErrors.confirmPassword}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <PasswordRequirements
+                              password={branchForm.password}
+                              confirmPassword={branchForm.confirmPassword}
+                              showConfirmMatch={true}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -3571,17 +4149,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <table style={{ width: '100%', minWidth: '1500px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <colgroup>
-            <col style={{ width: '60px' }} />   {/* S/NO */}
-            <col style={{ width: '135px' }} />  {/* Branch Code */}
-            <col style={{ width: '280px' }} />  {/* Branch Name */}
-            <col style={{ width: '160px' }} />  {/* Menu Type */}
-            <col style={{ width: '180px' }} />  {/* Manager */}
-            <col style={{ width: '135px' }} />  {/* Mobile */}
-            <col style={{ width: '130px' }} />  {/* City */}
-            <col style={{ width: '85px' }} />   {/* Tables */}
-            <col style={{ width: '105px' }} />  {/* Status */}
-            <col style={{ width: '125px' }} />  {/* Created Date */}
-            <col style={{ width: '125px' }} />  {/* Actions */}
+            <col style={{ width: '60px' }} />
+            <col style={{ width: '135px' }} />
+            <col style={{ width: '280px' }} />
+            <col style={{ width: '160px' }} />
+            <col style={{ width: '180px' }} />
+            <col style={{ width: '135px' }} />
+            <col style={{ width: '130px' }} />
+            <col style={{ width: '85px' }} />
+            <col style={{ width: '105px' }} />
+            <col style={{ width: '125px' }} />
+            <col style={{ width: '125px' }} />
           </colgroup>
           <thead>
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
@@ -3873,7 +4451,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       {hasPermission('branch-management', 'edit') && (
                         <button
                           type="button"
-                          title="Reset Password"
+                          title="Forgot / Reset Password"
                           onClick={() => handleOpenResetPasswordModal(b)}
                           style={{ border: 'none', background: '#f5f3ff', color: '#7c3aed', width: '30px', height: '30px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
                           onMouseEnter={e => e.currentTarget.style.background = '#ede9fe'}
@@ -4144,12 +4722,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               setShowResetConfirmPassword(false);
             }
           }}
-          title={`🔑 Reset Password — ${resetPasswordBranch.branchName || resetPasswordBranch.name}`}
+          title={`🔑 Reset / Forgot Password — ${resetPasswordBranch.branchName || resetPasswordBranch.name}`}
           maxWidth="460px"
         >
           <form onSubmit={handleSaveResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
             <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.4 }}>
-              Set a new login password for branch manager <strong>{resetPasswordBranch.branchManager || resetPasswordBranch.managerName || 'Manager'}</strong> ({resetPasswordBranch.branchCode}).
+              Set or reset the login password for branch manager <strong>{resetPasswordBranch.branchManager || resetPasswordBranch.managerName || 'Manager'}</strong> ({resetPasswordBranch.branchCode}).
             </p>
 
             <div>
@@ -4270,7 +4848,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 disabled={isSavingResetPassword}
                 style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: '#ffffff', fontSize: '12px', fontWeight: 700, cursor: isSavingResetPassword ? 'wait' : 'pointer' }}
               >
-                {isSavingResetPassword ? 'Saving...' : 'Update Password'}
+                {isSavingResetPassword ? 'Resetting Password...' : 'Reset Password'}
               </button>
             </div>
           </form>

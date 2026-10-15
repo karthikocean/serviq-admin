@@ -267,6 +267,16 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
   const roleNameStr = roleObj?.roleName || roleObj?.name || (typeof currentUser.role === 'string' ? currentUser.role : '') || '';
   const roleUpper = roleNameStr.toUpperCase().trim();
 
+  // Strict rule: Only userType: "RESTAURANT_OWNER" can access branch management and plans management
+  const isBranchOrPlansModule = [
+    'branch-management', 'branch_management', 'branches',
+    'plans-management', 'plans_subscription', 'plans_management', 'plans'
+  ].includes(moduleName);
+
+  if (isBranchOrPlansModule) {
+    return userTypeUpper === 'RESTAURANT_OWNER';
+  }
+
   const isOwnerRoleName = (r) => {
     const s = String(r || '').toUpperCase().trim();
     return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
@@ -1048,7 +1058,15 @@ export const AppProvider = ({ children }) => {
                 totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0),
                 isMainBranch: Boolean(b.isMainBranch),
                 branchType: b.branchType || (b.isMainBranch ? 'MAIN' : 'SUB'),
-                useCustomMenu: Boolean(b.useCustomMenu)
+                useCustomMenu: Boolean(b.useCustomMenu),
+                gstNumber: b.gstNumber || b.gstinNumber || b.gstin || b.taxId || b.taxNumber || '',
+                gstinNumber: b.gstinNumber || b.gstNumber || b.gstin || b.taxId || b.taxNumber || '',
+                gstin: b.gstin || b.gstNumber || b.gstinNumber || b.taxId || '',
+                fssaiNumber: b.fssaiNumber || b.fssaiLicense || b.fssai || b.fssaiNo || '',
+                fssaiLicense: b.fssaiLicense || b.fssaiNumber || b.fssai || b.fssaiNo || '',
+                fssai: b.fssai || b.fssaiLicense || b.fssaiNumber || b.fssaiNo || '',
+                billPrefix: b.billPrefix || b.invoicePrefix || b.billingPrefix || '',
+                invoicePrefix: b.invoicePrefix || b.billPrefix || b.billingPrefix || ''
               };
             });
 
@@ -1949,18 +1967,9 @@ export const AppProvider = ({ children }) => {
             console.warn("Could not check user status in users list:", uErr);
           }
 
-          if (!backendStaffRecord && candidateUserId) {
+          if (!backendStaffRecord) {
             try {
-              const directUserRes = await apiClient.get(`/users/${candidateUserId}`);
-              if (directUserRes && (directUserRes.status === 200 || directUserRes.status === 201)) {
-                backendStaffRecord = directUserRes.data?.data || directUserRes.data?.user || directUserRes.data;
-              }
-            } catch (e) {}
-          }
-
-          if (!backendStaffRecord && !isRestaurantOwner) {
-            try {
-              const fullListRes = await UserApi.getUsers({ limit: 10 });
+              const fullListRes = await UserApi.getUsers({ limit: 100 });
               if (fullListRes && fullListRes.status && fullListRes.response) {
                 const fullList = fullListRes.response?.data?.users || fullListRes.response?.data || fullListRes.response?.users || (Array.isArray(fullListRes.response) ? fullListRes.response : []);
                 if (Array.isArray(fullList)) {
@@ -3038,8 +3047,14 @@ export const AppProvider = ({ children }) => {
         totalTables: parseInt(branchData.totalTables) || 10,
         username: branchData.username || '',
         password: branchData.password || '',
-        gstNumber: branchData.gstNumber || '',
-        fssaiNumber: branchData.fssaiNumber || '',
+        gstNumber: branchData.gstNumber || branchData.gstinNumber || branchData.gstin || branchData.taxId || '',
+        gstinNumber: branchData.gstinNumber || branchData.gstNumber || branchData.gstin || branchData.taxId || '',
+        gstin: branchData.gstin || branchData.gstNumber || branchData.gstinNumber || branchData.taxId || '',
+        fssaiNumber: branchData.fssaiNumber || branchData.fssaiLicense || branchData.fssai || branchData.fssaiNo || '',
+        fssaiLicense: branchData.fssaiLicense || branchData.fssaiNumber || branchData.fssai || branchData.fssaiNo || '',
+        fssai: branchData.fssai || branchData.fssaiNumber || branchData.fssaiLicense || branchData.fssaiNo || '',
+        billPrefix: branchData.billPrefix || branchData.invoicePrefix || branchData.billingPrefix || '',
+        invoicePrefix: branchData.invoicePrefix || branchData.billPrefix || branchData.billingPrefix || '',
         isMainBranch: Boolean(branchData.isMainBranch),
         useCustomMenu: Boolean(branchData.useCustomMenu),
         operationalData: branchData.operationalData || {
@@ -3074,6 +3089,9 @@ export const AppProvider = ({ children }) => {
         if (b.id === branchId || b._id === branchId || String(b.id) === String(branchId) || String(b._id) === String(branchId)) {
           const nameVal = updatedData.branchName || updatedData.name || b.branchName || b.name || '';
           const mgr = updatedData.managerName || updatedData.branchManager || b.managerName || b.branchManager || '';
+          const gstVal = updatedData.gstNumber || updatedData.gstinNumber || updatedData.gstin || updatedData.taxId || b.gstNumber || b.gstinNumber || b.gstin || '';
+          const fssaiVal = updatedData.fssaiNumber || updatedData.fssaiLicense || updatedData.fssai || updatedData.fssaiNo || b.fssaiNumber || b.fssaiLicense || b.fssai || '';
+          const billPrefixVal = updatedData.billPrefix || updatedData.invoicePrefix || updatedData.billingPrefix || b.billPrefix || b.invoicePrefix || '';
           return {
             ...b,
             ...updatedData,
@@ -3081,6 +3099,14 @@ export const AppProvider = ({ children }) => {
             branchName: nameVal,
             managerName: mgr,
             branchManager: mgr,
+            gstNumber: gstVal,
+            gstinNumber: gstVal,
+            gstin: gstVal,
+            fssaiNumber: fssaiVal,
+            fssaiLicense: fssaiVal,
+            fssai: fssaiVal,
+            billPrefix: billPrefixVal,
+            invoicePrefix: billPrefixVal,
             useCustomMenu: updatedData.useCustomMenu !== undefined ? Boolean(updatedData.useCustomMenu) : Boolean(b.useCustomMenu),
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
             operationalData: {

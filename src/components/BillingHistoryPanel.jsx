@@ -448,19 +448,19 @@ export default function BillingHistoryPanel({
           <div className="billing-table-responsive">
             <table className="billing-table" style={{ minWidth: '1890px' }}>
               <colgroup>
-                <col style={{ width: '65px' }} />   {/* 1. S.NO */}
-                <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
-                <col style={{ width: '175px' }} />  {/* 3. INVOICE NO. */}
-                <col style={{ width: '175px' }} />  {/* 4. ORDER ID */}
-                <col style={{ width: '125px' }} />  {/* 5. ORDER TYPE */}
-                <col style={{ width: '170px' }} />  {/* 6. TABLE */}
-                <col style={{ width: '160px' }} />  {/* 7. BILL DATE & TIME */}
-                <col style={{ width: '145px' }} />  {/* 8. TOTAL AMOUNT */}
-                <col style={{ width: '145px' }} />  {/* 9. PAID AMOUNT */}
-                <col style={{ width: '135px' }} />  {/* 10. PAYMENT METHOD */}
-                <col style={{ width: '135px' }} />  {/* 11. PAYMENT STATUS */}
-                <col style={{ width: '140px' }} />  {/* 12. BILLED BY */}
-                <col style={{ width: '145px' }} />  {/* 13. ACTIONS */}
+                <col style={{ width: '65px' }} />
+                <col style={{ width: '185px' }} />
+                <col style={{ width: '175px' }} />
+                <col style={{ width: '175px' }} />
+                <col style={{ width: '125px' }} />
+                <col style={{ width: '170px' }} />
+                <col style={{ width: '160px' }} />
+                <col style={{ width: '145px' }} />
+                <col style={{ width: '145px' }} />
+                <col style={{ width: '135px' }} />
+                <col style={{ width: '135px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '145px' }} />
               </colgroup>
               <thead>
                 <tr>

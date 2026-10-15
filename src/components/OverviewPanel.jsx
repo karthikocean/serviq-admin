@@ -189,7 +189,7 @@ export default function OverviewPanel({
   const isCompanyUser = isUserCompanyUser(currentUser);
   const userBranchId = getUserAssignedBranchId(currentUser);
   const isAdmin = isCompanyUser;
-  const isRestaurantOwner = isCompanyUser;
+  const isRestaurantOwner = userTypeStr.toUpperCase().trim() === 'RESTAURANT_OWNER';
 
   const isSpecificBranch = Boolean(
     selectedBranchId && 

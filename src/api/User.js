@@ -127,12 +127,32 @@ class UserApi {
 
   async changePassword(userId, password) {
     try {
-      const response = await apiClient.put(`/users/${userId}/password`, { password });
+      const response = await apiClient.put(`/users/${userId}/password`, {
+        password,
+        newPassword: password,
+        pin: password
+      });
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(response.data.message || "Password Updated Successfully!", true);
         return { status: true, response: response.data };
       }
     } catch (error) {
+      if (error?.response?.status === 404) {
+        try {
+          const fallbackRes = await apiClient.put(`/users/${userId}`, {
+            password,
+            newPassword: password,
+            pin: password
+          });
+          if (fallbackRes.status === 200 || fallbackRes.status === 201) {
+            ShowNotifications.showAlertNotification(fallbackRes.data.message || "Password Updated Successfully!", true);
+            return { status: true, response: fallbackRes.data };
+          }
+        } catch (e2) {
+          // ignore fallback error and use main error
+        }
+      }
+
       const errorMessage = extractErrorMessage(error, "Failed to update password.");
       if (error?.response?.status !== 401) {
         ShowNotifications.showAlertNotification(errorMessage, false);
