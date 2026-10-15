@@ -329,6 +329,14 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
       )
     : (typeof targetBranchId === 'object' && targetBranchId !== null ? targetBranchId : null);
 
+  const isCustomMenuBranch = targetBranchObj ? (targetBranchObj.useCustomMenu === true || String(targetBranchObj.useCustomMenu) === 'true') : false;
+
+  // If the item itself is marked as a Company Menu item:
+  if (itemBranch.isCompanyMenu === true || String(itemBranch.isCompanyMenu) === 'true') {
+    // Company Menu item matches all non-custom branches, but NEVER custom menu branches
+    return !isCustomMenuBranch;
+  }
+
   const targetKeys = new Set([targetStr]);
   if (targetBranchObj) {
     if (targetBranchObj._id) targetKeys.add(String(targetBranchObj._id).toLowerCase().trim());
@@ -337,6 +345,22 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
     if (targetBranchObj.code) targetKeys.add(String(targetBranchObj.code).toLowerCase().trim());
     if (targetBranchObj.branchName) targetKeys.add(String(targetBranchObj.branchName).toLowerCase().trim());
     if (targetBranchObj.name) targetKeys.add(String(targetBranchObj.name).toLowerCase().trim());
+
+    // If branch uses Company Menu, also match items belonging to Main Branch or default non-custom branch
+    if (!isCustomMenuBranch && Array.isArray(branchesList)) {
+      let mainBranch = branchesList.find(b => b.isMainBranch || b.branchType === 'MAIN');
+      if (!mainBranch) {
+        mainBranch = branchesList.find(b => !b.useCustomMenu && String(b.useCustomMenu) !== 'true');
+      }
+      if (mainBranch) {
+        if (mainBranch._id) targetKeys.add(String(mainBranch._id).toLowerCase().trim());
+        if (mainBranch.id) targetKeys.add(String(mainBranch.id).toLowerCase().trim());
+        if (mainBranch.branchCode) targetKeys.add(String(mainBranch.branchCode).toLowerCase().trim());
+        if (mainBranch.code) targetKeys.add(String(mainBranch.code).toLowerCase().trim());
+        if (mainBranch.branchName) targetKeys.add(String(mainBranch.branchName).toLowerCase().trim());
+        if (mainBranch.name) targetKeys.add(String(mainBranch.name).toLowerCase().trim());
+      }
+    }
   }
 
   // Extract candidate branch identifiers

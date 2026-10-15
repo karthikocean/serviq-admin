@@ -54,6 +54,7 @@ import { getImageUrl } from '../helper/ImageHelper.js';
 import { isBranchMatch } from '../helper/BranchHelper.js';
 
 export default function MenuPanel({
+  branches: branchesProp,
   categories = [],
   refreshCategories,
   openAddMenuModal,
@@ -65,6 +66,9 @@ export default function MenuPanel({
   refreshTrigger
 }) {
   const { activeRestaurant, updateMenuCategories, selectedBranchId, hasPermission } = useAppState();
+  const branchesList = (Array.isArray(branchesProp) && branchesProp.length > 0)
+    ? branchesProp
+    : (activeRestaurant?.branches || []);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [showCategoryPanel, setShowCategoryPanel] = useState(false);
   const [newCategory, setNewCategory] = useState('');
@@ -81,11 +85,10 @@ export default function MenuPanel({
   const limit = 10;
   const [totalPages, setTotalPages] = useState(1);
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
+  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
   const rawCategoryList = liveCategories.length > 0 ? liveCategories : (Array.isArray(categories) ? categories : []);
-  const activeCategoryList = isBranchFiltered
-    ? rawCategoryList.filter(c => isBranchMatch(c, selectedBranchId, activeRestaurant?.branches || []))
-    : rawCategoryList;
+  // Categories are shared across the company for all branches
+  const activeCategoryList = rawCategoryList;
   const combinedCategories = activeCategoryList.filter(c => c.status !== 'UNAVAILABLE' && c.status !== 'Inactive' && c.status !== 'Disabled' && c.status !== false && !c.isDelete);
   const categoriesList = ['All Items', ...combinedCategories.map(c => c._id || c.id)];
 
@@ -157,7 +160,7 @@ export default function MenuPanel({
       params.categoryId = matchedCategory._id || matchedCategory.id;
     }
 
-    if (selectedBranchId && selectedBranchId !== 'ALL') {
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
       params.branchId = selectedBranchId;
     }
     const res = await MenuApi.getMenuItems(params);
@@ -168,8 +171,8 @@ export default function MenuPanel({
       } else {
         rawList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
       }
-      if (isBranchFiltered) {
-        rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, activeRestaurant?.branches || []));
+      if (!params.branchId && isBranchFiltered && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, branchesList));
       }
       const totalCount = res.response?.total ?? res.response?.totalItems ?? res.response?.totalRecords ?? res.response?.count ?? res.response?.pagination?.total ?? (res.response?.data?.total ?? rawList.length);
       setTotalItems(totalCount);
@@ -317,8 +320,9 @@ export default function MenuPanel({
             <tr>
               <th className="sticky-col-1" style={{ width: '70px', minWidth: '70px', maxWidth: '70px', padding: '14px 12px', boxSizing: 'border-box' }}>S.NO</th>
               <th className="sticky-col-2" style={{ width: '80px', minWidth: '80px', maxWidth: '80px', padding: '14px 12px', boxSizing: 'border-box' }}>IMAGE</th>
-              <th className="sticky-col-3" style={{ width: '250px', minWidth: '250px', padding: '14px 14px', boxSizing: 'border-box' }}>NAME</th>
-              <th style={{ width: '150px', padding: '14px 12px' }}>CATEGORY</th>
+              <th className="sticky-col-3" style={{ width: '230px', minWidth: '230px', padding: '14px 14px', boxSizing: 'border-box' }}>NAME</th>
+              <th style={{ width: '140px', padding: '14px 12px' }}>CATEGORY</th>
+              <th style={{ width: '160px', padding: '14px 12px', textAlign: 'center' }}>MENU SCOPE</th>
               <th style={{ width: '120px', padding: '14px 12px', textAlign: 'right' }}>BASE PRICE</th>
               <th style={{ width: '130px', padding: '14px 12px', textAlign: 'center' }}>GST RATE</th>
               <th style={{ width: '160px', padding: '14px 12px', textAlign: 'right' }}>TOTAL (INCL. GST)</th>
@@ -379,6 +383,41 @@ export default function MenuPanel({
                       if (foundCat) return foundCat.name;
                       return item.category || 'General';
                     })()}
+                  </td>
+
+                  {/* 3.1 Menu Scope */}
+                  <td style={{ padding: '12px 12px', textAlign: 'center' }}>
+                    {item.isCompanyMenu ? (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#eff6ff',
+                        color: '#1d4ed8',
+                        border: '1px solid #bfdbfe'
+                      }}>
+                        🏢 Company Menu
+                      </span>
+                    ) : (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: '#f0fdf4',
+                        color: '#15803d',
+                        border: '1px solid #bbf7d0'
+                      }}>
+                        📍 {typeof item.branchId === 'object' && item.branchId?.branchName ? item.branchId.branchName : 'Branch Custom'}
+                      </span>
+                    )}
                   </td>
 
                   {/* 4. Base Price */}
@@ -500,7 +539,17 @@ export default function MenuPanel({
             })}
             {paginatedMenu.length === 0 && (
               <tr>
-                <td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>No menu items found matching filters.</td>
+                <td colSpan="11" style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: '30px', marginBottom: '8px' }}>🍽️</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    No menu items found for this branch
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b' }}>
+                    {isBranchFiltered
+                      ? "This branch manages its own menu catalog. Click \"Add Item\" above to create dishes specifically for this branch."
+                      : "No menu items found matching filters."}
+                  </div>
+                </td>
               </tr>
             )}
           </tbody>

@@ -3032,6 +3032,8 @@ export const AppProvider = ({ children }) => {
         password: branchData.password || '',
         gstNumber: branchData.gstNumber || '',
         fssaiNumber: branchData.fssaiNumber || '',
+        isMainBranch: Boolean(branchData.isMainBranch),
+        useCustomMenu: Boolean(branchData.useCustomMenu),
         operationalData: branchData.operationalData || {
           tablesCount: parseInt(branchData.totalTables) || 10,
           activeOrders: 0,
@@ -3071,6 +3073,7 @@ export const AppProvider = ({ children }) => {
             branchName: nameVal,
             managerName: mgr,
             branchManager: mgr,
+            useCustomMenu: updatedData.useCustomMenu !== undefined ? Boolean(updatedData.useCustomMenu) : Boolean(b.useCustomMenu),
             totalTables: updatedData.totalTables ? parseInt(updatedData.totalTables) : b.totalTables,
             operationalData: {
               ...b.operationalData,

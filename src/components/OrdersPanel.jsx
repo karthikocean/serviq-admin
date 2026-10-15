@@ -879,47 +879,59 @@ export default function OrdersPanel({
         else if (Array.isArray(d?.response)) fetchedMenuItems = d.response;
       }
 
-      // Always ensure full menu catalog from MenuApi is available so all items from Menu Management appear
-      try {
-        const allMenuRes = await MenuApi.getMenuItems({ limit: 10 });
-        if (allMenuRes?.status && allMenuRes.response) {
-          const allD = allMenuRes.response;
-          const allArr = Array.isArray(allD)
-            ? allD
-            : (Array.isArray(allD?.data)
-              ? allD.data
-              : (Array.isArray(allD?.data?.items)
-                ? allD.data.items
-                : (Array.isArray(allD?.items) ? allD.items : [])));
-          if (allArr.length > 0) {
-            if (fetchedMenuItems.length === 0 || (!isBranchFiltered && allArr.length > fetchedMenuItems.length)) {
-              fetchedMenuItems = allArr;
-            } else {
-              // Merge missing items
-              const existingIds = new Set(fetchedMenuItems.map(i => String(i._id || i.id)));
-              allArr.forEach(item => {
-                const itemId = String(item._id || item.id);
-                if (!existingIds.has(itemId)) {
-                  fetchedMenuItems.push(item);
-                  existingIds.add(itemId);
-                }
-              });
+      const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+      const currentBranchObj = allBranchesList.find(b => 
+        String(b._id || b.id || '').toLowerCase() === String(branchId || '').toLowerCase() ||
+        String(b.branchCode || b.code || '').toLowerCase() === String(branchId || '').toLowerCase()
+      );
+      const isCustomMenuBranch = currentBranchObj ? (currentBranchObj.useCustomMenu === true || String(currentBranchObj.useCustomMenu) === 'true') : false;
+
+      // Only merge general menu items if this branch is NOT using a custom menu
+      if (!isCustomMenuBranch) {
+        try {
+          const allMenuRes = await MenuApi.getMenuItems({ limit: 10 });
+          if (allMenuRes?.status && allMenuRes.response) {
+            const allD = allMenuRes.response;
+            const allArr = Array.isArray(allD)
+              ? allD
+              : (Array.isArray(allD?.data)
+                ? allD.data
+                : (Array.isArray(allD?.data?.items)
+                  ? allD.data.items
+                  : (Array.isArray(allD?.items) ? allD.items : [])));
+            if (allArr.length > 0) {
+              if (fetchedMenuItems.length === 0 || (!isBranchFiltered && allArr.length > fetchedMenuItems.length)) {
+                fetchedMenuItems = allArr;
+              } else {
+                // Merge missing items
+                const existingIds = new Set(fetchedMenuItems.map(i => String(i._id || i.id)));
+                allArr.forEach(item => {
+                  const itemId = String(item._id || item.id);
+                  if (!existingIds.has(itemId)) {
+                    fetchedMenuItems.push(item);
+                    existingIds.add(itemId);
+                  }
+                });
+              }
             }
           }
+        } catch (e) {
+          console.warn("Full menu catalog fetch note:", e);
         }
-      } catch (e) {
-        console.warn("Full menu catalog fetch note:", e);
-      }
 
-      // Merge in any items from selectableMenuItems / activeRestaurant.menu to guarantee full 12-item list
-      if (selectableMenuItems && selectableMenuItems.length > 0) {
-        const existingNames = new Set(fetchedMenuItems.map(i => (i.name || '').toLowerCase().trim()));
-        selectableMenuItems.forEach(it => {
-          if (it.name && !existingNames.has(it.name.toLowerCase().trim())) {
-            fetchedMenuItems.push(it);
-            existingNames.add(it.name.toLowerCase().trim());
-          }
-        });
+        // Merge in any items from selectableMenuItems / activeRestaurant.menu to guarantee full list
+        if (selectableMenuItems && selectableMenuItems.length > 0) {
+          const existingNames = new Set(fetchedMenuItems.map(i => (i.name || '').toLowerCase().trim()));
+          selectableMenuItems.forEach(it => {
+            if (it.name && !existingNames.has(it.name.toLowerCase().trim())) {
+              fetchedMenuItems.push(it);
+              existingNames.add(it.name.toLowerCase().trim());
+            }
+          });
+        }
+      } else {
+        // For custom menu branches, strictly match items created for this branch
+        fetchedMenuItems = fetchedMenuItems.filter(m => isBranchMatch(m, branchId, allBranchesList));
       }
 
       setApiMenuItems(fetchedMenuItems);
