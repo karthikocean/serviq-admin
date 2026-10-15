@@ -1481,10 +1481,10 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
               {[
-                { id: 'all', label: `All History (${tabCounts.all || invoices.length})` },
-                { id: 'subscription', label: `Plan Subscriptions (${tabCounts.subscription || subscriptionInvoices.length})` },
-                { id: 'addon', label: `Branch Add-ons (${tabCounts.addon || addonInvoices.length})` },
-                { id: 'upgrade', label: `Plan Upgrades (${tabCounts.upgrade || upgradeInvoices.length})` }
+                { id: 'all', label: `All History ` },
+                { id: 'subscription', label: `Plan Subscriptions ` },
+                { id: 'addon', label: `Branch Add-ons ` },
+                { id: 'upgrade', label: `Plan Upgrades ` }
               ].map(tab => (
                 <button
                   key={tab.id}

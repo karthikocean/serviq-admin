@@ -225,7 +225,7 @@ export const resolveBranchContactNumber = (branch, users = [], staff = []) => {
     }
   }
 
-  // 3. Match by resolved manager name (e.g. "Gayathri Ranganathan")
+  // 3. Match by resolved manager name (e.g. "Serviq")
   const resolvedMgrName = resolveBranchManagerName(branch, users, staff);
   if (resolvedMgrName && resolvedMgrName !== 'Unassigned') {
     const mgrNameLower = resolvedMgrName.toLowerCase().trim();
@@ -508,12 +508,29 @@ export const isSubBranchUser = (user) => {
   return !isUserCompanyUser(user) && Boolean(getUserAssignedBranchId(user));
 };
 
+/**
+ * Checks whether a branch is designated as the Main Branch.
+ */
+export const isBranchMain = (branch) => {
+  if (!branch) return false;
+  return Boolean(
+    branch.isMainBranch === true ||
+    branch.isMain === true ||
+    branch.isHeadOffice === true ||
+    branch.isHQ === true ||
+    String(branch.branchType || '').toUpperCase() === 'MAIN' ||
+    String(branch.type || '').toUpperCase() === 'MAIN' ||
+    String(branch.branchName || branch.name || '').toLowerCase().includes('main')
+  );
+};
+
 export default {
   resolveBranchManagerName,
   resolveBranchContactNumber,
   isBranchMatch,
   getUserAssignedBranchId,
   isUserCompanyUser,
-  isSubBranchUser
+  isSubBranchUser,
+  isBranchMain
 };
 

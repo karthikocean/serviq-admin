@@ -84,7 +84,7 @@ class MenuApi {
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
       } else {
-        cleanParams.limit = 0;
+        cleanParams.limit = 10;
       }
       let response;
       try {

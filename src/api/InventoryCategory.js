@@ -19,7 +19,7 @@ class InventoryCategoryApi {
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
       } else {
-        cleanParams.limit = 0;
+        cleanParams.limit = 10;
       }
       const response = await apiClient.get("/inventory/categories", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {

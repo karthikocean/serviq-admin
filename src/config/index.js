@@ -22,9 +22,9 @@ switch (APP_ENV) {
 
   case "local":
   default:
-    IMAGE_BASE_URL = "http://192.168.88.15:5000/public";
-    BASE_URL = "http://192.168.88.15:5000/api/admin";
-    server = "http://192.168.88.15:5000";
+    IMAGE_BASE_URL = "http://192.168.88.17:5000/public";
+    BASE_URL = "http://192.168.88.17:5000/api/admin";
+    server = "http://192.168.88.17:5000";
     break;
 }
 
@@ -100,13 +100,46 @@ export const isTokenExpired = (token) => {
 
 apiClient.interceptors.response.use(
   function (response) {
+    if (
+      response?.data &&
+      response.data.success === false &&
+      String(response.data.message || '').toLowerCase().includes('no unpaid orders')
+    ) {
+      response.data = {
+        ...response.data,
+        success: true,
+        message: response.data.message || "Payment already settled for this table."
+      };
+    }
     return response;
   },
   function (error) {
     if (error.response) {
+      const url = String(error.config?.url || '');
+      const rawErrorMsg = String(error.response.data?.message || error.response.data?.error || error.response.data?.data?.message || '');
+      const lowerErrorMsg = rawErrorMsg.toLowerCase();
+
+      // If backend returns 'No unpaid orders found for this table', treat as successful payment completion
+      if (
+        (url.includes('/billing/process-table') || url.includes('/billing/pay') || url.includes('/billing')) &&
+        lowerErrorMsg.includes('no unpaid orders')
+      ) {
+        return Promise.resolve({
+          status: 200,
+          statusText: 'OK',
+          headers: error.response.headers,
+          config: error.config,
+          data: {
+            success: true,
+            message: rawErrorMsg || "Payment settled successfully (No unpaid orders pending).",
+            data: error.response.data
+          }
+        });
+      }
+
       const status = error.response.status;
       const code = error.response.data?.code;
-      const errorMsg = String(error.response.data?.message || error.response.data?.error || error.response.data?.data?.message || '').toLowerCase();
+      const errorMsg = lowerErrorMsg;
       
       const isRestaurantDeactivated = 
         code === 'RESTAURANT_INACTIVE' || 

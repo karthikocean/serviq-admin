@@ -7,7 +7,8 @@ import {
   resolveBranchContactNumber,
   isUserCompanyUser,
   getUserAssignedBranchId,
-  isSubBranchUser
+  isSubBranchUser,
+  isBranchMain
 } from '../helper/BranchHelper.js';
 
 const StoreFrontIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -87,6 +88,19 @@ const BuildingIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const CrownIcon = ({ size = 11, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7z" />
+    <path d="M4 20h16" />
+  </svg>
+);
+
+const StarIcon = ({ size = 10, color = 'currentColor' }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 export default function BranchSearchDropdown() {
   const { activeRestaurant, currentUser, selectedBranchId, setSelectedBranchId, fetchBranches: contextFetchBranches } = useAppState();
   const [isOpen, setIsOpen] = useState(false);
@@ -160,6 +174,8 @@ export default function BranchSearchDropdown() {
         String(b.branchName || b.name || '').toLowerCase() === String(selectedBranchId).toLowerCase()
       );
 
+  const isSelectedBranchMain = !isAllBranchesSelected && isBranchMain(selectedBranch);
+
   const assignedBranchObj = isBranchLocked
     ? (branches.find(b => String(b.id || b._id) === String(userBranchId) || String(b.branchCode) === String(userBranchId)) ||
        (currentUser?.branch && typeof currentUser.branch === 'object' ? currentUser.branch : null))
@@ -171,13 +187,21 @@ export default function BranchSearchDropdown() {
   const filteredBranches = branches.filter(b => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
+    const isMain = isBranchMain(b);
     return (
       (b.branchName && b.branchName.toLowerCase().includes(query)) ||
       (b.branchCode && b.branchCode.toLowerCase().includes(query)) ||
       (b.city && b.city.toLowerCase().includes(query)) ||
       (b.state && b.state.toLowerCase().includes(query)) ||
-      (b.branchManager && b.branchManager.toLowerCase().includes(query))
+      (b.branchManager && b.branchManager.toLowerCase().includes(query)) ||
+      (isMain && ('main'.includes(query) || 'main branch'.includes(query) || 'headquarters'.includes(query) || 'hq'.includes(query)))
     );
+  });
+
+  const sortedBranches = [...filteredBranches].sort((a, b) => {
+    const aMain = isBranchMain(a) ? 1 : 0;
+    const bMain = isBranchMain(b) ? 1 : 0;
+    return bMain - aMain;
   });
 
   const handleSelectBranch = (branchId) => {
@@ -218,26 +242,63 @@ export default function BranchSearchDropdown() {
             width: '28px',
             height: '28px',
             borderRadius: '6px',
-            background: isBranchLocked ? '#f1f5f9' : (selectedBranchId ? 'rgba(255, 122, 0, 0.1)' : '#f1f5f9'),
+            background: isBranchLocked 
+              ? '#f1f5f9' 
+              : (selectedBranchId 
+                  ? (isSelectedBranchMain ? '#fef3c7' : 'rgba(255, 122, 0, 0.1)') 
+                  : '#f1f5f9'),
+            border: isSelectedBranchMain && !isBranchLocked ? '1px solid #fde68a' : 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')
+            color: isBranchLocked 
+              ? '#64748b' 
+              : (selectedBranchId 
+                  ? (isSelectedBranchMain ? '#b45309' : 'var(--primary)') 
+                  : '#64748b')
           }}>
             {isCompanyUser && isAllBranchesSelected ? (
               <BuildingIcon size={15} color="var(--primary)" />
+            ) : isSelectedBranchMain ? (
+              <BuildingIcon size={15} color={isBranchLocked ? '#64748b' : '#b45309'} />
             ) : (
               <StoreFrontIcon size={15} color={isBranchLocked ? '#64748b' : (selectedBranchId ? 'var(--primary)' : '#64748b')} />
             )}
           </div>
           <div className="branch-search-trigger-text">
             <span className="branch-search-label">
-              {isBranchLocked ? 'Assigned Branch' : 'Branch Filter'}
+              {isBranchLocked ? 'Assigned Branch' : (isSelectedBranchMain ? 'Main Branch (HQ)' : 'Branch Filter')}
             </span>
             <span className="branch-search-value">
               {isBranchLocked 
                 ? assignedBranchName 
-                : (isAllBranchesSelected ? 'All Branches' : (selectedBranch ? (selectedBranch.branchName || selectedBranch.name) : 'All Branches'))}
+                : (isAllBranchesSelected 
+                    ? 'All Branches' 
+                    : (selectedBranch 
+                        ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                              <span>{selectedBranch.branchName || selectedBranch.name}</span>
+                              {isSelectedBranchMain && (
+                                <span style={{
+                                  fontSize: '9.5px',
+                                  background: '#fef3c7',
+                                  color: '#b45309',
+                                  border: '1px solid #fde68a',
+                                  padding: '1px 5px',
+                                  borderRadius: '4px',
+                                  fontWeight: 800,
+                                  letterSpacing: '0.2px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '2px',
+                                  lineHeight: '1.2'
+                                }}>
+                                  ★ MAIN
+                                </span>
+                              )}
+                            </span>
+                          ) 
+                        : 'All Branches'))}
             </span>
           </div>
         </div>
@@ -325,25 +386,75 @@ export default function BranchSearchDropdown() {
 
 
             {/* INDIVIDUAL BRANCHES */}
-            {filteredBranches.length > 0 ? (
-              filteredBranches.map((branch) => {
+            {sortedBranches.length > 0 ? (
+              sortedBranches.map((branch) => {
                 const branchId = branch._id || branch.id;
                 const isSelected = String(selectedBranchId) === String(branchId) || String(selectedBranchId) === String(branch.branchCode);
                 const isActive = branch.status === 'Active';
+                const isMain = isBranchMain(branch);
+
                 return (
                   <div
                     key={branchId}
-                    className={`branch-search-option ${isSelected ? 'selected' : ''}`}
+                    className={`branch-search-option ${isSelected ? 'selected' : ''} ${isMain ? 'main-branch' : ''}`}
                     onClick={() => handleSelectBranch(branchId)}
+                    style={isMain && !isSelected ? {
+                      background: 'linear-gradient(135deg, #fffdf8 0%, #ffffff 100%)',
+                      borderColor: '#fde68a',
+                      boxShadow: '0 2px 8px rgba(245, 158, 11, 0.08)'
+                    } : {}}
                   >
-                    <div className="branch-option-left-icon">
-                      <StoreFrontIcon size={16} color={isSelected ? 'var(--primary)' : '#64748b'} />
+                    <div
+                      className={`branch-option-left-icon ${isMain ? 'main-branch' : ''}`}
+                      style={isMain && !isSelected ? {
+                        background: '#fef3c7',
+                        color: '#b45309',
+                        border: '1px solid #fde68a',
+                        boxShadow: '0 1px 3px rgba(180, 83, 9, 0.12)'
+                      } : {}}
+                    >
+                      {isMain ? (
+                        <BuildingIcon size={16} color={isSelected ? 'var(--primary)' : '#b45309'} />
+                      ) : (
+                        <StoreFrontIcon size={16} color={isSelected ? 'var(--primary)' : '#64748b'} />
+                      )}
                     </div>
                     <div className="branch-option-info">
                       {/* Top title and badges row */}
                       <div className="branch-option-title-row">
-                        <span className="branch-option-name">{branch.branchName || branch.name}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flexWrap: 'nowrap' }}>
+                          <span
+                            className="branch-option-name"
+                            style={isMain ? { fontWeight: 800, color: '#0f172a' } : {}}
+                          >
+                            {branch.branchName || branch.name}
+                          </span>
+                          {isMain && (
+                            <span
+                              className="branch-badge-main"
+                              style={{
+                                fontSize: '10px',
+                                background: '#fef3c7',
+                                color: '#b45309',
+                                border: '1px solid #fde68a',
+                                padding: '1.5px 7px',
+                                borderRadius: '12px',
+                                fontWeight: 800,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                flexShrink: 0,
+                                letterSpacing: '0.2px',
+                                boxShadow: '0 1px 2px rgba(180, 83, 9, 0.08)'
+                              }}
+                              title="Designated Main Branch (Headquarters)"
+                            >
+                              <CrownIcon size={10} color="#b45309" />
+                              Main Branch
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
                           {branch.branchCode && (
                             <span className="branch-option-code">{branch.branchCode}</span>
                           )}
@@ -355,6 +466,12 @@ export default function BranchSearchDropdown() {
 
                       {/* Bottom meta row */}
                       <div className="branch-option-meta-row">
+                        {isMain && (
+                          <span className="branch-meta-item" style={{ color: '#b45309', fontWeight: 700 }}>
+                            <StarIcon size={10} color="#d97706" />
+                            <span>Headquarters</span>
+                          </span>
+                        )}
                         <span className="branch-meta-item">
                           <MapPinIcon size={11} color="#64748b" />
                           <span>{branch.city || 'Tamil Nadu'}</span>

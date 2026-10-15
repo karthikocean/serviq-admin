@@ -93,7 +93,7 @@ class BillingApi {
       cleanParams.sortOrder = filters.sortOrder || 'desc';
 
       if (filters.isExport) cleanParams.isExport = filters.isExport;
-      if (filters.limit === 0 || filters.limit === '0') cleanParams.limit = 0;
+      if (filters.limit === 0 || filters.limit === '0') cleanParams.limit = 10;
 
       // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
@@ -112,12 +112,25 @@ class BillingApi {
         response = await apiClient.get(url);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405 || !err1?.response) {
-          const orderParams = { ...cleanParams };
-          if (!orderParams.limit) orderParams.limit = 50;
-          const ordersRes = await apiClient.get('/orders', { params: orderParams }).catch(() => null);
+          let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+          const getOrderList = (res) => {
+            if (!res?.data) return [];
+            if (Array.isArray(res.data)) return res.data;
+            if (Array.isArray(res.data?.data)) return res.data.data;
+            if (Array.isArray(res.data?.orders)) return res.data.orders;
+            return [];
+          };
+          let rawOrders = getOrderList(ordersRes);
+          if (rawOrders.length === 0) {
+            ordersRes = await apiClient.get('/orders').catch(() => null);
+            rawOrders = getOrderList(ordersRes);
+          }
           if (ordersRes?.data) {
-            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
-            const paidOrders = rawOrders.filter(o => (o.billingStatus || o.paymentStatus || '').toLowerCase() === 'paid' || o.isPaid || o.status === 'completed' || o.status === 'done');
+            const paidOrders = rawOrders.filter(o => {
+              const payStatus = String(o.billingStatus || o.paymentStatus || '').toLowerCase();
+              if (payStatus === 'unpaid') return false;
+              return payStatus === 'paid' || o.isPaid || o.status === 'paid' || o.status === 'done';
+            });
             const resultOrders = paidOrders.length > 0 ? paidOrders : rawOrders;
             return { status: true, response: { data: resultOrders, total: resultOrders.length } };
           }
@@ -150,9 +163,11 @@ class BillingApi {
         cleanParams.branchId = filters.branchId;
       }
 
-      const searchVal = filters.search || filters.searchTerm || filters.searchQuery;
+      const searchVal = filters.search || filters.searchTerm || filters.searchQuery || filters.q;
       if (searchVal && String(searchVal).trim()) {
-        cleanParams.search = String(searchVal).trim();
+        const cleanSearch = String(searchVal).trim();
+        cleanParams.search = cleanSearch;
+        cleanParams.q = cleanSearch;
       }
 
       const tableVal = filters.tableId || filters.table;
@@ -162,6 +177,7 @@ class BillingApi {
         // tableId MUST be a valid 24-hex MongoDB ObjectId (_id) for Mongoose Order model
         if (/^[0-9a-fA-F]{24}$/.test(strTableId)) {
           cleanParams.tableId = strTableId;
+          cleanParams.table = strTableId;
         } else {
           // Do NOT send non-ObjectId string as tableId to prevent "Cast to ObjectId failed" error
           cleanParams.table = strTableId;
@@ -169,9 +185,11 @@ class BillingApi {
         }
       }
 
-      const customerVal = filters.customer || filters.customerFilter;
+      const customerVal = filters.customer || filters.customerFilter || filters.customerName;
       if (customerVal && String(customerVal).trim()) {
-        cleanParams.customer = String(customerVal).trim();
+        const cleanCust = String(customerVal).trim();
+        cleanParams.customer = cleanCust;
+        cleanParams.customerName = cleanCust;
       }
 
       const cashierVal = filters.cashierId || filters.cashier || filters.staffId || filters.waiterId;
@@ -183,6 +201,8 @@ class BillingApi {
           cleanParams.cashierId = strStaffId;
           cleanParams.waiterId = strStaffId;
           cleanParams.staffId = strStaffId;
+          cleanParams.cashier = strStaffId;
+          cleanParams.staff = strStaffId;
         } else {
           // Do NOT send non-ObjectId string as waiterId/cashierId/staffId to prevent "Cast to ObjectId failed" error
           cleanParams.cashier = strStaffId;
@@ -191,11 +211,13 @@ class BillingApi {
         }
       }
 
-      cleanParams.orderType = filters.orderType || 'DINE_IN';
+      if (filters.orderType && filters.orderType !== 'All' && filters.orderType !== 'ALL') {
+        cleanParams.orderType = filters.orderType;
+      }
 
-      // 1-based page index
-      const pageNum = filters.page !== undefined ? Number(filters.page) : 1;
-      cleanParams.page = pageNum < 1 ? 1 : pageNum;
+      // 0-based page index (starts with 0, limit is 10)
+      const pageNum = filters.page !== undefined ? Number(filters.page) : 0;
+      cleanParams.page = pageNum < 0 ? 0 : pageNum;
 
       cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
       cleanParams.sortBy = filters.sortBy || 'createdAt';
@@ -222,17 +244,39 @@ class BillingApi {
             const fallbackBillingUrl = `/billing${queryParams ? `?${queryParams}` : ''}`;
             response = await apiClient.get(fallbackBillingUrl);
           } catch (err2) {
-            const ordersRes = await apiClient.get('/orders').catch(() => null);
-            if (ordersRes?.data) {
-              const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+            let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+            const getOrderList = (res) => {
+              if (!res?.data) return [];
+              if (Array.isArray(res.data)) return res.data;
+              if (Array.isArray(res.data?.data)) return res.data.data;
+              if (Array.isArray(res.data?.orders)) return res.data.orders;
+              return [];
+            };
+            let rawOrders = getOrderList(ordersRes);
+            if (rawOrders.length === 0) {
+              ordersRes = await apiClient.get('/orders').catch(() => null);
+              rawOrders = getOrderList(ordersRes);
+            }
+            if (rawOrders.length > 0 || ordersRes?.data) {
               return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
             }
             throw err2;
           }
         } else if (!err1?.response) {
-          const ordersRes = await apiClient.get('/orders').catch(() => null);
-          if (ordersRes?.data) {
-            const rawOrders = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || ordersRes.data?.orders || []);
+          let ordersRes = await apiClient.get('/orders', { params: cleanParams }).catch(() => null);
+          const getOrderList = (res) => {
+            if (!res?.data) return [];
+            if (Array.isArray(res.data)) return res.data;
+            if (Array.isArray(res.data?.data)) return res.data.data;
+            if (Array.isArray(res.data?.orders)) return res.data.orders;
+            return [];
+          };
+          let rawOrders = getOrderList(ordersRes);
+          if (rawOrders.length === 0) {
+            ordersRes = await apiClient.get('/orders').catch(() => null);
+            rawOrders = getOrderList(ordersRes);
+          }
+          if (rawOrders.length > 0 || ordersRes?.data) {
             return { status: true, response: { data: rawOrders, tables: rawOrders, total: rawOrders.length } };
           }
         }
@@ -261,15 +305,48 @@ class BillingApi {
 
   async processTablePayment(payload) {
     try {
-      const response = await apiClient.post(`/billing/process-table`, payload);
-      if (response.status === 200 || response.status === 201) {
+      let response;
+      try {
+        response = await apiClient.post(`/billing/process-table`, payload);
+      } catch (err1) {
+        if (err1?.response?.status === 404 || err1?.response?.status === 405) {
+          const tableLabel = payload.tableLabel || payload.table || payload.tableNumber || (payload.tableId ? `Table ${payload.tableId}` : '');
+          try {
+            response = await apiClient.post(`/billing/pay`, {
+              tableLabel,
+              ...payload
+            });
+          } catch (err2) {
+            if (err2?.response?.status === 404) {
+              response = await apiClient.post(`/admin/billing/pay`, {
+                tableLabel,
+                ...payload
+              });
+            } else {
+              throw err2;
+            }
+          }
+        } else {
+          throw err1;
+        }
+      }
+      if (response && (response.status === 200 || response.status === 201)) {
         return { status: true, response: response.data };
       }
+      return { status: true, response: response?.data || { success: true } };
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
         "Failed to process payment.";
+
+      if (String(errorMessage).toLowerCase().includes('no unpaid orders')) {
+        return {
+          status: true,
+          response: error?.response?.data || { success: true, message: "No unpaid orders found. Table is already settled." },
+          alreadyPaid: true
+        };
+      }
 
       ShowNotifications.showAlertNotification(errorMessage, false);
 

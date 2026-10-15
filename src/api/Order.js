@@ -165,16 +165,30 @@ class OrderApi {
       const response = await apiClient.post("/billing/pay", { tableLabel });
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
-          response.data.message || `Bill for ${tableLabel} paid successfully!`,
+          response.data?.message || `Bill for ${tableLabel} paid successfully!`,
           true
         );
         return { status: true, response: response.data };
       }
+      return { status: true, response: response?.data || { success: true } };
     } catch (error) {
       const errorMessage =
         error?.response?.data?.message ||
         error?.message ||
         "Failed to Process Payment. Please try again.";
+
+      if (String(errorMessage).toLowerCase().includes('no unpaid orders')) {
+        ShowNotifications.showAlertNotification(
+          `Bill for ${tableLabel} is already settled / paid!`,
+          true
+        );
+        return {
+          status: true,
+          response: error?.response?.data || { success: true, message: `Bill for ${tableLabel} is already settled.` },
+          alreadyPaid: true
+        };
+      }
+
       ShowNotifications.showAlertNotification(errorMessage, false);
       return {
         status: false,
