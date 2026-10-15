@@ -60,7 +60,7 @@ export default function MenuManagement() {
 
   const fetchMenuItems = async () => {
     const params = { page: 0, limit: 10 };
-    if (selectedBranchId) {
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
       params.branchId = selectedBranchId;
     } else {
       params.branchId = 'all';
@@ -73,9 +73,6 @@ export default function MenuManagement() {
         rawList = res.response.data.items;
       } else {
         rawList = Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response) ? res.response : []);
-      }
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
-        rawList = rawList.filter(m => isBranchMatch(m, selectedBranchId, branches));
       }
       setMenuItems(rawList);
     }
@@ -91,9 +88,7 @@ export default function MenuManagement() {
             ? res.response.data.items
             : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
       let cleanList = catArray.filter(cat => !cat?.isDelete);
-      if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All') {
-        cleanList = cleanList.filter(c => isBranchMatch(c, selectedBranchId, branches));
-      }
+      // Categories are common across all branches for the restaurant
       setCategories(cleanList);
       const availableOnly = cleanList.filter(cat => cat.status !== 'UNAVAILABLE' && cat.status !== 'Inactive' && cat.status !== 'Disabled' && cat.status !== false);
       if (availableOnly.length > 0 && !menuForm.category) {
@@ -976,18 +971,64 @@ export default function MenuManagement() {
           </div>
         </section>
       ) : (
-        <MenuPanel
-          menu={menu}
-          categories={categories}
-          refreshCategories={fetchCategories}
-          refreshTrigger={refreshTrigger}
-          activeRestaurant={activeRestaurant}
-          openAddMenuModal={openAddMenuModal}
-          openEditMenuModal={openEditMenuModal}
-          handleDeleteMenu={handleDeleteMenu}
-          hasPermission={hasPermission}
-          onOpenCategoriesPage={() => navigate('/menu/categories')}
-        />
+        <>
+          {(() => {
+            const currentBranchObj = (branches || []).find(b => 
+              String(b._id || b.id || '').toLowerCase() === String(selectedBranchId || '').toLowerCase() ||
+              String(b.branchCode || b.code || '').toLowerCase() === String(selectedBranchId || '').toLowerCase()
+            );
+            const isSelectedBranchCustom = currentBranchObj ? (currentBranchObj.useCustomMenu === true || String(currentBranchObj.useCustomMenu) === 'true') : false;
+            const isBranchScoped = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
+            if (isBranchScoped && !isSelectedBranchCustom) {
+              return (
+                <div style={{
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '10px',
+                  padding: '12px 18px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '18px' }}>ℹ️</span>
+                    <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 600 }}>
+                      <strong>{currentBranchObj?.branchName || 'This branch'}</strong> is currently displaying the <strong>Company Menu</strong>.
+                      To create a separate menu for this branch, enable "Create separate / custom menu" in Branch Management.
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: '11px',
+                    background: '#dbeafe',
+                    color: '#1d4ed8',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap'
+                  }}>
+                    🏢 Company Menu Mode
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          <MenuPanel
+            menu={menu}
+            branches={branches}
+            categories={categories}
+            refreshCategories={fetchCategories}
+            refreshTrigger={refreshTrigger}
+            activeRestaurant={activeRestaurant}
+            openAddMenuModal={openAddMenuModal}
+            openEditMenuModal={openEditMenuModal}
+            handleDeleteMenu={handleDeleteMenu}
+            hasPermission={hasPermission}
+            onOpenCategoriesPage={() => navigate('/menu/categories')}
+          />
+        </>
       )}
 
       <Modal
