@@ -13,19 +13,11 @@ export default function PlansManagement() {
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
+  const isRestaurantOwner = userTypeStr.toUpperCase().trim() === 'RESTAURANT_OWNER';
 
-  const userType = (userTypeStr || roleStr || '').toUpperCase();
-  const userRoleUpper = (roleStr || '').toUpperCase().trim();
-  const isOwnerRoleName = (r) => {
-    const s = String(r || '').toUpperCase().trim();
-    return s === 'RESTAURANT_OWNER' || s === 'RESTAURANT OWNER' || s === 'OWNER' || s === 'SUPER ADMIN' || s === 'SUPER_ADMIN';
-  };
-  const hasSpecificNonOwnerRole = Boolean(userRoleUpper && !isOwnerRoleName(userRoleUpper));
-  const isRestaurantOwner = !hasSpecificNonOwnerRole && (isOwnerRoleName(userType) || isOwnerRoleName(userRoleUpper));
-
-  // Strict check: Only Restaurant Owner / Company can access plans management
-  if (!isRestaurantOwner && !hasPermission('plans-management', 'view')) {
-    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owner / Company Admin.", false);
+  // Strict check: Only userType: "RESTAURANT_OWNER" can access plans management
+  if (!isRestaurantOwner) {
+    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owners.", false);
     return <Navigate to="/dashboard" replace />;
   }
 

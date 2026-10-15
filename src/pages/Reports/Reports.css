@@ -431,11 +431,12 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 #f8fafc;
+  background: #ffffff;
 }
 
 .reports-table-container::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
+  height: 7px;
+  width: 7px;
 }
 
 .reports-table-container::-webkit-scrollbar-track {
@@ -447,13 +448,55 @@
   border-radius: 4px;
 }
 
+.reports-table-container::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
 .reports-table-container table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  min-width: 1050px;
   font-size: 13px;
   text-align: left;
   table-layout: auto;
+  box-sizing: border-box;
+}
+
+/* Specific proportional min-widths per table to prevent cramped or stretched columns */
+.reports-table-container table.table-tax-summary {
+  min-width: 680px;
+}
+
+.reports-table-container table.table-payment-settlement {
+  min-width: 860px;
+}
+
+.reports-table-container table.table-sales {
+  min-width: 1400px;
+}
+
+.reports-table-container table.table-dish {
+  min-width: 1060px;
+}
+
+.reports-table-container table.table-orders {
+  min-width: 1260px;
+}
+
+.reports-table-container table.table-stock-position {
+  min-width: 1300px;
+}
+
+.reports-table-container table.table-stock-movement {
+  min-width: 1260px;
+}
+
+.reports-table-container table.table-low-stock {
+  min-width: 740px;
+}
+
+.reports-table-container table.table-staff {
+  min-width: 1260px;
 }
 
 .reports-table-container table thead tr {
@@ -465,26 +508,33 @@
 .reports-table-container table th {
   background: #f8fafc;
   color: #475569;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 14px 14px;
+  padding: 14px 16px;
   white-space: nowrap;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   border-bottom: 2px solid #e2e8f0;
   box-shadow: none;
+  vertical-align: middle;
+  box-sizing: border-box;
+  user-select: none;
 }
 
 .reports-table-container table td {
-  padding: 12px 14px;
+  padding: 13px 16px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
   color: #334155;
   white-space: nowrap;
+  box-sizing: border-box;
+  font-size: 13px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
 }
 
 .reports-table-container tbody tr {
-  height: 50px;
+  height: 52px;
   transition: background-color 0.15s ease;
 }
 
@@ -495,12 +545,16 @@
 .reports-table-container table tfoot tr {
   background: #f8fafc;
   border-top: 2px solid #cbd5e1;
+  height: 48px;
 }
 
 .reports-table-container table tfoot td {
-  padding: 12px 10px;
-  font-size: 12.5px;
+  padding: 14px 16px;
+  font-size: 13px;
   border-bottom: none;
+  vertical-align: middle;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Empty State */
@@ -634,18 +688,24 @@
 .badge-status {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 3px 9px;
-  border-radius: 14px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
   font-size: 11.5px;
   font-weight: 700;
   text-transform: capitalize;
+  white-space: nowrap;
+  box-sizing: border-box;
+  min-width: 78px;
 }
 
 .badge-status.paid,
 .badge-status.completed,
 .badge-status.normal,
-.badge-status.available {
+.badge-status.available,
+.badge-status.in-stock {
   background: #dcfce7;
   color: #15803d;
   border: 1px solid #bbf7d0;
@@ -669,11 +729,78 @@
 }
 
 .badge-type {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   background: #f1f5f9;
   color: #475569;
+  border: 1px solid #e2e8f0;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
+
+/* Action button inside table cells */
+.reports-table-container .btn-table-action {
+  height: 32px;
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.reports-table-container .btn-table-action:hover {
+  background: #fff7ed;
+  color: #ea580c;
+  border-color: #fdba74;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(234, 88, 12, 0.15);
+}
+
+/* Modal detail table */
+.reports-modal-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.reports-modal-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 10px 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.reports-modal-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+.reports-modal-table tbody tr:last-child td {
+  border-bottom: none;
+}
+

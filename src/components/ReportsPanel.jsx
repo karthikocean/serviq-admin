@@ -2376,13 +2376,13 @@ export default function ReportsPanel({
             </div>
 
             <div className="reports-table-container">
-              <table>
+              <table className="table-tax-summary">
                 <thead>
                   <tr>
-                    <th>Tax Type</th>
-                    <th>Tax Rate</th>
-                    <th style={{ textAlign: 'right' }}>Taxable Amount</th>
-                    <th style={{ textAlign: 'right' }}>Tax Amount</th>
+                    <th style={{ minWidth: '180px', textAlign: 'left' }}>Tax Type</th>
+                    <th style={{ width: '130px', textAlign: 'center' }}>Tax Rate</th>
+                    <th style={{ minWidth: '180px', textAlign: 'right' }}>Taxable Amount</th>
+                    <th style={{ minWidth: '180px', textAlign: 'right' }}>Tax Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2401,10 +2401,10 @@ export default function ReportsPanel({
                   ) : (
                     taxSummaryRows.map((r, idx) => (
                       <tr key={r.taxType || idx}>
-                        <td>
+                        <td style={{ textAlign: 'left' }}>
                           <strong style={{ color: '#0f172a' }}>{r.taxType || r.name || 'GST'}</strong>
                         </td>
-                        <td>
+                        <td style={{ textAlign: 'center' }}>
                           <span className="badge-type">{r.taxRate || (r.rate ? `${r.rate}%` : '2.5%')}</span>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -2419,14 +2419,14 @@ export default function ReportsPanel({
                 </tbody>
                 {taxSummaryRows.length > 0 && (
                   <tfoot>
-                    <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                      <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                         Total Tax Summary:
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                         ₹{Number(taxApiData?.tableSummary?.totalTaxableAmount ?? taxSummaryRows.reduce((sum, r) => sum + Number(r.taxableAmount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d' }}>
                         ₹{Number(taxApiData?.tableSummary?.totalTaxAmount ?? taxSummaryRows.reduce((sum, r) => sum + Number(r.taxAmount || 0), 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -2505,15 +2505,15 @@ export default function ReportsPanel({
             </div>
 
             <div className="reports-table-container">
-              <table>
+              <table className="table-payment-settlement">
                 <thead>
                   <tr>
-                    <th style={{ width: '70px' }}>S.No</th>
-                    <th>Payment Method</th>
-                    <th style={{ textAlign: 'right' }}>Transaction Count</th>
-                    <th style={{ textAlign: 'right' }}>Taxable Amount</th>
-                    <th style={{ textAlign: 'right' }}>Tax Amount</th>
-                    <th style={{ textAlign: 'right' }}>Total Amount</th>
+                    <th style={{ width: '64px', textAlign: 'center' }}>S.No</th>
+                    <th style={{ minWidth: '180px', textAlign: 'left' }}>Payment Method</th>
+                    <th style={{ minWidth: '150px', textAlign: 'right' }}>Transaction Count</th>
+                    <th style={{ minWidth: '160px', textAlign: 'right' }}>Taxable Amount</th>
+                    <th style={{ minWidth: '150px', textAlign: 'right' }}>Tax Amount</th>
+                    <th style={{ minWidth: '170px', textAlign: 'right' }}>Total Amount</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2532,10 +2532,10 @@ export default function ReportsPanel({
                   ) : (
                     paymentSettlementRows.map((item, idx) => (
                       <tr key={item.paymentMethod || item.method || idx}>
-                        <td style={{ color: '#64748b', fontWeight: 600 }}>
+                        <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>
                           {item.sNo || (idx + 1)}
                         </td>
-                        <td>
+                        <td style={{ textAlign: 'left' }}>
                           <strong style={{ color: '#0f172a' }}>{item.paymentMethod || item.method}</strong>
                         </td>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -2561,20 +2561,20 @@ export default function ReportsPanel({
                 </tbody>
                 {paymentSettlementRows.length > 0 && (
                   <tfoot>
-                    <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                      <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                    <tr>
+                      <td colSpan={2} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                         Total Settlement:
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                         {paymentSettlementRows.reduce((sum, s) => sum + Number(s.transactionCount ?? s.count ?? 0), 0).toLocaleString()}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                         ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.taxableAmount ?? (s.collected ? s.collected - (s.refund || 0) : 0)), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                         ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.taxAmount ?? 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d' }}>
                         ₹{paymentSettlementRows.reduce((sum, s) => sum + Number(s.totalAmount ?? s.netCollected ?? s.collected ?? 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
@@ -2665,112 +2665,122 @@ export default function ReportsPanel({
           </div>
 
         <div className="reports-table-container">
-          
-            <table>
+            <table className={`reports-table table-${
+              activeTab === 'sales' ? 'sales'
+              : activeTab === 'items' ? 'dish'
+              : activeTab === 'orders' ? 'orders'
+              : activeTab === 'inventory' ? (
+                  inventorySubTab === 'movement' ? 'stock-movement'
+                  : inventorySubTab === 'low-stock' ? 'low-stock'
+                  : 'stock-position'
+                )
+              : activeTab === 'staff' ? 'staff'
+              : 'default'
+            }`}>
               <thead>
                 {activeTab === 'sales' && (
                   <tr>
-                    <th>S.No</th>
-                    <th>Date & Time</th>
-                    <th>Order No</th>
-                    <th>Bill No.</th>
-                    <th>Invoice No.</th>
-                    <th>Table / Type</th>
-                    <th>Payment Method</th>
-                    <th style={{ textAlign: 'right' }}>Gross Amount</th>
-                    <th style={{ textAlign: 'right' }}>Discount</th>
-                    <th style={{ textAlign: 'right' }}>Tax</th>
-                    <th style={{ textAlign: 'right' }}>Net Sales</th>
-                    <th>Status</th>
-                    <th style={{ textAlign: 'center' }}>Action</th>
+                    <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
+                    <th style={{ minWidth: '145px', textAlign: 'left' }}>Date & Time</th>
+                    <th style={{ minWidth: '110px', textAlign: 'left' }}>Order No</th>
+                    <th style={{ minWidth: '110px', textAlign: 'left' }}>Bill No.</th>
+                    <th style={{ minWidth: '120px', textAlign: 'left' }}>Invoice No.</th>
+                    <th style={{ minWidth: '110px', textAlign: 'left' }}>Table / Type</th>
+                    <th style={{ minWidth: '125px', textAlign: 'center' }}>Payment Method</th>
+                    <th style={{ minWidth: '115px', textAlign: 'right' }}>Gross Amount</th>
+                    <th style={{ minWidth: '105px', textAlign: 'right' }}>Discount</th>
+                    <th style={{ minWidth: '105px', textAlign: 'right' }}>Tax</th>
+                    <th style={{ minWidth: '120px', textAlign: 'right' }}>Net Sales</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>Status</th>
+                    <th style={{ width: '70px', textAlign: 'center' }}>Action</th>
                   </tr>
                 )}
 
                 {activeTab === 'items' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Dish Name</th>
-                    <th>Category</th>
-                    <th style={{ textAlign: 'center' }}>Food Type</th>
-                    <th style={{ textAlign: 'right' }}>Quantity Sold</th>
-                    <th style={{ textAlign: 'right' }}>Gross Sales</th>
-                    <th style={{ textAlign: 'right' }}>Discount</th>
-                    <th style={{ textAlign: 'right' }}>Net Sales</th>
-                    <th style={{ textAlign: 'right' }}>Sales %</th>
+                    <th style={{ minWidth: '200px', textAlign: 'left' }}>Dish Name</th>
+                    <th style={{ minWidth: '130px', textAlign: 'left' }}>Category</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>Food Type</th>
+                    <th style={{ minWidth: '115px', textAlign: 'right' }}>Quantity Sold</th>
+                    <th style={{ minWidth: '125px', textAlign: 'right' }}>Gross Sales</th>
+                    <th style={{ minWidth: '110px', textAlign: 'right' }}>Discount</th>
+                    <th style={{ minWidth: '130px', textAlign: 'right' }}>Net Sales</th>
+                    <th style={{ width: '95px', textAlign: 'right' }}>Sales %</th>
                   </tr>
                 )}
 
                 {activeTab === 'orders' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Order No.</th>
-                    <th>Date & Time</th>
-                    <th>Order Type</th>
-                    <th>Table</th>
-                    <th style={{ textAlign: 'center' }}>Items Count</th>
-                    <th style={{ textAlign: 'right' }}>Amount</th>
-                    <th>Payment Status</th>
-                    <th>Order Status</th>
-                    <th>Staff Responsible</th>
-                    <th style={{ textAlign: 'center' }}>Action</th>
+                    <th style={{ minWidth: '115px', textAlign: 'left' }}>Order No.</th>
+                    <th style={{ minWidth: '145px', textAlign: 'left' }}>Date & Time</th>
+                    <th style={{ minWidth: '110px', textAlign: 'center' }}>Order Type</th>
+                    <th style={{ width: '95px', textAlign: 'center' }}>Table</th>
+                    <th style={{ width: '95px', textAlign: 'center' }}>Items Count</th>
+                    <th style={{ minWidth: '125px', textAlign: 'right' }}>Amount</th>
+                    <th style={{ width: '125px', textAlign: 'center' }}>Payment Status</th>
+                    <th style={{ width: '125px', textAlign: 'center' }}>Order Status</th>
+                    <th style={{ minWidth: '140px', textAlign: 'left' }}>Staff Responsible</th>
+                    <th style={{ width: '70px', textAlign: 'center' }}>Action</th>
                   </tr>
                 )}
 
                 {activeTab === 'inventory' && inventorySubTab === 'position' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Item Name</th>
-                    <th>Category</th>
-                    <th style={{ textAlign: 'center' }}>Unit</th>
-                    <th style={{ textAlign: 'right' }}>Opening Stock</th>
-                    <th style={{ textAlign: 'right' }}>Purchased / Added</th>
-                    <th style={{ textAlign: 'right' }}>Used / Consumed</th>
-                    <th style={{ textAlign: 'right' }}>Wastage</th>
-                    <th style={{ textAlign: 'right' }}>Closing / Current Stock</th>
-                    <th style={{ textAlign: 'right' }}>Minimum Stock</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th style={{ minWidth: '180px', textAlign: 'left' }}>Item Name</th>
+                    <th style={{ minWidth: '120px', textAlign: 'left' }}>Category</th>
+                    <th style={{ width: '75px', textAlign: 'center' }}>Unit</th>
+                    <th style={{ minWidth: '115px', textAlign: 'right' }}>Opening Stock</th>
+                    <th style={{ minWidth: '135px', textAlign: 'right' }}>Purchased / Added</th>
+                    <th style={{ minWidth: '130px', textAlign: 'right' }}>Used / Consumed</th>
+                    <th style={{ minWidth: '100px', textAlign: 'right' }}>Wastage</th>
+                    <th style={{ minWidth: '145px', textAlign: 'right' }}>Closing / Current Stock</th>
+                    <th style={{ minWidth: '115px', textAlign: 'right' }}>Minimum Stock</th>
+                    <th style={{ width: '120px', textAlign: 'center' }}>Status</th>
                   </tr>
                 )}
 
                 {activeTab === 'inventory' && inventorySubTab === 'movement' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Date</th>
-                    <th>Transaction No.</th>
-                    <th>Transaction Type</th>
-                    <th>Item</th>
-                    <th style={{ textAlign: 'right' }}>Quantity</th>
-                    <th style={{ textAlign: 'center' }}>Unit</th>
-                    <th>Source</th>
-                    <th>Destination</th>
-                    <th>Reference No.</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th style={{ minWidth: '135px', textAlign: 'left' }}>Date</th>
+                    <th style={{ minWidth: '135px', textAlign: 'left' }}>Transaction No.</th>
+                    <th style={{ minWidth: '130px', textAlign: 'center' }}>Transaction Type</th>
+                    <th style={{ minWidth: '160px', textAlign: 'left' }}>Item</th>
+                    <th style={{ minWidth: '105px', textAlign: 'right' }}>Quantity</th>
+                    <th style={{ width: '75px', textAlign: 'center' }}>Unit</th>
+                    <th style={{ minWidth: '120px', textAlign: 'left' }}>Source</th>
+                    <th style={{ minWidth: '120px', textAlign: 'left' }}>Destination</th>
+                    <th style={{ minWidth: '125px', textAlign: 'left' }}>Reference No.</th>
+                    <th style={{ width: '120px', textAlign: 'center' }}>Status</th>
                   </tr>
                 )}
 
                 {activeTab === 'inventory' && inventorySubTab === 'low-stock' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Item</th>
-                    <th style={{ textAlign: 'right' }}>Current Stock</th>
-                    <th style={{ textAlign: 'right' }}>Minimum Stock</th>
-                    <th style={{ textAlign: 'center' }}>Unit</th>
-                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th style={{ minWidth: '220px', textAlign: 'left' }}>Item</th>
+                    <th style={{ minWidth: '130px', textAlign: 'right' }}>Current Stock</th>
+                    <th style={{ minWidth: '130px', textAlign: 'right' }}>Minimum Stock</th>
+                    <th style={{ width: '85px', textAlign: 'center' }}>Unit</th>
+                    <th style={{ width: '125px', textAlign: 'center' }}>Status</th>
                   </tr>
                 )}
 
                 {activeTab === 'staff' && (
                   <tr>
                     <th style={{ width: '60px', textAlign: 'center' }}>S.No</th>
-                    <th>Staff ID</th>
-                    <th>Staff Name</th>
-                    <th>Role</th>
-                    <th style={{ textAlign: 'right' }}>Orders Handled</th>
-                    <th style={{ textAlign: 'right' }}>KOTs Handled</th>
-                    <th style={{ textAlign: 'right' }}>Bills Generated</th>
-                    <th style={{ textAlign: 'right' }}>Payments Collected</th>
-                    <th style={{ textAlign: 'right' }}>Sales Amount</th>
-                    <th style={{ textAlign: 'right' }}>Cancelled Orders</th>
+                    <th style={{ minWidth: '105px', textAlign: 'left' }}>Staff ID</th>
+                    <th style={{ minWidth: '170px', textAlign: 'left' }}>Staff Name</th>
+                    <th style={{ width: '110px', textAlign: 'center' }}>Role</th>
+                    <th style={{ minWidth: '120px', textAlign: 'right' }}>Orders Handled</th>
+                    <th style={{ minWidth: '115px', textAlign: 'right' }}>KOTs Handled</th>
+                    <th style={{ minWidth: '120px', textAlign: 'right' }}>Bills Generated</th>
+                    <th style={{ minWidth: '135px', textAlign: 'right' }}>Payments Collected</th>
+                    <th style={{ minWidth: '130px', textAlign: 'right' }}>Sales Amount</th>
+                    <th style={{ minWidth: '125px', textAlign: 'right' }}>Cancelled Orders</th>
                   </tr>
                 )}
               </thead>
@@ -2816,18 +2826,18 @@ export default function ReportsPanel({
 
                       return (
                         <tr key={ord.id || ord._id || idx}>
-                          <td>{currentPage * pageSize + idx + 1}</td>
+                          <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{currentPage * pageSize + idx + 1}</td>
                           <td>{formatDateTimeDMY(date)}</td>
                           <td><strong style={{ color: '#0f172a' }} title={rawId ? `Order ID: ${rawId}` : undefined}>{orderNo}</strong></td>
                           <td><span style={{ fontWeight: 600, color: '#334155' }}>{billNo}</span></td>
                           <td><span style={{ fontWeight: 600, color: invoiceNo !== '-' ? '#1e293b' : '#94a3b8' }}>{invoiceNo}</span></td>
                           <td>{toDisplayText(ord.table || ord.tableNumber || ord.orderType, 'Dine-In')}</td>
-                          <td><span className="badge-type">{paymentMode}</span></td>
-                          <td style={{ textAlign: 'right' }}>₹{gross.toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', color: '#be123c' }}>₹{disc.toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', color: '#15803d' }}>₹{tax.toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{total.toLocaleString()}</td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}><span className="badge-type">{paymentMode}</span></td>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>₹{gross.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: disc > 0 ? '#be123c' : '#64748b' }}>₹{disc.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 600, color: '#15803d' }}>₹{tax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'center' }}>
                             <span className="badge-status paid">
                               {ord.status || 'Paid'}
                             </span>
@@ -2835,7 +2845,7 @@ export default function ReportsPanel({
                           <td style={{ textAlign: 'center' }}>
                             <button
                               type="button"
-                              className="btn-page-nav"
+                              className="btn-table-action"
                               title="View Order Details"
                               onClick={() => setViewOrder(ord)}
                             >
@@ -2892,14 +2902,16 @@ export default function ReportsPanel({
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              padding: '3px 8px',
+                              padding: '0 8px',
+                              height: '24px',
                               borderRadius: '12px',
                               fontSize: '11px',
                               fontWeight: 700,
                               textTransform: 'uppercase',
                               background: isVeg ? '#e6f4ea' : (isEgg ? '#fef3c7' : '#fce8e6'),
                               color: isVeg ? '#16a34a' : (isEgg ? '#d97706' : '#dc2626'),
-                              border: `1px solid ${isVeg ? '#bbf7d0' : (isEgg ? '#fde68a' : '#fecaca')}`
+                              border: `1px solid ${isVeg ? '#bbf7d0' : (isEgg ? '#fde68a' : '#fecaca')}`,
+                              boxSizing: 'border-box'
                             }}>
                               {foodType}
                             </span>
@@ -2954,7 +2966,7 @@ export default function ReportsPanel({
                           <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
                           <td><strong style={{ color: '#0f172a' }} title={rawId ? `Order ID: ${rawId}` : undefined}>{orderNo}</strong></td>
                           <td>{formatDateTimeDMY(date)}</td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <span className="badge-type" style={{
                               background: orderType === 'Dine-In' ? '#eff6ff' : orderType === 'Takeaway' ? '#fef3c7' : '#f3e8ff',
                               color: orderType === 'Dine-In' ? '#1d4ed8' : orderType === 'Takeaway' ? '#b45309' : '#7e22ce',
@@ -2963,19 +2975,19 @@ export default function ReportsPanel({
                               {orderType}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <span style={{ fontWeight: 600, color: tableDisplay !== '-' ? '#334155' : '#94a3b8' }}>
                               {tableDisplay}
                             </span>
                           </td>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{itemsCount}</td>
                           <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <span className={`badge-status ${billingStatus.toLowerCase()}`}>
                               {billingStatus}
                             </span>
                           </td>
-                          <td>
+                          <td style={{ textAlign: 'center' }}>
                             <span className={`badge-status ${status.toLowerCase()}`}>
                               {status}
                             </span>
@@ -2984,7 +2996,7 @@ export default function ReportsPanel({
                           <td style={{ textAlign: 'center' }}>
                             <button
                               type="button"
-                              className="btn-page-nav"
+                              className="btn-table-action"
                               title="View Order Details"
                               onClick={() => setViewOrder(ord)}
                             >
@@ -3015,14 +3027,14 @@ export default function ReportsPanel({
                             <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
                             <td style={{ whiteSpace: 'nowrap', color: '#475569' }}>{formatDateTimeDMY(t.date)}</td>
                             <td><strong style={{ color: '#0f172a' }}>{t.txnNo || t.transactionNo}</strong></td>
-                            <td><span className="badge-type">{t.type || t.transactionType}</span></td>
+                            <td style={{ textAlign: 'center' }}><span className="badge-type">{t.type || t.transactionType}</span></td>
                             <td><strong style={{ color: '#0f172a' }}>{t.item || t.itemName}</strong></td>
                             <td style={{ textAlign: 'right', fontWeight: 700, color: isPositive ? '#15803d' : isNegative ? '#b91c1c' : '#0f172a' }}>
                               {isPositive ? `+${Math.abs(t.quantity)}` : isNegative ? `-${Math.abs(t.quantity)}` : t.quantity}
                             </td>
                             <td style={{ textAlign: 'center' }}>{t.unit}</td>
-                            <td style={{ color: '#334155' }}>{t.source || '-'}</td>
-                            <td style={{ color: '#334155' }}>{t.destination || '-'}</td>
+                            <td>{t.source || '-'}</td>
+                            <td>{t.destination || '-'}</td>
                             <td><span style={{ fontWeight: 600, color: '#475569' }}>{t.refNo || t.referenceNo || '-'}</span></td>
                             <td style={{ textAlign: 'center' }}>
                               <span className={`badge-status ${(t.status || 'Completed').toLowerCase().replace(/\s+/g, '-')}`}>
@@ -3142,7 +3154,7 @@ export default function ReportsPanel({
                           <td style={{ textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{serialNo}</td>
                           <td><span style={{ fontWeight: 600, color: '#334155' }}>{staffId}</span></td>
                           <td><strong style={{ color: '#0f172a' }}>{staffName}</strong></td>
-                          <td><span className="badge-type">{role}</span></td>
+                          <td style={{ textAlign: 'center' }}><span className="badge-type">{role}</span></td>
                           <td style={{ textAlign: 'right', fontWeight: 600 }}>{ordersHandled.toLocaleString()}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: '#2563eb' }}>{kotsHandled.toLocaleString()}</td>
                           <td style={{ textAlign: 'right', fontWeight: 600, color: '#0d9488' }}>{billsGenerated.toLocaleString()}</td>
@@ -3161,20 +3173,20 @@ export default function ReportsPanel({
               </tbody>
               {activeTab === 'sales' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={7} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Summary:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       ₹{Number(salesApiData?.summary?.grossRevenue ?? salesApiData?.summary?.grossSales ?? salesMetrics.grossRevenue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#be123c' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#be123c' }}>
                       ₹{Number(salesApiData?.summary?.totalDiscount ?? salesApiData?.summary?.totalDiscounts ?? salesMetrics.totalDiscount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d' }}>
                       ₹{Number(salesApiData?.summary?.taxCollected ?? salesApiData?.summary?.totalTax ?? salesMetrics.taxCollected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       ₹{Number(salesApiData?.summary?.netSales ?? salesApiData?.summary?.netRevenue ?? salesMetrics.netSales ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td colSpan={2}></td>
@@ -3183,11 +3195,11 @@ export default function ReportsPanel({
               )}
               {activeTab === 'items' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Summary:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       {Number(
                         dishApiData?.summary?.totalQuantitySold ??
                         dishApiData?.summary?.totalDishesPrepared ??
@@ -3195,7 +3207,7 @@ export default function ReportsPanel({
                         0
                       ).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#334155' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#334155' }}>
                       ₹{Number(
                         dishApiData?.summary?.grossSales ??
                         dishApiData?.summary?.totalGrossSales ??
@@ -3203,7 +3215,7 @@ export default function ReportsPanel({
                         0
                       ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#be123c' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#be123c' }}>
                       ₹{Number(
                         dishApiData?.summary?.totalDiscount ??
                         dishApiData?.summary?.discount ??
@@ -3211,7 +3223,7 @@ export default function ReportsPanel({
                         0
                       ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       ₹{Number(
                         dishApiData?.summary?.totalNetSales ??
                         dishApiData?.summary?.foodRevenueGenerated ??
@@ -3220,38 +3232,55 @@ export default function ReportsPanel({
                         0
                       ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#2563eb' }}>
                       100.0%
                     </td>
                   </tr>
                 </tfoot>
               )}
+              {activeTab === 'orders' && paginatedRecords.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
+                      Total Orders / Revenue:
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
+                      ₹{Number(
+                        orderAnalyticsApiData?.summary?.totalOrderRevenue ??
+                        orderAnalyticsApiData?.summary?.totalSales ??
+                        paginatedRecords.reduce((sum, o) => sum + Number(o.total ?? o.totalAmount ?? o.grossAmount ?? 0), 0)
+                      ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td colSpan={4}></td>
+                  </tr>
+                </tfoot>
+              )}
               {activeTab === 'inventory' && inventorySubTab === 'position' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Summary:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       {Number(inventoryApiData?.tableSummary?.totalOpeningStock ?? inventoryReportData.list.reduce((sum, i) => sum + i.openingStock, 0)).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d' }}>
                       {inventoryApiData?.tableSummary?.totalPurchasedAdded !== undefined
                         ? inventoryApiData.tableSummary.totalPurchasedAdded
                         : `+${inventoryReportData.list.reduce((sum, i) => sum + i.purchased, 0).toLocaleString()}`}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#b91c1c' }}>
                       {inventoryApiData?.tableSummary?.totalUsedConsumed !== undefined
                         ? inventoryApiData.tableSummary.totalUsedConsumed
                         : `-${inventoryReportData.list.reduce((sum, i) => sum + i.used, 0).toLocaleString()}`}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b45309' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#b45309' }}>
                       {Number(inventoryApiData?.tableSummary?.totalWastage ?? inventoryReportData.list.reduce((sum, i) => sum + i.wastage, 0)).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       {Number(inventoryApiData?.tableSummary?.totalClosingStock ?? inventoryReportData.list.reduce((sum, i) => sum + i.closingStock, 0)).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', color: '#64748b' }}>
+                    <td style={{ textAlign: 'right', color: '#64748b' }}>
                       -
                     </td>
                     <td></td>
@@ -3260,11 +3289,11 @@ export default function ReportsPanel({
               )}
               {activeTab === 'inventory' && inventorySubTab === 'movement' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={5} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Movements:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       {stockMovementData.list.reduce((sum, t) => sum + Number(t.quantity || 0), 0)}
                     </td>
                     <td colSpan={5}></td>
@@ -3273,14 +3302,14 @@ export default function ReportsPanel({
               )}
               {activeTab === 'inventory' && inventorySubTab === 'low-stock' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={2} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={2} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Low / Out of Stock Items:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#b91c1c' }}>
                       {inventoryReportData.lowStockList.reduce((sum, i) => sum + Number(i.closingStock || 0), 0)}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#64748b' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#64748b' }}>
                       {inventoryReportData.lowStockList.reduce((sum, i) => sum + Number(i.minStock || 0), 0)}
                     </td>
                     <td colSpan={2}></td>
@@ -3289,26 +3318,26 @@ export default function ReportsPanel({
               )}
               {activeTab === 'staff' && paginatedRecords.length > 0 && (
                 <tfoot>
-                  <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid #cbd5e1' }}>
-                    <td colSpan={4} style={{ textAlign: 'right', padding: '12px 10px', color: '#0f172a', fontWeight: 800 }}>
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'right', color: '#0f172a', fontWeight: 800 }}>
                       Total Summary:
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       {Number(staffApiData?.tableSummary?.totalOrdersHandled ?? staffApiData?.summary?.ordersHandled ?? staffApiData?.summary?.totalOrdersServed ?? staffReportData.totalOrdersHandled).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#2563eb' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#2563eb' }}>
                       {Number(staffApiData?.tableSummary?.totalKotsHandled ?? staffApiData?.summary?.kotsHandled ?? staffReportData.totalKotsHandled).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0d9488' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0d9488' }}>
                       {Number(staffApiData?.tableSummary?.totalBillsGenerated ?? staffApiData?.summary?.billsGenerated ?? staffReportData.totalBillsGenerated).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#15803d' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#15803d' }}>
                       {Number(staffApiData?.tableSummary?.totalPaymentsCollected ?? staffApiData?.summary?.paymentsCollected ?? staffReportData.totalPaymentsCollected).toLocaleString()}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
                       ₹{Number(staffApiData?.tableSummary?.totalSalesAmount ?? staffApiData?.summary?.salesAmount ?? staffApiData?.summary?.totalStaffSales ?? staffApiData?.summary?.totalWaiterRevenue ?? staffReportData.totalStaffSales).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', padding: '12px 10px', fontWeight: 800, color: '#b91c1c' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#b91c1c' }}>
                       {Number(staffApiData?.tableSummary?.totalCancelledOrders ?? staffApiData?.summary?.cancelledOrders ?? staffReportData.totalCancelledOrders).toLocaleString()}
                     </td>
                   </tr>
@@ -3428,22 +3457,22 @@ export default function ReportsPanel({
 
             <div>
               <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 700 }}>Order Items</h4>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <table className="reports-modal-table">
                 <thead>
-                  <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #cbd5e1' }}>
-                    <th style={{ padding: '8px', textAlign: 'left' }}>Item</th>
-                    <th style={{ padding: '8px', textAlign: 'center' }}>Qty</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Price</th>
-                    <th style={{ padding: '8px', textAlign: 'right' }}>Total</th>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Item</th>
+                    <th style={{ width: '70px', textAlign: 'center' }}>Qty</th>
+                    <th style={{ width: '100px', textAlign: 'right' }}>Price</th>
+                    <th style={{ width: '110px', textAlign: 'right' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(viewOrder.items || []).map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '8px' }}>{toDisplayText(item.name || item.itemName)}</td>
-                      <td style={{ padding: '8px', textAlign: 'center' }}>{item.quantity || item.qty || 1}</td>
-                      <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(item.price || 0).toLocaleString()}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600 }}>₹{(Number(item.price || 0) * Number(item.quantity || item.qty || 1)).toLocaleString()}</td>
+                    <tr key={idx}>
+                      <td style={{ textAlign: 'left', fontWeight: 600, color: '#0f172a' }}>{toDisplayText(item.name || item.itemName)}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.quantity || item.qty || 1}</td>
+                      <td style={{ textAlign: 'right' }}>₹{Number(item.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>₹{(Number(item.price || 0) * Number(item.quantity || item.qty || 1)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                 </tbody>

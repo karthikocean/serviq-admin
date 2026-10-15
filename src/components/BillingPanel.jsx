@@ -837,17 +837,17 @@ export default function BillingPanel({
         <div className="billing-table-responsive">
           <table className="billing-table" style={{ minWidth: '1610px' }}>
             <colgroup>
-              <col style={{ width: '65px' }} />   {/* 1. S.NO */}
-              <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
-              <col style={{ width: '175px' }} />  {/* 3. ORDER ID */}
-              <col style={{ width: '130px' }} />  {/* 4. ORDER TYPE */}
-              <col style={{ width: '170px' }} />  {/* 5. TABLE */}
-              <col style={{ width: '160px' }} />  {/* 6. BILL DATE & TIME */}
-              <col style={{ width: '150px' }} />  {/* 7. BILL AMOUNT */}
-              <col style={{ width: '145px' }} />  {/* 8. PAID AMOUNT */}
-              <col style={{ width: '155px' }} />  {/* 9. BALANCE AMOUNT */}
-              <col style={{ width: '135px' }} />  {/* 10. PAYMENT STATUS */}
-              <col style={{ width: '140px' }} />  {/* 11. ACTIONS */}
+              <col style={{ width: '65px' }} />
+              <col style={{ width: '185px' }} />
+              <col style={{ width: '175px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '170px' }} />
+              <col style={{ width: '160px' }} />
+              <col style={{ width: '150px' }} />
+              <col style={{ width: '145px' }} />
+              <col style={{ width: '155px' }} />
+              <col style={{ width: '135px' }} />
+              <col style={{ width: '140px' }} />
             </colgroup>
             <thead>
               <tr>
@@ -906,7 +906,7 @@ export default function BillingPanel({
                 };
 
                 return (
-                  <tr key={bill.tableId || bill._id || index}>
+                  <tr key={bill._id || bill.id || `${bill.tableId || 'tbl'}-${bill.orderId || bill.order_id || index}`}>
                     <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
                       {bill.sNo || (page * limit + index + 1)}
                     </td>

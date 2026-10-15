@@ -11,7 +11,6 @@ import { formatDateDMY } from '../helper/DateHelper.js';
 import { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
 import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
-import { isMongoId } from '../config/initialData.js';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -879,7 +878,7 @@ export default function OrdersPanel({
         else if (Array.isArray(d?.response)) fetchedMenuItems = d.response;
       }
 
-      const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+      const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
       const currentBranchObj = allBranchesList.find(b => 
         String(b._id || b.id || '').toLowerCase() === String(branchId || '').toLowerCase() ||
         String(b.branchCode || b.code || '').toLowerCase() === String(branchId || '').toLowerCase()
@@ -2280,9 +2279,12 @@ export default function OrdersPanel({
 
   // Helper to determine if a dish is Vegetarian or Non-Vegetarian
   const isDishVeg = (item) => {
-    if (item?.isVeg !== undefined) return Boolean(item.isVeg);
-    const n = (item?.name || '').toLowerCase();
-    const c = (item?.category || '').toLowerCase();
+    if (!item) return true;
+    if (item.isVeg !== undefined && item.isVeg !== null) return Boolean(item.isVeg);
+    const rawName = typeof item.name === 'string' ? item.name : (typeof item.dishName === 'string' ? item.dishName : (item.name?.name || ''));
+    const rawCat = typeof item.category === 'string' ? item.category : (item.category?.name || item.category?.categoryName || item.category?.title || '');
+    const n = String(rawName || '').toLowerCase();
+    const c = String(rawCat || '').toLowerCase();
     if (
       n.includes('chicken') ||
       n.includes('mutton') ||
@@ -3206,7 +3208,7 @@ export default function OrdersPanel({
                 {filteredMenuItems.map(item => {
                   const isVeg = isDishVeg(item);
                   const inOrderQty = newOrderItems
-                    .filter(it => it.name.toLowerCase() === item.name.toLowerCase())
+                    .filter(it => String(it?.name || '').toLowerCase() === String(item?.name || '').toLowerCase())
                     .reduce((s, it) => s + (it.qty || 1), 0);
 
                   return (
@@ -4427,18 +4429,18 @@ export default function OrdersPanel({
           <div className="orders-table-responsive">
             <table className="orders-table" style={{ width: '1515px', minWidth: '1515px' }}>
               <colgroup>
-                <col style={{ width: '55px' }} />   {/* 1. S.NO */}
-                <col style={{ width: '135px' }} />  {/* 2. ORDER ID */}
-                <col style={{ width: '110px' }} />  {/* 3. ORDER TYPE */}
-                <col style={{ width: '150px' }} />  {/* 4. TABLE */}
-                <col style={{ width: '130px' }} />  {/* 5. ITEMS */}
-                <col style={{ width: '120px' }} />  {/* 6. ORDER DATE */}
-                <col style={{ width: '125px' }} />  {/* 7. TIME / ELAPSED */}
-                <col style={{ width: '145px' }} />  {/* 8. ASSIGNED WAITER */}
-                <col style={{ width: '115px' }} />  {/* 9. AMOUNT */}
-                <col style={{ width: '125px' }} />  {/* 10. PAYMENT STATUS */}
-                <col style={{ width: '125px' }} />  {/* 11. ORDER STATUS */}
-                <col style={{ width: '180px' }} />  {/* 12. ACTIONS */}
+                <col style={{ width: '55px' }} />
+                <col style={{ width: '135px' }} />
+                <col style={{ width: '110px' }} />
+                <col style={{ width: '150px' }} />
+                <col style={{ width: '130px' }} />
+                <col style={{ width: '120px' }} />
+                <col style={{ width: '125px' }} />
+                <col style={{ width: '145px' }} />
+                <col style={{ width: '115px' }} />
+                <col style={{ width: '125px' }} />
+                <col style={{ width: '125px' }} />
+                <col style={{ width: '180px' }} />
               </colgroup>
               <thead>
                 <tr>

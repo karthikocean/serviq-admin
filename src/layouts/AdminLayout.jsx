@@ -169,19 +169,14 @@ export default function AdminLayout() {
       return false;
     }
 
-    // 2. Branch & Plans Management:
+    // 2. Branch & Plans Management: Strictly restricted to userType: "RESTAURANT_OWNER" only
     if (
       permissionKey === 'branch-management' || 
-      permissionKey === 'branches'
-    ) {
-      return isRestaurantOwner || hasPermission('branch-management', 'view');
-    }
-
-    if (
+      permissionKey === 'branches' ||
       permissionKey === 'plans-management' || 
       permissionKey === 'plans'
     ) {
-      return isRestaurantOwner || hasPermission('plans-management', 'view');
+      return String(currentUser?.userType || '').toUpperCase().trim() === 'RESTAURANT_OWNER';
     }
 
     if (permissionKey === 'billing' || permissionKey === 'billing_payments') {
@@ -448,7 +443,15 @@ export default function AdminLayout() {
     return <Navigate to="/plans-management" replace />;
   }
 
-  // 3. Permission-Gated Pages: If a user navigates to an unpermitted route, redirect to their first allowed module
+  // 3. Branch & Plans Management Access Gate:
+  // Strictly restricted to userType: "RESTAURANT_OWNER" only
+  const isRestaurantOwnerUser = String(currentUser?.userType || '').toUpperCase().trim() === 'RESTAURANT_OWNER';
+  if ((isBranchActive || isPlansActive) && !isRestaurantOwnerUser) {
+    ShowNotifications.showAlertNotification("Access Denied: Branch Management and Plans Management are restricted to Restaurant Owners.", false);
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // 4. Permission-Gated Pages: If a user navigates to an unpermitted route, redirect to their first allowed module
   if (!isCurrentPageAllowed) {
     const fallbackRoute = getFirstAllowedRoute();
     if (fallbackRoute && fallbackRoute !== pathname) {
@@ -492,8 +495,8 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 2. Branch Management */}
-          {isTabAllowed('branch-management') && (
+          {/* 2. Branch Management (Only for userType: RESTAURANT_OWNER) */}
+          {isRestaurantOwnerUser && isTabAllowed('branch-management') && (
             <li className={`sidebar-item ${isBranchActive ? 'active' : ''}`}>
               <Link to="/branch-management" onClick={handleCloseAllDropdowns}>
                 <span className="sidebar-icon-box">
@@ -504,8 +507,8 @@ export default function AdminLayout() {
             </li>
           )}
 
-          {/* 3. Plans Management */}
-          {isTabAllowed('plans-management') && (
+          {/* 3. Plans Management (Only for userType: RESTAURANT_OWNER) */}
+          {isRestaurantOwnerUser && isTabAllowed('plans-management') && (
             <li className={`sidebar-item ${isPlansActive ? 'active' : ''}`}>
               <Link to="/plans-management" onClick={handleCloseAllDropdowns}>
                 <span className="sidebar-icon-box">

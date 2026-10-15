@@ -69,24 +69,12 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
     : (typeof currentUser?.role === 'string' ? currentUser.role : '');
   const userTypeStr = typeof currentUser?.userType === 'string' ? currentUser.userType : '';
-
-  const userType = (userTypeStr || roleStr || '').toUpperCase();
-  const userRoleLower = (roleStr || '').toLowerCase();
-  const isRestaurantOwner = 
-    userType === 'RESTAURANT_OWNER' || 
-    userType === 'OWNER' || 
-    userType === 'SUPER ADMIN' || 
-    userType === 'SUPER_ADMIN' || 
-    userRoleLower === 'restaurant_owner' || 
-    userRoleLower === 'restaurant owner' || 
-    userRoleLower === 'owner' || 
-    userRoleLower === 'super admin' || 
-    userRoleLower === 'super_admin';
+  const isRestaurantOwner = userTypeStr.toUpperCase().trim() === 'RESTAURANT_OWNER';
 
   const role = roleStr || 'Admin';
-  const hasPermission = hasPermissionProp || contextHasPermission || ((moduleName, action = 'view') => isRestaurantOwner);
+  const hasPermission = (moduleName, action = 'view') => isRestaurantOwner;
 
-  if (!isRestaurantOwner && !hasPermission('plans-management', 'view')) {
+  if (!isRestaurantOwner) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center', background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0', margin: '20px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '28px', margin: '0 auto 16px auto' }}>
@@ -96,7 +84,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
           Access Denied
         </h2>
         <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-          You do not have permission to view or manage subscription plans.
+          Plans Management is restricted to Restaurant Owners only.
         </p>
         <Link to="/dashboard" style={{ display: 'inline-block', background: 'var(--primary)', color: '#ffffff', padding: '10px 24px', borderRadius: '8px', textDecoration: 'none', fontWeight: 700, fontSize: '14px' }}>
           Return to Dashboard
