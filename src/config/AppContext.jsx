@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId, initialTables, initialOrders, initialMenu, initialStaff, initialBillingData, initialBillingHistory } from './initialData';
+import { initialRestaurantsData, initialState, AVAILABLE_PLANS, getPlanBranchLimit, resolveHumanPlanName, isMongoId } from './initialData';
 import { isTokenExpired, apiClient } from './index.js';
 import AuthApi from '../api/Auth.js';
 import MemberApi from '../api/Table.js';
@@ -744,8 +744,8 @@ export const AppProvider = ({ children }) => {
   }, [currentRestaurantId, restaurantsData, currentUser, FALLBACK_RESTAURANT]);
 
   const computeBillingData = (ordersList = [], tablesList = []) => {
-    const effectiveTables = (Array.isArray(tablesList) && tablesList.length > 0) ? tablesList : initialTables;
-    const effectiveOrders = (Array.isArray(ordersList) && ordersList.length > 0) ? ordersList : initialOrders;
+    const effectiveTables = Array.isArray(tablesList) ? tablesList : [];
+    const effectiveOrders = Array.isArray(ordersList) ? ordersList : [];
 
     const extractOrderTable = (o) => {
       if (!o) return '';
@@ -838,8 +838,8 @@ export const AppProvider = ({ children }) => {
         status: isUnpaid ? 'Unpaid' : 'Paid',
         paymentStatus: isUnpaid ? 'Unpaid' : 'Paid',
         paymentMethod: primaryOrder.paymentMethod || 'UPI',
-        cashier: primaryOrder.staff || primaryOrder.waiter || 'Priya Sharma',
-        staff: primaryOrder.waiter || primaryOrder.staff || 'Ramesh Kumar',
+        cashier: primaryOrder.staff || primaryOrder.waiter || '-',
+        staff: primaryOrder.waiter || primaryOrder.staff || '-',
         customerName: primaryOrder.customerName || `Guest (${tableLabel})`,
         customerPhone: primaryOrder.customerPhone || '',
         orderIds: targetOrders.map(o => o._id || o.id).filter(Boolean),
@@ -941,7 +941,7 @@ export const AppProvider = ({ children }) => {
         setRestaurantsData(prev => {
           const rest = prev[targetId];
           if (!rest) return prev;
-          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : initialOrders);
+          const finalOrders = rawOrders.length > 0 ? rawOrders : (rest.orders?.length > 0 ? rest.orders : []);
           const computedBillData = computeBillingData(finalOrders, rest.tables || []);
           return {
             ...prev,
@@ -1029,6 +1029,7 @@ export const AppProvider = ({ children }) => {
               const resolvedMgr = (b.managerName && b.managerName !== 'Unassigned') ? b.managerName : ((b.branchManager && b.branchManager !== 'Unassigned') ? b.branchManager : 'Unassigned');
 
               return {
+                ...b,
                 id: b._id || b.id,
                 _id: b._id || b.id,
                 branchName: b.branchName || b.name,
@@ -1044,7 +1045,9 @@ export const AppProvider = ({ children }) => {
                 pincode: typeof b.address === 'object' && b.address !== null ? (b.address.pincode || '') : (b.pincode || ''),
                 openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate || ''),
                 status: b.status || 'Active',
-                totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0)
+                totalTables: b.totalTables !== undefined ? b.totalTables : (Array.isArray(b.tables) ? b.tables.length : 0),
+                isMainBranch: Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN' || String(b.branchName || b.name || '').toLowerCase().includes('main')),
+                branchType: b.branchType || (b.isMainBranch ? 'MAIN' : 'SUB')
               };
             });
 
@@ -1054,7 +1057,7 @@ export const AppProvider = ({ children }) => {
               prevBranches.length === mappedBranches.length &&
               prevBranches.every((pb, idx) => {
                 const mb = mappedBranches[idx];
-                return pb && mb && (pb.id === mb.id || pb._id === mb._id) && pb.branchName === mb.branchName && pb.status === mb.status;
+                return pb && mb && (pb.id === mb.id || pb._id === mb._id) && pb.branchName === mb.branchName && pb.status === mb.status && pb.isMainBranch === mb.isMainBranch;
               })
             ) {
               return prev;

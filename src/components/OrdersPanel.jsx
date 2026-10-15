@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import apiClient from '../config/index.js';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
@@ -8,9 +8,10 @@ import { Modal } from './Modal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import { useAppState } from '../config/AppContext';
-import { isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
+import { isUserCompanyUser, getUserAssignedBranchId, isBranchMatch } from '../helper/BranchHelper.js';
+import { isMongoId } from '../config/initialData.js';
 import '../pages/OrderManagement/OrderManagement.css';
 
 // Clean SVG Icons
@@ -300,6 +301,7 @@ export default function OrdersPanel({
   const [customerName, setCustomerName] = useState('');
   const [customerMobile, setCustomerMobile] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [orderValidationErrors, setOrderValidationErrors] = useState({});
   const [newOrderWaiter, setNewOrderWaiter] = useState('Unassigned');
   const [newOrderSource, setNewOrderSource] = useState('Admin / POS'); // Admin / POS, Customer Website, Waiter App, Online / Delivery Partner
   const [newOrderNotes, setNewOrderNotes] = useState('');
@@ -381,11 +383,11 @@ export default function OrdersPanel({
   useEffect(() => {
     const loadTablesForPanel = async () => {
       try {
-        const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL';
-        const query = isBranchFiltered ? `?branchId=${selectedBranchId}` : '';
+        const isValidBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && /^[0-9a-fA-F]{24}$/.test(String(selectedBranchId));
+        const query = isValidBranch ? `?branchId=${selectedBranchId}&limit=100` : '?limit=100';
         const res = await apiClient.get(`/tables${query}`).catch(() => null);
         if (res && (res.status === 200 || res.data?.success)) {
-          const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.response?.data || []);
+          const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.tables || res.data?.response?.data || []);
           if (Array.isArray(fetched) && fetched.length > 0) {
             setApiTables(fetched);
           }
@@ -603,62 +605,111 @@ export default function OrdersPanel({
       <html>
       <head>
         <title>KOT - ${kotNoStr}</title>
+        <meta charset="utf-8" />
         <style>
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
           @page { size: portrait; margin: 4mm; }
-          * { box-sizing: border-box; }
-          body { font-family: 'Courier New', Courier, monospace; width: 280px; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+          body {
+            font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+            background: #ffffff;
+            color: #000000;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            font-size: 13px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
           @media print {
-            html, body { width: 100% !important; margin: 0 !important; padding: 4px !important; display: flex !important; justify-content: center !important; }
-            .kot-container { width: 280px !important; max-width: 280px !important; margin: 0 auto !important; }
+            html, body {
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              display: flex !important;
+              flex-direction: column !important;
+              align-items: center !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .kot-container {
+              width: 380px !important;
+              max-width: 380px !important;
+              min-width: 340px !important;
+              margin: 0 auto !important;
+              box-shadow: none !important;
+              border: none !important;
+              padding: 6px 10px !important;
+            }
             @page { size: portrait; margin: 4mm; }
           }
-          .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
-          .title { font-size: 16px; font-weight: bold; margin: 0; }
-          .subtitle { font-size: 12px; font-weight: bold; margin-top: 2px; }
-          .info { margin-bottom: 8px; border-bottom: 1px dashed #000; padding-bottom: 8px; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-          th { text-align: left; border-bottom: 1px solid #000; font-size: 11px; padding: 4px 0; }
-          td { padding: 4px 0; font-size: 11px; vertical-align: top; }
-          .notes { font-size: 10px; font-style: italic; color: #333; margin-top: 2px; }
-          .footer { text-align: center; border-top: 1px dashed #000; margin-top: 12px; padding-top: 8px; font-size: 10px; }
+          .kot-container {
+            width: 100%;
+            max-width: 380px;
+            background: #ffffff;
+            color: #000000;
+            padding: 14px 16px;
+          }
+          .header { text-align: center; border-bottom: 1.5px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+          .title { font-size: 18px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .subtitle { font-size: 13px; font-weight: 700; margin-top: 4px; letter-spacing: 1.5px; }
+          .info { margin-bottom: 10px; border-bottom: 1.5px dashed #000; padding-bottom: 10px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th { text-align: left; border-bottom: 1.5px solid #000; font-size: 13px; font-weight: 700; padding: 6px 0; text-transform: uppercase; }
+          td { padding: 6px 0; font-size: 13px; vertical-align: top; }
+          .notes { font-size: 11.5px; font-style: italic; color: #444; margin-top: 2px; }
+          .footer { text-align: center; border-top: 1.5px dashed #000; margin-top: 14px; padding-top: 8px; font-size: 12px; font-weight: 600; }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ RESTAURANT'}</div>
-          <div class="subtitle">KITCHEN ORDER TICKET (KOT)</div>
-        </div>
-        <div class="info">
-          <div class="info-row"><span><strong>KOT No:</strong> ${kotNoStr}</span><span><strong>Order ID:</strong> #${orderIdStr}</span></div>
-          <div class="info-row"><span><strong>Table:</strong> ${tableStr}</span><span><strong>Type:</strong> ${ord.orderType || 'Dine-In'}</span></div>
-          <div class="info-row"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div>
-          ${(ord.orderType && ord.orderType !== 'Dine-In') ? '' : `<div class="info-row"><span><strong>Waiter:</strong> ${waiterStr}</span></div>`}
-        </div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width: 55%;">Item</th>
-              <th style="width: 15%; text-align: center;">Qty</th>
-              <th style="width: 30%; text-align: right;">Notes</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map(it => `
+        <div class="kot-container">
+          <div class="header">
+            <div class="title">${activeRestaurant?.name || activeRestaurant?.restaurantName || 'XYZ RESTAURANT'}</div>
+            <div class="subtitle">KITCHEN ORDER TICKET (KOT)</div>
+          </div>
+          <div class="info">
+            <div class="info-row"><span><strong>KOT No:</strong> ${kotNoStr}</span><span><strong>Order ID:</strong> #${orderIdStr}</span></div>
+            <div class="info-row"><span><strong>Table:</strong> ${tableStr}</span><span><strong>Type:</strong> ${ord.orderType || 'Dine-In'}</span></div>
+            <div class="info-row"><span><strong>Date:</strong> ${dateStr}</span><span><strong>Time:</strong> ${timeStr}</span></div>
+            ${(ord.orderType && ord.orderType !== 'Dine-In') ? '' : `<div class="info-row"><span><strong>Waiter:</strong> ${waiterStr}</span></div>`}
+          </div>
+          <table>
+            <thead>
               <tr>
-                <td><strong>${it.name || 'Item'}</strong>${it.addOns ? `<div class="notes">+ ${it.addOns}</div>` : ''}</td>
-                <td style="text-align: center;"><strong>${it.qty || it.quantity || 1}</strong></td>
-                <td style="text-align: right; font-size: 10px;">${it.notes || '-'}</td>
+                <th style="width: 55%;">Item</th>
+                <th style="width: 15%; text-align: center;">Qty</th>
+                <th style="width: 30%; text-align: right;">Notes</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        ${ord.notes ? `<div style="margin-top: 8px; font-size: 11px; border-top: 1px dotted #000; padding-top: 4px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
-        <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
+            </thead>
+            <tbody>
+              ${items.map(it => `
+                <tr>
+                  <td><strong style="font-size: 13.5px;">${it.name || 'Item'}</strong>${it.addOns ? `<div class="notes">+ ${it.addOns}</div>` : ''}</td>
+                  <td style="text-align: center; font-size: 14px;"><strong>${it.qty || it.quantity || 1}</strong></td>
+                  <td style="text-align: right; font-size: 11.5px;">${it.notes || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          ${ord.notes ? `<div style="margin-top: 10px; font-size: 12px; border-top: 1px dotted #000; padding-top: 6px;"><strong>Order Note:</strong> ${ord.notes}</div>` : ''}
+          <div class="footer">Printed at ${new Date().toLocaleTimeString()}</div>
+        </div>
         <script>
-          window.onload = function() {
-            setTimeout(function() { window.print(); }, 100);
-          };
+          function triggerPrint() {
+            window.focus();
+            setTimeout(function() {
+              window.print();
+            }, 200);
+          }
+          if (document.readyState === 'complete') {
+            triggerPrint();
+          } else {
+            window.addEventListener('load', triggerPrint);
+          }
           window.onafterprint = function() {
             try { window.close(); } catch(e) {}
           };
@@ -667,14 +718,14 @@ export default function OrdersPanel({
       </html>
     `;
 
-    openCenteredPrintWindow(html, `KOT - ${kotNoStr}`, 460, 680);
+    openCenteredPrintWindow(html, `KOT - ${kotNoStr}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Helper for Printing Bill (Exact Thermal Receipt UI - Centered Popup Window)
   const handlePrintBill = (ord) => {
     if (!ord) return;
     const html = generateReceiptHtml(ord, activeRestaurant);
-    openCenteredPrintWindow(html, `Print Bill - ${ord?.billNo || ord?.id || 'Doc'}`, 480, 700);
+    openCenteredPrintWindow(html, `Print Bill - ${ord?.billNo || ord?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Extract menu items from activeRestaurant
@@ -803,18 +854,18 @@ export default function OrdersPanel({
 
   const fetchModalDataForBranch = async (branchId) => {
     try {
-      const isBranchFiltered = branchId && branchId !== 'ALL' && branchId !== 'all';
-      const branchParam = isBranchFiltered ? `branchId=${branchId}&` : '';
+      const isValidBranch = branchId && branchId !== 'ALL' && branchId !== 'all' && String(branchId).toUpperCase() !== 'COMPANY' && /^[0-9a-fA-F]{24}$/.test(String(branchId));
+      const branchParam = isValidBranch ? `branchId=${branchId}&` : '';
       const menuParams = { limit: 10 };
-      if (isBranchFiltered) {
+      if (isValidBranch) {
         menuParams.branchId = branchId;
       }
 
       const [menuRes, catRes, tableRes, staffRes] = await Promise.all([
         MenuApi.getMenuItems(menuParams).catch(() => null),
         apiClient.get(`/menu/categories?${branchParam}limit=10`).catch(() => null),
-        apiClient.get(`/tables?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null),
-        apiClient.get(`/users?${isBranchFiltered ? `branchId=${branchId}` : ''}`).catch(() => null)
+        apiClient.get(`/tables?${branchParam}limit=100`).catch(() => null),
+        apiClient.get(`/users?${branchParam}limit=100`).catch(() => null)
       ]);
 
       let fetchedMenuItems = [];
@@ -904,16 +955,31 @@ export default function OrdersPanel({
         else if (Array.isArray(td?.data)) fetchedTables = td.data;
         else if (Array.isArray(td?.data?.tables)) fetchedTables = td.data.tables;
         else if (Array.isArray(td?.tables)) fetchedTables = td.tables;
+        else if (Array.isArray(td?.response?.data)) fetchedTables = td.response.data;
         if (fetchedTables.length > 0) {
           setApiTables(fetchedTables);
         }
+      }
+
+      if (fetchedTables.length === 0) {
+        try {
+          const fallbackTblRes = await apiClient.get('/tables?limit=100').catch(() => null);
+          if (fallbackTblRes && (fallbackTblRes.status === 200 || fallbackTblRes.data?.success)) {
+            const ftd = fallbackTblRes.data;
+            const fallbackArr = Array.isArray(ftd) ? ftd : (ftd?.data || ftd?.tables || ftd?.response?.data || []);
+            if (Array.isArray(fallbackArr) && fallbackArr.length > 0) {
+              fetchedTables = fallbackArr;
+              setApiTables(fallbackArr);
+            }
+          }
+        } catch (e) { }
       }
 
       // Find first available table if possible
       const availableT = fetchedTables.find(t => !isTableOccupied(t.tableNumber || t.tableNo || t.name, fetchedTables));
       const firstTable = availableT
         ? (availableT.tableNumber || availableT.tableNo || availableT.name)
-        : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo) : (displayTables.length > 0 ? displayTables[0] : ''));
+        : (fetchedTables.length > 0 ? (fetchedTables[0].tableNumber || fetchedTables[0].tableNo || fetchedTables[0].name) : (displayTables.length > 0 ? displayTables[0] : '01'));
 
       setNewOrderTable(firstTable);
 
@@ -962,6 +1028,7 @@ export default function OrdersPanel({
     setItemQuantityInput(1);
     setItemNotesInput('');
     setItemAddonsInput('');
+    setOrderValidationErrors({});
     setIsCreateOrderModalOpen(true);
   };
 
@@ -1219,43 +1286,82 @@ export default function OrdersPanel({
 
   const handleCreateOrderSubmit = async (e) => {
     if (e) e.preventDefault();
+    const errors = {};
+
     if (newOrderItems.length === 0) {
       ShowNotifications.showAlertNotification("Please add at least one item to the order.", false);
       return;
     }
 
-    if (newOrderType === 'Dine-In' && !newOrderTable) {
-      ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
-      return;
-    }
-
-    if (newOrderType === 'Delivery') {
-      if (!customerName.trim()) {
-        ShowNotifications.showAlertNotification("Customer Name is required for Delivery.", false);
+    if (newOrderType === 'Dine-In') {
+      if (!newOrderTable) {
+        errors.newOrderTable = "Please select a dining table for Dine-In order.";
+        ShowNotifications.showAlertNotification("Please select a dining table for Dine-In order.", false);
+        setOrderValidationErrors(errors);
         return;
       }
-      if (!customerMobile.trim()) {
-        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
-        return;
-      }
-      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
-      if (digitsOnly.length !== 10) {
-        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
-        return;
-      }
-      if (!deliveryAddress.trim()) {
-        ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
-        return;
-      }
-    } else {
       if (customerMobile.trim()) {
         const digitsOnly = customerMobile.trim().replace(/\D/g, '');
         if (digitsOnly.length !== 10) {
+          errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
           ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+          setOrderValidationErrors(errors);
           return;
         }
       }
     }
+
+    if (newOrderType === 'Takeaway') {
+      if (!customerName || !customerName.trim()) {
+        errors.customerName = "Customer Name is required for Takeaway.";
+        ShowNotifications.showAlertNotification("Customer Name is required for Takeaway.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!customerMobile || !customerMobile.trim()) {
+        errors.customerMobile = "Customer Mobile Number is required for Takeaway.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Takeaway.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+      if (digitsOnly.length !== 10) {
+        errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+    }
+
+    if (newOrderType === 'Delivery') {
+      if (!customerName || !customerName.trim()) {
+        errors.customerName = "Customer Name is required for Delivery.";
+        ShowNotifications.showAlertNotification("Customer Name is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!customerMobile || !customerMobile.trim()) {
+        errors.customerMobile = "Customer Mobile Number is required for Delivery.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      const digitsOnly = customerMobile.trim().replace(/\D/g, '');
+      if (digitsOnly.length !== 10) {
+        errors.customerMobile = "Customer Mobile Number must be exactly 10 digits.";
+        ShowNotifications.showAlertNotification("Customer Mobile Number must be exactly 10 digits.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+      if (!deliveryAddress || !deliveryAddress.trim()) {
+        errors.deliveryAddress = "Delivery Address is required for Delivery.";
+        ShowNotifications.showAlertNotification("Delivery Address is required for Delivery.", false);
+        setOrderValidationErrors(errors);
+        return;
+      }
+    }
+
+    setOrderValidationErrors({});
 
     // Check if selected table is occupied before sending (for Dine-In)
     if (newOrderType === 'Dine-In') {
@@ -1273,25 +1379,59 @@ export default function OrdersPanel({
     const tax = parseFloat((subtotal * (taxRate / 100)).toFixed(2));
     const total = parseFloat((subtotal + tax).toFixed(2));
 
-    // 1. Robust table matching for Dine-In
-    const matchedTable = newOrderType === 'Dine-In'
-      ? (apiTables.find(t =>
-        (t._id && String(t._id) === String(newOrderTable)) ||
-        (t.id && String(t.id) === String(newOrderTable)) ||
-        (t.tableNumber !== undefined && String(t.tableNumber).trim() === String(newOrderTable).trim()) ||
-        (t.tableNo !== undefined && String(t.tableNo).trim() === String(newOrderTable).trim()) ||
-        (t.name && String(t.name).trim().toLowerCase() === String(newOrderTable).trim().toLowerCase()) ||
-        (t.tableNumber !== undefined && `TBL-${String(t.tableNumber).padStart(3, '0')}`.toLowerCase() === String(newOrderTable).toLowerCase()) ||
-        (t.tableNumber !== undefined && `Table ${t.tableNumber}`.toLowerCase() === String(newOrderTable).toLowerCase())
-      ) || (apiTables.length > 0 ? apiTables[0] : null))
-      : null;
+    // 1. Gather all table candidates from state, props, and tenant config
+    let allAvailableTables = [
+      ...(Array.isArray(apiTables) ? apiTables : []),
+      ...(Array.isArray(tables) ? tables : []),
+      ...(Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables : [])
+    ];
 
-    // 2. Waiter matching ONLY for Dine-In
+    // If no tables with valid MongoDB _id exist, fetch fresh from backend right now
+    if (!allAvailableTables.some(t => t && t._id && /^[0-9a-fA-F]{24}$/.test(String(t._id)))) {
+      try {
+        const freshTablesRes = await apiClient.get('/tables?limit=100').catch(() => null);
+        if (freshTablesRes && (freshTablesRes.status === 200 || freshTablesRes.data?.success)) {
+          const freshData = freshTablesRes.data;
+          const freshList = Array.isArray(freshData) ? freshData : (freshData?.data || freshData?.tables || freshData?.response?.data || []);
+          if (Array.isArray(freshList) && freshList.length > 0) {
+            allAvailableTables = [...freshList, ...allAvailableTables];
+            setApiTables(freshList);
+          }
+        }
+      } catch (tblErr) {
+        console.warn("Direct table resolution fetch note:", tblErr);
+      }
+    }
+
+    // 2. Robust table matching for Dine-In
+    let matchedTable = null;
+    const targetTblStr = String(newOrderTable || '').trim().toLowerCase();
+    const numOnly = targetTblStr.replace(/\D/g, '');
+
+    matchedTable = allAvailableTables.find(t => {
+      if (!t) return false;
+      const tId = String(t._id || t.id || '').trim().toLowerCase();
+      const tNum = String(t.tableNumber || t.tableNo || '').trim().toLowerCase();
+      const tName = String(t.name || '').trim().toLowerCase();
+      const tCode = String(t.tableId || '').trim().toLowerCase();
+      const bNum = (tNum || tName || tId).replace(/\D/g, '');
+
+      if (tId && tId === targetTblStr) return true;
+      if (tNum && tNum === targetTblStr) return true;
+      if (tName && tName === targetTblStr) return true;
+      if (tCode && tCode === targetTblStr) return true;
+      if (tNum && `table ${tNum}` === targetTblStr) return true;
+      if (tNum && `tbl-${tNum.padStart(3, '0')}`.toLowerCase() === targetTblStr) return true;
+      if (numOnly && bNum && parseInt(numOnly, 10) === parseInt(bNum, 10)) return true;
+      return false;
+    }) || (allAvailableTables.length > 0 ? allAvailableTables[0] : null);
+
+    // 3. Waiter matching ONLY for Dine-In
     const matchedWaiter = newOrderType === 'Dine-In' && newOrderWaiter && newOrderWaiter !== 'Unassigned' && newOrderWaiter !== 'None'
       ? (allWaiters.find(w => w.name === newOrderWaiter) || staff.find(w => w.name === newOrderWaiter))
       : null;
 
-    // 3. Format items avoiding empty-string menuId (which fails ObjectId validation)
+    // 4. Format items avoiding empty-string menuId (which fails ObjectId validation)
     const formattedItems = newOrderItems.map(item => {
       const itObj = {
         name: item.name,
@@ -1312,6 +1452,32 @@ export default function OrdersPanel({
       return itObj;
     });
 
+    // 5. Strictly resolve tableId for Dine-In ONLY (do NOT send tableId for Takeaway or Delivery)
+    let resolvedTableId = '';
+    let resolvedTable = '';
+    let resolvedTableNumber = '';
+
+    const firstTableWithMongoId = allAvailableTables.find(t => t && t._id && /^[0-9a-fA-F]{24}$/.test(String(t._id)));
+    const anyFallbackTable = firstTableWithMongoId || allAvailableTables[0];
+
+    if (newOrderType === 'Dine-In') {
+      if (matchedTable) {
+        resolvedTableId = String(matchedTable._id || matchedTable.id || matchedTable.tableId || '');
+        resolvedTable = String(matchedTable.tableNumber || matchedTable.tableNo || matchedTable.name || newOrderTable || '01');
+        resolvedTableNumber = String(matchedTable.tableNumber || matchedTable.tableNo || newOrderTable || '01');
+      } else {
+        resolvedTableId = String(anyFallbackTable?._id || anyFallbackTable?.id || newOrderTable || '01');
+        resolvedTable = String(newOrderTable || '01');
+        resolvedTableNumber = String(newOrderTable || '01');
+      }
+      if (resolvedTableId && !/^[0-9a-fA-F]{24}$/.test(resolvedTableId) && firstTableWithMongoId?._id) {
+        resolvedTableId = String(firstTableWithMongoId._id);
+      }
+    } else {
+      resolvedTable = newOrderType;
+      resolvedTableNumber = newOrderType;
+    }
+
     const payload = {
       orderType: newOrderType,
       type: newOrderType,
@@ -1325,6 +1491,15 @@ export default function OrdersPanel({
       total
     };
 
+    if (newOrderType === 'Dine-In') {
+      payload.tableId = String(resolvedTableId || firstTableWithMongoId?._id || anyFallbackTable?._id || anyFallbackTable?.id || '65b000000000000000000001');
+      payload.table = resolvedTable;
+      payload.tableNumber = resolvedTableNumber;
+    } else {
+      // For Takeaway and Delivery, do NOT send tableId!
+      payload.table = newOrderType;
+    }
+
     if (newOrderNotes && newOrderNotes.trim()) {
       payload.notes = newOrderNotes.trim();
     }
@@ -1335,17 +1510,14 @@ export default function OrdersPanel({
       : (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' ? selectedBranchId : getFallbackBranchId());
     if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
       payload.branchId = String(effectiveBranch);
+    } else if (matchedTable?.branchId) {
+      const tbBranch = typeof matchedTable.branchId === 'object' ? matchedTable.branchId?._id : matchedTable.branchId;
+      if (tbBranch && /^[0-9a-fA-F]{24}$/.test(String(tbBranch))) {
+        payload.branchId = String(tbBranch);
+      }
     }
 
     if (newOrderType === 'Dine-In') {
-      if (matchedTable) {
-        payload.tableId = matchedTable._id || matchedTable.id;
-        payload.table = matchedTable.tableNumber || matchedTable.tableNo || matchedTable.name || String(newOrderTable);
-        payload.tableNumber = matchedTable.tableNumber || matchedTable.tableNo || String(newOrderTable);
-      } else {
-        payload.table = String(newOrderTable || '01');
-      }
-
       if (matchedWaiter) {
         const validWaiterId = matchedWaiter._id || matchedWaiter.id;
         if (validWaiterId && /^[0-9a-fA-F]{24}$/.test(String(validWaiterId))) {
@@ -1357,9 +1529,6 @@ export default function OrdersPanel({
         payload.waiter = 'Unassigned';
       }
     } else {
-      // Takeaway or Delivery: No waiter assigned, table identifier is the order type
-      payload.table = newOrderType;
-      payload.tableNumber = newOrderType;
       payload.waiter = 'Unassigned';
 
       if (customerName && customerName.trim()) {
@@ -1408,19 +1577,13 @@ export default function OrdersPanel({
     } catch (error) {
       console.error("Order creation error:", error, "Server data:", error.response?.data);
       const serverData = error.response?.data;
-      let errorMsg = serverData?.message || serverData?.error;
-      if (!errorMsg && serverData?.errors) {
-        if (Array.isArray(serverData.errors)) {
-          errorMsg = serverData.errors.map(e => e.msg || e.message || String(e)).join(', ');
-        } else if (typeof serverData.errors === 'object') {
-          errorMsg = Object.values(serverData.errors).map(e => e.message || e.msg || String(e)).join(', ');
-        }
-      }
-      if (!errorMsg && typeof serverData === 'string') {
-        errorMsg = serverData;
-      }
-      if (!errorMsg) {
-        errorMsg = error.message || "Failed to create order via API";
+      let errorMsg = '';
+      if (Array.isArray(serverData?.errors) && serverData.errors.length > 0) {
+        errorMsg = serverData.errors.map(e => `${e.field ? `[${e.field}]: ` : ''}${e.message || e.msg || String(e)}`).join(', ');
+      } else if (serverData?.errors && typeof serverData.errors === 'object') {
+        errorMsg = Object.values(serverData.errors).map(e => e.message || e.msg || String(e)).join(', ');
+      } else {
+        errorMsg = serverData?.message || serverData?.error || error.message || "Failed to create order via API";
       }
 
       // Check if table is occupied
@@ -1435,17 +1598,15 @@ export default function OrdersPanel({
         }
       }
 
-      // Fallback: If non-Dine-In order failed because backend schema requires tableId
-      if (newOrderType !== 'Dine-In' && typeof errorMsg === 'string' && (errorMsg.toLowerCase().includes('table') || errorMsg.toLowerCase().includes('tableid'))) {
+      // Auto-retry if backend validation failed due to tableId (Dine-In ONLY)
+      if (newOrderType === 'Dine-In' && serverData?.errors?.some(e => String(e.field || '').includes('tableId') || String(e.message || '').includes('tableId'))) {
         try {
-          const fallbackTable = apiTables[0];
-          if (fallbackTable?._id) {
-            const fallbackPayload = {
-              ...payload,
-              tableId: fallbackTable._id,
-              table: fallbackTable.tableNumber || fallbackTable.name || '01'
-            };
-            const retryRes = await apiClient.post('/orders', fallbackPayload);
+          const freshRes = await apiClient.get('/tables?limit=10').catch(() => null);
+          const tList = Array.isArray(freshRes?.data) ? freshRes.data : (freshRes?.data?.data || freshRes?.data?.tables || []);
+          const firstTbl = tList.find(t => t && t._id);
+          if (firstTbl?._id && String(payload.tableId) !== String(firstTbl._id)) {
+            const retryPayload = { ...payload, tableId: String(firstTbl._id) };
+            const retryRes = await apiClient.post('/orders', retryPayload);
             if (retryRes.data?.success || retryRes.status === 200 || retryRes.status === 201) {
               ShowNotifications.showAlertNotification(`Order created successfully!`, true);
               setIsCreateOrderModalOpen(false);
@@ -1558,11 +1719,17 @@ export default function OrdersPanel({
     const isNoneWaiter = !editOrderWaiter || editOrderWaiter === 'Unassigned' || editOrderWaiter === 'None';
     const waiterId = isNoneWaiter ? null : (waiter ? (waiter._id || waiter.id) : (editingOrder.waiterId?._id || editingOrder.waiterId || null));
 
+    const isDineIn = !editingOrder.orderType || editingOrder.orderType === 'Dine-In';
+
     const payload = {
-      table: editOrderTable,
-      tableId: table ? table._id : (editingOrder.tableId?._id || editingOrder.tableId),
-      waiter: (!editingOrder.orderType || editingOrder.orderType === 'Dine-In') ? (isNoneWaiter ? 'Unassigned' : editOrderWaiter) : 'Unassigned',
-      waiterId: (!editingOrder.orderType || editingOrder.orderType === 'Dine-In') ? waiterId : null,
+      ...(isDineIn ? {
+        table: editOrderTable,
+        tableId: table ? table._id : (editingOrder.tableId?._id || editingOrder.tableId)
+      } : {
+        table: editingOrder.orderType || 'Takeaway'
+      }),
+      waiter: isDineIn ? (isNoneWaiter ? 'Unassigned' : editOrderWaiter) : 'Unassigned',
+      waiterId: isDineIn ? waiterId : null,
       notes: editOrderNotes,
       status: editOrderStatus,
       customerName: editCustomerName ? editCustomerName.trim() : (editingOrder.customerName || ''),
@@ -1695,8 +1862,8 @@ export default function OrdersPanel({
 
       // 4. Construct params object for backend query
       const params = {
-        page,
-        limit
+        page: 0,
+        limit: 100
       };
 
       if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
@@ -1824,27 +1991,187 @@ export default function OrdersPanel({
     selectedBranchId
   ]);
 
-  // Display orders directly from backend response without client-side .filter()
-  const filteredOrders = serverOrders !== null ? serverOrders : (Array.isArray(orders) ? orders : []);
+  // Robust, complete filtering across all 7 filters
+  const filteredOrders = useMemo(() => {
+    let result = Array.isArray(serverOrders) ? serverOrders : (Array.isArray(orders) ? orders : []);
 
-  const isServerPaginated = Boolean(
-    serverOrders !== null ||
-    ((propTotalCount || 0) > 0 && filteredOrders.length <= limit) ||
-    ((propTotalPages || 1) > 1 && filteredOrders.length <= limit) ||
-    (filteredOrders.length <= limit && (propTotalCount || 0) > filteredOrders.length)
-  );
+    // 1. Search Query Filter (debouncedSearch or searchOrderId)
+    const rawSearch = (debouncedSearch || searchOrderId || '').trim().toLowerCase();
+    if (rawSearch) {
+      result = result.filter(ord => {
+        const oId = String(ord.orderId || ord.id || '').toLowerCase();
+        const oNum = oId.replace(/\D/g, '');
+        const cleanSearch = rawSearch.replace(/\D/g, '');
+        if (oId.includes(rawSearch) || (cleanSearch && oNum && oNum.includes(cleanSearch))) return true;
 
-  const effectiveTotalCount = serverOrders !== null
-    ? serverTotalCount
-    : (propTotalCount !== undefined ? propTotalCount : filteredOrders.length);
+        const custName = String(ord.customerName || ord.customer?.name || ord.clientName || '').toLowerCase();
+        if (custName.includes(rawSearch)) return true;
 
-  const effectiveTotalPages = serverOrders !== null
-    ? serverTotalPages
-    : (propTotalPages !== undefined ? propTotalPages : Math.max(1, Math.ceil(effectiveTotalCount / limit)));
+        const custPhone = String(ord.customerMobile || ord.customerPhone || ord.phone || '').toLowerCase();
+        if (custPhone.includes(rawSearch)) return true;
 
-  const paginatedOrders = (serverOrders !== null || isServerPaginated || filteredOrders.length <= limit)
-    ? filteredOrders
-    : filteredOrders.slice(page * limit, (page + 1) * limit);
+        const tblStr = String(ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '').toLowerCase();
+        if (tblStr.includes(rawSearch)) return true;
+
+        const waiter = String(getResolvedWaiterName(ord) || '').toLowerCase();
+        if (waiter.includes(rawSearch)) return true;
+
+        if (Array.isArray(ord.items)) {
+          const hasDish = ord.items.some(it => String(it.name || it.itemName || '').toLowerCase().includes(rawSearch));
+          if (hasDish) return true;
+        }
+
+        const notes = String(ord.notes || '').toLowerCase();
+        if (notes.includes(rawSearch)) return true;
+
+        return false;
+      });
+    }
+
+    // 2. Order Status Filter
+    if (orderFilter && String(orderFilter).toLowerCase() !== 'all') {
+      const targetStatus = String(orderFilter).toLowerCase();
+      result = result.filter(ord => {
+        const s = String(ord.status || 'new').toLowerCase();
+        return s === targetStatus;
+      });
+    }
+
+    // 3. Order Type Filter (Dine-In, Takeaway, Delivery)
+    if (orderTypeFilter && String(orderTypeFilter).toLowerCase() !== 'all') {
+      const targetType = String(orderTypeFilter).toLowerCase().replace(/[^a-z]/g, '');
+      result = result.filter(ord => {
+        const rawType = String(ord.orderType || ord.type || 'Dine-In').toLowerCase().replace(/[^a-z]/g, '');
+        return rawType === targetType;
+      });
+    }
+
+    // 4. Dining Table Filter
+    if (selectedTableFilter && selectedTableFilter !== 'All' && selectedTableFilter !== 'ALL') {
+      const targetTbl = String(selectedTableFilter).replace(/^Table\s*/i, '').trim().toLowerCase();
+      const numOnlyTarget = targetTbl.replace(/\D/g, '');
+      result = result.filter(ord => {
+        const oType = String(ord.orderType || ord.type || 'Dine-In').toLowerCase();
+        if (oType.includes('takeaway') || oType.includes('delivery')) return false;
+
+        const rawTbl = String(ord.tableId?.tableNumber || ord.tableId?.tableNo || ord.table || '').replace(/^Table\s*/i, '').trim().toLowerCase();
+        const numOnlyRaw = rawTbl.replace(/\D/g, '');
+        if (rawTbl === targetTbl) return true;
+        if (numOnlyTarget && numOnlyRaw && parseInt(numOnlyTarget, 10) === parseInt(numOnlyRaw, 10)) return true;
+        return rawTbl.includes(targetTbl);
+      });
+    }
+
+    // 5. Assigned Waiter Filter
+    const targetWaiter = String(currentSelectedWaiterName || selectedWaiterFilter?.name || selectedWaiterFilter || 'All Waiters').trim();
+    if (targetWaiter && targetWaiter !== 'All Waiters' && targetWaiter !== 'All') {
+      result = result.filter(ord => {
+        const ordWaiter = getResolvedWaiterName(ord);
+        if (targetWaiter === 'Unassigned') {
+          return !ordWaiter || ordWaiter === 'Unassigned' || ordWaiter === '-' || ordWaiter === 'None';
+        }
+        return ordWaiter.toLowerCase() === targetWaiter.toLowerCase();
+      });
+    }
+
+    // 6. Payment Status Filter (Paid vs Unpaid)
+    if (paymentStatusFilter && String(paymentStatusFilter).toLowerCase() !== 'all') {
+      const targetPay = String(paymentStatusFilter).toLowerCase();
+      result = result.filter(ord => {
+        const isPaid = (ord.billingStatus || ord.paymentStatus || '').toLowerCase() === 'paid' || ord.isPaid === true || (ord.payment && (ord.payment.status === 'paid' || ord.payment.paymentStatus === 'paid'));
+        if (targetPay === 'paid') return isPaid;
+        if (targetPay === 'unpaid') return !isPaid;
+        return true;
+      });
+    }
+
+    // 7. Date Range Filter
+    if (dateRangeFilter && dateRangeFilter !== 'All' && dateRangeFilter !== 'All Time') {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      let startD = '';
+      let endD = '';
+
+      if (dateRangeFilter === 'Today') {
+        startD = todayStr;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'Yesterday') {
+        const yest = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        startD = `${yest.getFullYear()}-${pad(yest.getMonth() + 1)}-${pad(yest.getDate())}`;
+        endD = startD;
+      } else if (dateRangeFilter === 'This Week') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startD = `${sevenDaysAgo.getFullYear()}-${pad(sevenDaysAgo.getMonth() + 1)}-${pad(sevenDaysAgo.getDate())}`;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'This Month') {
+        startD = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+        endD = todayStr;
+      } else if (dateRangeFilter === 'Custom') {
+        startD = customStartDate || '';
+        endD = customEndDate || '';
+      }
+
+      if (startD || endD) {
+        result = result.filter(ord => {
+          const rawDate = ord.createdAt || ord.date;
+          if (!rawDate) return true;
+          const dObj = new Date(rawDate);
+          if (isNaN(dObj.getTime())) return true;
+          const ordDateStr = `${dObj.getFullYear()}-${pad(dObj.getMonth() + 1)}-${pad(dObj.getDate())}`;
+          if (startD && ordDateStr < startD) return false;
+          if (endD && ordDateStr > endD) return false;
+          return true;
+        });
+      }
+    }
+
+    // 8. Branch Filter: If 'All Branches' / 'COMPANY', show all data. If specific sub-branch, show ONLY that sub-branch's data.
+    if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') {
+      result = result.filter(ord => {
+        let matches = isBranchMatch(ord, selectedBranchId, activeRestaurant?.branches || []);
+        if (!matches && (ord.tableId || ord.table)) {
+          const tbl = (Array.isArray(tables) ? tables : []).find(t =>
+            String(t._id || t.id || '') === String(ord.tableId?._id || ord.tableId?.id || ord.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(ord.table || ord.tableNumber || '') ||
+            String(t.tableId || '') === String(ord.tableId || '')
+          ) || (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+            String(t._id || t.id || '') === String(ord.tableId?._id || ord.tableId?.id || ord.tableId || '') ||
+            String(t.tableNumber || t.tableNo || '') === String(ord.table || ord.tableNumber || '') ||
+            String(t.tableId || '') === String(ord.tableId || '')
+          ) : null);
+          if (tbl && (tbl.branchId || tbl.branch)) {
+            matches = isBranchMatch(tbl.branchId || tbl.branch, selectedBranchId, activeRestaurant?.branches || []);
+          }
+        }
+        return matches;
+      });
+    }
+
+    return result;
+  }, [
+    serverOrders,
+    orders,
+    debouncedSearch,
+    searchOrderId,
+    orderFilter,
+    orderTypeFilter,
+    selectedTableFilter,
+    currentSelectedWaiterName,
+    selectedWaiterFilter,
+    paymentStatusFilter,
+    dateRangeFilter,
+    customStartDate,
+    customEndDate,
+    selectedBranchId,
+    activeRestaurant?.branches,
+    tables
+  ]);
+
+  const effectiveTotalCount = filteredOrders.length;
+  const effectiveTotalPages = Math.max(1, Math.ceil(effectiveTotalCount / limit));
+  const paginatedOrders = filteredOrders.slice(page * limit, (page + 1) * limit);
 
   const getOrderPageNumbers = () => {
     const pages = [];
@@ -1985,7 +2312,13 @@ export default function OrdersPanel({
     const totalPayable = calculateNewOrderTotal();
 
     // Table display list
-    const allTableCards = apiTables.length > 0 ? apiTables : displayTables.map(tNo => ({ tableNumber: tNo }));
+    const allTableCards = (Array.isArray(apiTables) && apiTables.length > 0)
+      ? apiTables
+      : ((Array.isArray(tables) && tables.length > 0)
+          ? tables
+          : ((Array.isArray(activeRestaurant?.tables) && activeRestaurant.tables.length > 0)
+              ? activeRestaurant.tables
+              : displayTables.map(tNo => ({ tableNumber: tNo }))));
 
     return (
       <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box', background: '#f8fafc', minHeight: '100vh' }}>
@@ -2093,6 +2426,7 @@ export default function OrdersPanel({
                       type="button"
                       onClick={() => {
                         setNewOrderType(type.id);
+                        setOrderValidationErrors({});
                         if (type.id !== 'Dine-In') {
                           setNewOrderTable('');
                           setNewOrderWaiter('Unassigned');
@@ -2446,7 +2780,7 @@ export default function OrdersPanel({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <DeliveryIcon size={18} color="#2563eb" />
                     <span style={{ fontSize: '13px', fontWeight: 800, color: '#1e40af' }}>
-                      Delivery Details (Required for Delivery)
+                      Delivery Details 
                     </span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -2458,19 +2792,27 @@ export default function OrdersPanel({
                         type="text"
                         required
                         value={customerName}
-                        onChange={e => setCustomerName(e.target.value)}
+                        onChange={e => {
+                          setCustomerName(e.target.value);
+                          if (orderValidationErrors.customerName) setOrderValidationErrors(prev => ({ ...prev, customerName: null }));
+                        }}
                         placeholder="Enter customer full name..."
                         style={{
                           width: '100%',
                           padding: '10px 14px',
                           borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
+                          border: orderValidationErrors.customerName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                           fontSize: '13px',
                           outline: 'none',
                           background: '#ffffff',
                           boxSizing: 'border-box'
                         }}
                       />
+                      {orderValidationErrors.customerName && (
+                        <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                          {orderValidationErrors.customerName}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#1e3a8a', marginBottom: '6px' }}>
@@ -2481,19 +2823,27 @@ export default function OrdersPanel({
                         required
                         maxLength={10}
                         value={customerMobile}
-                        onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                        onChange={e => {
+                          setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10));
+                          if (orderValidationErrors.customerMobile) setOrderValidationErrors(prev => ({ ...prev, customerMobile: null }));
+                        }}
                         placeholder="Enter 10-digit mobile number"
                         style={{
                           width: '100%',
                           padding: '10px 14px',
                           borderRadius: '8px',
-                          border: '1px solid #cbd5e1',
+                          border: orderValidationErrors.customerMobile ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                           fontSize: '13px',
                           outline: 'none',
                           background: '#ffffff',
                           boxSizing: 'border-box'
                         }}
                       />
+                      {orderValidationErrors.customerMobile && (
+                        <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                          {orderValidationErrors.customerMobile}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -2504,13 +2854,16 @@ export default function OrdersPanel({
                       required
                       rows={2}
                       value={deliveryAddress}
-                      onChange={e => setDeliveryAddress(e.target.value)}
+                      onChange={e => {
+                        setDeliveryAddress(e.target.value);
+                        if (orderValidationErrors.deliveryAddress) setOrderValidationErrors(prev => ({ ...prev, deliveryAddress: null }));
+                      }}
                       placeholder="Enter full delivery address with door number, street, landmark, and pincode..."
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.deliveryAddress ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         background: '#ffffff',
@@ -2519,55 +2872,78 @@ export default function OrdersPanel({
                         resize: 'vertical'
                       }}
                     />
+                    {orderValidationErrors.deliveryAddress && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.deliveryAddress}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Takeaway Customer details (Optional / Quick) */}
+              {/* Takeaway Customer details (Mandatory) */}
               {newOrderType === 'Takeaway' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Customer Name
+                      Customer Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
+                      required
                       value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                      placeholder="Customer name (optional)"
+                      onChange={e => {
+                        setCustomerName(e.target.value);
+                        if (orderValidationErrors.customerName) setOrderValidationErrors(prev => ({ ...prev, customerName: null }));
+                      }}
+                      placeholder="Enter customer full name..."
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.customerName ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         boxSizing: 'border-box',
                         background: '#ffffff'
                       }}
                     />
+                    {orderValidationErrors.customerName && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.customerName}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
-                      Customer Mobile Number
+                      Customer Mobile Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="tel"
+                      required
                       maxLength={10}
                       value={customerMobile}
-                      onChange={e => setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      placeholder="10-digit mobile number (optional)"
+                      onChange={e => {
+                        setCustomerMobile(e.target.value.replace(/\D/g, '').slice(0, 10));
+                        if (orderValidationErrors.customerMobile) setOrderValidationErrors(prev => ({ ...prev, customerMobile: null }));
+                      }}
+                      placeholder="Enter 10-digit mobile number"
                       style={{
                         width: '100%',
                         padding: '10px 14px',
                         borderRadius: '8px',
-                        border: '1px solid #cbd5e1',
+                        border: orderValidationErrors.customerMobile ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                         fontSize: '13px',
                         outline: 'none',
                         boxSizing: 'border-box',
                         background: '#ffffff'
                       }}
                     />
+                    {orderValidationErrors.customerMobile && (
+                      <span style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                        {orderValidationErrors.customerMobile}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -4560,6 +4936,14 @@ export default function OrdersPanel({
         const calcTotal = itemSubtotal + calcTax;
         const displayTotal = viewingOrder.total ? Number(viewingOrder.total) : calcTotal;
 
+        const customerNameVal = viewingOrder.customerName || viewingOrder.customer?.name || viewingOrder.customer?.customerName || viewingOrder.clientName || viewingOrder.guestName || '';
+        const customerPhoneVal = viewingOrder.customerMobile || viewingOrder.customerPhone || viewingOrder.phone || viewingOrder.customer?.phone || viewingOrder.customer?.mobile || viewingOrder.customer?.phoneNumber || viewingOrder.mobile || '';
+        const deliveryAddressVal = viewingOrder.deliveryAddress || viewingOrder.address || viewingOrder.customer?.address || '';
+        const orderTypeVal = viewingOrder.orderType || viewingOrder.type || (tableNum === 'Takeaway' ? 'Takeaway' : (tableNum === 'Delivery' ? 'Delivery' : 'Dine-In'));
+        const isTakeaway = String(orderTypeVal).toLowerCase() === 'takeaway' || String(tableNum).toLowerCase() === 'takeaway';
+        const isDelivery = String(orderTypeVal).toLowerCase() === 'delivery' || String(tableNum).toLowerCase() === 'delivery';
+        const isNonDineIn = isTakeaway || isDelivery || String(tableNum).toLowerCase().includes('n/a') || tableNum === '-' || !viewingOrder.tableId;
+
         return (
           <Modal
             isOpen={!!viewingOrder}
@@ -4569,75 +4953,202 @@ export default function OrdersPanel({
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '4px' }}>
 
-              {/* Meta Card */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                background: '#f8fafc',
-                padding: '14px 18px',
-                borderRadius: '12px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Table
-                  </span>
-                  <strong style={{ fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>
-                    {String(tableNum).startsWith('Table') ? tableNum : `Table ${tableNum}`}
-                  </strong>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Assigned Waiter
-                  </span>
-                  <strong style={{ fontSize: '13px', color: (viewingOrder.orderType && viewingOrder.orderType !== 'Dine-In') ? '#94a3b8' : (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    {(viewingOrder.orderType && viewingOrder.orderType !== 'Dine-In') ? (
-                      '-'
-                    ) : (waiterName && waiterName !== 'Unassigned') ? (
-                      <>
-                        <UserIcon size={14} color="#64748b" />
-                        <span>{waiterName}</span>
-                      </>
-                    ) : 'None (Unassigned)'}
-                  </strong>
-                </div>
-
-                <div>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
-                    Order Status
-                  </span>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '3px 10px',
-                    borderRadius: '16px',
-                    fontSize: '11px',
-                    fontWeight: 800,
-                    textTransform: 'capitalize',
-                    background:
-                      orderStatus === 'completed' ? '#dcfce7' :
-                        orderStatus === 'served' ? '#e0f2fe' :
-                          orderStatus === 'ready' ? '#f1f5f9' :
-                            orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
-                    color:
-                      orderStatus === 'completed' ? '#15803d' :
-                        orderStatus === 'served' ? '#0369a1' :
-                          orderStatus === 'ready' ? '#334155' :
-                            orderStatus === 'preparing' ? '#c2410c' : '#b45309',
-                    border: '1px solid',
-                    borderColor:
-                      orderStatus === 'completed' ? '#bbf7d0' :
-                        orderStatus === 'served' ? '#bae6fd' :
-                          orderStatus === 'ready' ? '#cbd5e1' :
-                            orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+              {/* Meta Card: Customer details for Takeaway/Delivery, Table/Waiter for Dine-In */}
+              {isNonDineIn ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  background: '#f8fafc',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px'
                   }}>
-                    ● {orderStatus}
-                  </span>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Customer Name
+                      </span>
+                      <strong style={{ fontSize: '14px', color: '#0f172a', fontWeight: 800 }}>
+                        {customerNameVal || 'Customer'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Mobile Number
+                      </span>
+                      <strong style={{ fontSize: '13px', color: customerPhoneVal ? '#0f172a' : '#94a3b8', fontWeight: 700 }}>
+                        {customerPhoneVal || '-'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Order Status
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 10px',
+                          borderRadius: '16px',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          textTransform: 'capitalize',
+                          background:
+                            orderStatus === 'completed' ? '#dcfce7' :
+                              orderStatus === 'served' ? '#e0f2fe' :
+                                orderStatus === 'ready' ? '#f1f5f9' :
+                                  orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
+                          color:
+                            orderStatus === 'completed' ? '#15803d' :
+                              orderStatus === 'served' ? '#0369a1' :
+                                orderStatus === 'ready' ? '#334155' :
+                                  orderStatus === 'preparing' ? '#c2410c' : '#b45309',
+                          border: '1px solid',
+                          borderColor:
+                            orderStatus === 'completed' ? '#bbf7d0' :
+                              orderStatus === 'served' ? '#bae6fd' :
+                                orderStatus === 'ready' ? '#cbd5e1' :
+                                  orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+                        }}>
+                          ● {orderStatus}
+                        </span>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '10px',
+                          background: isDelivery ? '#eff6ff' : '#fff7ed',
+                          color: isDelivery ? '#1d4ed8' : '#ea580c',
+                          border: `1px solid ${isDelivery ? '#bfdbfe' : '#fed7aa'}`
+                        }}>
+                          {orderTypeVal}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {deliveryAddressVal && (
+                    <div style={{
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                        Delivery Address
+                      </span>
+                      <span style={{ fontSize: '12.5px', color: '#1e293b', fontWeight: 600 }}>
+                        {deliveryAddressVal}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  background: '#f8fafc',
+                  padding: '14px 18px',
+                  borderRadius: '12px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px'
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Table
+                      </span>
+                      <strong style={{ fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>
+                        {String(tableNum).startsWith('Table') ? tableNum : `Table ${tableNum}`}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Assigned Waiter
+                      </span>
+                      <strong style={{ fontSize: '13px', color: (waiterName && waiterName !== 'Unassigned') ? '#0f172a' : '#94a3b8', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        {(waiterName && waiterName !== 'Unassigned') ? (
+                          <>
+                            <UserIcon size={14} color="#64748b" />
+                            <span>{waiterName}</span>
+                          </>
+                        ) : 'None (Unassigned)'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', display: 'block', marginBottom: '4px' }}>
+                        Order Status
+                      </span>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '3px 10px',
+                        borderRadius: '16px',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        textTransform: 'capitalize',
+                        background:
+                          orderStatus === 'completed' ? '#dcfce7' :
+                            orderStatus === 'served' ? '#e0f2fe' :
+                              orderStatus === 'ready' ? '#f1f5f9' :
+                                orderStatus === 'preparing' ? '#fff7ed' : '#fef3c7',
+                        color:
+                          orderStatus === 'completed' ? '#15803d' :
+                            orderStatus === 'served' ? '#0369a1' :
+                              orderStatus === 'ready' ? '#334155' :
+                                orderStatus === 'preparing' ? '#c2410c' : '#b45309',
+                        border: '1px solid',
+                        borderColor:
+                          orderStatus === 'completed' ? '#bbf7d0' :
+                            orderStatus === 'served' ? '#bae6fd' :
+                              orderStatus === 'ready' ? '#cbd5e1' :
+                                orderStatus === 'preparing' ? '#ffedd5' : '#fde68a'
+                      }}>
+                        ● {orderStatus}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(customerNameVal || customerPhoneVal) && (
+                    <div style={{
+                      paddingTop: '8px',
+                      borderTop: '1px dashed #cbd5e1',
+                      display: 'flex',
+                      gap: '16px',
+                      fontSize: '12px'
+                    }}>
+                      {customerNameVal && (
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>Customer: </span>
+                          <strong style={{ color: '#0f172a' }}>{customerNameVal}</strong>
+                        </div>
+                      )}
+                      {customerPhoneVal && (
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>Mobile: </span>
+                          <strong style={{ color: '#0f172a' }}>{customerPhoneVal}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {viewingOrder.notes && (
                 <div style={{ padding: '10px 14px', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: '8px', fontSize: '12px', color: '#d48806', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -4702,28 +5213,6 @@ export default function OrdersPanel({
                     ₹{displayTotal.toFixed(2)}
                   </span>
                 </div>
-              </div>
-
-              {/* Modal Actions */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setViewingOrder(null)}
-                  style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', background: '#fff', border: '1px solid #cbd5e1', color: '#475569' }}
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-black"
-                  onClick={() => {
-                    handlePrintBill(viewingOrder);
-                  }}
-                  style={{ padding: '8px 18px', borderRadius: '8px', background: '#ff5a1f', color: '#fff', fontSize: '13px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px', border: 'none', cursor: 'pointer' }}
-                >
-                  <PrintIcon size={14} /> Print Receipt
-                </button>
               </div>
             </div>
           </Modal>
@@ -4970,7 +5459,7 @@ export default function OrdersPanel({
               </div>
             )}
 
-            {/* Delivery Fields (Required for Delivery) */}
+            {/* Delivery Fields  */}
             {newOrderType === 'Delivery' && (
               <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div style={{ fontSize: '12px', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>

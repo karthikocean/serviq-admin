@@ -198,10 +198,6 @@ export default function RolesPermissionsPanel() {
   };
 
   const handleDeleteRole = (role) => {
-    if (role.isDefault) {
-      ShowNotifications.showAlertNotification("System default roles cannot be deleted.", false);
-      return;
-    }
     setRoleToDelete(role);
   };
 
@@ -846,7 +842,7 @@ export default function RolesPermissionsPanel() {
                             <PencilIcon size={15} />
                           </button>
                         )}
-                        {!role.isDefault && hasPermission('roles-permissions', 'delete') && (
+                        {hasPermission('roles-permissions', 'delete') && (
                           <button
                             type="button"
                             onClick={() => handleDeleteRole(role)}

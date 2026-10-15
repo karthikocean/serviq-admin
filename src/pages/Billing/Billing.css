@@ -289,7 +289,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  padding: 12px 14px;
+  padding: 12px 16px;
   color: #ffffff;
   background-color: #f95e10;
   font-weight: 700;
@@ -318,7 +318,7 @@
 }
 
 .billing-table td {
-  padding: 12px 14px;
+  padding: 12px 16px;
   vertical-align: middle;
   white-space: nowrap;
   box-sizing: border-box;

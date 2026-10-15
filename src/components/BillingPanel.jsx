@@ -7,7 +7,7 @@ import BillingApi from '../api/Billing.js';
 import OrderApi from '../api/Order.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
 import { isMongoId } from '../config/initialData.js';
-import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 
 const EyeIcon = ({ size = 15, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -52,10 +52,10 @@ export default function BillingPanel({
   setSelectedBillingTable,
   activeRestaurant = {},
   availableTables = [],
-  availableStaff = [],
   billingPaymentMethod = 'UPI',
   setBillingPaymentMethod,
   fetchBillingData,
+  triggerRefresh,
   selectedBranchId,
   currentUser = {},
   hasPermission,
@@ -63,14 +63,11 @@ export default function BillingPanel({
   setSearchTerm: propSetSearchTerm,
   selectedTable: propSelectedTable,
   setSelectedTable: propSetSelectedTable,
-  customerFilter: propCustomerFilter,
-  setCustomerFilter: propSetCustomerFilter,
-  selectedStaff: propSelectedStaff,
-  setSelectedStaff: propSetSelectedStaff,
   page: propPage,
   setPage: propSetPage,
   limit: propLimit = 10,
-  totalItems: propTotalItems = 0
+  totalItems: propTotalItems = 0,
+  onBillPaid
 }) {
   const canView = typeof hasPermission === 'function' ? hasPermission('billing_current', 'view') : true;
   const canEdit = typeof hasPermission === 'function' ? (hasPermission('billing_current', 'edit') || hasPermission('billing_current', 'add')) : true;
@@ -83,6 +80,31 @@ export default function BillingPanel({
   const [payAmount, setPayAmount] = useState('');
   const [payRefNo, setPayRefNo] = useState('');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentSuccessTrigger, setPaymentSuccessTrigger] = useState(0);
+
+  // useEffect invoked whenever payment completes to fetch latest correct status from backend
+  useEffect(() => {
+    if (paymentSuccessTrigger > 0) {
+      if (typeof fetchBillingData === 'function') {
+        fetchBillingData();
+      }
+      if (typeof triggerRefresh === 'function') {
+        triggerRefresh();
+      }
+
+      // Supplementary sync fetch after 400ms to guarantee database persistence
+      const syncTimer = setTimeout(() => {
+        if (typeof fetchBillingData === 'function') {
+          fetchBillingData();
+        }
+        if (typeof triggerRefresh === 'function') {
+          triggerRefresh();
+        }
+      }, 400);
+
+      return () => clearTimeout(syncTimer);
+    }
+  }, [paymentSuccessTrigger]);
 
   // Filters State: Dining Table, Customer, Cashier/Staff, and Search
   const [localSearchTerm, setLocalSearchTerm] = useState('');
@@ -92,14 +114,6 @@ export default function BillingPanel({
   const [localSelectedTable, setLocalSelectedTable] = useState('All');
   const selectedTable = propSelectedTable !== undefined ? propSelectedTable : localSelectedTable;
   const setSelectedTable = propSetSelectedTable || setLocalSelectedTable;
-
-  const [localCustomerFilter, setLocalCustomerFilter] = useState('');
-  const customerFilter = propCustomerFilter !== undefined ? propCustomerFilter : localCustomerFilter;
-  const setCustomerFilter = propSetCustomerFilter || setLocalCustomerFilter;
-
-  const [localSelectedStaff, setLocalSelectedStaff] = useState('All');
-  const selectedStaff = propSelectedStaff !== undefined ? propSelectedStaff : localSelectedStaff;
-  const setSelectedStaff = propSetSelectedStaff || setLocalSelectedStaff;
 
   // Pagination for List Table
   const [localPage, setLocalPage] = useState(0);
@@ -112,7 +126,7 @@ export default function BillingPanel({
     if (propPage === undefined) {
       setLocalPage(0);
     }
-  }, [searchTerm, selectedTable, customerFilter, selectedStaff]);
+  }, [searchTerm, selectedTable]);
 
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
 
@@ -188,69 +202,39 @@ export default function BillingPanel({
     }
   }, [selectedTable, tableOptions, setSelectedTable]);
 
-  // Cashier / Staff options
-  const staffOptions = useMemo(() => {
-    const map = new Map();
 
-    const addStaffOption = (s) => {
-      if (!s) return;
-      const mongoId = (s._id && isMongoId(String(s._id))) ? String(s._id) : (isMongoId(String(s.id)) ? String(s.id) : null);
-      const name = s.name || s.staffName || s.fullName || s.userName;
-      const code = s.id || s.employeeCode || s.code;
 
-      if (mongoId) {
-        const label = name || `Staff (${mongoId.slice(-4)})`;
-        map.set(mongoId, { label, code, name });
-      }
-    };
+  // Strict rule: Only bills with unpaid status must show in Current Billing
+  const isUnpaidBill = (b) => {
+    if (!b) return false;
+    const statusStr = String(b.status || '').toLowerCase();
+    const payStatusStr = String(b.paymentStatus || b.payment_status || b.billingStatus || '').toLowerCase();
+    const billAmt = Number(b.billAmount ?? b.total ?? b.amount ?? 0);
+    const paidAmt = Number(b.paidAmount ?? b.paid ?? 0);
+    const balAmt = b.balanceAmount !== undefined ? Number(b.balanceAmount) : Math.max(0, billAmt - paidAmt);
 
-    if (Array.isArray(availableStaff)) {
-      availableStaff.forEach(addStaffOption);
+    // If explicitly marked as unpaid, it should definitely be shown in Current Billing
+    if (payStatusStr === 'unpaid' || payStatusStr === 'pending' || payStatusStr === 'pending_payment') {
+      return true;
     }
-    if (Array.isArray(activeRestaurant?.staff)) {
-      activeRestaurant.staff.forEach(addStaffOption);
-    }
-    displayBillingData.forEach(b => {
-      const sId = b.cashierId || b.staffId || b.waiterId;
-      const name = b.cashier || b.staff || b.waiter || b.billedBy;
-      if (sId && isMongoId(String(sId))) {
-        if (!map.has(String(sId))) {
-          map.set(String(sId), { label: name || `Staff (${String(sId).slice(-4)})`, code: sId, name });
-        }
-      }
-    });
 
-    const entries = Array.from(map.entries()).map(([value, info]) => ({
-      value,
-      label: info.label,
-      code: info.code,
-      name: info.name
-    }));
+    const isPaid = 
+      statusStr === 'paid' ||
+      statusStr === 'done' ||
+      payStatusStr === 'paid' ||
+      b.isPaid === true ||
+      b.paid === true ||
+      b.is_paid === true ||
+      (paidAmt >= billAmt && billAmt > 0) ||
+      (balAmt <= 0 && paidAmt > 0);
 
-    return [
-      { value: 'All', label: 'All Cashier / Staff' },
-      ...entries
-    ];
-  }, [availableStaff, activeRestaurant, displayBillingData]);
+    return !isPaid;
+  };
 
-  // If selectedStaff is set to a string code (like "stf-01" or "STF-01") instead of ObjectId, auto-map it to its _id
-  useEffect(() => {
-    if (selectedStaff && selectedStaff !== 'All' && !isMongoId(String(selectedStaff))) {
-      const match = staffOptions.find(opt => 
-        opt.code === selectedStaff || 
-        opt.name === selectedStaff || 
-        (opt.label && opt.label.toLowerCase().includes(String(selectedStaff).toLowerCase()))
-      );
-      if (match && isMongoId(String(match.value))) {
-        setSelectedStaff(match.value);
-      }
-    }
-  }, [selectedStaff, staffOptions, setSelectedStaff]);
+  const filteredBills = displayBillingData.filter(isUnpaidBill);
+  const paginatedBills = filteredBills;
 
-  // Bills are already filtered and paginated by backend API
-  const filteredBills = displayBillingData;
-
-  const totalBillsCount = propTotalItems > 0 ? propTotalItems : filteredBills.length;
+  const totalBillsCount = propTotalItems !== undefined && propTotalItems >= 0 ? filteredBills.length : filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalBillsCount / limit));
 
   useEffect(() => {
@@ -260,6 +244,7 @@ export default function BillingPanel({
   }, [totalPages, page]);
 
   const getPageNumbers = () => {
+    if (totalBillsCount === 0) return [];
     const pages = [];
     const maxVisible = 5;
     const current = page + 1;
@@ -273,10 +258,6 @@ export default function BillingPanel({
     }
     return pages;
   };
-
-  const paginatedBills = (propTotalItems > 0 || displayBillingData.length <= limit)
-    ? filteredBills
-    : filteredBills.slice(page * limit, (page + 1) * limit);
 
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
@@ -311,58 +292,223 @@ export default function BillingPanel({
     }
 
     setIsProcessingPayment(true);
-    const currentTableId = paymentModalBill.tableId || paymentModalBill._id || paymentModalBill.id;
+
+    // 1. Resolve MongoDB ObjectId for Branch
+    let resolvedBranchId = null;
+    const branchCandidates = [
+      paymentModalBill.branchId,
+      typeof paymentModalBill.branch === 'object' ? paymentModalBill.branch?._id || paymentModalBill.branch?.id : paymentModalBill.branch,
+      selectedBranchId,
+      activeRestaurant?.branches?.[0]?._id,
+      activeRestaurant?.branches?.[0]?.id,
+      currentUser?.branchId?._id,
+      currentUser?.branchId
+    ];
+
+    for (const b of branchCandidates) {
+      if (b && isMongoId(String(b))) {
+        resolvedBranchId = String(b);
+        break;
+      }
+    }
+
+    if (!resolvedBranchId) {
+      const bFound = (activeRestaurant?.branches || []).find(b => 
+        String(b.id || b._id) === String(selectedBranchId) ||
+        String(b.branchCode) === String(selectedBranchId) ||
+        String(b.branchName || b.name) === String(selectedBranchId)
+      );
+      if (bFound && (bFound._id || bFound.id)) {
+        resolvedBranchId = String(bFound._id || bFound.id);
+      }
+    }
+
+    // 2. Resolve MongoDB ObjectId for Table
+    let resolvedTableId = null;
+    const tableCandidates = [
+      paymentModalBill.tableId,
+      paymentModalBill.table_id,
+      paymentModalBill.rawTableId,
+      paymentModalBill._id,
+      paymentModalBill.id
+    ];
+
+    for (const t of tableCandidates) {
+      if (t && isMongoId(String(t))) {
+        resolvedTableId = String(t);
+        break;
+      }
+    }
+
+    if (!resolvedTableId) {
+      const targetTblStr = String(paymentModalBill.table || paymentModalBill.tableNumber || paymentModalBill.tableId || '')
+        .replace(/^Table\s*/i, '')
+        .trim();
+      const matchedTable = 
+        (availableTables || []).find(t => 
+          String(t._id || '') === String(paymentModalBill.tableId) ||
+          String(t.id || '') === String(paymentModalBill.tableId) ||
+          String(t.tableId || '') === String(paymentModalBill.tableId) ||
+          String(t.tableNumber || t.tableNo || '').trim() === targetTblStr ||
+          String(t.name || '').trim() === targetTblStr
+        ) ||
+        (activeRestaurant?.tables || []).find(t => 
+          String(t._id || '') === String(paymentModalBill.tableId) ||
+          String(t.id || '') === String(paymentModalBill.tableId) ||
+          String(t.tableId || '') === String(paymentModalBill.tableId) ||
+          String(t.tableNumber || t.tableNo || '').trim() === targetTblStr ||
+          String(t.name || '').trim() === targetTblStr
+        );
+      if (matchedTable) {
+        resolvedTableId = String(matchedTable._id || (isMongoId(String(matchedTable.id || '')) ? matchedTable.id : ''));
+      }
+    }
+
+    if (!resolvedTableId) {
+      resolvedTableId = paymentModalBill.tableId || paymentModalBill._id || paymentModalBill.id;
+    }
+
+    if (!resolvedBranchId) {
+      ShowNotifications.showAlertNotification("Branch ID is required to process table billing.", false);
+      setIsProcessingPayment(false);
+      return;
+    }
+    if (!resolvedTableId) {
+      ShowNotifications.showAlertNotification("Table ID is required to process table billing.", false);
+      setIsProcessingPayment(false);
+      return;
+    }
+
+    const normalizedPaymentMethod = (payMethod || 'cash').toLowerCase();
+
+    const payload = {
+      branchId: resolvedBranchId,
+      tableId: resolvedTableId,
+      paymentMethod: normalizedPaymentMethod,
+      amount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? paymentModalBill.total ?? 0),
+      ...(payRefNo && payRefNo.trim() ? { referenceNumber: payRefNo.trim() } : {})
+    };
 
     try {
-      if (currentTableId) {
-        await BillingApi.processTablePayment({
-          branchId: selectedBranchId,
-          tableId: currentTableId,
-          paymentMethod: payMethod.toLowerCase(),
-          amount: parseFloat(payAmount),
-          referenceNumber: payRefNo
-        }).catch(() => null);
+      const apiRes = await BillingApi.processTablePayment(payload);
+
+      if (!apiRes || apiRes.status === false) {
+        setIsProcessingPayment(false);
+        return;
       }
+
+      const backendData = apiRes.response?.data || apiRes.response || {};
+      const generatedInvoiceNo = 
+        backendData.invoiceNo || 
+        backendData.invoiceNumber || 
+        backendData.taxInvoiceNo || 
+        backendData.billNo ||
+        backendData.invoice?.invoiceNo ||
+        paymentModalBill.invoiceNo || 
+        paymentModalBill.billNo || 
+        '-';
+
+      const staffName = currentUser?.name || currentUser?.fullName || currentUser?.username || 'Staff';
 
       // Construct Invoice Data
       const updatedBill = {
         ...paymentModalBill,
         status: 'Paid',
         paymentStatus: 'Paid',
-        paidAmount: parseFloat(payAmount),
+        paidAmount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? paymentModalBill.total ?? 0),
         balanceAmount: 0,
         paymentMethod: payMethod,
         referenceNumber: payRefNo,
-        invoiceNo: paymentModalBill.invoiceNo || paymentModalBill.billNo || paymentModalBill.id || '-',
+        invoiceNo: generatedInvoiceNo,
         billedBy: staffName,
         paidAt: new Date().toISOString()
       };
 
+      if (typeof onBillPaid === 'function') {
+        onBillPaid(paymentModalBill);
+      }
+
       if (typeof setBillingData === 'function') {
-        setBillingData(prev => prev.map(b => {
-          if (b.table === paymentModalBill.table || b.tableId === currentTableId || b.billNo === paymentModalBill.billNo) {
-            return updatedBill;
-          }
-          return b;
+        // Immediately remove paid bill from Current Billing view
+        setBillingData(prev => prev.filter(b => {
+          const isTarget = (
+            (paymentModalBill.id && (b.id === paymentModalBill.id || b._id === paymentModalBill.id)) ||
+            (paymentModalBill._id && (b._id === paymentModalBill._id || b.id === paymentModalBill._id)) ||
+            (paymentModalBill.billNo && (b.billNo === paymentModalBill.billNo || b.billNumber === paymentModalBill.billNo)) ||
+            (paymentModalBill.orderId && b.orderId && b.orderId !== '-' && b.orderId === paymentModalBill.orderId) ||
+            (resolvedTableId && (b.tableId === resolvedTableId || b.id === resolvedTableId || b._id === resolvedTableId)) ||
+            (paymentModalBill.tableId && (b.tableId === paymentModalBill.tableId || b.id === paymentModalBill.tableId || b._id === paymentModalBill.tableId)) ||
+            (paymentModalBill.table && b.table === paymentModalBill.table)
+          );
+          return !isTarget;
         }));
       }
 
-      ShowNotifications.showAlertNotification(`Payment collected successfully!`, true);
+      if (typeof setSelectedBillingTable === 'function') {
+        setSelectedBillingTable(prev => {
+          if (prev && (prev === paymentModalBill.tableId || prev === paymentModalBill._id || prev === resolvedTableId || prev === paymentModalBill.table)) {
+            return '';
+          }
+          return prev;
+        });
+      }
+
+      ShowNotifications.showAlertNotification(
+        apiRes.response?.message || `Payment collected successfully!`,
+        true
+      );
       setPaymentModalBill(null);
       setInvoiceModalBill(updatedBill); // Show Tax Invoice Popup
-      if (typeof fetchBillingData === 'function') fetchBillingData();
+
+      // Invoke useEffect to fetch the latest correct status from backend
+      setPaymentSuccessTrigger(prev => prev + 1);
     } catch (err) {
-      console.error(err);
-      ShowNotifications.showAlertNotification("Failed to collect payment", false);
+      console.error("Failed to process table payment:", err);
+      ShowNotifications.showAlertNotification(
+        err?.response?.data?.message || err?.message || "Failed to collect payment",
+        false
+      );
     } finally {
       setIsProcessingPayment(false);
     }
   };
 
-  // Print Bill Popup Handler (Centered Thermal Bill Print Window)
+  // Open View Bill Modal & dynamically fetch Invoice if missing
+  const handleOpenViewBill = async (bill) => {
+    setViewingBill(bill);
+    const hasValidInv = bill.invoiceNo && bill.invoiceNo !== '-' && String(bill.invoiceNo).startsWith('INV-');
+    if (!hasValidInv) {
+      try {
+        const histRes = await BillingApi.getBillingHistory({
+          branchId: selectedBranchId,
+          tableId: bill.tableId || bill.table,
+          search: (bill.orderId && bill.orderId !== '-') ? bill.orderId : bill.billNo,
+          limit: 10
+        });
+        if (histRes?.status && histRes?.response) {
+          const list = Array.isArray(histRes.response.data) ? histRes.response.data : (Array.isArray(histRes.response) ? histRes.response : []);
+          const match = list.find(h => 
+            (bill.orderId && bill.orderId !== '-' && (h.orderId === bill.orderId || h.order_id === bill.orderId)) ||
+            (bill.billNo && bill.billNo !== '-' && (h.billNo === bill.billNo || h.billNumber === bill.billNo)) ||
+            (h.table === bill.table || h.tableId === bill.tableId)
+          );
+          if (match) {
+            const foundInvNo = match.invoiceNo || match.invoiceNumber || match.invoiceId || match.id || '';
+            if (foundInvNo) {
+              setViewingBill(prev => prev ? { ...prev, invoiceNo: foundInvNo, invoiceId: foundInvNo, isInvoice: true } : prev);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch invoice for bill:", err);
+      }
+    }
+  };
+
+  // Print Bill Popup Handler (Centered Thermal Bill Print Window - Before Payment)
   const handlePrintBillPopup = (bill) => {
-    const htmlContent = generateReceiptHtml(bill, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, 480, 700);
+    const htmlContent = generateReceiptHtml({ ...bill, isPaid: false }, activeRestaurant, currentUser);
+    openCenteredPrintWindow(htmlContent, `Print Bill - ${bill?.billNo || bill?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   // Modern Tax Invoice HTML Generator (matching Admin theme and screenshot design)
@@ -607,27 +753,27 @@ export default function BillingPanel({
     `;
   };
 
-  // Print Tax Invoice Popup Handler (Opens centered on screen)
+  // Print Tax Invoice Popup Handler (After Payment)
   const handlePrintInvoicePopup = (invoice) => {
-    const htmlContent = generateTaxInvoiceHtml(invoice);
-    const script = `<script>window.onload = function() { setTimeout(function(){ window.print(); }, 100); }; window.onafterprint = function() { try{ window.close(); }catch(e){} };</script>`;
-    openCenteredPrintWindow(htmlContent + script, 'Tax Invoice', 760, 840);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
+    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.invoiceNo || invoice?.billNo || invoice?.id || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
-  // Download Invoice HTML Handler
+  // Download Invoice/Bill HTML Handler
   const handleDownloadInvoicePopup = (bill) => {
-    const htmlContent = generateTaxInvoiceHtml(bill);
-    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.id || 'INV-Doc';
+    const isInvoice = (bill.status || bill.paymentStatus || '').toLowerCase() === 'paid' || bill.isInvoice;
+    const htmlContent = generateReceiptHtml({ ...bill, isPaid: isInvoice }, activeRestaurant, currentUser);
+    const invNo = bill.invoiceNo || bill.invoiceNumber || bill.billNo || bill.id || 'Doc';
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `TaxInvoice-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+    a.download = `${isInvoice ? 'TaxInvoice' : 'Bill'}-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    ShowNotifications.showAlertNotification("Tax Invoice downloaded successfully!", true);
+    ShowNotifications.showAlertNotification(`${isInvoice ? 'Tax Invoice' : 'Bill'} downloaded successfully!`, true);
   };
 
   return (
@@ -648,10 +794,10 @@ export default function BillingPanel({
         <span style={{ fontSize: '13px', color: '#64748b' }}>Manage active restaurant table billing, collect payments, and print invoices.</span>
       </div>
 
-      {/* FILTER BAR: DINING TABLE, CUSTOMER, CASHIER/STAFF & SEARCH */}
+      {/* FILTER BAR: SEARCH & DINING TABLE */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
         gap: '12px',
         alignItems: 'flex-end',
         marginBottom: '20px',
@@ -669,8 +815,7 @@ export default function BillingPanel({
             data-search="true"
             placeholder="Search Bill No / Order ID..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.replace(/\s+/g, ''))}
-            onKeyDown={(e) => { if (e.key === ' ' || e.code === 'Space') e.preventDefault(); }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
           />
         </div>
@@ -685,59 +830,36 @@ export default function BillingPanel({
             placeholder="Select Table..."
           />
         </div>
-
-        {/* Customer */}
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Customer</label>
-          <input
-            type="text"
-            placeholder="Name or Phone..."
-            value={customerFilter}
-            onChange={(e) => setCustomerFilter(e.target.value)}
-            style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box', fontSize: '13px' }}
-          />
-        </div>
-
-        {/* Cashier / Staff */}
-        <div>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Cashier / Staff</label>
-          <SearchableSelect
-            value={selectedStaff}
-            onChange={(e) => setSelectedStaff(e.target.value)}
-            options={staffOptions}
-            placeholder="Select Staff..."
-          />
-        </div>
       </div>
 
       {/* CURRENT BILLING LIST TABLE */}
       <div className="billing-table-card">
         <div className="billing-table-responsive">
-          <table className="billing-table" style={{ minWidth: '1350px' }}>
+          <table className="billing-table" style={{ minWidth: '1610px' }}>
             <colgroup>
-              <col style={{ width: '60px' }} />   {/* 1. S.NO */}
-              <col style={{ width: '130px' }} />  {/* 2. BILL NO. */}
-              <col style={{ width: '130px' }} />  {/* 3. ORDER ID */}
-              <col style={{ width: '115px' }} />  {/* 4. ORDER TYPE */}
+              <col style={{ width: '65px' }} />   {/* 1. S.NO */}
+              <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
+              <col style={{ width: '175px' }} />  {/* 3. ORDER ID */}
+              <col style={{ width: '130px' }} />  {/* 4. ORDER TYPE */}
               <col style={{ width: '170px' }} />  {/* 5. TABLE */}
               <col style={{ width: '160px' }} />  {/* 6. BILL DATE & TIME */}
-              <col style={{ width: '135px' }} />  {/* 7. BILL AMOUNT */}
-              <col style={{ width: '135px' }} />  {/* 8. PAID AMOUNT */}
-              <col style={{ width: '135px' }} />  {/* 9. BALANCE AMOUNT */}
-              <col style={{ width: '130px' }} />  {/* 10. PAYMENT STATUS */}
-              <col style={{ width: '145px' }} />  {/* 11. ACTIONS */}
+              <col style={{ width: '150px' }} />  {/* 7. BILL AMOUNT */}
+              <col style={{ width: '145px' }} />  {/* 8. PAID AMOUNT */}
+              <col style={{ width: '155px' }} />  {/* 9. BALANCE AMOUNT */}
+              <col style={{ width: '135px' }} />  {/* 10. PAYMENT STATUS */}
+              <col style={{ width: '140px' }} />  {/* 11. ACTIONS */}
             </colgroup>
             <thead>
               <tr>
                 <th style={{ textAlign: 'center' }}>S.NO</th>
-                <th style={{ textAlign: 'left' }}>BILL NO.</th>
-                <th style={{ textAlign: 'left' }}>ORDER ID</th>
+                <th style={{ textAlign: 'left', paddingLeft: '16px' }}>BILL NO.</th>
+                <th style={{ textAlign: 'left', paddingLeft: '16px' }}>ORDER ID</th>
                 <th style={{ textAlign: 'center' }}>ORDER TYPE</th>
                 <th style={{ textAlign: 'center' }}>TABLE</th>
                 <th style={{ textAlign: 'center' }}>BILL DATE & TIME</th>
-                <th style={{ textAlign: 'right' }}>BILL AMOUNT</th>
-                <th style={{ textAlign: 'right' }}>PAID AMOUNT</th>
-                <th style={{ textAlign: 'right' }}>BALANCE AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>BILL AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>PAID AMOUNT</th>
+                <th style={{ textAlign: 'right', paddingRight: '16px' }}>BALANCE AMOUNT</th>
                 <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                 <th style={{ textAlign: 'center' }} className="sticky-actions-header">ACTIONS</th>
               </tr>
@@ -756,9 +878,14 @@ export default function BillingPanel({
                 const dateStr = bill.date || formatDateDMY(bill.billDateTime || bill.createdAt || new Date());
                 const timeStr = bill.time || (bill.billDateTime ? new Date(bill.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (bill.createdAt ? new Date(bill.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'));
 
+                const rawInvoiceNo = bill.invoiceNo || bill.invoiceNumber || bill.invoiceId || (bill.invoice && typeof bill.invoice === 'object' ? (bill.invoice.invoiceNo || bill.invoice.invoiceNumber || bill.invoice.id) : bill.invoice) || '';
+                const fallbackInvoiceNo = rawInvoiceNo || (billNo && billNo !== '-' ? (billNo.startsWith('INV-') ? billNo : `INV-${billNo.replace(/^BILL[-_]*/i, '')}`) : '');
+
                 const currentBill = {
                   ...bill,
                   billNo,
+                  invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
+                  invoiceId: rawInvoiceNo || fallbackInvoiceNo,
                   subtotal,
                   tax,
                   discount: Number(bill.discount || 0),
@@ -783,10 +910,10 @@ export default function BillingPanel({
                     <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
                       {bill.sNo || (page * limit + index + 1)}
                     </td>
-                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                       {billNo}
                     </td>
-                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569' }}>
+                    <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 600, color: '#475569', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                       {bill.orderId || bill.order_id || '-'}
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -801,13 +928,13 @@ export default function BillingPanel({
                       <div style={{ fontWeight: 600, fontSize: '12px', color: '#0f172a', lineHeight: 1.2 }}>{dateStr}</div>
                       <div style={{ fontSize: '11px', color: '#64748b', marginTop: '3px', lineHeight: 1.2 }}>{timeStr}</div>
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{billAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b', fontSize: '13px', fontVariantNumeric: 'tabular-nums' }}>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: balanceAmount > 0 ? '#ef4444' : '#64748b', fontSize: '13px', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                       ₹{balanceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -830,7 +957,7 @@ export default function BillingPanel({
                         {canView && (
                         <button
                           type="button"
-                          onClick={() => setViewingBill(currentBill)}
+                          onClick={() => handleOpenViewBill(currentBill)}
                           title="View Bill"
                           aria-label="View Bill"
                           style={{
@@ -902,12 +1029,12 @@ export default function BillingPanel({
                           </>
                         ) : (
                           <>
-                            {/* 4. Print Invoice (Icon without text) */}
+                            {/* Print Invoice / Receipt */}
                             <button
                               type="button"
                               onClick={() => handlePrintInvoicePopup(currentBill)}
-                              title="Print Invoice"
-                              aria-label="Print Invoice"
+                              title="Print Invoice / Receipt"
+                              aria-label="Print Invoice / Receipt"
                               style={{
                                 width: '32px',
                                 height: '32px',
@@ -924,27 +1051,28 @@ export default function BillingPanel({
                             >
                               <PrinterIcon size={15} color="#16a34a" />
                             </button>
-                            {/* 5. Download Invoice (Icon without text) */}
+
+                            {/* Disabled Payment Icon for Paid status */}
                             <button
                               type="button"
-                              onClick={() => handleDownloadInvoicePopup(currentBill)}
-                              title="Download Invoice"
-                              aria-label="Download Invoice"
+                              disabled
+                              title="Payment Already Collected"
+                              aria-label="Payment Already Collected"
                               style={{
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '6px',
-                                border: '1px solid #fed7aa',
-                                background: '#fff7ed',
-                                color: '#ea580c',
+                                border: '1px solid #e2e8f0',
+                                background: '#f1f5f9',
+                                color: '#94a3b8',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
+                                cursor: 'not-allowed',
+                                opacity: 0.6
                               }}
                             >
-                              <DownloadIcon size={15} color="#ea580c" />
+                              <CreditCardIcon size={15} color="#94a3b8" />
                             </button>
                           </>
                         )}
@@ -1040,20 +1168,15 @@ export default function BillingPanel({
         </div>
       </div>
 
-      {/* VIEW BILL MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="430px">
+      {/* VIEW BILL MODAL (Sample Bill Format - Before Payment) */}
+      <Modal isOpen={!!viewingBill} onClose={() => setViewingBill(null)} title="Bill Receipt" maxWidth="480px">
         {viewingBill && (
           <ReceiptCard
             data={viewingBill}
             activeRestaurant={activeRestaurant}
-            onPrint={() => handlePrintBillPopup(viewingBill)}
-            onDownload={() => handleDownloadInvoicePopup(viewingBill)}
-            onCollectPayment={() => {
-              const b = viewingBill;
-              setViewingBill(null);
-              handleOpenCollectPayment(b);
-            }}
-            isPaid={(viewingBill.status || viewingBill.paymentStatus || '').toLowerCase() === 'paid'}
+            currentUser={currentUser}
+            isPaid={false}
+            showActions={false}
           />
         )}
       </Modal>
@@ -1138,12 +1261,13 @@ export default function BillingPanel({
         )}
       </Modal>
 
-      {/* TAX INVOICE MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice Receipt" maxWidth="430px">
+      {/* TAX INVOICE MODAL (Sample Invoice Format - After Payment) */}
+      <Modal isOpen={!!invoiceModalBill} onClose={() => setInvoiceModalBill(null)} title="Tax Invoice (After Payment)" maxWidth="480px">
         {invoiceModalBill && (
           <ReceiptCard
             data={invoiceModalBill}
             activeRestaurant={activeRestaurant}
+            currentUser={currentUser}
             onPrint={() => handlePrintInvoicePopup(invoiceModalBill)}
             onDownload={() => handleDownloadInvoicePopup(invoiceModalBill)}
             isPaid={true}

@@ -410,23 +410,6 @@ export default function InventoryPanel() {
             </span>
           </div>
         </div>
-
-        {/* View Scope Indicator */}
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: scope === 'COMPANY' ? '#eff6ff' : '#f0fdf4',
-          border: scope === 'COMPANY' ? '1px solid #bfdbfe' : '1px solid #bbf7d0',
-          padding: '5px 12px',
-          borderRadius: '20px',
-          fontSize: '12px',
-          fontWeight: 700,
-          color: scope === 'COMPANY' ? '#1d4ed8' : '#15803d'
-        }}>
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: scope === 'COMPANY' ? '#2563eb' : '#16a34a' }}></span>
-          <span>{scope === 'COMPANY' ? 'Company HQ Scope' : 'Active Outlet Scope'}</span>
-        </div>
       </div>
 
       {/* 2. MAIN PAGE ROUTE CONTENT */}

@@ -1055,7 +1055,7 @@ export const AppProvider = ({ children }) => {
               }
             }
             if (!profRoleObj || !profRoleObj.permissions || Object.keys(profRoleObj.permissions).length === 0) {
-              const listRes = await RoleApi.getRoles({ limit: 100 });
+              const listRes = await RoleApi.getRoles({ limit: 10 });
               if (listRes && listRes.status && listRes.response) {
                 const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                 if (Array.isArray(rolesList)) {
@@ -1271,7 +1271,7 @@ export const AppProvider = ({ children }) => {
                 }
               }
               if (!roleObj || !roleObj.permissions || Object.keys(roleObj.permissions).length === 0) {
-                const listRes = await RoleApi.getRoles({ limit: 100 });
+                const listRes = await RoleApi.getRoles({ limit: 10 });
                 if (listRes && listRes.status && listRes.response) {
                   const rolesList = listRes.response?.data?.roles || listRes.response?.data || listRes.response?.roles || [];
                   if (Array.isArray(rolesList)) {

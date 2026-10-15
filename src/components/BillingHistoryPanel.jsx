@@ -4,8 +4,9 @@ import * as XLSX from 'xlsx';
 import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
+import apiClient from '../config/index.js';
 import { formatDateDMY } from '../helper/DateHelper.js';
-import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow } from './ReceiptTemplate.jsx';
+import ReceiptCard, { generateReceiptHtml, openCenteredPrintWindow, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT } from './ReceiptTemplate.jsx';
 import '../pages/Billing/Billing.css';
 
 const EyeIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -31,8 +32,18 @@ const DownloadIcon = ({ size = 16, color = 'currentColor' }) => (
   </svg>
 );
 
+const TrashIcon = ({ size = 15, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    <line x1="10" y1="11" x2="10" y2="17"></line>
+    <line x1="14" y1="11" x2="14" y2="17"></line>
+  </svg>
+);
+
 export default function BillingHistoryPanel({
   billingHistory = [],
+  allFilteredHistory = [],
   branches = [],
   isLoading,
   searchTerm, setSearchTerm,
@@ -52,9 +63,12 @@ export default function BillingHistoryPanel({
   totalPages: propTotalPages,
   summary,
   activeRestaurant = {},
-  hasPermission
+  currentUser = {},
+  hasPermission,
+  onDeleteInvoice
 }) {
   const canView = typeof hasPermission === 'function' ? hasPermission('billing_history', 'view') : true;
+  const canDelete = typeof hasPermission === 'function' ? (hasPermission('billing_history', 'delete') || hasPermission('billing', 'delete') || hasPermission('orders', 'delete')) : true;
   const restaurantName = activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'XYZ Restaurant';
   const restaurantAddress = activeRestaurant?.address || activeRestaurant?.location || '123 Main Street, City Centre';
   const restaurantGst = activeRestaurant?.gstNo || activeRestaurant?.gstin || '33AAAAA0000A1Z5';
@@ -78,7 +92,34 @@ export default function BillingHistoryPanel({
 
   // State for Modals
   const [selectedInvoice, setSelectedInvoice] = useState(null); // For Invoice View Modal
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null); // For Delete Confirmation Modal
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Handle Confirm Delete Bill
+  const handleConfirmDelete = async () => {
+    if (!invoiceToDelete) return;
+    setIsDeleting(true);
+    try {
+      if (typeof onDeleteInvoice === 'function') {
+        await onDeleteInvoice(invoiceToDelete);
+      } else {
+        const targetId = invoiceToDelete.rawOrderId || invoiceToDelete.orderId || invoiceToDelete.order_id || invoiceToDelete._id || invoiceToDelete.id;
+        const cleanId = String(targetId || '').replace(/^[#ORD-_]*/i, '');
+        if (cleanId) {
+          await apiClient.delete(`/orders/${cleanId}`).catch(() => null);
+          await apiClient.delete(`/billing/${cleanId}`).catch(() => null);
+        }
+        ShowNotifications.showAlertNotification("Bill deleted successfully.", true);
+      }
+    } catch (err) {
+      console.error("Delete bill error:", err);
+      ShowNotifications.showAlertNotification("Failed to delete bill.", false);
+    } finally {
+      setIsDeleting(false);
+      setInvoiceToDelete(null);
+    }
+  };
 
   // Direct Excel Export (Fetches full filtered dataset without pagination)
   const handleExportExcel = async () => {
@@ -119,7 +160,9 @@ export default function BillingHistoryPanel({
         customer: customerFilter ? customerFilter.trim() : undefined,
         cashierId: selectedStaff && selectedStaff !== 'All' ? selectedStaff : undefined,
         paymentMethod: selectedPayment && selectedPayment !== 'All' ? selectedPayment : undefined,
-        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : undefined,
+        paymentStatus: paymentStatus && paymentStatus !== 'All' ? paymentStatus : 'Paid',
+        status: 'Paid',
+        billingStatus: 'Paid',
         orderType: orderType && orderType !== 'All' ? orderType : undefined,
         isExport: 'true',
         limit: '10' // Tell backend to fetch all for export
@@ -143,8 +186,12 @@ export default function BillingHistoryPanel({
     }
 
     // Fallback to local table data if API didn't return full list
-    if (itemsToExport.length === 0 && billingHistory.length > 0) {
-      itemsToExport = billingHistory;
+    if (itemsToExport.length === 0) {
+      if (allFilteredHistory.length > 0) {
+        itemsToExport = allFilteredHistory;
+      } else if (billingHistory.length > 0) {
+        itemsToExport = billingHistory;
+      }
     }
 
     if (itemsToExport.length === 0) {
@@ -208,26 +255,27 @@ export default function BillingHistoryPanel({
 
   // Helper to generate Receipt HTML for Printing and Downloading (Exact Thermal Receipt UI)
   const generateInvoiceHtml = (invoice) => {
-    return generateReceiptHtml(invoice, activeRestaurant);
+    return generateReceiptHtml(invoice, activeRestaurant, currentUser);
   };
 
   const handlePrintInvoiceDirect = (invoice) => {
-    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
-    openCenteredPrintWindow(htmlContent, `Receipt - ${invoice?.id || invoice?.billNo || 'Doc'}`, 480, 700);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
+    openCenteredPrintWindow(htmlContent, `Tax Invoice - ${invoice?.invoiceNo || invoice?.id || invoice?.billNo || 'Doc'}`, STANDARD_PRINT_WIDTH, STANDARD_PRINT_HEIGHT);
   };
 
   const handleDownloadInvoiceDirect = (invoice) => {
-    const htmlContent = generateReceiptHtml(invoice, activeRestaurant);
+    const htmlContent = generateReceiptHtml({ ...invoice, isPaid: true }, activeRestaurant, currentUser);
     const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Receipt-${String(invoice.id || invoice.billNo || 'doc').replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+    const invNo = invoice.invoiceNo || invoice.id || invoice.billNo || 'doc';
+    a.download = `TaxInvoice-${String(invNo).replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    ShowNotifications.showAlertNotification(`Receipt ${invoice.id || ''} downloaded successfully!`, true);
+    ShowNotifications.showAlertNotification(`Tax Invoice downloaded successfully!`, true);
   };
 
   // Calculate Summaries
@@ -276,28 +324,7 @@ export default function BillingHistoryPanel({
             />
           </div>
 
-          {/* Row 1, Col 3: 3. Customer Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Customer</label>
-            <input
-              type="text"
-              placeholder="Name or Phone..."
-              value={customerFilter}
-              onChange={(e) => setCustomerFilter && setCustomerFilter(e.target.value)}
-              style={{ width: '100%', height: '38px', padding: '0 12px', borderRadius: '6px', border: '1px solid var(--border)', boxSizing: 'border-box', fontSize: '13px' }}
-            />
-          </div>
 
-          {/* Row 2, Col 1: 4. Cashier / Staff Filter */}
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Cashier / Staff</label>
-            <SearchableSelect
-              value={selectedStaff}
-              onChange={(e) => setSelectedStaff && setSelectedStaff(e.target.value)}
-              options={staffOptions.length > 0 ? staffOptions : [{ value: 'All', label: 'All Cashier / Staff' }]}
-              placeholder="Select Staff..."
-            />
-          </div>
 
           {/* Row 2, Col 2: 5. Date Range */}
           <div>
@@ -338,12 +365,11 @@ export default function BillingHistoryPanel({
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '6px', color: '#64748b', textTransform: 'uppercase' }}>Payment Status</label>
             <SearchableSelect
-              value={paymentStatus || 'All'}
+              value={paymentStatus || 'Paid'}
               onChange={(e) => setPaymentStatus && setPaymentStatus(e.target.value)}
               options={[
-                { value: 'All', label: 'All Statuses' },
                 { value: 'Paid', label: 'Paid' },
-                { value: 'Unpaid', label: 'Unpaid' }
+                { value: 'All', label: 'All Paid Bills' }
               ]}
               placeholder="Select Status..."
             />
@@ -420,33 +446,33 @@ export default function BillingHistoryPanel({
         {/* MAIN HISTORY TABLE WITH ALL 13 REQUIRED COLUMNS */}
         <div className="billing-table-card">
           <div className="billing-table-responsive">
-            <table className="billing-table" style={{ minWidth: '1615px' }}>
+            <table className="billing-table" style={{ minWidth: '1890px' }}>
               <colgroup>
-                <col style={{ width: '50px' }} />   {/* 1. S.NO */}
-                <col style={{ width: '125px' }} />  {/* 2. BILL NO. */}
-                <col style={{ width: '145px' }} />  {/* 3. INVOICE NO. */}
-                <col style={{ width: '125px' }} />  {/* 4. ORDER ID */}
-                <col style={{ width: '110px' }} />  {/* 5. ORDER TYPE */}
+                <col style={{ width: '65px' }} />   {/* 1. S.NO */}
+                <col style={{ width: '185px' }} />  {/* 2. BILL NO. */}
+                <col style={{ width: '175px' }} />  {/* 3. INVOICE NO. */}
+                <col style={{ width: '175px' }} />  {/* 4. ORDER ID */}
+                <col style={{ width: '125px' }} />  {/* 5. ORDER TYPE */}
                 <col style={{ width: '170px' }} />  {/* 6. TABLE */}
                 <col style={{ width: '160px' }} />  {/* 7. BILL DATE & TIME */}
-                <col style={{ width: '120px' }} />  {/* 8. TOTAL AMOUNT */}
-                <col style={{ width: '120px' }} />  {/* 9. PAID AMOUNT */}
-                <col style={{ width: '115px' }} />  {/* 10. PAYMENT METHOD */}
-                <col style={{ width: '115px' }} />  {/* 11. PAYMENT STATUS */}
-                <col style={{ width: '125px' }} />  {/* 12. BILLED BY */}
-                <col style={{ width: '135px' }} />  {/* 13. ACTIONS */}
+                <col style={{ width: '145px' }} />  {/* 8. TOTAL AMOUNT */}
+                <col style={{ width: '145px' }} />  {/* 9. PAID AMOUNT */}
+                <col style={{ width: '135px' }} />  {/* 10. PAYMENT METHOD */}
+                <col style={{ width: '135px' }} />  {/* 11. PAYMENT STATUS */}
+                <col style={{ width: '140px' }} />  {/* 12. BILLED BY */}
+                <col style={{ width: '145px' }} />  {/* 13. ACTIONS */}
               </colgroup>
               <thead>
                 <tr>
                   <th style={{ textAlign: 'center' }}>S.NO</th>
-                  <th style={{ textAlign: 'left' }}>BILL NO.</th>
-                  <th style={{ textAlign: 'left' }}>INVOICE NO.</th>
-                  <th style={{ textAlign: 'left' }}>ORDER ID</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>BILL NO.</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>INVOICE NO.</th>
+                  <th style={{ textAlign: 'left', paddingLeft: '16px' }}>ORDER ID</th>
                   <th style={{ textAlign: 'center' }}>ORDER TYPE</th>
                   <th style={{ textAlign: 'center' }}>TABLE</th>
                   <th style={{ textAlign: 'center' }}>BILL DATE & TIME</th>
-                  <th style={{ textAlign: 'right' }}>TOTAL AMOUNT</th>
-                  <th style={{ textAlign: 'right' }}>PAID AMOUNT</th>
+                  <th style={{ textAlign: 'right', paddingRight: '16px' }}>TOTAL AMOUNT</th>
+                  <th style={{ textAlign: 'right', paddingRight: '16px' }}>PAID AMOUNT</th>
                   <th style={{ textAlign: 'center' }}>PAYMENT METHOD</th>
                   <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                   <th style={{ textAlign: 'left' }}>BILLED BY</th>
@@ -464,7 +490,19 @@ export default function BillingHistoryPanel({
                   <>
                     {billingHistory.map((invoice, idx) => {
                       const billNo = invoice.billNo || invoice.billNumber || '-';
-                      const invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.id || '-';
+                      let invNo = invoice.invoiceNo || invoice.invoiceNumber || invoice.invoiceId || '';
+                      if (!invNo || invNo === '-') {
+                        if (billNo && billNo !== '-') {
+                          invNo = billNo.startsWith('INV-') ? billNo : `INV-${billNo.replace(/^BILL[-_]*/i, '')}`;
+                        } else if (invoice.orderId && invoice.orderId !== '-') {
+                          invNo = `INV-${String(invoice.orderId).replace(/^[#ORD-_]*/i, '')}`;
+                        } else if (invoice.id || invoice._id) {
+                          const rawId = String(invoice.id || invoice._id);
+                          invNo = rawId.length === 24 ? `INV-${rawId.slice(-6).toUpperCase()}` : `INV-${rawId}`;
+                        } else {
+                          invNo = invoice.orderId ? `INV-${String(invoice.orderId).replace(/^[#ORD-_]*/i, '')}` : `INV-${1000 + idx + 1}`;
+                        }
+                      }
                       const totAmt = Number(invoice.amount ?? invoice.totalAmount ?? 0);
                       const paidAmt = Number(invoice.paidAmount ?? totAmt);
 
@@ -473,13 +511,13 @@ export default function BillingHistoryPanel({
                           <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
                             {page * limit + idx + 1}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 800, color: '#0f172a', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {billNo}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {invNo}
                           </td>
-                          <td style={{ textAlign: 'left', fontSize: '13px', color: '#475569', fontWeight: 600 }}>
+                          <td style={{ textAlign: 'left', fontSize: '13px', color: '#475569', fontWeight: 600, paddingLeft: '16px', letterSpacing: '0.2px' }}>
                             {invoice.orderId || invoice.order_id || '-'}
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -498,10 +536,10 @@ export default function BillingHistoryPanel({
                               {invoice.time || (invoice.createdAt ? new Date(invoice.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (invoice.billDateTime ? new Date(invoice.billDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'))}
                             </div>
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                             ₹{totAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
-                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 700, color: '#16a34a', fontVariantNumeric: 'tabular-nums' }}>
+                          <td style={{ textAlign: 'right', fontSize: '13px', fontWeight: 700, color: '#16a34a', fontVariantNumeric: 'tabular-nums', paddingRight: '16px' }}>
                             ₹{paidAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -553,12 +591,12 @@ export default function BillingHistoryPanel({
                               </button>
                               )}
 
-                              {/* 2. Print Invoice (Icon without text) */}
+                              {/* 2. Print Invoice / Receipt */}
                               <button
                                 type="button"
                                 onClick={() => handlePrintInvoiceDirect(invoice)}
-                                title="Print Invoice"
-                                aria-label="Print Invoice"
+                                title="Print Invoice / Receipt"
+                                aria-label="Print Invoice / Receipt"
                                 style={{
                                   width: '32px',
                                   height: '32px',
@@ -576,19 +614,20 @@ export default function BillingHistoryPanel({
                                 <PrinterIcon size={15} color="#0f172a" />
                               </button>
 
-                              {/* 3. Download Invoice (Icon without text) */}
+                              {/* 3. Delete Bill / Invoice */}
+                              {canDelete && (
                               <button
                                 type="button"
-                                onClick={() => handleDownloadInvoiceDirect(invoice)}
-                                title="Download Invoice"
-                                aria-label="Download Invoice"
+                                onClick={() => setInvoiceToDelete(invoice)}
+                                title="Delete Bill / Invoice"
+                                aria-label="Delete Bill / Invoice"
                                 style={{
                                   width: '32px',
                                   height: '32px',
                                   borderRadius: '6px',
-                                  border: '1px solid #bbf7d0',
-                                  background: '#f0fdf4',
-                                  color: '#16a34a',
+                                  border: '1px solid #fecaca',
+                                  background: '#fef2f2',
+                                  color: '#dc2626',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -596,8 +635,9 @@ export default function BillingHistoryPanel({
                                   transition: 'all 0.15s ease'
                                 }}
                               >
-                                <DownloadIcon size={15} color="#16a34a" />
+                                <TrashIcon size={15} color="#dc2626" />
                               </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -686,16 +726,73 @@ export default function BillingHistoryPanel({
         </div>
       </div>
 
-      {/* INVOICE DETAILS MODAL (Exact Thermal Receipt UI) */}
-      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice Receipt" maxWidth="430px">
+      {/* INVOICE DETAILS MODAL (Sample Invoice Format - After Payment) */}
+      <Modal isOpen={!!selectedInvoice} onClose={() => setSelectedInvoice(null)} title="Tax Invoice (After Payment)" maxWidth="480px">
         {selectedInvoice && (
           <ReceiptCard
             data={selectedInvoice}
             activeRestaurant={activeRestaurant}
-            onPrint={() => handlePrintInvoiceDirect(selectedInvoice)}
-            onDownload={() => handleDownloadInvoiceDirect(selectedInvoice)}
+            currentUser={currentUser}
             isPaid={true}
+            showActions={false}
           />
+        )}
+      </Modal>
+
+      {/* DELETE BILL CONFIRMATION MODAL */}
+      <Modal
+        isOpen={!!invoiceToDelete}
+        onClose={() => { if (!isDeleting) setInvoiceToDelete(null); }}
+        title="Confirm Delete Bill"
+        maxWidth="420px"
+      >
+        {invoiceToDelete && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '6px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>
+              Are you sure you want to delete bill <strong>{invoiceToDelete.billNo || invoiceToDelete.invoiceNo}</strong>
+              {invoiceToDelete.table && invoiceToDelete.table !== '-' ? ` (${invoiceToDelete.table})` : ''}
+              {invoiceToDelete.amount ? ` for ₹${Number(invoiceToDelete.amount).toFixed(2)}` : ''}?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setInvoiceToDelete(null)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                style={{
+                  background: '#dc2626',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '8px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  borderRadius: '8px',
+                  cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </section>
