@@ -235,32 +235,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [opSubTab, setOpSubTab] = useState('tables');
   const viewTopRef = useRef(null);
 
-  // Auto-scroll to top when opening branch view page or form
+  // Auto-scroll to top ONLY ONCE when switching into branch view page or form
+  const lastScrolledViewRef = useRef('');
+
   useEffect(() => {
-    if (activeView === 'hierarchy' || activeView === 'form') {
+    if ((activeView === 'hierarchy' || activeView === 'form') && lastScrolledViewRef.current !== activeView) {
+      lastScrolledViewRef.current = activeView;
       const resetScrollToTop = () => {
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
         const contentBody = document.querySelector('.content-body');
         if (contentBody) contentBody.scrollTop = 0;
         const mainContent = document.querySelector('.main-content');
         if (mainContent) mainContent.scrollTop = 0;
-        if (viewTopRef.current) {
-          viewTopRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
-        }
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
       };
 
       resetScrollToTop();
-      const rafId = requestAnimationFrame(resetScrollToTop);
       const timer = setTimeout(resetScrollToTop, 50);
-
-      return () => {
-        cancelAnimationFrame(rafId);
-        clearTimeout(timer);
-      };
+      return () => clearTimeout(timer);
+    } else if (activeView === 'list') {
+      lastScrolledViewRef.current = 'list';
     }
-  }, [activeView, selectedBranchForTree]);
+  }, [activeView]);
 
   // Delete modal state
   const [branchToDelete, setBranchToDelete] = useState(null);
@@ -413,12 +410,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           const bPref = d.billPrefix || d.invoicePrefix || d.billingPrefix || '';
           setSelectedBranchForTree(prev => {
             if (!prev) return prev;
+            const newGst = gst || prev.gstNumber || '';
+            const newFssai = fssai || prev.fssaiNumber || '';
+            const newPref = bPref || prev.billPrefix || '';
+            if (
+              prev.gstNumber === newGst &&
+              prev.fssaiNumber === newFssai &&
+              prev.billPrefix === newPref &&
+              (!d.email || prev.email === d.email) &&
+              (!d.mobileNumber || prev.mobileNumber === d.mobileNumber) &&
+              (!d.branchManager || prev.branchManager === d.branchManager)
+            ) {
+              return prev;
+            }
             return {
               ...prev,
               ...d,
-              ...(gst ? { gstNumber: gst, gstinNumber: gst, gstin: gst } : {}),
-              ...(fssai ? { fssaiNumber: fssai, fssaiLicense: fssai, fssai: fssai } : {}),
-              ...(bPref ? { billPrefix: bPref, invoicePrefix: bPref } : {})
+              ...(newGst ? { gstNumber: newGst, gstinNumber: newGst, gstin: newGst } : {}),
+              ...(newFssai ? { fssaiNumber: newFssai, fssaiLicense: newFssai, fssai: newFssai } : {}),
+              ...(newPref ? { billPrefix: newPref, invoicePrefix: newPref } : {})
             };
           });
         }
@@ -1798,11 +1808,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     };
   }, [baseCurrentViewBranch]);
 
+  const currentViewBranchId = String(currentViewBranch?.id || currentViewBranch?._id || currentViewBranch?.branchCode || '');
+  const lastFetchedBranchIdRef = useRef('');
+
   useEffect(() => {
-    if (activeView === 'hierarchy' && currentViewBranch) {
-      fetchBranchOperationalData(currentViewBranch);
+    if (activeView === 'hierarchy' && currentViewBranchId) {
+      if (lastFetchedBranchIdRef.current !== currentViewBranchId) {
+        lastFetchedBranchIdRef.current = currentViewBranchId;
+        fetchBranchOperationalData(currentViewBranch);
+      }
+    } else if (activeView !== 'hierarchy') {
+      lastFetchedBranchIdRef.current = '';
     }
-  }, [activeView, currentViewBranch, fetchBranchOperationalData]);
+  }, [activeView, currentViewBranchId, fetchBranchOperationalData]);
 
   // Live computed operational data for current branch
   const opData = (() => {
@@ -2266,7 +2284,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'hierarchy') {
     return (
-      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
         
         {/* Top Header Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -3097,7 +3115,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'form') {
     return (
-      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
         {/* Header Card with Back Button */}
         <div style={{
           background: '#ffffff',
@@ -4059,7 +4077,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // VIEW 3: MAIN BRANCH LIST VIEW
   // ==========================================
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
       
       {/* 1. Header & Actions Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>

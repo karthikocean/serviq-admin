@@ -222,8 +222,25 @@ export default function MenuManagement() {
     const isCompanyUser = isUserCompanyUser(currentUser);
     const userBranchId = getUserAssignedBranchId(currentUser);
     const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
-    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
     const initialBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
+
+    if (initialBranch) {
+      const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+      const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, initialBranch));
+      const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+      const isCustomMenuEnabled = Boolean(
+        branchCustomFlag === true ||
+        String(branchCustomFlag).toLowerCase() === 'true'
+      );
+      if (!isCustomMenuEnabled) {
+        ShowNotifications.showAlertNotification(
+          "This branch uses the Company Menu. Custom menu items cannot be added unless 'useCustomMenu' is enabled in Branch Management.",
+          false
+        );
+        return;
+      }
+    }
 
     setMenuForm({
       _id: '',
@@ -369,6 +386,22 @@ export default function MenuManagement() {
     if (allBranchesList.length > 0 && !finalBranchId) {
       ShowNotifications.showAlertNotification('Please select a branch before adding.', false);
       return;
+    }
+
+    if (!menuForm._id && finalBranchId) {
+      const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, finalBranchId));
+      const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+      const isCustomMenuEnabled = Boolean(
+        branchCustomFlag === true ||
+        String(branchCustomFlag).toLowerCase() === 'true'
+      );
+      if (!isCustomMenuEnabled) {
+        ShowNotifications.showAlertNotification(
+          `Branch "${targetBranchObj?.branchName || 'Selected'}" has useCustomMenu disabled. Custom menu items cannot be created for this branch.`,
+          false
+        );
+        return;
+      }
     }
 
     const itemData = {
@@ -972,49 +1005,6 @@ export default function MenuManagement() {
         </section>
       ) : (
         <>
-          {(() => {
-            const currentBranchObj = (branches || []).find(b => 
-              String(b._id || b.id || '').toLowerCase() === String(selectedBranchId || '').toLowerCase() ||
-              String(b.branchCode || b.code || '').toLowerCase() === String(selectedBranchId || '').toLowerCase()
-            );
-            const isSelectedBranchCustom = currentBranchObj ? (currentBranchObj.useCustomMenu === true || String(currentBranchObj.useCustomMenu) === 'true') : false;
-            const isBranchScoped = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
-            if (isBranchScoped && !isSelectedBranchCustom) {
-              return (
-                <div style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: '10px',
-                  padding: '12px 18px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '18px' }}>ℹ️</span>
-                    <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 600 }}>
-                      <strong>{currentBranchObj?.branchName || 'This branch'}</strong> is currently displaying the <strong>Company Menu</strong>.
-                      To create a separate menu for this branch, enable "Create separate / custom menu" in Branch Management.
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: '11px',
-                    background: '#dbeafe',
-                    color: '#1d4ed8',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    🏢 Company Menu Mode
-                  </span>
-                </div>
-              );
-            }
-            return null;
-          })()}
           <MenuPanel
             menu={menu}
             branches={branches}
