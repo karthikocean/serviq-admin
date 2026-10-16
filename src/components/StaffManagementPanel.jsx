@@ -5,7 +5,7 @@ import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -2177,7 +2177,7 @@ export default function StaffManagementPanel({
                       {hasPermission('staff', 'edit') && (
                       <button
                         type="button"
-                        title={isStaffActive ? "Deactivate Account" : "Activate Account"}
+                        title={isStaffActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
                         onClick={() => handleToggleAccountStatus(user)}
                         style={{
                           background: isStaffActive ? '#ecfdf5' : '#fef2f2',
@@ -2200,7 +2200,7 @@ export default function StaffManagementPanel({
                           e.currentTarget.style.background = isStaffActive ? '#ecfdf5' : '#fef2f2';
                         }}
                       >
-                        {isStaffActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                        {isStaffActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
                       </button>
                       )}
                     </div>

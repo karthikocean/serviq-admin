@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { getCustomerScanUrl, CUSTOMER_APP_URL } from '../config/index.js';
 import TableApi from '../api/Table.js';
@@ -944,9 +944,9 @@ export default function TablesPanel({
                                   justifyContent: 'center',
                                   transition: 'all 0.15s'
                                 }}
-                                title={isQrActive ? 'Deactivate QR Code' : 'Activate QR Code'}
+                                title={isQrActive ? 'Deactivate / Lock QR Code' : 'Activate / Unlock QR Code'}
                               >
-                                {isQrActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                                {isQrActive ? <UnlockIcon size={16} color="#16a34a" /> : <LockIcon size={16} color="#dc2626" />}
                               </button>
                             )}
 

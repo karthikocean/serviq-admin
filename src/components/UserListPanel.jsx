@@ -4,7 +4,7 @@ import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
-import DeleteConfirmationModal from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -422,6 +422,56 @@ export default function UserListPanel() {
 
       setViewState('list');
       fetchData();
+    }
+  };
+
+  const handleToggleUserStatus = async (user) => {
+    const targetId = user._id || user.id;
+    const isCurrentlyActive = user.status === 'Active' || (!user.status && user.isActive);
+    const nextStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+    const nextIsActive = !isCurrentlyActive;
+
+    // Optimistic UI update
+    setApiUsers(prev => prev.map(u => {
+      if ((u._id || u.id) === targetId) {
+        return { ...u, status: nextStatus, isActive: nextIsActive, active: nextIsActive };
+      }
+      return u;
+    }));
+
+    try {
+      const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+      const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+      const uId = String(targetId || '');
+      const uEmail = (user.email || '').toLowerCase().trim();
+
+      if (!nextIsActive) {
+        if (uId && !storedInactiveIds.includes(uId)) storedInactiveIds.push(uId);
+        if (uEmail && !storedInactiveEmails.includes(uEmail)) storedInactiveEmails.push(uEmail);
+      } else {
+        const idIdx = storedInactiveIds.indexOf(uId);
+        if (idIdx > -1) storedInactiveIds.splice(idIdx, 1);
+        const emailIdx = storedInactiveEmails.indexOf(uEmail);
+        if (emailIdx > -1) storedInactiveEmails.splice(emailIdx, 1);
+      }
+      localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
+      localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
+
+      const res = await UserApi.updateUser(targetId, {
+        name: user.name,
+        roleId: user.role?._id || user.roleId || user.role,
+        branchId: user.branchId || user.branch?._id || user.branch,
+        phoneNumber: user.phoneNumber,
+        status: nextStatus,
+        isActive: nextIsActive,
+        active: nextIsActive
+      });
+
+      if (res?.status) {
+        ShowNotifications.showAlertNotification(`User account ${nextStatus === 'Active' ? 'unlocked / activated' : 'locked / deactivated'} successfully!`, true);
+      }
+    } catch (e) {
+      console.warn("User status toggle error:", e);
     }
   };
 
@@ -1146,6 +1196,38 @@ export default function UserListPanel() {
                             <KeyIcon />
                           </button>
                         )}
+                        {hasPermission('users', 'edit') && (() => {
+                          const isUserActive = user.status === 'Active' || (!user.status && user.isActive);
+                          return (
+                            <button
+                              type="button"
+                              title={isUserActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
+                              onClick={() => handleToggleUserStatus(user)}
+                              style={{
+                                background: isUserActive ? '#ecfdf5' : '#fef2f2',
+                                border: `1px solid ${isUserActive ? '#a7f3d0' : '#fecaca'}`,
+                                color: isUserActive ? '#16a34a' : '#dc2626',
+                                cursor: 'pointer',
+                                width: '28px',
+                                height: '28px',
+                                padding: '0',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = isUserActive ? '#d1fae5' : '#fee2e2';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = isUserActive ? '#ecfdf5' : '#fef2f2';
+                              }}
+                            >
+                              {isUserActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
+                            </button>
+                          );
+                        })()}
                         {hasPermission('users', 'delete') && (
                           <button
                             type="button"

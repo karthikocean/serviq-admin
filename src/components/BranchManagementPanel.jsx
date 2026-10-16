@@ -9,10 +9,11 @@ import MenuApi from '../api/Menu.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
+import PasswordRequirements from './common/PasswordRequirements';
 import { 
   resolveBranchManagerName, 
   resolveBranchContactNumber,
@@ -4516,7 +4517,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       {hasPermission('branch-management', 'edit') && (
                         <button
                           type="button"
-                          title={b.status === 'Active' ? 'Deactivate Branch' : 'Activate Branch'}
+                          title={b.status === 'Active' ? 'Deactivate / Lock Branch' : 'Activate / Unlock Branch'}
                           onClick={() => handleToggleBranchStatus(b)}
                           style={{
                             border: `1px solid ${b.status === 'Active' ? '#bbf7d0' : '#fecaca'}`,
@@ -4535,7 +4536,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           onMouseEnter={e => e.currentTarget.style.background = b.status === 'Active' ? '#dcfce7' : '#fee2e2'}
                           onMouseLeave={e => e.currentTarget.style.background = b.status === 'Active' ? '#f0fdf4' : '#fef2f2'}
                         >
-                          {b.status === 'Active' ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                          {b.status === 'Active' ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
                         </button>
                       )}
 

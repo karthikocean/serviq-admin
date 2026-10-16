@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { useAppState } from '../config/AppContext';
 
@@ -917,9 +917,9 @@ export default function RolesPermissionsPanel() {
                             onMouseLeave={e => {
                               e.currentTarget.style.background = isRoleActive ? '#ecfdf5' : '#fef2f2';
                             }}
-                            title={isRoleActive ? "Deactivate Role (Click to set Inactive)" : "Activate Role (Click to set Active)"}
+                            title={isRoleActive ? "Deactivate / Lock Role (Click to set Inactive)" : "Activate / Unlock Role (Click to set Active)"}
                           >
-                            {isRoleActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                            {isRoleActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
                           </button>
                           )}
                           {hasPermission('roles-permissions', 'edit') && (

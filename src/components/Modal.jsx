@@ -1,6 +1,15 @@
 import React, { useEffect } from 'react';
 
-export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', hideHeader = false, children }) => {
+export const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  maxWidth = '480px',
+  hideHeader = false,
+  style = {},
+  overlayStyle = {},
+  children
+}) => {
   useEffect(() => {
     if (isOpen) {
       const prevOverflow = document.body.style.overflow;
@@ -33,7 +42,8 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', hideHeader =
         zIndex: 99999,
         padding: '16px',
         boxSizing: 'border-box',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        ...overlayStyle
       }}
     >
       <div 
@@ -46,7 +56,8 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', hideHeader =
           margin: 'auto',
           boxSizing: 'border-box',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          ...style
         }}
       >
         {!hideHeader && (
