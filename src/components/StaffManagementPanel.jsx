@@ -5,6 +5,7 @@ import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -2154,7 +2155,7 @@ export default function StaffManagementPanel({
                         style={{
                           background: isStaffActive ? '#ecfdf5' : '#fef2f2',
                           border: `1px solid ${isStaffActive ? '#a7f3d0' : '#fecaca'}`,
-                          color: isStaffActive ? '#059669' : '#dc2626',
+                          color: isStaffActive ? '#16a34a' : '#dc2626',
                           cursor: 'pointer',
                           width: '28px',
                           height: '28px',
@@ -2172,7 +2173,7 @@ export default function StaffManagementPanel({
                           e.currentTarget.style.background = isStaffActive ? '#ecfdf5' : '#fef2f2';
                         }}
                       >
-                        <PowerIcon size={14} color={isStaffActive ? '#059669' : '#dc2626'} />
+                        {isStaffActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
                       </button>
                       )}
                     </div>
@@ -2295,35 +2296,16 @@ export default function StaffManagementPanel({
       </div>
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
+        onConfirm={handleDeleteConfirm}
         title="Delete Staff Member"
-        maxWidth="420px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '8px' }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#334155', lineHeight: '1.5' }}>
-            Are you sure you want to remove <strong>{userToDelete?.name}</strong> from the restaurant staff list? This action will immediately revoke their access.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setUserToDelete(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-black"
-              style={{ background: '#dc2626', borderColor: '#dc2626' }}
-              onClick={handleDeleteConfirm}
-            >
-              Delete Staff
-            </button>
-          </div>
-        </div>
-      </Modal>
+        itemType="staff member"
+        itemName={userToDelete?.name}
+        warningText="Warning: This action will immediately revoke their access and cannot be undone."
+        confirmText="Delete Staff"
+      />
 
       {/* Change Password Modal */}
       <Modal

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import DeleteConfirmationModal from '../DeleteConfirmationModal';
 import { useAppState } from '../../config/AppContext';
 import { isBranchMatch, getUserAssignedBranchId, isUserCompanyUser } from '../../helper/BranchHelper';
 
@@ -45,6 +46,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
 
   // View States: null | 'ADD' | 'VIEW_DETAIL'
   const [viewState, setViewState] = useState(null);
@@ -259,20 +261,25 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
     }
   };
 
-  const handleDelete = async (purchase) => {
-    const pId = purchase._id || purchase.id;
-    if (!pId) return;
-    if (window.confirm(`Are you sure you want to delete purchase ${purchase.purchaseNo || purchase.id}?`)) {
+  const handleDelete = (purchase) => {
+    setPurchaseToDelete(purchase);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!purchaseToDelete) return;
+    const pId = purchaseToDelete._id || purchaseToDelete.id;
+    if (pId) {
       try {
         const res = await InventoryApi.deletePurchase(pId);
         if (res?.status) {
           setApiPurchases(prev => prev.filter(p => (p.id !== pId && p._id !== pId)));
-          if (onDeletePurchase) onDeletePurchase(purchase);
+          if (onDeletePurchase) onDeletePurchase(purchaseToDelete);
         }
       } catch (err) {
         console.error('Delete purchase error:', err);
       }
     }
+    setPurchaseToDelete(null);
   };
 
   const getTypeBadgeStyle = (typeStr) => {
@@ -801,6 +808,16 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         totalItems={filteredPurchases.length}
         pageSize={PAGE_SIZE}
         onPageChange={setCurrentPage}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={!!purchaseToDelete}
+        onClose={() => setPurchaseToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Purchase Deletion"
+        itemType="purchase"
+        itemName={purchaseToDelete?.purchaseNo || purchaseToDelete?.id}
+        confirmText="Delete Purchase"
       />
     </div>
   );

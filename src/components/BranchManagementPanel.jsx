@@ -9,12 +9,17 @@ import MenuApi from '../api/Menu.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
-import PasswordRequirements from './common/PasswordRequirements';
-import { resolveBranchManagerName, resolveBranchContactNumber } from '../helper/BranchHelper.js';
-import { getPlanBranchLimit } from '../config/initialData';
+import { 
+  resolveBranchManagerName, 
+  resolveBranchContactNumber,
+  getUserAssignedBranchId,
+  isUserCompanyUser,
+  isBranchMatch
+} from '../helper/BranchHelper.js';
 import {
   sanitizeName,
   sanitizeMobile,
@@ -183,7 +188,7 @@ const initialBranchState = {
 
 export default function BranchManagementPanel({ hasPermission: hasPermissionProp }) {
   const navigate = useNavigate();
-  const { currentUser, activeRestaurant, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders, hasPermission: contextHasPermission } = useAppState();
+  const { currentUser, activeRestaurant, selectedBranchId, addBranch, updateBranch, deleteBranch, purchaseExtraBranchSlots, fetchOrders, hasPermission: contextHasPermission } = useAppState();
 
   const roleStr = typeof currentUser?.role === 'object' && currentUser?.role !== null
     ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
@@ -214,6 +219,37 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     );
   }
 
+  const storedBranchId = (() => {
+    try {
+      return sessionStorage.getItem('selectedBranchId') || '';
+    } catch (e) {
+      return '';
+    }
+  })();
+
+  const userAssignedBranchId = getUserAssignedBranchId(currentUser);
+  const isCompany = isUserCompanyUser(currentUser);
+  const isBranchLogin = !isCompany && Boolean(userAssignedBranchId);
+  const effectiveSelectedBranch = selectedBranchId || storedBranchId;
+  const cleanSelectedBranch = (effectiveSelectedBranch && effectiveSelectedBranch !== 'ALL' && effectiveSelectedBranch !== 'All' && String(effectiveSelectedBranch).toUpperCase() !== 'COMPANY' && String(effectiveSelectedBranch).toLowerCase() !== 'all branches') ? effectiveSelectedBranch : null;
+
+  // Active branch context if logged in to a branch or if a specific branch is selected
+  const activeBranchContextId = isBranchLogin 
+    ? userAssignedBranchId 
+    : (cleanSelectedBranch || (!isCompany ? (currentUser?.branchName || currentUser?.branch) : null));
+
+  const isBranchCurrentActive = (b) => {
+    if (!activeBranchContextId) return false;
+    if (isBranchMatch(b, activeBranchContextId)) return true;
+    if (userAssignedBranchId && isBranchMatch(b, userAssignedBranchId)) return true;
+    if (cleanSelectedBranch && isBranchMatch(b, cleanSelectedBranch)) return true;
+    if (currentUser?.branchName && isBranchMatch(b, currentUser.branchName)) return true;
+    if (currentUser?.branch && typeof currentUser.branch === 'object' && isBranchMatch(b, currentUser.branch)) return true;
+    if (currentUser?.email && b?.email && String(currentUser.email).toLowerCase() === String(b.email).toLowerCase()) return true;
+    if (currentUser?.username && b?.username && String(currentUser.username).toLowerCase() === String(b.username).toLowerCase()) return true;
+    return false;
+  };
+
   const [activeView, setActiveView] = useState('list'); // 'list' | 'form' | 'hierarchy'
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -235,32 +271,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [opSubTab, setOpSubTab] = useState('tables');
   const viewTopRef = useRef(null);
 
-  // Auto-scroll to top when opening branch view page or form
+  // Auto-scroll to top ONLY ONCE when switching into branch view page or form
+  const lastScrolledViewRef = useRef('');
+
   useEffect(() => {
-    if (activeView === 'hierarchy' || activeView === 'form') {
+    if ((activeView === 'hierarchy' || activeView === 'form') && lastScrolledViewRef.current !== activeView) {
+      lastScrolledViewRef.current = activeView;
       const resetScrollToTop = () => {
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
         const contentBody = document.querySelector('.content-body');
         if (contentBody) contentBody.scrollTop = 0;
         const mainContent = document.querySelector('.main-content');
         if (mainContent) mainContent.scrollTop = 0;
-        if (viewTopRef.current) {
-          viewTopRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
-        }
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
       };
 
       resetScrollToTop();
-      const rafId = requestAnimationFrame(resetScrollToTop);
       const timer = setTimeout(resetScrollToTop, 50);
-
-      return () => {
-        cancelAnimationFrame(rafId);
-        clearTimeout(timer);
-      };
+      return () => clearTimeout(timer);
+    } else if (activeView === 'list') {
+      lastScrolledViewRef.current = 'list';
     }
-  }, [activeView, selectedBranchForTree]);
+  }, [activeView]);
 
   // Delete modal state
   const [branchToDelete, setBranchToDelete] = useState(null);
@@ -413,12 +446,25 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           const bPref = d.billPrefix || d.invoicePrefix || d.billingPrefix || '';
           setSelectedBranchForTree(prev => {
             if (!prev) return prev;
+            const newGst = gst || prev.gstNumber || '';
+            const newFssai = fssai || prev.fssaiNumber || '';
+            const newPref = bPref || prev.billPrefix || '';
+            if (
+              prev.gstNumber === newGst &&
+              prev.fssaiNumber === newFssai &&
+              prev.billPrefix === newPref &&
+              (!d.email || prev.email === d.email) &&
+              (!d.mobileNumber || prev.mobileNumber === d.mobileNumber) &&
+              (!d.branchManager || prev.branchManager === d.branchManager)
+            ) {
+              return prev;
+            }
             return {
               ...prev,
               ...d,
-              ...(gst ? { gstNumber: gst, gstinNumber: gst, gstin: gst } : {}),
-              ...(fssai ? { fssaiNumber: fssai, fssaiLicense: fssai, fssai: fssai } : {}),
-              ...(bPref ? { billPrefix: bPref, invoicePrefix: bPref } : {})
+              ...(newGst ? { gstNumber: newGst, gstinNumber: newGst, gstin: newGst } : {}),
+              ...(newFssai ? { fssaiNumber: newFssai, fssaiLicense: newFssai, fssai: newFssai } : {}),
+              ...(newPref ? { billPrefix: newPref, invoicePrefix: newPref } : {})
             };
           });
         }
@@ -1673,11 +1719,19 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     };
   }, [baseCurrentViewBranch]);
 
+  const currentViewBranchId = String(currentViewBranch?.id || currentViewBranch?._id || currentViewBranch?.branchCode || '');
+  const lastFetchedBranchIdRef = useRef('');
+
   useEffect(() => {
-    if (activeView === 'hierarchy' && currentViewBranch) {
-      fetchBranchOperationalData(currentViewBranch);
+    if (activeView === 'hierarchy' && currentViewBranchId) {
+      if (lastFetchedBranchIdRef.current !== currentViewBranchId) {
+        lastFetchedBranchIdRef.current = currentViewBranchId;
+        fetchBranchOperationalData(currentViewBranch);
+      }
+    } else if (activeView !== 'hierarchy') {
+      lastFetchedBranchIdRef.current = '';
     }
-  }, [activeView, currentViewBranch, fetchBranchOperationalData]);
+  }, [activeView, currentViewBranchId, fetchBranchOperationalData]);
 
   // Live computed operational data for current branch
   const opData = (() => {
@@ -2141,7 +2195,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'hierarchy') {
     return (
-      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
         
         {/* Top Header Bar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
@@ -2972,7 +3026,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // ==========================================
   if (activeView === 'form') {
     return (
-      <div ref={viewTopRef} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div ref={viewTopRef} style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
         {/* Header Card with Back Button */}
         <div style={{
           background: '#ffffff',
@@ -3934,12 +3988,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   // VIEW 3: MAIN BRANCH LIST VIEW
   // ==========================================
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ width: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '80px' }}>
       
       {/* 1. Header & Actions Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'var(--text-main)', fontFamily: "'Outfit', sans-serif" }}>
+          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 600, color: 'var(--text-main)', fontFamily: "'Outfit', sans-serif" }}>
             Branch List
           </h2>
         </div>
@@ -3982,7 +4036,157 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         </div>
       </div>
 
-      {/* Branch Search & Filter Bar */}
+      {/* 1. Branch Metrics & Quota Cards (First) */}
+      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px', width: '100%', boxSizing: 'border-box' }}>
+        
+        {/* Card 1: Total Branches */}
+        <div 
+          className="stat-card" 
+          onClick={() => { setStatusFilter('All'); setPage(0); }}
+          style={{ 
+            borderLeft: '5px solid var(--primary)', 
+            cursor: 'pointer',
+            backgroundColor: '#ffffff',
+            boxShadow: statusFilter === 'All' ? '0 0 0 2px var(--primary), 0 4px 12px rgba(249, 94, 16, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
+            transition: 'all 0.2s ease',
+            padding: '18px 20px',
+            borderRadius: '12px'
+          }}
+          title="Click to view all branches"
+        >
+          <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
+              <div className="stat-label" style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                Total Branches
+              </div>
+              <h3 style={{ fontSize: '26px', fontWeight: 800, margin: '6px 0', color: 'var(--black)', fontFamily: "'Outfit', sans-serif" }}>
+                {totalBranchesCount}
+              </h3>
+              <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>All registered outlets</span>
+              </div>
+            </div>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+              <BuildingStoreIcon size={20} color="var(--primary)" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Active Branches */}
+        <div 
+          className="stat-card" 
+          onClick={() => { setStatusFilter('Active'); setPage(0); }}
+          style={{ 
+            borderLeft: '5px solid #16a34a', 
+            cursor: 'pointer',
+            backgroundColor: '#ffffff',
+            boxShadow: statusFilter === 'Active' ? '0 0 0 2px #16a34a, 0 4px 12px rgba(22, 163, 74, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
+            transition: 'all 0.2s ease',
+            padding: '18px 20px',
+            borderRadius: '12px'
+          }}
+          title="Click to filter active branches"
+        >
+          <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
+              <div className="stat-label" style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                Active Branches
+              </div>
+              <h3 style={{ fontSize: '26px', fontWeight: 800, margin: '6px 0', color: '#16a34a', fontFamily: "'Outfit', sans-serif" }}>
+                {activeBranchesCount}
+              </h3>
+              <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>● Operational & Live</span>
+              </div>
+            </div>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', flexShrink: 0 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Inactive Branches */}
+        <div 
+          className="stat-card" 
+          onClick={() => { setStatusFilter('Inactive'); setPage(0); }}
+          style={{ 
+            borderLeft: '5px solid #64748b', 
+            cursor: 'pointer',
+            backgroundColor: '#ffffff',
+            boxShadow: statusFilter === 'Inactive' ? '0 0 0 2px #64748b, 0 4px 12px rgba(100, 116, 139, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
+            transition: 'all 0.2s ease',
+            padding: '18px 20px',
+            borderRadius: '12px'
+          }}
+          title="Click to filter inactive branches"
+        >
+          <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
+              <div className="stat-label" style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                Inactive Branches
+              </div>
+              <h3 style={{ fontSize: '26px', fontWeight: 800, margin: '6px 0', color: '#64748b', fontFamily: "'Outfit', sans-serif" }}>
+                {Math.max(0, branches.length - activeBranchesCount)}
+              </h3>
+              <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>Paused / offline</span>
+              </div>
+            </div>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="10" y1="15" x2="10" y2="9" />
+                <line x1="14" y1="15" x2="14" y2="9" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Plan Quota / Capacity */}
+        <div 
+          className="stat-card" 
+          onClick={() => {
+            if (branches.length >= totalAllowedBranches) {
+              handleOpenAddForm();
+            } else {
+              navigate('/plans-management');
+            }
+          }}
+          style={{ 
+            borderLeft: `5px solid ${remainingBranchSlots === 0 ? '#ea580c' : '#8b5cf6'}`, 
+            cursor: 'pointer',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+            transition: 'all 0.2s ease',
+            padding: '18px 20px',
+            borderRadius: '12px'
+          }}
+          title="Click to view subscription plan details or manage branch quota"
+        >
+          <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
+              <div className="stat-label" style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                Plan Capacity ({planName})
+              </div>
+              <h3 style={{ fontSize: '26px', fontWeight: 800, margin: '6px 0', color: remainingBranchSlots === 0 ? '#ea580c' : '#8b5cf6', fontFamily: "'Outfit', sans-serif" }}>
+                {branches.length} <span style={{ fontSize: '16px', fontWeight: 600, color: '#94a3b8' }}>/ {totalAllowedBranches}</span>
+              </h3>
+              <div style={{ fontSize: '12px', color: remainingBranchSlots === 0 ? '#ea580c' : '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>{remainingBranchSlots === 0 ? '⚠️ Limit Reached (Upgrade)' : `✓ ${remainingBranchSlots} Slot${remainingBranchSlots === 1 ? '' : 's'} Remaining`}</span>
+              </div>
+            </div>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: remainingBranchSlots === 0 ? '#fff7ed' : '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: remainingBranchSlots === 0 ? '#ea580c' : '#8b5cf6', flexShrink: 0 }}>
+              <TreeIcon size={20} color={remainingBranchSlots === 0 ? '#ea580c' : '#8b5cf6'} />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 2. Branch Search & Filter Bar (Next) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap', background: '#fff', padding: '16px 20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '260px', maxWidth: '380px' }}>
           <input
@@ -4020,7 +4224,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         </div>
       </div>
 
-      {/* 4. Branch List Table */}
+      {/* 3. Branch List Table (Third) */}
       <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '6px', borderRadius: '14px', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.03)' }}>
         <table style={{ width: '100%', minWidth: '1500px', borderCollapse: 'collapse', fontSize: '13px' }}>
           <colgroup>
@@ -4038,17 +4242,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           </colgroup>
           <thead>
             <tr style={{ backgroundColor: '#f95e10', color: '#ffffff' }}>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>S/NO</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Code</th>
-              <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Name</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Menu Type</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Manager</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Mobile</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>City</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Tables</th>
-              <th style={{ padding: '14px 10px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Status</th>
-              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Created Date</th>
-              <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Actions</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>S/NO</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Code</th>
+              <th style={{ padding: '14px 16px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Branch Name</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Menu Type</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Manager</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Mobile</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'left', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>City</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Tables</th>
+              <th style={{ padding: '14px 10px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Status</th>
+              <th style={{ padding: '14px 14px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Created Date</th>
+              <th style={{ padding: '14px 12px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', backgroundColor: '#f95e10' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -4162,39 +4366,51 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                   {/* 3. Menu Type (Dedicated Column) */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                    {b.useCustomMenu ? (
-                      <span style={{
-                        fontSize: '11px',
-                        background: '#ecfdf5',
-                        color: '#065f46',
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontWeight: 700,
-                        border: '1px solid #a7f3d0',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                      }} title="This branch has its own independent menu">
-                        <span style={{ fontSize: '12px' }}>🍽️</span> Custom Menu
-                      </span>
-                    ) : (
-                      <span style={{
-                        fontSize: '11px',
-                        background: '#eff6ff',
-                        color: '#1e40af',
-                        padding: '5px 12px',
-                        borderRadius: '20px',
-                        fontWeight: 700,
-                        border: '1px solid #bfdbfe',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                      }} title="This branch uses Company Menu">
-                        <span style={{ fontSize: '12px' }}>🏢</span> Company Menu
-                      </span>
-                    )}
+                    {(() => {
+                      // If logged in to a specific branch or a branch is selected:
+                      // Only show menu type for that branch. Don't show other branch menu types!
+                      if (activeBranchContextId && !isBranchCurrentActive(b)) {
+                        return (
+                          <span style={{ color: '#94a3b8', fontSize: '13px', fontWeight: 600 }} title="Menu type hidden for other branches">
+                            —
+                          </span>
+                        );
+                      }
+
+                      return b.useCustomMenu ? (
+                        <span style={{
+                          fontSize: '11px',
+                          background: '#ecfdf5',
+                          color: '#065f46',
+                          padding: '5px 12px',
+                          borderRadius: '20px',
+                          fontWeight: 700,
+                          border: '1px solid #a7f3d0',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }} title="This branch has its own independent menu">
+                          <span style={{ fontSize: '12px' }}>🍽️</span> Custom Menu
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '11px',
+                          background: '#eff6ff',
+                          color: '#1e40af',
+                          padding: '5px 12px',
+                          borderRadius: '20px',
+                          fontWeight: 700,
+                          border: '1px solid #bfdbfe',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }} title="This branch uses Company Menu">
+                          <span style={{ fontSize: '12px' }}>🏢</span> Company Menu
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   {/* 4. Manager */}
@@ -4303,9 +4519,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           title={b.status === 'Active' ? 'Deactivate Branch' : 'Activate Branch'}
                           onClick={() => handleToggleBranchStatus(b)}
                           style={{
-                            border: 'none',
-                            background: b.status === 'Active' ? '#f0fdf4' : '#fff7ed',
-                            color: b.status === 'Active' ? '#166534' : '#c2410c',
+                            border: `1px solid ${b.status === 'Active' ? '#bbf7d0' : '#fecaca'}`,
+                            background: b.status === 'Active' ? '#f0fdf4' : '#fef2f2',
+                            color: b.status === 'Active' ? '#16a34a' : '#dc2626',
                             width: '30px',
                             height: '30px',
                             borderRadius: '6px',
@@ -4316,10 +4532,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                             transition: 'all 0.15s',
                             flexShrink: 0
                           }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                          onMouseEnter={e => e.currentTarget.style.background = b.status === 'Active' ? '#dcfce7' : '#fee2e2'}
+                          onMouseLeave={e => e.currentTarget.style.background = b.status === 'Active' ? '#f0fdf4' : '#fef2f2'}
                         >
-                          <PowerIcon size={14} />
+                          {b.status === 'Active' ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
                         </button>
                       )}
 
@@ -4465,39 +4681,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       )}
 
       {/* 5. DELETE CONFIRMATION MODAL */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!branchToDelete}
         onClose={() => setBranchToDelete(null)}
+        onConfirm={handleDeleteConfirm}
         title="Confirm Branch Deletion"
-        maxWidth="450px"
-      >
-        <div style={{ marginTop: '10px' }}>
-          <p style={{ fontSize: '14px', color: 'var(--text-main)' }}>
-            Are you sure you want to delete branch <strong>"{branchToDelete?.branchName}"</strong> ({branchToDelete?.branchCode})?
-          </p>
-          <p style={{ fontSize: '12px', color: '#ef4444', background: '#fef2f2', padding: '10px 12px', borderRadius: '8px' }}>
-            Warning: This action cannot be undone.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setBranchToDelete(null)}
-              style={{ padding: '8px 18px' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-black"
-              onClick={handleDeleteConfirm}
-              style={{ padding: '8px 20px', background: '#dc2626', color: '#fff' }}
-            >
-              Delete Branch
-            </button>
-          </div>
-        </div>
-      </Modal>
+        itemType="branch"
+        itemName={branchToDelete?.branchName ? `${branchToDelete.branchName} (${branchToDelete.branchCode})` : branchToDelete?.branchCode}
+        confirmText="Delete Branch"
+      />
 
       {/* 6. BRANCH LIMIT EXCEEDED / ADD-ON REQUIRED MODAL */}
       {isPlanLimitModalOpen && (
@@ -4543,6 +4735,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </span>
               </div>
             </div>
+
 
             <p style={{ margin: 0, fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
               To add branch #{branches.length + 1}, purchase an additional branch add-on slot or upgrade your subscription plan.

@@ -3,6 +3,7 @@ import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInpu
 import InventoryApi from '../../api/Inventory';
 import InventoryCategoryApi from '../../api/InventoryCategory';
 import { Modal } from '../Modal';
+import DeleteConfirmationModal from '../DeleteConfirmationModal';
 import { useAppState } from '../../config/AppContext';
 import { isBranchMatch } from '../../helper/BranchHelper';
 
@@ -751,83 +752,16 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
       />
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={Boolean(itemToDelete)}
-        onClose={() => !isDeleting && setItemToDelete(null)}
-        title="Confirm Deletion"
-        maxWidth="420px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-          <div style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
-            <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '50%',
-              backgroundColor: '#fef2f2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#0f172a', fontSize: '15px' }}>
-                Delete Inventory Item
-              </p>
-              <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                Are you sure you want to delete <strong style={{ color: '#0f172a' }}>"{itemToDelete?.name}"</strong>{itemToDelete?.itemCode ? ` (${itemToDelete?.itemCode})` : ''}? This action cannot be undone.
-              </p>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-            <button
-              type="button"
-              disabled={isDeleting}
-              onClick={() => setItemToDelete(null)}
-              style={{
-                background: '#ffffff',
-                color: '#334155',
-                border: '1px solid #cbd5e1',
-                padding: '9px 18px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: isDeleting ? 'not-allowed' : 'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={isDeleting}
-              onClick={handleConfirmDelete}
-              style={{
-                background: '#dc2626',
-                color: '#ffffff',
-                border: 'none',
-                padding: '9px 20px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 700,
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isDeleting ? 0.7 : 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)'
-              }}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete Item'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Item Deletion"
+        itemType="inventory item"
+        itemName={itemToDelete ? `${itemToDelete.name}${itemToDelete.itemCode ? ` (${itemToDelete.itemCode})` : ''}` : ''}
+        isDeleting={isDeleting}
+        confirmText="Delete Item"
+      />
     </div>
   );
 }

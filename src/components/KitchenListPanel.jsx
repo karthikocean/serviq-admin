@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import { useAppState } from '../config/AppContext';
 
 const PencilIcon = ({ size = 18, color = 'currentColor' }) => (
@@ -313,60 +314,20 @@ export default function KitchenListPanel({
           </div>
         </div>
       </div>
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!staffToDelete}
         onClose={() => setStaffToDelete(null)}
-        title="Confirm Deletion"
-        maxWidth="400px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#fef2f2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--black)', fontSize: '15px' }}>Delete Kitchen Staff</p>
-              <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
-                Are you sure you want to delete kitchen staff {staffToDelete?.name}? This action cannot be undone.
-              </p>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-            <button 
-              className="btn btn-outline" 
-              style={{ padding: '8px 16px', fontSize: '13px' }}
-              onClick={() => setStaffToDelete(null)}
-            >
-              Cancel
-            </button>
-            <button 
-              className="btn btn-black" 
-              style={{ padding: '8px 16px', fontSize: '13px', backgroundColor: '#dc2626', borderColor: '#dc2626', color: '#fff' }}
-              onClick={() => {
-                if (staffToDelete) {
-                  deleteStaff(activeRestaurant.id, staffToDelete.id);
-                  setStaffToDelete(null);
-                }
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={() => {
+          if (staffToDelete) {
+            deleteStaff(activeRestaurant.id, staffToDelete.id);
+            setStaffToDelete(null);
+          }
+        }}
+        title="Confirm Staff Deletion"
+        itemType="kitchen staff"
+        itemName={staffToDelete?.name}
+        confirmText="Delete Staff"
+      />
     </section>
   );
 }

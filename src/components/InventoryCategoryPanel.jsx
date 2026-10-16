@@ -5,6 +5,7 @@ import InventoryCategoryApi from '../api/InventoryCategory';
 import InventoryApi from '../api/Inventory';
 import BranchApi from '../api/Branch.js';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
@@ -1104,47 +1105,25 @@ export default function InventoryCategoryPanel() {
       )}
 
       {/* Delete Category Confirmation Modal Popup */}
-      {categoryToDelete && (
-        <Modal
-          isOpen={!!categoryToDelete}
-          onClose={() => !isDeleting && setCategoryToDelete(null)}
-          title="Confirm Category Deletion"
-          maxWidth="450px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>
-              {(() => {
-                const count = getItemCountForCategory(categoryToDelete);
-                return count > 0 ? `? It is currently used by ${count} inventory item(s).` : '?';
-              })()}
-            </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setCategoryToDelete(null)}
-                disabled={isDeleting}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Category Deletion"
+        itemType="category"
+        itemName={categoryToDelete?.name}
+        message={categoryToDelete ? (
+          <>
+            Are you sure you want to delete category <strong>"{categoryToDelete?.name}"</strong>
+            {(() => {
+              const count = getItemCountForCategory(categoryToDelete);
+              return count > 0 ? `? It is currently used by ${count} inventory item(s).` : '?';
+            })()}
+          </>
+        ) : null}
+        isDeleting={isDeleting}
+        confirmText="Delete Category"
+      />
     </section>
   );
 }

@@ -112,7 +112,7 @@ export const DEFAULT_ROLES = {
       kitchen: { view: true, add: true, edit: true, delete: true },
       Reports: { view: true, add: true, edit: true, delete: false },
       users: { view: true, add: true, edit: true, delete: false },
-      'roles-permissions': { view: false, add: false, edit: false, delete: false },
+      'roles-permissions': { view: true, add: true, edit: true, delete: true },
       help_support: { view: true, add: true, edit: true, delete: true },
       'help-support': { view: true, add: true, edit: true, delete: true },
       Settings: { view: true, add: false, edit: true, delete: false }
@@ -784,8 +784,11 @@ export const AppProvider = ({ children }) => {
         const isMatch = (cleanTable && tableNum && cleanTable.toLowerCase() === tableNum.toLowerCase()) ||
           (cleanTable && tableNum && parseInt(cleanTable, 10) === parseInt(tableNum, 10)) ||
           (t._id && String(o.tableId?._id || o.tableId) === String(t._id));
-        const bStatus = (o.billingStatus || '').toLowerCase();
-        return isMatch && bStatus !== 'paid';
+        const bStatus = String(o.billingStatus || o.paymentStatus || '').toLowerCase();
+        const ordStatus = String(o.status || o.orderStatus || '').toLowerCase();
+        const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
+        // Only orders that are Unpaid AND Completed should appear in current billing
+        return isMatch && bStatus !== 'paid' && isCompleted;
       });
 
       const paidOrders = effectiveOrders.filter(o => {
@@ -799,10 +802,10 @@ export const AppProvider = ({ children }) => {
         return isMatch === true;
       });
 
-      const targetOrders = unpaidOrders.length > 0 ? unpaidOrders : (paidOrders.length > 0 ? paidOrders.slice(0, 1) : []);
+      const targetOrders = unpaidOrders.length > 0 ? unpaidOrders : [];
       if (targetOrders.length === 0) return null;
 
-      const isUnpaid = unpaidOrders.length > 0;
+      const isUnpaid = true;
       const primaryOrder = targetOrders[0] || {};
       const allItems = targetOrders.flatMap(o => Array.isArray(o.items) ? o.items : []);
       const mappedItems = allItems.map(it => {
@@ -831,6 +834,7 @@ export const AppProvider = ({ children }) => {
         billNo: `BILL-${tableNum || idx + 1}`,
         orderId: primaryOrder.orderId || primaryOrder.id || `#ORD-${tableNum}`,
         orderType: primaryOrder.orderType || 'Dine-In',
+        orderStatus: primaryOrder.status || primaryOrder.orderStatus || 'Completed',
         table: tableLabel,
         tableNo: tableNum,
         tableId: tableId,
@@ -2171,6 +2175,7 @@ export const AppProvider = ({ children }) => {
 
           sessionStorage.setItem("userToken", token);
           sessionStorage.setItem("token", token);
+          sessionStorage.removeItem("serviq_roles_cache");
           try { localStorage.clear(); } catch (e) { }
 
           const userBranchId = typeof apiUser.branchId === 'object' && apiUser.branchId !== null

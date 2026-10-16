@@ -509,28 +509,211 @@ export const isSubBranchUser = (user) => {
 };
 
 /**
- * Checks whether a branch is designated as the Main Branch.
+ * Resolves the single primary designated Main Branch from a list of branches.
+ * Exactly one branch should be considered the Main Branch.
  */
-export const isBranchMain = (branch) => {
+export const getMainBranch = (branchesList = []) => {
+  if (!Array.isArray(branchesList) || branchesList.length === 0) return null;
+
+  // 1. Look for explicit boolean or type flags
+  const explicitMain = branchesList.find(b => 
+    Boolean(
+      b?.isMainBranch === true ||
+      b?.isMain === true ||
+      b?.isHeadOffice === true ||
+      b?.isHQ === true ||
+      String(b?.branchType || '').toUpperCase() === 'MAIN' ||
+      String(b?.type || '').toUpperCase() === 'MAIN'
+    )
+  );
+  if (explicitMain) return explicitMain;
+
+  // 2. Only if no branch has explicit flags, look for exact branch name matches (never substring)
+  const exactNameMain = branchesList.find(b => {
+    const name = String(b?.branchName || b?.name || '').trim().toLowerCase();
+    return name === 'main branch' || name === 'headquarters' || name === 'head office';
+  });
+  if (exactNameMain) return exactNameMain;
+
+  return null;
+};
+
+/**
+ * Checks whether a branch is designated as the Main Branch.
+ * If allBranches list is provided, guarantees that ONLY the single designated main branch returns true.
+ */
+export const isBranchMain = (branch, allBranches = null) => {
   if (!branch) return false;
+
+  // If the full branch list is available, resolve the single designated main branch
+  if (Array.isArray(allBranches) && allBranches.length > 0) {
+    const mainBranch = getMainBranch(allBranches);
+    if (!mainBranch) return false;
+    const bId = String(branch._id || branch.id || branch.branchCode || '');
+    const mainId = String(mainBranch._id || mainBranch.id || mainBranch.branchCode || '');
+    return Boolean(bId && mainId && bId === mainId);
+  }
+
+  // Standalone check (when branch list is not provided):
+  // Check explicit database / backend flags ONLY.
+  // Never do loose substring checking on branch name to prevent normal branches
+  // named "main" or containing "main" from being falsely treated as the Main Branch.
   return Boolean(
     branch.isMainBranch === true ||
     branch.isMain === true ||
     branch.isHeadOffice === true ||
     branch.isHQ === true ||
     String(branch.branchType || '').toUpperCase() === 'MAIN' ||
-    String(branch.type || '').toUpperCase() === 'MAIN' ||
-    String(branch.branchName || branch.name || '').toLowerCase().includes('main')
+    String(branch.type || '').toUpperCase() === 'MAIN'
   );
+};
+
+/**
+ * Resolves the city or location name for a branch from various possible fields
+ * (e.g., branch.city, branch.address.city, branch.location, or activeRestaurant.branches).
+ */
+export const resolveBranchCity = (branch, restaurantBranches = []) => {
+  if (!branch) return '';
+
+  // 1. Direct city property
+  if (typeof branch.city === 'string' && branch.city.trim() && branch.city.trim().toLowerCase() !== 'undefined' && branch.city.trim().toLowerCase() !== 'null') {
+    return branch.city.trim();
+  }
+
+  // 2. Address object (MongoDB address schema: { street, city, state, country, pincode })
+  if (branch.address && typeof branch.address === 'object') {
+    const addrCity = branch.address.city || branch.address.district || branch.address.town || branch.address.area;
+    if (typeof addrCity === 'string' && addrCity.trim() && addrCity.trim().toLowerCase() !== 'undefined' && addrCity.trim().toLowerCase() !== 'null') {
+      return addrCity.trim();
+    }
+    const addrState = branch.address.state;
+    if (typeof addrState === 'string' && addrState.trim() && addrState.trim().toLowerCase() !== 'undefined' && addrState.trim().toLowerCase() !== 'null') {
+      return addrState.trim();
+    }
+  }
+
+  // 3. Location / branchLocation property
+  if (typeof branch.location === 'string' && branch.location.trim() && branch.location.trim().toLowerCase() !== 'undefined' && branch.location.trim().toLowerCase() !== 'null') {
+    return branch.location.trim();
+  }
+  if (typeof branch.branchLocation === 'string' && branch.branchLocation.trim() && branch.branchLocation.trim().toLowerCase() !== 'undefined' && branch.branchLocation.trim().toLowerCase() !== 'null') {
+    return branch.branchLocation.trim();
+  }
+
+  // 4. Look up in activeRestaurant / cached restaurant branches
+  if (Array.isArray(restaurantBranches) && restaurantBranches.length > 0) {
+    const bId = String(branch._id || branch.id || '');
+    const bCode = String(branch.branchCode || branch.code || '').toLowerCase().trim();
+    const matched = restaurantBranches.find(rb => {
+      const rbId = String(rb._id || rb.id || '');
+      const rbCode = String(rb.branchCode || rb.code || '').toLowerCase().trim();
+      return (bId && (rbId === bId)) || (bCode && (rbCode === bCode));
+    });
+
+    if (matched && matched !== branch) {
+      const matchedCity = resolveBranchCity(matched, []);
+      if (matchedCity) return matchedCity;
+    }
+  }
+
+  // 5. String address parsing (e.g. "Gandhipuram, Coimbatore, Tamil Nadu")
+  if (typeof branch.address === 'string' && branch.address.trim()) {
+    const parts = branch.address.split(',').map(p => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      const candidate = parts[parts.length - 2];
+      if (candidate && !/^\d+$/.test(candidate) && candidate.length > 2) {
+        return candidate;
+      }
+    }
+    return branch.address.trim();
+  }
+
+  // 6. Direct state fallback if city not found
+  if (typeof branch.state === 'string' && branch.state.trim() && branch.state.trim().toLowerCase() !== 'undefined' && branch.state.trim().toLowerCase() !== 'null') {
+    return branch.state.trim();
+  }
+
+  return '';
+};
+
+/**
+ * Resolves the full Location for a branch.
+ * Prioritizes the specific Street Address / Location entered by the user
+ * (e.g. "Gandhipuram", "T. Nagar", "Saravanampatti") combined with the City if distinct,
+ * or the City itself if only city was provided.
+ */
+export const resolveBranchLocation = (branch, restaurantBranches = []) => {
+  if (!branch) return '';
+
+  let matched = null;
+  if (Array.isArray(restaurantBranches) && restaurantBranches.length > 0) {
+    const bId = String(branch._id || branch.id || '');
+    const bCode = String(branch.branchCode || branch.code || '').toLowerCase().trim();
+    matched = restaurantBranches.find(rb => {
+      const rbId = String(rb._id || rb.id || '');
+      const rbCode = String(rb.branchCode || rb.code || '').toLowerCase().trim();
+      return (bId && (rbId === bId)) || (bCode && (rbCode === bCode));
+    });
+  }
+
+  // 1. Resolve Street Address / Location string
+  const rawStreet = 
+    (typeof branch.street === 'string' && branch.street.trim()) ||
+    (typeof branch.address === 'string' && branch.address.trim()) ||
+    (branch.address && typeof branch.address === 'object' && typeof branch.address.street === 'string' && branch.address.street.trim()) ||
+    (branch.address && typeof branch.address === 'object' && typeof branch.address.addressLine1 === 'string' && branch.address.addressLine1.trim()) ||
+    (typeof branch.location === 'string' && branch.location.trim()) ||
+    (typeof branch.branchLocation === 'string' && branch.branchLocation.trim()) ||
+    (matched && typeof matched.street === 'string' && matched.street.trim()) ||
+    (matched && typeof matched.address === 'string' && matched.address.trim()) ||
+    (matched && matched.address && typeof matched.address === 'object' && typeof matched.address.street === 'string' && matched.address.street.trim()) ||
+    (matched && typeof matched.location === 'string' && matched.location.trim()) ||
+    '';
+
+  // 2. Resolve City
+  const rawCity = 
+    (typeof branch.city === 'string' && branch.city.trim() && branch.city.trim().toLowerCase() !== 'undefined' && branch.city.trim().toLowerCase() !== 'null' && branch.city.trim()) ||
+    (branch.address && typeof branch.address === 'object' && typeof branch.address.city === 'string' && branch.address.city.trim()) ||
+    (matched && typeof matched.city === 'string' && matched.city.trim() && matched.city.trim().toLowerCase() !== 'undefined' && matched.city.trim()) ||
+    (matched && matched.address && typeof matched.address === 'object' && typeof matched.address.city === 'string' && matched.address.city.trim()) ||
+    '';
+
+  const cleanStreet = rawStreet && !['undefined', 'null', 'none', '-'].includes(rawStreet.toLowerCase()) ? rawStreet : '';
+  const cleanCity = rawCity && !['undefined', 'null', 'none', '-'].includes(rawCity.toLowerCase()) ? rawCity : '';
+
+  // If street address / location is entered:
+  if (cleanStreet) {
+    if (cleanCity && !cleanStreet.toLowerCase().includes(cleanCity.toLowerCase())) {
+      return `${cleanStreet}, ${cleanCity}`;
+    }
+    return cleanStreet;
+  }
+
+  // If only city is entered:
+  if (cleanCity) {
+    return cleanCity;
+  }
+
+  // Fallback to state or country
+  const rawState = branch.state || (branch.address && typeof branch.address === 'object' && branch.address.state) || (matched && matched.state) || '';
+  if (rawState && typeof rawState === 'string' && rawState.trim() && !['undefined', 'null'].includes(rawState.toLowerCase())) {
+    return rawState.trim();
+  }
+
+  return '';
 };
 
 export default {
   resolveBranchManagerName,
   resolveBranchContactNumber,
+  resolveBranchCity,
+  resolveBranchLocation,
   isBranchMatch,
   getUserAssignedBranchId,
   isUserCompanyUser,
   isSubBranchUser,
+  getMainBranch,
   isBranchMain
 };
+
 

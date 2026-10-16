@@ -204,23 +204,15 @@ export default function BillingPanel({
 
 
 
-  // Strict rule: Only bills with unpaid status must show in Current Billing
+  // Strict rule: Only bills with Unpaid status AND Completed order status must show in Current Billing
   const isUnpaidBill = (b) => {
     if (!b) return false;
-    const statusStr = String(b.status || '').toLowerCase();
-    const payStatusStr = String(b.paymentStatus || b.payment_status || b.billingStatus || '').toLowerCase();
+    const payStatusStr = String(b.paymentStatus || b.payment_status || b.billingStatus || '').toLowerCase().trim();
     const billAmt = Number(b.billAmount ?? b.total ?? b.amount ?? 0);
     const paidAmt = Number(b.paidAmount ?? b.paid ?? 0);
     const balAmt = b.balanceAmount !== undefined ? Number(b.balanceAmount) : Math.max(0, billAmt - paidAmt);
 
-    // If explicitly marked as unpaid, it should definitely be shown in Current Billing
-    if (payStatusStr === 'unpaid' || payStatusStr === 'pending' || payStatusStr === 'pending_payment') {
-      return true;
-    }
-
     const isPaid = 
-      statusStr === 'paid' ||
-      statusStr === 'done' ||
       payStatusStr === 'paid' ||
       b.isPaid === true ||
       b.paid === true ||
@@ -228,7 +220,39 @@ export default function BillingPanel({
       (paidAmt >= billAmt && billAmt > 0) ||
       (balAmt <= 0 && paidAmt > 0);
 
-    return !isPaid;
+    if (isPaid) return false;
+
+    // Check Order Status: must be Completed (or served/done)
+    let ordStatus = String(b.orderStatus || b.order_status || b.orderState || '').toLowerCase().trim();
+    if (!ordStatus && typeof b.order === 'object' && b.order !== null) {
+      ordStatus = String(b.order?.status || b.order?.orderStatus || '').toLowerCase().trim();
+    }
+    if (!ordStatus && Array.isArray(b.orders) && b.orders.length > 0) {
+      ordStatus = String(b.orders[0]?.status || b.orders[0]?.orderStatus || '').toLowerCase().trim();
+    }
+    if (!ordStatus && Array.isArray(activeRestaurant?.orders)) {
+      const cleanOrdId = String(b.orderId || b.order_id || b.rawOrderId || b._id || b.id || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+      const matchedOrd = activeRestaurant.orders.find(o => {
+        const oClean = String(o._id || o.id || o.orderId || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+        return oClean && oClean === cleanOrdId;
+      });
+      if (matchedOrd) {
+        ordStatus = String(matchedOrd.status || matchedOrd.orderStatus || '').toLowerCase().trim();
+      }
+    }
+    if (!ordStatus) {
+      const orig = String(b.originalStatus || b.originalOrderStatus || '').toLowerCase().trim();
+      if (['new', 'preparing', 'ready', 'served', 'completed', 'done', 'cancelled'].includes(orig)) {
+        ordStatus = orig;
+      }
+    }
+
+    if (ordStatus) {
+      const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
+      if (!isCompleted) return false;
+    }
+
+    return true;
   };
 
   const filteredBills = displayBillingData.filter(isUnpaidBill);
@@ -426,6 +450,38 @@ export default function BillingPanel({
 
       if (typeof onBillPaid === 'function') {
         onBillPaid(paymentModalBill);
+      }
+
+      // Immediately move to Billing History in memory / activeRestaurant state
+      if (activeRestaurant) {
+        if (Array.isArray(activeRestaurant.billingHistory)) {
+          const alreadyInHist = activeRestaurant.billingHistory.some(h => 
+            (updatedBill._id && (h._id === updatedBill._id || h.id === updatedBill._id)) ||
+            (updatedBill.billNo && (h.billNo === updatedBill.billNo || h.billNumber === updatedBill.billNo))
+          );
+          if (!alreadyInHist) {
+            activeRestaurant.billingHistory = [updatedBill, ...activeRestaurant.billingHistory];
+          }
+        } else {
+          activeRestaurant.billingHistory = [updatedBill];
+        }
+
+        // Also update matching order in activeRestaurant.orders to paid
+        if (Array.isArray(activeRestaurant.orders)) {
+          const targetOrdId = String(paymentModalBill.orderId || paymentModalBill.rawOrderId || paymentModalBill._id || paymentModalBill.id || '').replace(/^(#|ORD-|ord-)/i, '');
+          activeRestaurant.orders = activeRestaurant.orders.map(o => {
+            const oId = String(o._id || o.id || o.orderId || '').replace(/^(#|ORD-|ord-)/i, '');
+            if (oId && oId === targetOrdId) {
+              return {
+                ...o,
+                billingStatus: 'paid',
+                paymentStatus: 'paid',
+                isPaid: true
+              };
+            }
+            return o;
+          });
+        }
       }
 
       if (typeof setBillingData === 'function') {
@@ -835,17 +891,18 @@ export default function BillingPanel({
       {/* CURRENT BILLING LIST TABLE */}
       <div className="billing-table-card">
         <div className="billing-table-responsive">
-          <table className="billing-table" style={{ minWidth: '1610px' }}>
+          <table className="billing-table" style={{ minWidth: '1720px' }}>
             <colgroup>
               <col style={{ width: '65px' }} />
               <col style={{ width: '185px' }} />
               <col style={{ width: '175px' }} />
-              <col style={{ width: '130px' }} />
               <col style={{ width: '170px' }} />
+              <col style={{ width: '130px' }} />
               <col style={{ width: '160px' }} />
               <col style={{ width: '150px' }} />
               <col style={{ width: '145px' }} />
               <col style={{ width: '155px' }} />
+              <col style={{ width: '135px' }} />
               <col style={{ width: '135px' }} />
               <col style={{ width: '140px' }} />
             </colgroup>
@@ -861,6 +918,7 @@ export default function BillingPanel({
                 <th style={{ textAlign: 'right', paddingRight: '16px' }}>PAID AMOUNT</th>
                 <th style={{ textAlign: 'right', paddingRight: '16px' }}>BALANCE AMOUNT</th>
                 <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
+                <th style={{ textAlign: 'center' }}>ORDER STATUS</th>
                 <th style={{ textAlign: 'center' }} className="sticky-actions-header">ACTIONS</th>
               </tr>
             </thead>
@@ -894,6 +952,7 @@ export default function BillingPanel({
                   items: rawItems,
                   orderId: bill.orderId || bill.order_id || '-',
                   orderType: bill.orderType || 'Dine-In',
+                  orderStatus: bill.orderStatus || bill.order_status || 'Completed',
                   table: bill.table || (bill.tableNo ? `Table ${bill.tableNo}` : '-'),
                   date: dateStr,
                   time: timeStr,
@@ -949,6 +1008,20 @@ export default function BillingPanel({
                         border: isPaid ? '1px solid #86efac' : '1px solid #fecaca'
                       }}>
                         {isPaid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '3px 10px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        backgroundColor: '#dcfce7',
+                        color: '#15803d',
+                        border: '1px solid #bbf7d0'
+                      }}>
+                        {currentBill.orderStatus || 'Completed'}
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
