@@ -17,7 +17,7 @@ export default function PlansManagement() {
 
   // Strict check: Only userType: "RESTAURANT_OWNER" can access plans management
   if (!isRestaurantOwner) {
-    ShowNotifications.showAlertNotification("Access Denied: Plans Management is restricted to Restaurant Owners.", false);
+    ShowNotifications.showAlertNotification("Access Denied: Subscription is restricted to Restaurant Owners.", false);
     return <Navigate to="/dashboard" replace />;
   }
 
