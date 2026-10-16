@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppState } from '../config/AppContext';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { apiClient } from '../config/index';
-import { sanitizeMobile, validateMobile } from '../helper/ValidationHelper.js';
+import { sanitizeMobile, validateMobile, validateGstin } from '../helper/ValidationHelper.js';
 
 // Shared Styles
 const cardStyle = {
@@ -187,8 +187,9 @@ export default function SettingsPanel() {
         errors.fssaiLicense = 'FSSAI License Number must contain exactly 14 digits and start with 1.';
     }
 
-    if (formData.gstinNumber && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(formData.gstinNumber)) {
-        errors.gstinNumber = 'Invalid GSTIN. Please enter a valid 15-character GSTIN.';
+    if (formData.gstinNumber) {
+        const gstErr = validateGstin(formData.gstinNumber);
+        if (gstErr) errors.gstinNumber = gstErr;
     }
 
     if (formData.panNumber && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(formData.panNumber)) {
@@ -339,9 +340,10 @@ export default function SettingsPanel() {
                     if (formErrors.gstinNumber) setFormErrors({ ...formErrors, gstinNumber: '' });
                 }}
                 onBlurOverride={(e) => {
-                    const val = e.target.value;
-                    if (val && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(val)) {
-                        setFormErrors({ ...formErrors, gstinNumber: 'Invalid GSTIN. Please enter a valid 15-character GSTIN.' });
+                    const val = (e.target.value || '').trim();
+                    if (val) {
+                        const gstErr = validateGstin(val);
+                        if (gstErr) setFormErrors({ ...formErrors, gstinNumber: gstErr });
                     }
                 }}
             />

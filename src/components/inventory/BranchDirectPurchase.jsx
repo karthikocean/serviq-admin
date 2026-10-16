@@ -69,7 +69,7 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
   const fetchItems = useCallback(async () => {
     try {
       const res = await InventoryApi.getItems({
-        limit: 100,
+        limit: 10,
         branchId: effectiveBranchId || undefined,
         strictBranch: isBranchFiltered
       });

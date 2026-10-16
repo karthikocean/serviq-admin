@@ -220,8 +220,6 @@ class BillingApi {
       cleanParams.page = pageNum < 0 ? 0 : pageNum;
 
       cleanParams.limit = filters.limit !== undefined ? Number(filters.limit) : 10;
-      cleanParams.sortBy = filters.sortBy || 'createdAt';
-      cleanParams.sortOrder = filters.sortOrder || 'desc';
 
       // Add any additional non-empty params
       Object.keys(filters).forEach(key => {
@@ -305,22 +303,41 @@ class BillingApi {
 
   async processTablePayment(payload) {
     try {
+      const cleanPayload = { ...payload };
+
+      // Ensure items is strictly an array (even if incoming was an object)
+      if (cleanPayload.items) {
+        if (Array.isArray(cleanPayload.items)) {
+          cleanPayload.items = cleanPayload.items;
+        } else if (typeof cleanPayload.items === 'object' && cleanPayload.items !== null) {
+          cleanPayload.items = Object.values(cleanPayload.items);
+        } else {
+          cleanPayload.items = [];
+        }
+      } else {
+        cleanPayload.items = [];
+      }
+
+      if (cleanPayload.subtotal === undefined) cleanPayload.subtotal = Number(cleanPayload.amount || 0);
+      if (cleanPayload.tax === undefined) cleanPayload.tax = 0;
+      if (cleanPayload.total === undefined) cleanPayload.total = Number(cleanPayload.amount || 0);
+
       let response;
       try {
-        response = await apiClient.post(`/billing/process-table`, payload);
+        response = await apiClient.post(`/billing/process-table`, cleanPayload);
       } catch (err1) {
         if (err1?.response?.status === 404 || err1?.response?.status === 405) {
-          const tableLabel = payload.tableLabel || payload.table || payload.tableNumber || (payload.tableId ? `Table ${payload.tableId}` : '');
+          const tableLabel = cleanPayload.tableLabel || cleanPayload.table || cleanPayload.tableNumber || (cleanPayload.tableId ? `Table ${cleanPayload.tableId}` : '');
           try {
             response = await apiClient.post(`/billing/pay`, {
               tableLabel,
-              ...payload
+              ...cleanPayload
             });
           } catch (err2) {
             if (err2?.response?.status === 404) {
               response = await apiClient.post(`/admin/billing/pay`, {
                 tableLabel,
-                ...payload
+                ...cleanPayload
               });
             } else {
               throw err2;

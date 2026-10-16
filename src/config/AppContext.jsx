@@ -2037,7 +2037,7 @@ export const AppProvider = ({ children }) => {
 
           if (!backendStaffRecord) {
             try {
-              const fullListRes = await UserApi.getUsers({ limit: 100 });
+              const fullListRes = await UserApi.getUsers({ limit: 10 });
               if (fullListRes && fullListRes.status && fullListRes.response) {
                 const fullList = fullListRes.response?.data?.users || fullListRes.response?.data || fullListRes.response?.users || (Array.isArray(fullListRes.response) ? fullListRes.response : []);
                 if (Array.isArray(fullList)) {
@@ -2611,7 +2611,16 @@ export const AppProvider = ({ children }) => {
     }
 
     const payload = {
-      items: updatedItems,
+      items: updatedItems.map(it => ({
+        menuId: it.menuId || it._id || it.id || '',
+        name: it.name || it.dishName || '',
+        qty: Number(it.qty || 1),
+        price: Number(it.price || 0),
+        status: it.status || 'new'
+      })),
+      subtotal: Number(order.subtotal || order.billAmount || 0),
+      tax: Number(order.tax || 0),
+      total: Number(order.total || order.billAmount || 0),
       status: newOrderStatus
     };
 
@@ -2819,7 +2828,21 @@ export const AppProvider = ({ children }) => {
       if (rest) {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
-          const payload = { status: nextStatus };
+          const itemsArray = (order.items || []).map(it => ({
+            menuId: it.menuId || it._id || it.id || '',
+            name: it.name || it.dishName || '',
+            qty: Number(it.qty || 1),
+            price: Number(it.price || 0),
+            status: nextStatus
+          }));
+
+          const payload = {
+            items: itemsArray,
+            subtotal: Number(order.subtotal || order.billAmount || 0),
+            tax: Number(order.tax || 0),
+            total: Number(order.total || order.billAmount || 0),
+            status: nextStatus
+          };
           const idToUpdate = order._id || order.id || order.orderId;
           await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
@@ -2860,8 +2883,22 @@ export const AppProvider = ({ children }) => {
       if (rest) {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
+          const itemsArray = (order.items || []).map(it => ({
+            menuId: it.menuId || it._id || it.id || '',
+            name: it.name || it.dishName || '',
+            qty: Number(it.qty || 1),
+            price: Number(it.price || 0),
+            status: it.status || order.status || 'new'
+          }));
+          const payload = {
+            waiter: waiterName,
+            items: itemsArray,
+            subtotal: Number(order.subtotal || order.billAmount || 0),
+            tax: Number(order.tax || 0),
+            total: Number(order.total || order.billAmount || 0)
+          };
           const idToUpdate = order._id || order.id || order.orderId;
-          await OrderApi.updateOrder(idToUpdate, { waiter: waiterName }).catch(() => { });
+          await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
       }
     } catch (e) {

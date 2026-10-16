@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
 import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
@@ -187,13 +187,21 @@ export default function TablesPanel({
     }
   };
 
+  const getTableStatusKey = (statusStr) => {
+    const s = String(statusStr || 'Free').trim().toLowerCase();
+    if (s === 'occupied') return 'Occupied';
+    if (s === 'reserved') return 'Reserved';
+    if (s.includes('maint') || s.includes('unavail')) return 'Maintenance';
+    return 'Free';
+  };
+
   const getStatusBadgeProps = (statusStr) => {
-    const s = String(statusStr || 'Free').toLowerCase();
-    if (s === 'occupied') {
+    const key = getTableStatusKey(statusStr);
+    if (key === 'Occupied') {
       return { text: 'Occupied', bg: '#fce8e6', color: '#dc2626' };
-    } else if (s === 'reserved') {
+    } else if (key === 'Reserved') {
       return { text: 'Reserved', bg: '#dbeafe', color: '#2563eb' };
-    } else if (s.includes('maint') || s.includes('unavail')) {
+    } else if (key === 'Maintenance') {
       return { text: 'Maintenance / Unavailable', bg: '#fef3c7', color: '#d97706' };
     } else {
       return { text: 'Free', bg: '#e6f4ea', color: '#16a34a' };
@@ -208,7 +216,6 @@ export default function TablesPanel({
     setIsTablesLoading(true);
     try {
       const params = {
-        page: page,
         limit: 10
       };
       if (isBranchFiltered) {
@@ -245,15 +252,44 @@ export default function TablesPanel({
       fetchFilteredTables();
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, statusFilter, selectedBranchId, page]);
+  }, [searchTerm, statusFilter, selectedBranchId]);
 
   const displayTables = serverTables !== null ? serverTables : (Array.isArray(tables) ? tables : []);
-  const filteredTables = displayTables;
-  const totalTablesCount = serverTables !== null ? serverTotalCount : filteredTables.length;
+
+  const filteredTables = useMemo(() => {
+    let list = Array.isArray(displayTables) ? displayTables : [];
+
+    // Filter by Status Tab
+    if (statusFilter && statusFilter !== 'All') {
+      list = list.filter(table => getTableStatusKey(table.status) === statusFilter);
+    }
+
+    // Filter by Search Query
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(table => {
+        const tableIdStr = String(table.tableNumber || table.tableNum || table.tableNo || table.name || table.id || '').toLowerCase();
+        const waiterName = String(getWaiterName(table) || '').toLowerCase();
+        const section = String(table.section || 'Main Dining').toLowerCase();
+        const seats = String(table.seatingCapacity ?? table.seats ?? '').toLowerCase();
+        const status = String(table.status || 'Free').toLowerCase();
+
+        return (
+          tableIdStr.includes(q) ||
+          waiterName.includes(q) ||
+          section.includes(q) ||
+          seats.includes(q) ||
+          status.includes(q)
+        );
+      });
+    }
+
+    return list;
+  }, [displayTables, statusFilter, searchTerm, staff]);
+
+  const totalTablesCount = filteredTables.length;
   const totalPages = Math.max(1, Math.ceil(totalTablesCount / limit));
-  const paginatedTables = (serverTables !== null || displayTables.length <= limit)
-    ? filteredTables
-    : filteredTables.slice(page * limit, (page + 1) * limit);
+  const paginatedTables = filteredTables.slice(page * limit, (page + 1) * limit);
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -403,21 +439,11 @@ export default function TablesPanel({
     return pages;
   };
 
-  useEffect(() => {
-    setPage(0);
-  }, [searchTerm, statusFilter]);
-
-  useEffect(() => {
-    if (page >= totalPages && totalPages > 0) {
-      setPage(Math.max(0, totalPages - 1));
-    }
-  }, [totalPages, page]);
-
   const totalCount = displayTables.length;
-  const freeCount = displayTables.filter(t => (t.status || 'free').toLowerCase() === 'free' || (t.status || '').toLowerCase() === 'available').length;
-  const occupiedCount = displayTables.filter(t => (t.status || '').toLowerCase() === 'occupied').length;
-  const reservedCount = displayTables.filter(t => (t.status || '').toLowerCase() === 'reserved').length;
-  const maintenanceCount = displayTables.filter(t => (t.status || '').toLowerCase().includes('maint') || (t.status || '').toLowerCase().includes('unavail')).length;
+  const freeCount = displayTables.filter(t => getTableStatusKey(t.status) === 'Free').length;
+  const occupiedCount = displayTables.filter(t => getTableStatusKey(t.status) === 'Occupied').length;
+  const reservedCount = displayTables.filter(t => getTableStatusKey(t.status) === 'Reserved').length;
+  const maintenanceCount = displayTables.filter(t => getTableStatusKey(t.status) === 'Maintenance').length;
 
   const handleBatchPrint = () => {
     const iframe = document.createElement('iframe');
@@ -997,7 +1023,9 @@ export default function TablesPanel({
               ) : (
                 <tr>
                   <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                    No dining tables match your current filter "{searchTerm}".
+                    {searchTerm || (statusFilter && statusFilter !== 'All')
+                      ? `No dining tables found matching ${statusFilter !== 'All' ? `status "${statusFilter}"` : ''}${statusFilter !== 'All' && searchTerm ? ' and ' : ''}${searchTerm ? `filter "${searchTerm}"` : ''}.`
+                      : 'No dining tables found.'}
                   </td>
                 </tr>
               )}

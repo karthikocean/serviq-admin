@@ -77,7 +77,7 @@ export default function StaffFormPage() {
   // Fallback: If editing and existing staff is not in activeRestaurant.staff, fetch via API
   useEffect(() => {
     if (isEdit && !existingStaff && staffId) {
-      UserApi.getUsers({ limit: 100 })
+      UserApi.getUsers({ limit: 10 })
         .then(res => {
           const list = res?.response?.data || (Array.isArray(res?.response) ? res.response : []);
           if (Array.isArray(list)) {

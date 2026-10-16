@@ -383,7 +383,7 @@ export default function OrdersPanel({
     const loadTablesForPanel = async () => {
       try {
         const isValidBranch = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'all' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && /^[0-9a-fA-F]{24}$/.test(String(selectedBranchId));
-        const query = isValidBranch ? `?branchId=${selectedBranchId}&limit=100` : '?limit=100';
+        const query = isValidBranch ? `?branchId=${selectedBranchId}&limit=10` : '?limit=10';
         const res = await apiClient.get(`/tables${query}`).catch(() => null);
         if (res && (res.status === 200 || res.data?.success)) {
           const fetched = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.tables || res.data?.response?.data || []);
@@ -1216,7 +1216,10 @@ export default function OrdersPanel({
         total: orderTotal
       };
 
-      const branchQuery = appendingOrder.branchId ? `?branchId=${appendingOrder.branchId}` : '';
+      const cleanAppendBranchId = typeof appendingOrder.branchId === 'object' && appendingOrder.branchId !== null
+        ? (appendingOrder.branchId._id || appendingOrder.branchId.id)
+        : (appendingOrder.branchId && appendingOrder.branchId !== 'ALL' && appendingOrder.branchId !== 'All' ? appendingOrder.branchId : '');
+      const branchQuery = cleanAppendBranchId ? `?branchId=${cleanAppendBranchId}` : '';
       const orderId = appendingOrder._id || appendingOrder.id;
       const res = await apiClient.put(`/orders/${orderId}/items/append${branchQuery}`, payload);
       if (res.data?.success || res.status === 200) {
@@ -1874,7 +1877,7 @@ export default function OrdersPanel({
       // 4. Construct params object for backend query
       const params = {
         page: 0,
-        limit: 100
+        limit: 10
       };
 
       if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
@@ -2213,14 +2216,48 @@ export default function OrdersPanel({
     else if (currentStatus === 'ready') nextStatus = 'served';
     else if (currentStatus === 'served') nextStatus = 'completed';
 
+    const targetOrder = (orders || []).find(o => String(o._id || o.id || o.orderId) === String(orderId));
+    const rawBranch = branchId || targetOrder?.branchId;
+    const cleanBranchId = typeof rawBranch === 'object' && rawBranch !== null
+      ? (rawBranch._id || rawBranch.id)
+      : (rawBranch && rawBranch !== 'ALL' && rawBranch !== 'All' && String(rawBranch).toUpperCase() !== 'COMPANY' ? rawBranch : '');
+    const branchQuery = cleanBranchId ? `?branchId=${cleanBranchId}` : '';
+
+    const itemsArray = (targetOrder?.items || []).map(it => ({
+      menuId: it.menuId || it._id || it.id || '',
+      name: it.name || it.dishName || '',
+      qty: Number(it.qty || 1),
+      price: Number(it.price || 0),
+      status: nextStatus
+    }));
+
+    const fullPayload = {
+      items: itemsArray,
+      subtotal: Number(targetOrder?.subtotal || targetOrder?.billAmount || 0),
+      tax: Number(targetOrder?.tax || 0),
+      total: Number(targetOrder?.total || targetOrder?.billAmount || 0),
+      status: nextStatus
+    };
+
     try {
-      const branchQuery = branchId ? `?branchId=${branchId}` : '';
-      const res = await apiClient.patch(`/orders/${orderId}/status${branchQuery}`, { status: nextStatus });
-      if (res.data?.success) {
+      let res = null;
+      try {
+        res = await apiClient.patch(`/orders/${orderId}/status${branchQuery}`, { status: nextStatus, items: itemsArray });
+      } catch (patchErr) {
+        // Fallback to updating order with full payload including items array
+        res = await apiClient.put(`/orders/${orderId}${branchQuery}`, fullPayload).catch(() => null);
+        if (!res || !res.data?.success) {
+          res = await apiClient.put(`/orders/${orderId}`, fullPayload).catch(() => null);
+        }
+      }
+
+      if (res && (res.data?.success || res.status === 200)) {
         ShowNotifications.showAlertNotification(`Order status updated to ${nextStatus.toUpperCase()}!`, true);
         fetchFilteredOrders();
         if (refreshOrders) refreshOrders();
+        return;
       }
+      throw new Error("Failed via API");
     } catch (error) {
       const restId = activeRestaurant?.id || 'rest-1';
       if (updateOrderStatus) {
@@ -5259,7 +5296,10 @@ export default function OrdersPanel({
                 className="btn btn-black"
                 onClick={async () => {
                   try {
-                    const branchQuery = orderToDelete.branchId ? `?branchId=${orderToDelete.branchId}` : '';
+                    const cleanDeleteBranchId = typeof orderToDelete.branchId === 'object' && orderToDelete.branchId !== null
+                      ? (orderToDelete.branchId._id || orderToDelete.branchId.id)
+                      : (orderToDelete.branchId && orderToDelete.branchId !== 'ALL' && orderToDelete.branchId !== 'All' ? orderToDelete.branchId : '');
+                    const branchQuery = cleanDeleteBranchId ? `?branchId=${cleanDeleteBranchId}` : '';
                     const res = await apiClient.delete(`/orders/${orderToDelete._id || orderToDelete.id}${branchQuery}`);
                     if (res.data?.success) {
                       ShowNotifications.showAlertNotification(`Order deleted successfully`, true);

@@ -125,7 +125,7 @@ export const isTableOccupied = (table, orderList = []) => {
 };
 
 export const getOccupiedTablesCount = (tablesList = [], ordersList = []) => {
-  if (!Array.isArray(tablesList)) tablesList = [];
+  if (!Array.isArray(tablesList) || tablesList.length === 0) return 0;
   if (!Array.isArray(ordersList)) ordersList = [];
 
   const activeOrders = ordersList.filter(o => {
@@ -137,32 +137,14 @@ export const getOccupiedTablesCount = (tablesList = [], ordersList = []) => {
     return !isCompleted && !isPaidAndDone;
   });
 
-  const matchedOrderKeys = new Set();
   let occupiedCount = 0;
-
   tablesList.forEach(t => {
     if (isTableOccupied(t, activeOrders)) {
       occupiedCount++;
-      activeOrders.forEach((o, idx) => {
-        if (isTableOccupied(t, [o])) {
-          matchedOrderKeys.add(o._id || o.id || o.orderId || idx);
-        }
-      });
     }
   });
 
-  activeOrders.forEach((o, idx) => {
-    const key = o._id || o.id || o.orderId || idx;
-    if (!matchedOrderKeys.has(key)) {
-      const matchesAnyKnownTable = tablesList.some(t => isTableOccupied(t, [o]));
-      if (!matchesAnyKnownTable) {
-        occupiedCount++;
-        matchedOrderKeys.add(key);
-      }
-    }
-  });
-
-  return occupiedCount;
+  return Math.min(occupiedCount, tablesList.length);
 };
 
 export default function OverviewPanel({
@@ -284,13 +266,45 @@ export default function OverviewPanel({
 
   const fetchAllBranchTables = async () => {
     try {
-      const res = await TableApi.getTables({ limit: 10 });
+      // 1. Fetch organization-wide tables with high limit
+      const res = await TableApi.getTables({ limit: 1000, page: 0 });
+      let allFetched = [];
       if (res && res.status && res.response) {
         const resp = res.response;
-        const tList = Array.isArray(resp) ? resp : (Array.isArray(resp.data) ? resp.data : (Array.isArray(resp.tables) ? resp.tables : (Array.isArray(resp.data?.tables) ? resp.data.tables : [])));
-        if (tList.length > 0) {
-          setFetchedAllTables(tList);
+        allFetched = Array.isArray(resp) ? resp : (Array.isArray(resp.data) ? resp.data : (Array.isArray(resp.tables) ? resp.tables : (Array.isArray(resp.data?.tables) ? resp.data.tables : [])));
+      }
+
+      // 2. If branches exist, ensure any branch without tables in the general query gets queried specifically
+      if (Array.isArray(branches) && branches.length > 0) {
+        const branchIdsToFetch = branches.map(b => b._id || b.id).filter(Boolean);
+        const branchesWithTables = new Set(allFetched.map(t => {
+          const bId = typeof t.branchId === 'object' && t.branchId !== null ? (t.branchId._id || t.branchId.id) : t.branchId;
+          return String(bId || '').toLowerCase().trim();
+        }));
+
+        const missingBranchIds = branchIdsToFetch.filter(bId => !branchesWithTables.has(String(bId).toLowerCase().trim()));
+        if (missingBranchIds.length > 0) {
+          const perBranchResults = await Promise.allSettled(
+            missingBranchIds.map(bId => TableApi.getTables({ branchId: bId, limit: 500, page: 0 }))
+          );
+          perBranchResults.forEach(r => {
+            if (r.status === 'fulfilled' && r.value?.status && r.value?.response) {
+              const bResp = r.value.response;
+              const bList = Array.isArray(bResp) ? bResp : (Array.isArray(bResp.data) ? bResp.data : (Array.isArray(bResp.tables) ? bResp.tables : []));
+              if (Array.isArray(bList) && bList.length > 0) {
+                bList.forEach(tbl => {
+                  if (!allFetched.some(existing => (existing._id && tbl._id && existing._id === tbl._id) || (existing.id && tbl.id && existing.id === tbl.id))) {
+                    allFetched.push(tbl);
+                  }
+                });
+              }
+            }
+          });
         }
+      }
+
+      if (allFetched.length > 0) {
+        setFetchedAllTables(allFetched);
       }
     } catch (e) {
       console.warn("Could not fetch tables for branch overview:", e);
@@ -308,8 +322,8 @@ export default function OverviewPanel({
 
   // Current view tables and orders
   const displayTables = isSpecificBranch
-    ? (tables || []).filter(t => isBranchMatch(t, selectedBranchId, branches))
-    : (allTables && allTables.length > 0 ? allTables : tables);
+    ? (combinedTables || tables || []).filter(t => isBranchMatch(t, selectedBranchId, branches))
+    : (combinedTables && combinedTables.length > 0 ? combinedTables : (allTables && allTables.length > 0 ? allTables : tables));
   const displayOrders = isSpecificBranch
     ? (orders || []).filter(o => isBranchMatch(o, selectedBranchId, branches))
     : (allOrders && allOrders.length > 0 ? allOrders : orders);
@@ -514,7 +528,9 @@ export default function OverviewPanel({
     const totalBranchTables = branchTables.length > 0 
       ? branchTables.length 
       : (Number(branch.totalTables) || Number(branch.tablesCount) || 0);
-    const occupied = Math.min(getOccupiedTablesCount(branchTables, branchOrders), totalBranchTables || Infinity);
+    const occupied = totalBranchTables > 0
+      ? Math.min(getOccupiedTablesCount(branchTables, branchOrders), totalBranchTables)
+      : 0;
 
     const activeStaff = branchStaff.filter(s => {
       const statusStr = String(s.dutyStatus || s.status || '').toLowerCase().trim();

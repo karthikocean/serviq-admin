@@ -103,3 +103,17 @@ export const validatePassword = (password = '', fieldName = 'Password') => {
 export const isStrongPassword = (password = '') => {
   return !validatePassword(password);
 };
+
+// Validate 15-character Indian GSTIN
+export const validateGstin = (gstin = '') => {
+  const val = String(gstin || '').trim().toUpperCase();
+  if (!val) return '';
+  if (val.length < 15) {
+    return 'Invalid GST. Please enter a valid 15-character GST.';
+  }
+  const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+  if (!gstinRegex.test(val)) {
+    return 'Invalid GST Number.';
+  }
+  return '';
+};
