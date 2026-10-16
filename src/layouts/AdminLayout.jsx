@@ -32,6 +32,24 @@ export default function AdminLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  // Strictly block Waiter and Kitchen staff from accessing Admin panel layout
+  const roleNameStr = (currentUser?.role?.roleName || currentUser?.role?.name || currentUser?.roleName || (typeof currentUser?.role === 'string' ? currentUser.role : '') || '').toLowerCase();
+  const userTypeStr = String(currentUser?.userType || '').toLowerCase();
+  const isWaiterOrKitchen = 
+    roleNameStr.includes('waiter') || 
+    roleNameStr.includes('kitchen') || 
+    roleNameStr.includes('chef') || 
+    roleNameStr.includes('cook') ||
+    userTypeStr === 'station' ||
+    userTypeStr === 'waiter' ||
+    userTypeStr === 'kitchen';
+
+  if (isWaiterOrKitchen) {
+    sessionStorage.clear();
+    ShowNotifications.showAlertNotification("Access denied. Waiter and Kitchen staff must use the mobile application.", false);
+    return <Navigate to="/login" replace />;
+  }
+
   const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(false);
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);

@@ -6,6 +6,8 @@ import { sanitizeMobile, validateMobile, validatePassword } from '../../helper/V
 import PasswordRequirements from '../../components/common/PasswordRequirements';
 import SearchableSelect from '../../components/SearchableSelect.jsx';
 import RoleApi from '../../api/Role';
+import UserApi from '../../api/User.js';
+import TableApi from '../../api/Table.js';
 import { isUserCompanyUser, getUserAssignedBranchId } from '../../helper/BranchHelper.js';
 
 export default function StaffFormPage() {
@@ -52,12 +54,13 @@ export default function StaffFormPage() {
 
   const isEdit = !!staffId;
   const existingStaff = isEdit && activeRestaurant?.staff
-    ? activeRestaurant.staff.find(s => s.id === staffId || s.id === parseInt(staffId))
+    ? activeRestaurant.staff.find(s => String(s.id || s._id) === String(staffId))
     : null;
 
   const allTables = activeRestaurant?.tables || [];
 
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
     branchId: getInitialBranchId(),
@@ -71,6 +74,33 @@ export default function StaffFormPage() {
 
   const [formErrors, setFormErrors] = useState({});
 
+  // Fallback: If editing and existing staff is not in activeRestaurant.staff, fetch via API
+  useEffect(() => {
+    if (isEdit && !existingStaff && staffId) {
+      UserApi.getUsers({ limit: 100 })
+        .then(res => {
+          const list = res?.response?.data || (Array.isArray(res?.response) ? res.response : []);
+          if (Array.isArray(list)) {
+            const found = list.find(u => String(u._id || u.id) === String(staffId));
+            if (found) {
+              setForm(prev => ({
+                ...prev,
+                name: found.name || '',
+                branchId: found.branchId?._id || found.branchId?.id || found.branchId || '',
+                role: found.roleId?.roleName || found.roleId?.name || (found.userType === 'STATION' ? 'Kitchen' : 'Waiter'),
+                phone: found.phoneNumber || found.phone || '',
+                email: found.email || '',
+                password: '',
+                status: found.dutyStatus || (found.isActive === false ? 'Off Duty' : 'On Duty'),
+                assignedTableIds: []
+              }));
+            }
+          }
+        })
+        .catch(err => console.warn("Failed to fetch user in StaffFormPage:", err));
+    }
+  }, [isEdit, staffId, existingStaff]);
+
   useEffect(() => {
     if (existingStaff) {
       const staffAssignedTables = allTables
@@ -83,6 +113,8 @@ export default function StaffFormPage() {
       }
       if (isBranchLogin && userBranchId) {
         initialBranch = userBranchId;
+      } else if (!initialBranch && cleanSelectedBranch) {
+        initialBranch = cleanSelectedBranch;
       }
 
       setForm({
@@ -96,22 +128,17 @@ export default function StaffFormPage() {
         assignedTableIds: staffAssignedTables
       });
     } else if (!isEdit) {
-      setForm({
-        name: '',
-        branchId: getInitialBranchId(),
-        role: 'Waiter',
-        phone: '',
-        email: '',
-        password: '',
-        status: 'On Duty',
-        assignedTableIds: []
-      });
+      setForm(prev => ({
+        ...prev,
+        branchId: getInitialBranchId()
+      }));
     }
-  }, [existingStaff, selectedBranchId, isEdit, isBranchLogin, userBranchId]);
+  }, [existingStaff, selectedBranchId, isEdit, isBranchLogin, userBranchId, cleanSelectedBranch]);
 
   const validate = () => {
     const errors = {};
-    const isKitchen = form.role === 'Kitchen';
+    const roleLower = (form.role || '').toLowerCase();
+    const isKitchen = roleLower.includes('kitchen') || roleLower.includes('cook') || roleLower.includes('chef');
 
     if (!form.name.trim()) {
       errors.name = 'Full Name is required.';
@@ -132,55 +159,128 @@ export default function StaffFormPage() {
       }
     }
 
-    const passwordErr = validatePassword(form.password);
-    if (passwordErr) {
-      errors.password = passwordErr;
+    if (!isEdit || (form.password && form.password.trim())) {
+      const passwordErr = validatePassword(form.password);
+      if (passwordErr) {
+        errors.password = passwordErr;
+      }
     }
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    setIsSubmitting(true);
 
-    const isKitchen = form.role === 'Kitchen';
-    const targetStaffId = existingStaff ? existingStaff.id : (isEdit ? staffId : `ST-${Date.now()}`);
+    try {
+      const roleName = form.role || 'Waiter';
+      const roleLower = roleName.toLowerCase();
+      const isKitchen = roleLower.includes('kitchen') || roleLower.includes('cook') || roleLower.includes('chef') || roleLower.includes('station');
+      const isBranchAdmin = roleLower.includes('manager') || roleLower.includes('admin');
+      const isWaiter = roleLower.includes('waiter');
 
-    let finalBranchId = form.branchId;
-    if (isBranchLogin && userBranchId) {
-      finalBranchId = userBranchId;
-    } else if (finalBranchId === 'COMPANY' || finalBranchId === 'ALL' || finalBranchId === 'all') {
-      finalBranchId = '';
+      let effectiveBranch = form.branchId;
+      if (isBranchLogin && userBranchId) {
+        effectiveBranch = userBranchId;
+      } else if (!effectiveBranch && cleanSelectedBranch) {
+        effectiveBranch = cleanSelectedBranch;
+      }
+      if (effectiveBranch === 'ALL' || effectiveBranch === 'COMPANY' || effectiveBranch === 'all') {
+        effectiveBranch = '';
+      }
+
+      // Resolve roleId from availableRoles
+      let resolvedRoleId = null;
+      if (availableRoles.length > 0) {
+        const found = availableRoles.find(r => 
+          (r.roleName && r.roleName.toLowerCase() === roleLower) ||
+          (r.name && r.name.toLowerCase() === roleLower) ||
+          r._id === form.role ||
+          r.id === form.role
+        );
+        if (found) {
+          resolvedRoleId = found._id || found.id;
+        }
+      }
+
+      const payload = {
+        name: form.name.trim(),
+        userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
+        status: form.status === 'Off Duty' ? 'Inactive' : 'Active',
+        isActive: form.status !== 'Off Duty',
+        active: form.status !== 'Off Duty',
+        dutyStatus: form.status || 'On Duty',
+      };
+
+      if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+        payload.branchId = String(effectiveBranch);
+      }
+      if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
+        payload.roleId = String(resolvedRoleId);
+      }
+      if (form.phone && form.phone.trim()) {
+        payload.phoneNumber = form.phone.trim();
+      }
+      if (!isKitchen && form.email && form.email.trim()) {
+        payload.email = form.email.trim();
+      }
+      if (form.password && form.password.trim()) {
+        payload.password = form.password;
+      }
+
+      let res;
+      const targetMongoId = existingStaff?._id || existingStaff?.id || (isEdit ? staffId : null);
+      const isMongoId = targetMongoId && /^[0-9a-fA-F]{24}$/.test(String(targetMongoId));
+
+      if (isEdit && isMongoId) {
+        res = await UserApi.updateUser(targetMongoId, payload);
+        if (form.password && form.password.trim()) {
+          await UserApi.changePassword(targetMongoId, form.password);
+        }
+      } else {
+        res = await UserApi.createUser(payload);
+      }
+
+      if (res && res.status) {
+        const savedUserId = (res.response?.data?._id || res.response?.data?.id || targetMongoId || `ST-${Date.now()}`);
+        const staffData = {
+          id: savedUserId,
+          ...form,
+          branchId: effectiveBranch,
+          email: isKitchen ? '' : form.email.trim()
+        };
+
+        if (isEdit && updateStaff && activeRestaurant?.id) {
+          updateStaff(activeRestaurant.id, staffData);
+        } else if (addStaff && activeRestaurant?.id) {
+          addStaff(activeRestaurant.id, staffData);
+        }
+
+        if (isWaiter && savedUserId) {
+          try {
+            await TableApi.assignWaiter({
+              waiterId: savedUserId,
+              tableIds: form.assignedTableIds || []
+            });
+            if (assignTablesToWaiter && activeRestaurant?.id) {
+              assignTablesToWaiter(activeRestaurant.id, savedUserId, form.assignedTableIds || []);
+            }
+          } catch (tableErr) {
+            console.warn("Table assignment error in StaffFormPage:", tableErr);
+          }
+        }
+
+        navigate('/staff');
+      }
+    } catch (err) {
+      console.error("Error submitting staff form:", err);
+      ShowNotifications.showAlertNotification("An error occurred while saving the staff member.", false);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const staffData = {
-      id: targetStaffId,
-      ...form,
-      branchId: finalBranchId,
-      email: isKitchen ? '' : form.email.trim()
-    };
-
-    if (isEdit) {
-      if (updateStaff) {
-        updateStaff(activeRestaurant.id, staffData);
-      }
-      if (assignTablesToWaiter && form.role === 'Waiter') {
-        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
-      }
-      ShowNotifications.showAlertNotification(`Staff member "${form.name}" updated successfully.`, true);
-    } else {
-      if (addStaff) {
-        addStaff(activeRestaurant.id, staffData);
-      }
-      if (assignTablesToWaiter && form.role === 'Waiter') {
-        assignTablesToWaiter(activeRestaurant.id, targetStaffId, form.assignedTableIds || []);
-      }
-      ShowNotifications.showAlertNotification(`Staff member "${form.name}" created successfully.`, true);
-    }
-
-    navigate('/staff');
   };
 
   return (
@@ -509,6 +609,7 @@ export default function StaffFormPage() {
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               style={{
                 background: '#ff5a1f',
                 border: 'none',
@@ -517,10 +618,11 @@ export default function StaffFormPage() {
                 borderRadius: '8px',
                 padding: '10px 24px',
                 fontSize: '14px',
-                cursor: 'pointer'
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting ? 0.7 : 1
               }}
             >
-              {isEdit ? 'Save Changes' : 'Create Staff Member'}
+              {isSubmitting ? 'Saving...' : (isEdit ? 'Save Changes' : 'Create Staff Member')}
             </button>
           </div>
         </form>

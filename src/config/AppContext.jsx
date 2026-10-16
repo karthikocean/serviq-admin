@@ -195,14 +195,14 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: true, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
-      tables: { view: true, add: false, edit: true, delete: false },
+      tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
-      waiter: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
+      waiter: { view: false, add: false, edit: false, delete: false },
       kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
@@ -217,15 +217,15 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: false, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
-      kitchen: { view: true, add: false, edit: false, delete: false },
+      kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
@@ -239,15 +239,15 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: false, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
-      kitchen: { view: true, add: false, edit: false, delete: false },
+      kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
@@ -289,6 +289,25 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
 
   // Pure Restaurant Owner & Super Admin (without a specific custom role) have full access
   if (isRestaurantOwner) return true;
+
+  // Waiter and Kitchen staff are strictly mobile app users and have ZERO permissions in the admin panel
+  const roleNameLower = String(roleNameStr || '').toLowerCase();
+  const isWaiterOrKitchenRole = 
+    roleUpper === 'WAITER' ||
+    roleUpper === 'KITCHEN' ||
+    roleUpper === 'KITCHEN_STAFF' ||
+    roleUpper === 'KITCHEN STAFF' ||
+    roleNameLower.includes('waiter') ||
+    roleNameLower.includes('kitchen') ||
+    roleNameLower.includes('chef') ||
+    roleNameLower.includes('cook') ||
+    userTypeUpper === 'STATION' ||
+    userTypeUpper === 'WAITER' ||
+    userTypeUpper === 'KITCHEN';
+
+  if (isWaiterOrKitchenRole) {
+    return false;
+  }
 
   // Block permission immediately if staff user account itself is inactive or deleted
   const isUserAccountInactive = 
@@ -2158,6 +2177,28 @@ export const AppProvider = ({ children }) => {
                 userTypeUpper === 'KITCHEN';
               hasExplicitAdminAccess = !isNonAdminStaff;
             }
+          }
+
+          const isWaiterOrKitchenStaff = 
+            roleLower.includes('waiter') ||
+            roleLower.includes('kitchen') ||
+            roleLower.includes('chef') ||
+            roleLower.includes('cook') ||
+            userTypeUpper === 'STATION' ||
+            userTypeUpper === 'WAITER' ||
+            userTypeUpper === 'KITCHEN';
+
+          if (!isRestaurantOwner && isWaiterOrKitchenStaff) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Access denied. Waiter and Kitchen staff must use the mobile application."
+            };
           }
 
           if (hasExplicitAdminAccess === false) {

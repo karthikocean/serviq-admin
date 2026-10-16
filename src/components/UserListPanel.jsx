@@ -194,9 +194,6 @@ export default function UserListPanel() {
     if (usersRes?.status) {
       const uData = usersRes.response?.data || usersRes.response || [];
       let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
-      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && activeFilteredBranchId !== 'All') {
-        list = list.filter(u => isBranchMatch(u, activeFilteredBranchId, currentBranches));
-      }
       setApiUsers(list);
       const totalNum = usersRes.response?.total ?? usersRes.response?.totalRecords ?? usersRes.response?.totalUsers ?? usersRes.response?.count ?? usersRes.response?.pagination?.total ?? (usersRes.response?.data?.total ?? list.length);
       setTotalRecords(totalNum);
@@ -266,11 +263,22 @@ export default function UserListPanel() {
   });
   const [formErrors, setFormErrors] = useState({});
 
+  useEffect(() => {
+    if (viewState === 'form' && !editingUserId) {
+      if (!isAdmin && currentBranchId) {
+        setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      }
+    }
+  }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
+
   const openAddUser = () => {
     setEditingUserId(null);
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
     const defaultBranch = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : (activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
+      : (cleanBranch || activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     setUserForm({
       name: '',
       branchId: defaultBranch || '',
@@ -309,7 +317,8 @@ export default function UserListPanel() {
       errors.name = 'Full Name should contain letters only.';
     }
 
-    if (!userForm.branchId) {
+    const effectiveBranchVal = userForm.branchId || (!isAdmin && currentBranchId) || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
+    if (!effectiveBranchVal && isCompanyScope) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -347,6 +356,13 @@ export default function UserListPanel() {
       return;
     }
 
+    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const effectiveBranch = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+          ? userForm.branchId
+          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || '')));
+
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
@@ -354,16 +370,22 @@ export default function UserListPanel() {
     const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
-      roleId: resolvedRoleId,
-      branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
-      phoneNumber: userForm.phone.trim(),
     };
 
-    if (userForm.email.trim()) {
+    if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+      payload.branchId = String(effectiveBranch);
+    }
+    if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
+      payload.roleId = String(resolvedRoleId);
+    }
+    if (userForm.phone && userForm.phone.trim()) {
+      payload.phoneNumber = userForm.phone.trim();
+    }
+    if (userForm.email && userForm.email.trim()) {
       payload.email = userForm.email.trim();
     }
 
@@ -371,7 +393,9 @@ export default function UserListPanel() {
     if (editingUserId) {
       res = await UserApi.updateUser(editingUserId, payload);
     } else {
-      payload.password = userForm.password;
+      if (userForm.password && userForm.password.trim()) {
+        payload.password = userForm.password;
+      }
       res = await UserApi.createUser(payload);
     }
 

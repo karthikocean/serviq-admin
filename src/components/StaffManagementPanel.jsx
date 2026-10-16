@@ -432,11 +432,22 @@ export default function StaffManagementPanel({
   });
   const [formErrors, setFormErrors] = useState({});
 
+  useEffect(() => {
+    if (viewState === 'form' && !editingUserId) {
+      if (!isAdmin && currentBranchId) {
+        setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      }
+    }
+  }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
+
   const openAddUser = () => {
     setEditingUserId(null);
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
     const initialBranchId = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : ((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (apiBranches[0]?._id || ''));
+      : (cleanBranch || (apiBranches[0]?._id || ''));
     const waiterRole = apiRoles.find(r => r.roleName.toLowerCase().includes('waiter'));
     const autoCode = `EMP-${String(apiUsers.length + 1).padStart(3, '0')}`;
     setUserForm({
@@ -515,7 +526,8 @@ export default function StaffManagementPanel({
       errors.name = 'Full Name should contain letters and spaces only.';
     }
 
-    if (!userForm.branchId) {
+    const effectiveBranchVal = userForm.branchId || (!isAdmin && currentBranchId) || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
+    if (!effectiveBranchVal && isCompanyScope) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -554,6 +566,13 @@ export default function StaffManagementPanel({
     e.preventDefault();
     if (!validate()) return;
 
+    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const effectiveBranch = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+          ? userForm.branchId
+          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || '')));
+
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
@@ -561,19 +580,27 @@ export default function StaffManagementPanel({
 
     const isStatusActive = userForm.status === 'Active';
     const payload = {
-      employeeCode: userForm.employeeCode.trim(),
       name: userForm.name.trim(),
-      roleId: resolvedRoleId,
-      branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
       dutyStatus: userForm.dutyStatus,
-      phoneNumber: userForm.phone.trim(),
     };
 
-    if (!isKitchenEmployee && userForm.email.trim()) {
+    if (userForm.employeeCode && userForm.employeeCode.trim()) {
+      payload.employeeCode = userForm.employeeCode.trim();
+    }
+    if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+      payload.branchId = String(effectiveBranch);
+    }
+    if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
+      payload.roleId = String(resolvedRoleId);
+    }
+    if (userForm.phone && userForm.phone.trim()) {
+      payload.phoneNumber = userForm.phone.trim();
+    }
+    if (!isKitchenEmployee && userForm.email && userForm.email.trim()) {
       payload.email = userForm.email.trim();
     }
 
@@ -581,7 +608,7 @@ export default function StaffManagementPanel({
     if (editingUserId) {
       res = await UserApi.updateUser(editingUserId, payload);
     } else {
-      if (!isKitchenEmployee) {
+      if (!isKitchenEmployee && userForm.password && userForm.password.trim()) {
         payload.password = userForm.password;
       }
       res = await UserApi.createUser(payload);
