@@ -7,6 +7,8 @@ import TableApi from '../api/Table.js';
 import { 
   resolveBranchManagerName, 
   resolveBranchContactNumber, 
+  resolveBranchCity,
+  resolveBranchLocation,
   isBranchMatch,
   isUserCompanyUser,
   getUserAssignedBranchId
@@ -521,12 +523,16 @@ export default function OverviewPanel({
 
     const mgr = resolveBranchManagerName(branch, allUsers || users || [], branchStaff || allStaff || staff || []);
     const contactNum = resolveBranchContactNumber(branch, allUsers || users || [], branchStaff || allStaff || staff || []);
+    const resolvedLoc = resolveBranchLocation(branch, activeRestaurant?.branches || branches || []);
+    const resolvedCity = resolveBranchCity(branch, activeRestaurant?.branches || branches || []);
 
     return {
       ...branch,
       id: branch._id || branch.id,
       branchName: branch.branchName || branch.name || 'Branch',
       branchCode: branch.branchCode || 'BR-001',
+      location: resolvedLoc || branch.location || resolvedCity || branch.city || '',
+      city: resolvedCity || branch.city || '',
       branchManager: mgr,
       managerName: mgr,
       mobileNumber: contactNum !== 'N/A' ? contactNum : (branch.mobileNumber || branch.contactNumber || branch.phone || ''),
@@ -582,7 +588,7 @@ export default function OverviewPanel({
                 </span>
               </div>
               <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                📍 {typeof selectedBranch.address === 'object' && selectedBranch.address !== null ? (selectedBranch.city || selectedBranch.address?.city || selectedBranch.address?.street || selectedBranch.address?.state || 'Tamil Nadu') : (selectedBranch.city || selectedBranch.address || 'Tamil Nadu')} • Manager: <strong>{resolveBranchManagerName(selectedBranch, allUsers || users || [], allStaff || staff || [])}</strong> • Contact: {resolveBranchContactNumber(selectedBranch, allUsers || users || [], allStaff || staff || [])}
+                📍 {resolveBranchLocation(selectedBranch, activeRestaurant?.branches || branches || []) || resolveBranchCity(selectedBranch, activeRestaurant?.branches || branches || []) || 'Tamil Nadu'} • Manager: <strong>{resolveBranchManagerName(selectedBranch, allUsers || users || [], allStaff || staff || [])}</strong> • Contact: {resolveBranchContactNumber(selectedBranch, allUsers || users || [], allStaff || staff || [])}
               </p>
             </div>
           </div>
@@ -751,39 +757,41 @@ export default function OverviewPanel({
           </div>
 
           <div style={{ overflowX: 'auto', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)', paddingBottom: '6px' }}>
-            <table className="menu-items-table" style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <table className="menu-items-table" style={{ width: '100%', minWidth: '1100px', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f95e10', color: '#ffffff', textAlign: 'left' }}>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH NAME</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CODE & LOCATION</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MANAGER</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLES OCCUPIED</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ON DUTY</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TODAY ORDERS</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REVENUE</th>
-                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACTION</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>BRANCH NAME</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CODE & LOCATION</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>MANAGER</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STATUS</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TABLES OCCUPIED</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>STAFF ON DUTY</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>TODAY ORDERS</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>REVENUE</th>
+                  <th style={{ padding: '14px 18px', color: '#ffffff', fontWeight: 600, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>ACTION</th>
                 </tr>
               </thead>
               <tbody>
                 {branchAnalytics.map(b => (
                   <tr key={b.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px', color: '#0f172a' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <StoreIcon size={16} color="var(--primary)" />
                         <span>{b.branchName}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#64748b' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px', color: '#64748b' }}>
                       <span style={{ fontSize: '11px', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: 700, color: '#334155', marginRight: '6px' }}>
                         {b.branchCode}
                       </span>
-                      {b.city || 'Tamil Nadu'}
+                      <span style={{ fontWeight: 400, color: '#334155' }}>
+                        {b.location || resolveBranchLocation(b, activeRestaurant?.branches || branches || []) || b.city || resolveBranchCity(b, activeRestaurant?.branches || branches || []) || '—'}
+                      </span>
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#334155', fontWeight: 600 }}>
+                    <td style={{ padding: '14px 16px', color: '#334155', fontWeight: 400, fontSize: '14px' }}>
                       {b.branchManager || b.managerName || resolveBranchManagerName(b, allUsers || users || [], allStaff || staff || []) || 'Unassigned'}
                     </td>
-                    <td style={{ padding: '14px 16px' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px' }}>
                       <span style={{
                         fontSize: '11px',
                         padding: '3px 8px',
@@ -795,30 +803,30 @@ export default function OverviewPanel({
                         {b.status || 'Active'}
                       </span>
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600 }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px' }}>
                       <span style={{ color: b.occupiedTables > 0 ? '#ea580c' : '#10b981' }}>{b.occupiedTables} Occupied</span> / {b.tablesCount}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 600, color: '#334155' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px', color: '#334155' }}>
                       {b.activeStaff} / {b.staffCount}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 400, fontSize: '14px', color: '#0f172a' }}>
                       {b.ordersCount}
                     </td>
-                    <td style={{ padding: '14px 16px', fontWeight: 800, color: 'var(--primary)' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 600, fontSize: '14px', color: 'var(--primary)' }}>
                       ₹{b.revenue.toLocaleString('en-IN')}
                     </td>
-                    <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'center', fontSize: '14px' }}>
                       {isAdmin ? (
                         <button
                           type="button"
                           className="btn btn-outline"
-                          style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700 }}
+                          style={{ padding: '6px 12px', fontSize: '12px', fontWeight: 600 }}
                           onClick={() => onSelectBranch(b.id)}
                         >
                           Drill Down
                         </button>
                       ) : (
-                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>—</span>
+                        <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 400 }}>—</span>
                       )}
                     </td>
                   </tr>

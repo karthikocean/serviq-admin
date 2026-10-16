@@ -209,6 +209,17 @@ export default function Billing() {
             const rawInvoiceNo = t.invoiceNo || t.invoiceNumber || t.invoiceId || t.taxInvoiceNo || (t.invoice && typeof t.invoice === 'object' ? (t.invoice.invoiceNo || t.invoice.invoiceNumber || t.invoice.id) : t.invoice) || '';
             const fallbackInvoiceNo = rawInvoiceNo || (rawBillNo && rawBillNo !== '-' ? (rawBillNo.startsWith('INV-') ? rawBillNo : `INV-${rawBillNo.replace(/^BILL[-_]*/i, '')}`) : `INV-${mongoOrderId}`);
 
+            // Preserve order status from raw record, order property or status
+            const rawOrderStatus = String(
+              t.orderStatus || 
+              t.order_status || 
+              t.orderState || 
+              (typeof t.order === 'object' && t.order !== null ? (t.order?.status || t.order?.orderStatus) : '') ||
+              (Array.isArray(t.orders) && t.orders.length > 0 ? (t.orders[0]?.status || t.orders[0]?.orderStatus) : '') ||
+              (t.status && !['unpaid', 'paid', 'pending', 'pending_payment'].includes(String(t.status).toLowerCase()) ? t.status : '') ||
+              ''
+            ).trim();
+
             return {
               ...t,
               id: t.id || t._id || `bill-${idx + 1}`,
@@ -219,6 +230,8 @@ export default function Billing() {
               invoiceId: rawInvoiceNo || fallbackInvoiceNo,
               orderId: t.orderId || t.order_id || mongoOrderId,
               orderType: t.orderType || 'Dine-In',
+              orderStatus: rawOrderStatus,
+              originalStatus: t.status,
               tableId: mongoTableId,
               table: tableDisplay,
               billDateTime: rawBillDate,
@@ -249,7 +262,7 @@ export default function Billing() {
             };
           });
 
-          // Strict requirement: Only Unpaid / Pending payment bills should ever appear in Current Billing
+          // Strict requirement: Only Unpaid bills where Order Status is Completed should appear in Current Billing
           fetchedTables = fetchedTables.filter(b => {
             const isRecentlyPaid = 
               recentlyPaidKeys.has(String(b.id)) ||
@@ -261,10 +274,6 @@ export default function Billing() {
             if (isRecentlyPaid) return false;
 
             const payStatus = String(b.paymentStatus || b.billingStatus || '').toLowerCase();
-            if (payStatus === 'unpaid' || payStatus === 'pending' || payStatus === 'pending_payment') {
-              return true;
-            }
-
             const isPaid = 
               b.isPaid === true ||
               b.paid === true ||
@@ -273,7 +282,38 @@ export default function Billing() {
               String(b.status || '').toLowerCase() === 'done' ||
               (Number(b.paidAmount || 0) >= Number(b.billAmount || b.total || 0) && Number(b.billAmount || b.total || 0) > 0) ||
               (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
-            return !isPaid;
+
+            if (isPaid) return false;
+
+            // Resolve order status: Must be Completed (or served / done)
+            let ordStatus = String(b.orderStatus || b.order_status || '').toLowerCase().trim();
+            if (!ordStatus && typeof b.order === 'object' && b.order !== null) {
+              ordStatus = String(b.order?.status || b.order?.orderStatus || '').toLowerCase().trim();
+            }
+            if (!ordStatus && Array.isArray(activeRestaurant?.orders)) {
+              const cleanOrdId = String(b.orderId || b.order_id || b.rawOrderId || b._id || b.id || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+              const matchedOrd = activeRestaurant.orders.find(o => {
+                const oClean = String(o._id || o.id || o.orderId || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+                return oClean && oClean === cleanOrdId;
+              });
+              if (matchedOrd) {
+                ordStatus = String(matchedOrd.status || matchedOrd.orderStatus || '').toLowerCase().trim();
+              }
+            }
+            if (!ordStatus) {
+              const orig = String(b.originalStatus || '').toLowerCase().trim();
+              if (['new', 'preparing', 'ready', 'served', 'completed', 'done', 'cancelled'].includes(orig)) {
+                ordStatus = orig;
+              }
+            }
+
+            // If order status is known, strictly require it to be completed/served/done
+            if (ordStatus) {
+              const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
+              if (!isCompleted) return false;
+            }
+
+            return true;
           });
 
           // Branch filter: If a specific sub-branch is selected, only show bills for that branch
@@ -386,12 +426,9 @@ export default function Billing() {
           };
         });
 
-        // Filter fallback pool to only include Unpaid bills
+        // Filter fallback pool to only include Unpaid bills where order status is Completed
         pool = pool.filter(b => {
           const payStatus = String(b.paymentStatus || b.billingStatus || '').toLowerCase();
-          if (payStatus === 'unpaid' || payStatus === 'pending' || payStatus === 'pending_payment') {
-            return true;
-          }
           const isPaidBill = 
             b.isPaid === true ||
             b.paid === true ||
@@ -400,7 +437,34 @@ export default function Billing() {
             String(b.status || '').toLowerCase() === 'done' ||
             (Number(b.paidAmount || 0) >= Number(b.billAmount || b.total || 0) && Number(b.billAmount || b.total || 0) > 0) ||
             (Number(b.balanceAmount || 0) <= 0 && Number(b.paidAmount || 0) > 0);
-          return !isPaidBill;
+
+          if (isPaidBill) return false;
+
+          // Check Order Status: must be Completed (or served/done)
+          let ordStatus = String(b.orderStatus || b.order_status || '').toLowerCase().trim();
+          if (!ordStatus && Array.isArray(activeRestaurant?.orders)) {
+            const cleanOrdId = String(b.orderId || b.order_id || b.rawOrderId || b._id || b.id || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+            const matchedOrd = activeRestaurant.orders.find(o => {
+              const oClean = String(o._id || o.id || o.orderId || '').trim().replace(/^(#|ORD-|ord-)/i, '');
+              return oClean && oClean === cleanOrdId;
+            });
+            if (matchedOrd) {
+              ordStatus = String(matchedOrd.status || matchedOrd.orderStatus || '').toLowerCase().trim();
+            }
+          }
+          if (!ordStatus) {
+            const orig = String(b.originalStatus || '').toLowerCase().trim();
+            if (['new', 'preparing', 'ready', 'served', 'completed', 'done', 'cancelled'].includes(orig)) {
+              ordStatus = orig;
+            }
+          }
+
+          if (ordStatus) {
+            const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
+            if (!isCompleted) return false;
+          }
+
+          return true;
         });
 
         // Filter fallback pool by branch if a specific sub-branch is selected

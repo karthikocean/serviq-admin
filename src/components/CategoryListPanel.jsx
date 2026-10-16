@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
@@ -71,6 +72,32 @@ export default function CategoryListPanel({
 
   const branches = liveBranches.length > 0 ? liveBranches : (activeRestaurant?.branches || []);
 
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isCompany = isUserCompanyUser(currentUser);
+  const isBranchUser = !isCompany && Boolean(userBranchId);
+  const isBranchFiltered = Boolean(
+    selectedBranchId &&
+    selectedBranchId !== 'ALL' &&
+    selectedBranchId !== 'All' &&
+    String(selectedBranchId).toUpperCase() !== 'COMPANY' &&
+    String(selectedBranchId).toLowerCase() !== 'all branches'
+  );
+  const isBranchCategoryScope = isBranchUser || isBranchFiltered;
+  const activeBranchTargetId = isBranchUser ? userBranchId : (isBranchFiltered ? selectedBranchId : null);
+
+  const currentBranchObj = isBranchCategoryScope
+    ? branches.find(b => isBranchMatch(b, activeBranchTargetId))
+    : null;
+
+  const branchCustomFlag = currentBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+  const isCustomMenuEnabled = Boolean(
+    branchCustomFlag === true ||
+    String(branchCustomFlag).toLowerCase() === 'true'
+  );
+
+  // In branch category scope, only show "Add Category" if useCustomMenu is true for that branch
+  const canAddCategory = canAdd && (!isBranchCategoryScope || isCustomMenuEnabled);
+
   const fetchCategoriesData = async () => {
     if (!activeRestaurant) return;
     try {
@@ -110,7 +137,6 @@ export default function CategoryListPanel({
     }
   }, [categories]);
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All';
   const displayCategories = isBranchFiltered
     ? allCategories.filter(c => isBranchMatch(c, selectedBranchId, branches))
     : allCategories;
@@ -164,6 +190,15 @@ export default function CategoryListPanel({
   const [formErrors, setFormErrors] = useState({});
 
   const handleOpenAdd = () => {
+    if (isBranchCategoryScope && activeBranchTargetId) {
+      if (!isCustomMenuEnabled) {
+        ShowNotifications.showAlertNotification(
+          "This branch uses the Company Menu. Custom categories cannot be added unless 'useCustomMenu' is enabled in Branch Management.",
+          false
+        );
+        return;
+      }
+    }
     setEditingItem(null);
     setFormName('');
     setFormImage('');
@@ -173,7 +208,7 @@ export default function CategoryListPanel({
     const isCompanyUser = isUserCompanyUser(currentUser);
     const userBranchId = getUserAssignedBranchId(currentUser);
     const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
-    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
     const defaultBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
     setFormBranchId(defaultBranch || '');
     setFormErrors({});
@@ -246,8 +281,23 @@ export default function CategoryListPanel({
       return;
     }
 
-    setIsSubmitting(true);
     const candidateBranch = effectiveBranch || (isMongoId(formBranchId) ? formBranchId : null);
+
+    if (!editingItem && candidateBranch) {
+      const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, candidateBranch));
+      const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+      const isBranchCustomEnabled = Boolean(
+        branchCustomFlag === true ||
+        String(branchCustomFlag).toLowerCase() === 'true'
+      );
+      if (!isBranchCustomEnabled) {
+        ShowNotifications.showAlertNotification(
+          `Branch "${targetBranchObj?.branchName || 'Selected'}" has useCustomMenu disabled. Custom categories cannot be created for this branch.`,
+          false
+        );
+        return;
+      }
+    }
     const payload = {
       name: formName.trim(),
       image: cleanRelativeImagePath(formImage),
@@ -687,7 +737,7 @@ export default function CategoryListPanel({
             </button>
           )}
 
-          {canAdd && (
+          {canAddCategory && (
             <button
               type="button"
               onClick={handleOpenAdd}
@@ -755,7 +805,11 @@ export default function CategoryListPanel({
               {paginatedCategories.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
-                    No categories found. Click <strong>Add Category</strong> to create one.
+                    {isBranchCategoryScope
+                      ? (isCustomMenuEnabled
+                          ? <>No categories found. Click <strong>Add Category</strong> to create one.</>
+                          : "This branch displays the Company Menu. To create custom categories for this branch, enable \"Create separate / custom menu\" in Branch Management.")
+                      : <>No categories found. Click <strong>Add Category</strong> to create one.</>}
                   </td>
                 </tr>
               ) : (
@@ -1009,26 +1063,16 @@ export default function CategoryListPanel({
       )}
 
       {/* Delete Category Modal */}
-      {categoryToDelete && (
-        <Modal
-          isOpen={!!categoryToDelete}
-          onClose={() => setCategoryToDelete(null)}
-          title="Confirm Category Deletion"
-          maxWidth="400px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b' }}>
-              Are you sure you want to delete category <strong>"{categoryToDelete.name}"</strong>?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setCategoryToDelete(null)} disabled={isDeleting}>Cancel</button>
-              <button type="button" className="btn btn-black" onClick={handleConfirmDelete} disabled={isDeleting} style={{ background: '#dc2626', borderColor: '#dc2626', color: '#fff' }}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Category Deletion"
+        itemType="category"
+        itemName={categoryToDelete?.name}
+        isDeleting={isDeleting}
+        confirmText="Delete Category"
+      />
 
     </section>
   );

@@ -7,6 +7,7 @@ import UploadApi from '../../api/Upload';
 import { notificationApi } from '../../api/Notification';
 import { isBranchMatch } from '../../helper/BranchHelper';
 import { Modal } from '../../components/Modal';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import ShowNotifications from '../../helper/ShowNotifications';
 import SearchableSelect from '../../components/SearchableSelect';
 import { formatDateDMY, formatDateTimeDMY } from '../../helper/DateHelper.js';
@@ -2688,62 +2689,17 @@ export default function HelpSupport() {
       </Modal>
 
       {/* DELETE CONFIRMATION MODAL */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!deleteTicketConfirm}
         onClose={() => setDeleteTicketConfirm(null)}
+        onConfirm={handleDeleteTicket}
         title="Confirm Delete Ticket"
-      >
-        {deleteTicketConfirm && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
-              Are you sure you want to permanently delete support ticket <strong style={{ color: '#0f172a' }}>{deleteTicketConfirm.ticketNumber || `#TK`}</strong>?
-            </p>
-
-            <div style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '8px',
-              padding: '12px',
-              fontSize: '13px',
-              color: '#991b1b',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <XCircleIcon size={16} color="#dc2626" />
-              <span>This action cannot be undone. The ticket conversation will be permanently removed.</span>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setDeleteTicketConfirm(null)}
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteTicket}
-                disabled={isDeleting}
-                style={{
-                  background: '#dc2626',
-                  color: '#ffffff',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isDeleting ? 'Deleting...' : 'Yes, Delete Ticket'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        itemType="support ticket"
+        itemName={deleteTicketConfirm?.ticketNumber || `#TK`}
+        warningText="Warning: This action cannot be undone. The ticket conversation will be permanently removed."
+        isDeleting={isDeleting}
+        confirmText="Delete Ticket"
+      />
 
       {/* DEDICATED RESOLVE TICKET MODAL */}
       <Modal

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon, EyeIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
+import DeleteConfirmationModal from '../DeleteConfirmationModal';
 
 export default function CompanyVendors({ hasPermission }) {
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_purchases', 'add') : true;
@@ -13,6 +14,7 @@ export default function CompanyVendors({ hasPermission }) {
   const [vendorsList, setVendorsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [vendorToDelete, setVendorToDelete] = useState(null);
 
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,13 +154,18 @@ export default function CompanyVendors({ hasPermission }) {
     }
   };
 
-  const handleDelete = async (v) => {
-    if (window.confirm(`Are you sure you want to delete vendor "${v.name}"?`)) {
-      const res = await InventoryApi.deleteVendor(v._id || v.id);
-      if (res?.status) {
-        fetchVendors();
-      }
+  const handleDelete = (v) => {
+    setVendorToDelete(v);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!vendorToDelete) return;
+    const res = await InventoryApi.deleteVendor(vendorToDelete._id || vendorToDelete.id);
+    if (res?.status) {
+      ShowNotifications.showAlertNotification("Vendor deleted successfully.", true);
+      fetchVendors();
     }
+    setVendorToDelete(null);
   };
 
   const handleToggleStatus = async (v) => {
@@ -632,6 +639,16 @@ export default function CompanyVendors({ hasPermission }) {
         totalItems={filteredVendors.length}
         pageSize={PAGE_SIZE}
         onPageChange={setCurrentPage}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={!!vendorToDelete}
+        onClose={() => setVendorToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Vendor Deletion"
+        itemType="vendor"
+        itemName={vendorToDelete?.name}
+        confirmText="Delete Vendor"
       />
     </div>
   );

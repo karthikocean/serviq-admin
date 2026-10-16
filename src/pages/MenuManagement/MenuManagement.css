@@ -132,8 +132,8 @@
   background: #f95e10 !important;
   color: #ffffff !important;
   padding: 13px 14px !important;
-  font-weight: 700 !important;
-  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
   text-transform: uppercase !important;
   border-bottom: none !important;
   border-right: none !important;
@@ -146,7 +146,8 @@
 }
 
 .menu-items-table tbody td {
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .menu-items-table tbody tr:hover {
@@ -157,7 +158,8 @@
   padding: 12px 8px;
   border-bottom: 1px solid var(--border);
   vertical-align: center;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .menu-image-placeholder-box {

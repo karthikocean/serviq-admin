@@ -126,9 +126,8 @@
 .help-support-container .data-table thead th {
   background-color: #f95e10 !important;
   background: #f95e10 !important;
-  color: #ffffff !important;
-  font-weight: 800 !important;
-  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
   border-bottom: none !important;

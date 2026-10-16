@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
 import { Modal } from '../../components/Modal';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import MenuApi from '../../api/Menu.js';
 import BranchApi from '../../api/Branch.js';
@@ -163,6 +164,21 @@ export default function MenuManagement() {
       }
 
       const targetBranchId = menuForm.branchId || (selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : (currentUser?.activeBranchId || currentUser?.branchId || (branches.length > 0 ? (branches[0]._id || branches[0].id) : undefined)));
+
+      if (targetBranchId && targetBranchId !== 'ALL') {
+        const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, targetBranchId));
+        const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+        const isBranchCustomEnabled = Boolean(
+          branchCustomFlag === true ||
+          String(branchCustomFlag).toLowerCase() === 'true'
+        );
+        if (!isBranchCustomEnabled) {
+          setCustomCategoryError(`Branch "${targetBranchObj?.branchName || 'Selected'}" has useCustomMenu disabled. Custom categories cannot be created for this branch.`);
+          setIsAddingCategory(false);
+          return;
+        }
+      }
+
       const payload = {
         name: categoryName,
         description: '',
@@ -222,8 +238,25 @@ export default function MenuManagement() {
     const isCompanyUser = isUserCompanyUser(currentUser);
     const userBranchId = getUserAssignedBranchId(currentUser);
     const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
-    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
     const initialBranch = isBranchLogin ? userBranchId : cleanSelectedBranch;
+
+    if (initialBranch) {
+      const allBranchesList = (branches && branches.length > 0) ? branches : (activeRestaurant?.branches || []);
+      const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, initialBranch));
+      const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+      const isCustomMenuEnabled = Boolean(
+        branchCustomFlag === true ||
+        String(branchCustomFlag).toLowerCase() === 'true'
+      );
+      if (!isCustomMenuEnabled) {
+        ShowNotifications.showAlertNotification(
+          "This branch uses the Company Menu. Custom menu items cannot be added unless 'useCustomMenu' is enabled in Branch Management.",
+          false
+        );
+        return;
+      }
+    }
 
     setMenuForm({
       _id: '',
@@ -371,6 +404,22 @@ export default function MenuManagement() {
       return;
     }
 
+    if (!menuForm._id && finalBranchId) {
+      const targetBranchObj = allBranchesList.find(b => isBranchMatch(b, finalBranchId));
+      const branchCustomFlag = targetBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+      const isCustomMenuEnabled = Boolean(
+        branchCustomFlag === true ||
+        String(branchCustomFlag).toLowerCase() === 'true'
+      );
+      if (!isCustomMenuEnabled) {
+        ShowNotifications.showAlertNotification(
+          `Branch "${targetBranchObj?.branchName || 'Selected'}" has useCustomMenu disabled. Custom menu items cannot be created for this branch.`,
+          false
+        );
+        return;
+      }
+    }
+
     const itemData = {
       name: menuForm.name.trim(),
       desc: menuForm.desc ? menuForm.desc.trim() : '',
@@ -454,6 +503,23 @@ export default function MenuManagement() {
   const gstRateNum = parseFloat(menuForm.gst) || 0;
   const gstAmount = (basePriceNum * gstRateNum) / 100;
   const totalCustomerPrice = basePriceNum + gstAmount;
+
+  const isCompanyUser = isUserCompanyUser(currentUser);
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
+  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
+  const isBranchScoped = isBranchLogin || Boolean(cleanSelectedBranch);
+  const activeBranchTargetId = isBranchLogin ? userBranchId : (cleanSelectedBranch || menuForm.branchId || '');
+
+  const activeBranchObj = (isBranchScoped && activeBranchTargetId)
+    ? branches.find(b => isBranchMatch(b, activeBranchTargetId))
+    : null;
+
+  const branchCustomFlag = activeBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+  const isCustomMenuEnabled = Boolean(
+    branchCustomFlag === true ||
+    String(branchCustomFlag).toLowerCase() === 'true'
+  );
 
   return (
     <div style={{ width: '100%' }}>
@@ -779,7 +845,7 @@ export default function MenuManagement() {
                             value: cat._id || cat.id,
                             label: cat.name
                           })),
-                        { value: 'custom', label: '+ Add Custom Category...' }
+                        ...((!isBranchScoped || isCustomMenuEnabled) ? [{ value: 'custom', label: '+ Add Custom Category...' }] : [])
                       ]}
                       placeholder="Select Category..."
                     />
@@ -972,49 +1038,6 @@ export default function MenuManagement() {
         </section>
       ) : (
         <>
-          {(() => {
-            const currentBranchObj = (branches || []).find(b => 
-              String(b._id || b.id || '').toLowerCase() === String(selectedBranchId || '').toLowerCase() ||
-              String(b.branchCode || b.code || '').toLowerCase() === String(selectedBranchId || '').toLowerCase()
-            );
-            const isSelectedBranchCustom = currentBranchObj ? (currentBranchObj.useCustomMenu === true || String(currentBranchObj.useCustomMenu) === 'true') : false;
-            const isBranchScoped = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
-            if (isBranchScoped && !isSelectedBranchCustom) {
-              return (
-                <div style={{
-                  background: '#eff6ff',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: '10px',
-                  padding: '12px 18px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '18px' }}>ℹ️</span>
-                    <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 600 }}>
-                      <strong>{currentBranchObj?.branchName || 'This branch'}</strong> is currently displaying the <strong>Company Menu</strong>.
-                      To create a separate menu for this branch, enable "Create separate / custom menu" in Branch Management.
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: '11px',
-                    background: '#dbeafe',
-                    color: '#1d4ed8',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    fontWeight: 700,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    🏢 Company Menu Mode
-                  </span>
-                </div>
-              );
-            }
-            return null;
-          })()}
           <MenuPanel
             menu={menu}
             branches={branches}
@@ -1111,43 +1134,16 @@ export default function MenuManagement() {
       </Modal>
 
       {/* Delete Menu Item Confirmation Modal */}
-      {itemToDelete && (
-        <Modal
-          isOpen={!!itemToDelete}
-          onClose={() => !isDeletingItem && setItemToDelete(null)}
-          title="Confirm Menu Item Deletion"
-          maxWidth="440px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete menu item <strong>"{itemToDelete?.name}"</strong>?
-            </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setItemToDelete(null)}
-                disabled={isDeletingItem}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleConfirmDeleteMenu}
-                disabled={isDeletingItem}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
-                {isDeletingItem ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDeleteMenu}
+        title="Confirm Menu Item Deletion"
+        itemType="menu item"
+        itemName={itemToDelete?.name}
+        isDeleting={isDeletingItem}
+        confirmText="Delete Menu Item"
+      />
     </div>
   );
 }

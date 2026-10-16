@@ -174,7 +174,7 @@ export default function BranchSearchDropdown() {
         String(b.branchName || b.name || '').toLowerCase() === String(selectedBranchId).toLowerCase()
       );
 
-  const isSelectedBranchMain = !isAllBranchesSelected && isBranchMain(selectedBranch);
+  const isSelectedBranchMain = !isAllBranchesSelected && isBranchMain(selectedBranch, branches);
 
   const assignedBranchObj = isBranchLocked
     ? (branches.find(b => String(b.id || b._id) === String(userBranchId) || String(b.branchCode) === String(userBranchId)) ||
@@ -187,7 +187,7 @@ export default function BranchSearchDropdown() {
   const filteredBranches = branches.filter(b => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
-    const isMain = isBranchMain(b);
+    const isMain = isBranchMain(b, branches);
     return (
       (b.branchName && b.branchName.toLowerCase().includes(query)) ||
       (b.branchCode && b.branchCode.toLowerCase().includes(query)) ||
@@ -199,8 +199,8 @@ export default function BranchSearchDropdown() {
   });
 
   const sortedBranches = [...filteredBranches].sort((a, b) => {
-    const aMain = isBranchMain(a) ? 1 : 0;
-    const bMain = isBranchMain(b) ? 1 : 0;
+    const aMain = isBranchMain(a, branches) ? 1 : 0;
+    const bMain = isBranchMain(b, branches) ? 1 : 0;
     return bMain - aMain;
   });
 
@@ -391,7 +391,7 @@ export default function BranchSearchDropdown() {
                 const branchId = branch._id || branch.id;
                 const isSelected = String(selectedBranchId) === String(branchId) || String(selectedBranchId) === String(branch.branchCode);
                 const isActive = branch.status === 'Active';
-                const isMain = isBranchMain(branch);
+                const isMain = isBranchMain(branch, branches);
 
                 return (
                   <div

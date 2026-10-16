@@ -51,7 +51,7 @@ const PlusIcon = ({ size = 14, color = 'currentColor' }) => (
 
 import MenuApi from '../api/Menu.js';
 import { getImageUrl } from '../helper/ImageHelper.js';
-import { isBranchMatch } from '../helper/BranchHelper.js';
+import { isBranchMatch, isUserCompanyUser, getUserAssignedBranchId } from '../helper/BranchHelper.js';
 
 export default function MenuPanel({
   branches: branchesProp,
@@ -65,7 +65,7 @@ export default function MenuPanel({
   currency = '₹',
   refreshTrigger
 }) {
-  const { activeRestaurant, updateMenuCategories, selectedBranchId, hasPermission } = useAppState();
+  const { currentUser, activeRestaurant, updateMenuCategories, selectedBranchId, hasPermission } = useAppState();
   const branchesList = (Array.isArray(branchesProp) && branchesProp.length > 0)
     ? branchesProp
     : (activeRestaurant?.branches || []);
@@ -85,7 +85,31 @@ export default function MenuPanel({
   const limit = 10;
   const [totalPages, setTotalPages] = useState(1);
 
-  const isBranchFiltered = selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY';
+  const userBranchId = getUserAssignedBranchId(currentUser);
+  const isCompany = isUserCompanyUser(currentUser);
+  const isBranchUser = !isCompany && Boolean(userBranchId);
+  const isBranchFiltered = Boolean(
+    selectedBranchId &&
+    selectedBranchId !== 'ALL' &&
+    selectedBranchId !== 'All' &&
+    String(selectedBranchId).toUpperCase() !== 'COMPANY' &&
+    String(selectedBranchId).toLowerCase() !== 'all branches'
+  );
+  const isBranchMenuScope = isBranchUser || isBranchFiltered;
+  const activeBranchTargetId = isBranchUser ? userBranchId : (isBranchFiltered ? selectedBranchId : null);
+
+  const currentBranchObj = isBranchMenuScope
+    ? branchesList.find(b => isBranchMatch(b, activeBranchTargetId))
+    : null;
+
+  const branchCustomFlag = currentBranchObj?.useCustomMenu ?? currentUser?.branch?.useCustomMenu ?? currentUser?.branchId?.useCustomMenu;
+  const isCustomMenuEnabled = Boolean(
+    branchCustomFlag === true ||
+    String(branchCustomFlag).toLowerCase() === 'true'
+  );
+
+  // In branch menu scope, only show "Add Menu Item" if useCustomMenu is true for that branch
+  const canAddMenuItem = hasPermission('menu', 'add') && (!isBranchMenuScope || isCustomMenuEnabled);
   const rawCategoryList = liveCategories.length > 0 ? liveCategories : (Array.isArray(categories) ? categories : []);
   // Categories are shared across the company for all branches
   const activeCategoryList = rawCategoryList;
@@ -267,7 +291,7 @@ export default function MenuPanel({
                 Manage Categories
               </button>
             )}
-            {hasPermission('menu', 'add') && (
+            {canAddMenuItem && (
               <button
                 type="button"
                 className="btn btn-black"
@@ -545,8 +569,10 @@ export default function MenuPanel({
                     No menu items found for this branch
                   </div>
                   <div style={{ fontSize: '13px', color: '#64748b' }}>
-                    {isBranchFiltered
-                      ? "This branch manages its own menu catalog. Click \"Add Item\" above to create dishes specifically for this branch."
+                    {isBranchMenuScope
+                      ? (isCustomMenuEnabled
+                          ? "This branch manages its own menu catalog. Click \"Add Menu Item\" above to create dishes specifically for this branch."
+                          : "This branch displays the Company Menu. To create custom menu items for this branch, enable \"Create separate / custom menu\" in Branch Management.")
                       : "No menu items found matching filters."}
                   </div>
                 </td>
