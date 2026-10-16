@@ -159,7 +159,7 @@ class BillingApi {
     try {
       const cleanParams = {};
 
-      if (filters.branchId && filters.branchId !== 'All' && filters.branchId !== 'ALL' && String(filters.branchId).toUpperCase() !== 'COMPANY') {
+      if (filters.branchId && String(filters.branchId).toUpperCase() !== 'COMPANY') {
         cleanParams.branchId = filters.branchId;
       }
 
