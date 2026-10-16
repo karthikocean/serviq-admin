@@ -725,9 +725,18 @@ export default function OverviewPanel({
               <div className="stat-label" style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 TOP ITEM (THIS MONTH)
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '4px 0', color: 'var(--black)', lineHeight: 1.3, wordBreak: 'break-word', whiteSpace: 'normal' }} title={statsData?.topItem?.name || topItemFallback}>
-                {statsData?.topItem?.name || topItemFallback}
+              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '4px 0', color: 'var(--black)', lineHeight: 1.3, wordBreak: 'break-word', whiteSpace: 'normal' }} title={(statsData?.topItem?.name && statsData.topItem.name !== '-') ? statsData.topItem.name : topItemFallback}>
+                {(statsData?.topItem?.name && statsData.topItem.name !== '-') ? statsData.topItem.name : topItemFallback}
               </h3>
+              {statsData?.topItem?.quantitySold > 0 ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  {statsData.topItem.quantitySold} orders sold
+                </div>
+              ) : statsData?.topItem?.subLabel ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                  {statsData.topItem.subLabel}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
