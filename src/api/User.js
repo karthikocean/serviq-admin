@@ -82,16 +82,18 @@ class UserApi {
     }
   }
 
-  async createUser(data) {
+  async createUser(data, options = {}) {
     try {
       const response = await apiClient.post("/users", data);
       if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(response.data.message || "User Created Successfully!", true);
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(response.data.message || "User Created Successfully!", true);
+        }
         return { status: true, response: response.data };
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error, "Failed to create user.");
-      if (error?.response?.status !== 401) {
+      if (error?.response?.status !== 401 && !options.silent) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
       return { status: false, response: error?.response?.data || error };

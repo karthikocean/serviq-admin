@@ -137,9 +137,7 @@ export default function Billing() {
       tableId: resolvedTableId,
       table: resolvedTableId,
       page: page !== undefined ? page : 0,
-      limit: 50,
-      sortBy: 'createdAt',
-      sortOrder: 'desc'
+      limit: 10,
     };
 
     let fetchedTables = [];

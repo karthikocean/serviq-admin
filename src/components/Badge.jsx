@@ -6,8 +6,8 @@ export const Badge = ({ children, status, className = '', style, onClick, ...pro
     extraClass = 'badge-ready';
   } else if (status === 'Pending' || status === 'new' || status === 'preparing' || status === 'Partial') {
     extraClass = 'badge-preparing';
-  } else if (status === 'Suspended' || status === 'Disabled' || status === 'Off Duty' || status === 'cancelled') {
-    extraClass = 'badge-suspended';
+  } else if (status === 'Inactive' || status === 'Suspended' || status === 'Disabled' || status === 'Off Duty' || status === 'cancelled') {
+    extraClass = 'badge-inactive';
   } else if (status === 'served') {
     extraClass = 'badge-served';
   } else if (status === 'completed') {

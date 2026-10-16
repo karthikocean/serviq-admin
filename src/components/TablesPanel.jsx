@@ -105,8 +105,13 @@ export default function TablesPanel({
 }) {
   const { hasPermission: contextHasPermission, selectedBranchId, activeRestaurant: contextRestaurant } = useAppState();
   const checkPermission = hasPermissionProp || contextHasPermission || (() => true);
-  const branches = activeRestaurant?.branches || contextRestaurant?.branches || [];
-  const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
+  const isCompanyScope = !selectedBranchId ||
+    selectedBranchId === 'ALL' ||
+    selectedBranchId === 'All' ||
+    selectedBranchId === 'all' ||
+    String(selectedBranchId).toUpperCase() === 'COMPANY' ||
+    String(selectedBranchId).toLowerCase() === 'all branches';
+  const isBranchFiltered = !isCompanyScope;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Free' | 'Occupied' | 'Reserved' | 'Maintenance'
   const [tableToDelete, setTableToDelete] = useState(null);
@@ -549,7 +554,7 @@ export default function TablesPanel({
             </button>
           )}
 
-          {checkPermission('tables', 'add') && (
+          {checkPermission('tables', 'add') && !isCompanyScope && (
             <button
               type="button"
               onClick={() => {

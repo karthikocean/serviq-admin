@@ -653,17 +653,17 @@ export default function UserListPanel() {
                   let currentBranchVal = userForm.branchId;
                   if (!isCompanyScope) {
                     currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
-                  } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
-                    currentBranchVal = '';
                   }
 
-                  const currentBranchObj = currentBranchVal
+                  const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                  const currentBranchObj = (!isCompanySelected && currentBranchVal)
                     ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                     : null;
-                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
+                  let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
 
                   const branchOptions = [
-                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
+                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : []),
+                    { value: 'COMPANY', label: 'Company' },
                     ...allBranchesList.map(b => ({
                       value: b._id || b.id,
                       label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`

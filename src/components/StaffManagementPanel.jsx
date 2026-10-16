@@ -469,7 +469,9 @@ export default function StaffManagementPanel({
 
   const openEditUser = (user) => {
     setEditingUserId(user._id);
-    const userBranchId = (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : '');
+    const rawBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
+    const isComp = !rawBranchId || rawBranchId === 'COMPANY' || rawBranchId === 'Company' || user.userType === 'RESTAURANT_OWNER' || user.userType === 'SUPER_ADMIN';
+    const userBranchId = isComp ? 'COMPANY' : (rawBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     const userAssignedTableIds = apiTables
       .filter(t => {
         const wId = t.assignedWaiterId || (typeof t.assignedWaiter === 'object' ? t.assignedWaiter?._id : t.assignedWaiter);
@@ -526,8 +528,9 @@ export default function StaffManagementPanel({
       errors.name = 'Full Name should contain letters and spaces only.';
     }
 
+    const isCompanySelected = userForm.branchId === 'COMPANY' || userForm.branchId === 'Company';
     const effectiveBranchVal = userForm.branchId || (!isAdmin && currentBranchId) || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
-    if (!effectiveBranchVal && isCompanyScope) {
+    if (!effectiveBranchVal && !isCompanySelected && isCompanyScope) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -566,12 +569,15 @@ export default function StaffManagementPanel({
     e.preventDefault();
     if (!validate()) return;
 
+    const isCompanyBranchSelected = userForm.branchId === 'COMPANY' || userForm.branchId === 'Company';
     const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
-    const effectiveBranch = (!isAdmin && currentBranchId)
-      ? currentBranchId
-      : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
-          ? userForm.branchId
-          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || '')));
+    const effectiveBranch = isCompanyBranchSelected
+      ? null
+      : ((!isAdmin && currentBranchId)
+          ? currentBranchId
+          : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+              ? userForm.branchId
+              : (cleanSelected || currentBranchId || (apiBranches[0]?._id || ''))));
 
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
@@ -581,7 +587,7 @@ export default function StaffManagementPanel({
     const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
-      userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
+      userType: isCompanyBranchSelected ? (isBranchAdmin ? 'SUPER_ADMIN' : 'STAFF') : (isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF'),
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
@@ -591,7 +597,9 @@ export default function StaffManagementPanel({
     if (userForm.employeeCode && userForm.employeeCode.trim()) {
       payload.employeeCode = userForm.employeeCode.trim();
     }
-    if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+    if (isCompanyBranchSelected) {
+      payload.branchId = null;
+    } else if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
       payload.branchId = String(effectiveBranch);
     }
     if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
@@ -1294,17 +1302,17 @@ export default function StaffManagementPanel({
                 let currentBranchVal = userForm.branchId;
                 if (!isCompanyScopeEffective) {
                   currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
-                } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
-                  currentBranchVal = '';
                 }
 
-                const currentBranchObj = currentBranchVal
+                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                const currentBranchObj = (!isCompanySelected && currentBranchVal)
                   ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                   : null;
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
+                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
 
                 const branchOptions = [
-                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
+                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : []),
+                  { value: 'COMPANY', label: 'Company' },
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -1829,7 +1837,8 @@ export default function StaffManagementPanel({
               const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
               const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
               const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
-              const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
+              const isCompanyStaff = !uBranchId || uBranchId === 'COMPANY' || uBranchId === 'Company' || user.userType === 'RESTAURANT_OWNER' || user.userType === 'SUPER_ADMIN';
+              const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (isCompanyStaff ? 'Company' : (uBranchId ? 'Main Branch' : 'Company'));
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');

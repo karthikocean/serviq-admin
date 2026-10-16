@@ -686,6 +686,51 @@ export const AppProvider = ({ children }) => {
     };
   }, []);
 
+  // Immediate auto-logout if current branch is inactivated
+  useEffect(() => {
+    const handleBranchStatusChange = (e) => {
+      let branchId = null;
+      let status = null;
+
+      if (e?.key === 'serviq_branch_status_change' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          branchId = parsed.branchId;
+          status = parsed.status;
+        } catch (_) {}
+      } else if (e?.detail) {
+        branchId = e.detail.branchId;
+        status = e.detail.status;
+      }
+
+      if (status === 'Inactive' && branchId) {
+        const uRole = String(
+          typeof currentUser?.role === 'object' && currentUser?.role !== null
+            ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+            : (currentUser?.role || currentUser?.userType || '')
+        ).toLowerCase();
+        const isOwner = uRole.includes('owner') || String(currentUser?.userType || '').toUpperCase() === 'RESTAURANT_OWNER';
+
+        // Only log out users tied to this particular inactivated branch
+        const assignedBranchId = getUserAssignedBranchId(currentUser) || (currentUser?.branchId?._id || currentUser?.branchId?.id || currentUser?.branchId);
+        const isCurrentBranchSession = String(assignedBranchId) === String(branchId) || (!isOwner && String(selectedBranchId) === String(branchId));
+
+        if (isCurrentBranchSession && !isOwner) {
+          ShowNotifications.showAlertNotification("This branch has been deactivated. You have been logged out.", false);
+          logout();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleBranchStatusChange);
+    window.addEventListener('serviq_branch_status_change', handleBranchStatusChange);
+
+    return () => {
+      window.removeEventListener('storage', handleBranchStatusChange);
+      window.removeEventListener('serviq_branch_status_change', handleBranchStatusChange);
+    };
+  }, [currentUser, selectedBranchId]);
+
 
   // Fallback empty tenant with Premium plan defaults
   const FALLBACK_RESTAURANT = useMemo(() => ({

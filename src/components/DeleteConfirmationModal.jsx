@@ -21,7 +21,6 @@ export const UnlockIcon = ({ size = 16, color = '#16a34a' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <rect width="18" height="11" x="3" y="11" rx="2.5" ry="2.5" fill={color} fillOpacity="0.14" />
     <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-    <circle cx="12" cy="16.5" r="1.2" fill={color} />
   </svg>
 );
 
@@ -29,7 +28,6 @@ export const LockIcon = ({ size = 16, color = '#dc2626' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
     <rect width="18" height="11" x="3" y="11" rx="2.5" ry="2.5" fill={color} fillOpacity="0.14" />
     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    <circle cx="12" cy="16.5" r="1.2" fill={color} />
   </svg>
 );
 

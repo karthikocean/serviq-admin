@@ -2520,7 +2520,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
             }}
           >
             {/* Embedded typography, custom scrollbar and print styling */}
-            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" />
+            <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" />
             <style>{`
               @media print {
                 body * { visibility: hidden !important; }
@@ -2541,7 +2541,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 .receipt-no-print { display: none !important; }
               }
               #serviq-receipt, #serviq-receipt * {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+                font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
                 box-sizing: border-box;
               }
               .serviq-receipt-scroll-container::-webkit-scrollbar {
@@ -2569,7 +2569,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
               id="serviq-receipt"
               className="serviq-receipt-scroll-container"
               style={{
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                 color: '#0f172a',
                 fontFeatureSettings: "'tnum'",
                 WebkitFontSmoothing: 'antialiased',
@@ -2639,7 +2639,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 <div style={{ display: 'inline-flex', flexDirection: 'column' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-end', position: 'relative' }}>
                     <span style={{ fontSize: '25px', fontWeight: 900, color: '#FF6B00', letterSpacing: '-0.5px', lineHeight: 1 }}>
-                      SERVI
+                      SERVIQ
                     </span>
                     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                       <svg
@@ -2764,7 +2764,7 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                 paddingTop: '14px',
                 borderTop: '1px solid #F1F5F9'
               }}>
-                {/* Left Column: Restaurant & Branch Details */}
+                {/* Left Column: Branch Details */}
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{
@@ -2779,31 +2779,21 @@ export default function PlansManagementPanel({ hasPermission: hasPermissionProp 
                       flexShrink: 0
                     }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 2v20M21 2v6a3 3 0 0 1-3 3M18 11v11M6 2v7a3 3 0 0 1-3 3M6 12v10M3 2v4a3 3 0 0 0 6 0V2" />
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
                       </svg>
                     </div>
                     <span style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
-                      Restaurant & Branch Details
+                      Branch Details
                     </span>
                   </div>
 
                   <div style={{ marginTop: '10px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: '10px' }}>
-                      <div>
-                        <div style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 500 }}>Restaurant Name</div>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', marginTop: '1px', wordBreak: 'break-word' }}>
-                          {resolvedRestaurantName}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 500 }}>Branch Name</div>
-                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#FF6B00', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '4px', wordBreak: 'break-word' }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
-                          <span>{resolvedBranchName}</span>
-                        </div>
+                    <div>
+                      <div style={{ fontSize: '10.5px', color: '#64748B', fontWeight: 500 }}>Branch Name</div>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px', wordBreak: 'break-word' }}>
+                        <span style={{ color: '#FF6B00', fontSize: '13px' }}>📍</span>
+                        <span>{resolvedBranchName}</span>
                       </div>
                     </div>
 

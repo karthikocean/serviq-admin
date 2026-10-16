@@ -55,6 +55,14 @@ export default function TableFormPage() {
 
   const [formErrors, setFormErrors] = useState({});
 
+  // Safety check: Cannot add a table in company (all branches) scope
+  useEffect(() => {
+    if (!isEdit && isCompanyScope) {
+      ShowNotifications.showAlertNotification("Please select a specific branch to add a dining table.", false);
+      navigate('/tables', { replace: true });
+    }
+  }, [isEdit, isCompanyScope, navigate]);
+
   // Sync form branch and next Table ID when locked to a branch
   useEffect(() => {
     if (isBranchLocked) {
