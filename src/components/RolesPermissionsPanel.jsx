@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { useAppState } from '../config/AppContext';
 
@@ -32,15 +33,6 @@ const ArrowLeftIcon = ({ size = 16, color = 'currentColor' }) => (
     <polyline points="12 19 5 12 12 5" />
   </svg>
 );
-
-const defaultRolesList = [
-  { id: 1, name: 'Super Admin', status: 'Active' },
-  { id: 2, name: 'Branch Admin', status: 'Active' },
-  { id: 3, name: 'Branch Manager', status: 'Active' },
-  { id: 4, name: 'Cashier', status: 'Active' },
-  { id: 5, name: 'Waiter', status: 'Active' },
-  { id: 6, name: 'Kitchen Staff', status: 'Active' }
-];
 
 const isOwnerRole = (roleName = '') => {
   const lower = (roleName || '').trim().toLowerCase();
@@ -134,6 +126,9 @@ export default function RolesPermissionsPanel() {
   const [roleToDeactivate, setRoleToDeactivate] = useState(null);
   const [apiRoles, setApiRoles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const limit = 10;
 
   const fetchRoles = async () => {
     setIsLoading(true);
@@ -151,6 +146,34 @@ export default function RolesPermissionsPanel() {
   useEffect(() => {
     fetchRoles();
   }, []);
+
+  const filteredRoles = useMemo(() => {
+    if (!searchTerm.trim()) return apiRoles;
+    const term = searchTerm.toLowerCase().trim();
+    return apiRoles.filter(role => 
+      (role.roleName || '').toLowerCase().includes(term)
+    );
+  }, [apiRoles, searchTerm]);
+
+  const totalPages = Math.ceil(filteredRoles.length / limit) || 1;
+  const paginatedRoles = useMemo(() => {
+    const start = page * limit;
+    return filteredRoles.slice(start, start + limit);
+  }, [filteredRoles, page, limit]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 5;
+    let start = Math.max(1, page + 1 - Math.floor(maxVisible / 2));
+    let end = Math.min(totalPages, start + maxVisible - 1);
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   const handleToggleRoleStatus = (role) => {
     if (isOwnerRole(role.roleName)) {
@@ -284,6 +307,19 @@ export default function RolesPermissionsPanel() {
     const trimmedRoleName = editingRoleName.trim();
     if (!trimmedRoleName) {
       setRoleNameError("Role Name is required.");
+      return;
+    }
+
+    if (!/^[a-zA-Z\s]+$/.test(trimmedRoleName)) {
+      setRoleNameError("Role Name must contain only characters (letters and spaces).");
+      return;
+    }
+
+    const hasPermissionSelected = Object.values(permissionsState).some(
+      m => m && (m.view || m.add || m.edit || m.delete)
+    );
+    if (!hasPermissionSelected) {
+      ShowNotifications.showAlertNotification("Please select at least one permission for the role.", false);
       return;
     }
 
@@ -490,8 +526,16 @@ export default function RolesPermissionsPanel() {
                 <input
                   type="text"
                   value={editingRoleName}
+                  onKeyDown={(e) => {
+                    // Prevent leading space
+                    if (e.key === ' ' && !e.currentTarget.value) {
+                      e.preventDefault();
+                    }
+                  }}
                   onChange={(e) => {
-                    setEditingRoleName(e.target.value);
+                    // Filter input to allow only letters and spaces
+                    const val = e.target.value.replace(/[^a-zA-Z\s]/g, '').replace(/^\s+/, '');
+                    setEditingRoleName(val);
                     if (roleNameError) setRoleNameError('');
                   }}
                   disabled={viewState === 'edit' && isOwnerRole(editingRoleName)}
@@ -602,8 +646,7 @@ export default function RolesPermissionsPanel() {
                         fontSize: '13px'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8', display: 'inline-block', flexShrink: 0, margin: '0 7px' }} />
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
                         <span style={{ fontWeight: 600, color: '#1e293b' }}>
                           {module.name}
                         </span>
@@ -692,7 +735,53 @@ export default function RolesPermissionsPanel() {
               + Add Role
             </button>
           )}
+        </div>
+
+        {/* Search Row */}
+        <div style={{ marginBottom: '14px', width: '100%', maxWidth: '360px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <input
+              type="text"
+              placeholder="Search by role name..."
+              value={searchTerm}
+              onKeyDown={e => {
+                if (e.key === ' ' && !e.currentTarget.value) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={(e) => {
+                const val = e.target.value.replace(/^\s+/, '');
+                setSearchTerm(val);
+                setPage(0);
+              }}
+              style={{
+                width: '100%',
+                height: '38px',
+                padding: '0 14px 0 36px',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                fontSize: '13px',
+                outline: 'none',
+                backgroundColor: '#f8fafc',
+                boxSizing: 'border-box'
+              }}
+            />
+            <svg
+              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
           </div>
+        </div>
 
         {/* Roles List Table - Compact Layout */}
         <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '4px' }}>
@@ -717,116 +806,103 @@ export default function RolesPermissionsPanel() {
               </tr>
             </thead>
             <tbody>
-              {apiRoles.map((role, index) => {
-                const hasAdminAccess = isOwnerRole(role.roleName)
-                  ? true
-                  : (role.adminAccess !== undefined
-                      ? Boolean(role.adminAccess)
-                      : (role.isAdminAccess !== undefined
-                          ? Boolean(role.isAdminAccess)
-                          : !['waiter', 'kitchen staff', 'kitchen', 'chef', 'cook', 'server', 'steward'].includes((role.roleName || '').trim().toLowerCase())));
+              {isLoading ? (
+                <tr>
+                  <td colSpan="5" style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13.5px' }}>
+                    Loading roles...
+                  </td>
+                </tr>
+              ) : paginatedRoles.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b', fontSize: '14px' }}>
+                    {searchTerm ? `No roles matching "${searchTerm}".` : "No roles created yet. Click '+ Add Role' to create one."}
+                  </td>
+                </tr>
+              ) : (
+                paginatedRoles.map((role, idx) => {
+                  const globalIndex = page * limit + idx;
+                  const hasAdminAccess = isOwnerRole(role.roleName)
+                    ? true
+                    : (role.adminAccess !== undefined
+                        ? Boolean(role.adminAccess)
+                        : (role.isAdminAccess !== undefined
+                            ? Boolean(role.isAdminAccess)
+                            : !['waiter', 'kitchen staff', 'kitchen', 'chef', 'cook', 'server', 'steward'].includes((role.roleName || '').trim().toLowerCase())));
 
-                const isRoleActive = role.isActive !== false && String(role.status || '').toLowerCase() !== 'inactive';
+                  const isRoleActive = role.isActive !== false && String(role.status || '').toLowerCase() !== 'inactive';
 
-                return (
-                  <tr
-                    key={role._id}
-                    style={{
-                      borderBottom: index < apiRoles.length - 1 ? '1px solid #f1f5f9' : 'none',
-                      transition: 'background 0.15s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                    onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
-                  >
-                    {/* S.NO */}
-                    <td style={{ padding: '8px 14px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
-                      {index + 1}
-                    </td>
+                  return (
+                    <tr
+                      key={role._id}
+                      style={{
+                        borderBottom: idx < paginatedRoles.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        transition: 'background 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
+                    >
+                      {/* S.NO */}
+                      <td style={{ padding: '8px 14px', fontSize: '13px', color: '#64748b', fontWeight: '500' }}>
+                        {globalIndex + 1}
+                      </td>
 
-                    {/* ROLE NAME */}
-                    <td style={{ padding: '8px 14px', fontSize: '13.5px', fontWeight: '700', color: '#0f172a' }}>
-                      {role.roleName}
-                    </td>
+                      {/* ROLE NAME */}
+                      <td style={{ padding: '8px 14px', fontSize: '13.5px', fontWeight: '700', color: '#0f172a' }}>
+                        {role.roleName}
+                      </td>
 
-                    {/* ADMIN ACCESS */}
-                    <td style={{ padding: '8px 14px' }}>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        padding: '3px 10px',
-                        borderRadius: '14px',
-                        fontSize: '11.5px',
-                        fontWeight: '700',
-                        backgroundColor: hasAdminAccess ? '#dcfce7' : '#fee2e2',
-                        border: `1px solid ${hasAdminAccess ? '#86efac' : '#fca5a5'}`,
-                        color: hasAdminAccess ? '#15803d' : '#dc2626'
-                      }}>
+                      {/* ADMIN ACCESS */}
+                      <td style={{ padding: '8px 14px' }}>
                         <span style={{
-                          width: '6px',
-                          height: '6px',
-                          borderRadius: '50%',
-                          backgroundColor: hasAdminAccess ? '#16a34a' : '#dc2626'
-                        }} />
-                        {hasAdminAccess ? 'Allowed' : 'Restricted'}
-                      </span>
-                    </td>
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '3px 10px',
+                          borderRadius: '14px',
+                          fontSize: '11.5px',
+                          fontWeight: '700',
+                          backgroundColor: hasAdminAccess ? '#dcfce7' : '#fee2e2',
+                          border: `1px solid ${hasAdminAccess ? '#86efac' : '#fca5a5'}`,
+                          color: hasAdminAccess ? '#15803d' : '#dc2626'
+                        }}>
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: hasAdminAccess ? '#16a34a' : '#dc2626'
+                          }} />
+                          {hasAdminAccess ? 'Allowed' : 'Restricted'}
+                        </span>
+                      </td>
 
-                    {/* STATUS */}
-                    <td style={{ padding: '8px 14px' }}>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '3px 10px',
-                        borderRadius: '14px',
-                        fontSize: '11.5px',
-                        fontWeight: '700',
-                        backgroundColor: isRoleActive ? '#e6f4ea' : '#fee2e2',
-                        border: isRoleActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
-                        color: isRoleActive ? '#16a34a' : '#dc2626'
-                      }}>
-                        {isRoleActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
+                      {/* STATUS */}
+                      <td style={{ padding: '8px 14px' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '3px 10px',
+                          borderRadius: '14px',
+                          fontSize: '11.5px',
+                          fontWeight: '700',
+                          backgroundColor: isRoleActive ? '#e6f4ea' : '#fee2e2',
+                          border: isRoleActive ? '1.5px solid #86efac' : '1.5px solid #fca5a5',
+                          color: isRoleActive ? '#16a34a' : '#dc2626'
+                        }}>
+                          {isRoleActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
 
-                    {/* ACTIONS */}
-                    <td style={{ padding: '8px 14px', textAlign: 'right' }}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                        {/* Status Toggle Icon */}
-                        {hasPermission('roles-permissions', 'edit') && (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleRoleStatus(role)}
-                          style={{
-                            background: isRoleActive ? '#ecfdf5' : '#fef2f2',
-                            border: `1px solid ${isRoleActive ? '#a7f3d0' : '#fecaca'}`,
-                            color: isRoleActive ? '#059669' : '#dc2626',
-                            cursor: 'pointer',
-                            padding: '5px',
-                            borderRadius: '5px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'all 0.15s'
-                          }}
-                          onMouseEnter={e => {
-                            e.currentTarget.style.background = isRoleActive ? '#d1fae5' : '#fee2e2';
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = isRoleActive ? '#ecfdf5' : '#fef2f2';
-                          }}
-                          title={isRoleActive ? "Deactivate Role (Click to set Inactive)" : "Activate Role (Click to set Active)"}
-                        >
-                          <PowerIcon size={14} color={isRoleActive ? '#059669' : '#dc2626'} />
-                        </button>
-                        )}
-                        {hasPermission('roles-permissions', 'edit') && (
+                      {/* ACTIONS */}
+                      <td style={{ padding: '8px 14px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+                          {/* Status Toggle Icon */}
+                          {hasPermission('roles-permissions', 'edit') && (
                           <button
                             type="button"
-                            onClick={() => handleEditRole(role)}
+                            onClick={() => handleToggleRoleStatus(role)}
                             style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#64748b',
+                              background: isRoleActive ? '#ecfdf5' : '#fef2f2',
+                              border: `1px solid ${isRoleActive ? '#a7f3d0' : '#fecaca'}`,
+                              color: isRoleActive ? '#059669' : '#dc2626',
                               cursor: 'pointer',
                               padding: '5px',
                               borderRadius: '5px',
@@ -835,75 +911,168 @@ export default function RolesPermissionsPanel() {
                               justifyContent: 'center',
                               transition: 'all 0.15s'
                             }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                            title="Edit Role"
-                          >
-                            <PencilIcon size={15} />
-                          </button>
-                        )}
-                        {hasPermission('roles-permissions', 'delete') && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRole(role)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#ef4444',
-                              cursor: 'pointer',
-                              padding: '5px',
-                              borderRadius: '5px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              transition: 'all 0.15s'
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = isRoleActive ? '#d1fae5' : '#fee2e2';
                             }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
-                            title="Delete Role"
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = isRoleActive ? '#ecfdf5' : '#fef2f2';
+                            }}
+                            title={isRoleActive ? "Deactivate Role (Click to set Inactive)" : "Activate Role (Click to set Active)"}
                           >
-                            <TrashIcon size={15} />
+                            {isRoleActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          )}
+                          {hasPermission('roles-permissions', 'edit') && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditRole(role)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#64748b',
+                                cursor: 'pointer',
+                                padding: '5px',
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                              onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                              title="Edit Role"
+                            >
+                              <PencilIcon size={15} />
+                            </button>
+                          )}
+                          {hasPermission('roles-permissions', 'delete') && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRole(role)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '5px',
+                                borderRadius: '5px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = '#b91c1c'}
+                              onMouseLeave={e => e.currentTarget.style.color = '#ef4444'}
+                              title="Delete Role"
+                            >
+                              <TrashIcon size={15} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Controls */}
+        {filteredRoles.length > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px 4px 4px 4px',
+            borderTop: '1px solid #f1f5f9',
+            marginTop: '10px',
+            flexWrap: 'wrap',
+            gap: '12px'
+          }}>
+            {/* Left Info Text */}
+            <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+              Showing {filteredRoles.length === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, filteredRoles.length)} of {filteredRoles.length} entries
+            </div>
+
+            {/* Right Pagination Buttons */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                type="button"
+                disabled={page === 0}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: page === 0 ? '#f8fafc' : '#ffffff',
+                  color: page === 0 ? '#cbd5e1' : '#334155',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  cursor: page === 0 ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Prev
+              </button>
+
+              {getPageNumbers().map(pageNum => (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setPage(pageNum - 1)}
+                  style={{
+                    minWidth: '34px',
+                    height: '34px',
+                    padding: '0 8px',
+                    borderRadius: '8px',
+                    border: pageNum === page + 1 ? 'none' : '1px solid #e2e8f0',
+                    background: pageNum === page + 1 ? '#000000' : '#ffffff',
+                    color: pageNum === page + 1 ? '#ffffff' : '#334155',
+                    fontSize: '0.85rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    boxShadow: pageNum === page + 1 ? '0 3px 10px rgba(0,0,0,0.25)' : 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={page >= totalPages - 1 || totalPages === 0}
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  background: (page >= totalPages - 1 || totalPages === 0) ? '#f8fafc' : '#ffffff',
+                  color: (page >= totalPages - 1 || totalPages === 0) ? '#cbd5e1' : '#334155',
+                  fontSize: '0.82rem',
+                  fontWeight: '600',
+                  cursor: (page >= totalPages - 1 || totalPages === 0) ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Confirm Deletion Modal */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!roleToDelete}
         onClose={() => setRoleToDelete(null)}
+        onConfirm={handleConfirmDelete}
         title="Confirm Role Deletion"
-        maxWidth="400px"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#475569' }}>
-            Are you sure you want to delete role <strong>"{roleToDelete?.roleName}"</strong>?
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-            <button
-              type="button"
-              onClick={() => setRoleToDelete(null)}
-              style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#0f172a', fontWeight: 700, borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmDelete}
-              style={{ background: '#dc2626', border: 'none', color: '#ffffff', fontWeight: 700, borderRadius: '8px', padding: '8px 18px', fontSize: '13px', cursor: 'pointer' }}
-            >
-              Delete
-            </button>
-          </div>
-        </div>
-      </Modal>
+        itemType="role"
+        itemName={roleToDelete?.roleName}
+        confirmText="Delete Role"
+      />
 
       {/* Confirm Role Deactivation Modal */}
       <Modal

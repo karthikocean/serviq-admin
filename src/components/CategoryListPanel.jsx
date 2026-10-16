@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications';
 import MenuApi from '../api/Menu.js';
 import BranchApi from '../api/Branch.js';
@@ -1062,26 +1063,16 @@ export default function CategoryListPanel({
       )}
 
       {/* Delete Category Modal */}
-      {categoryToDelete && (
-        <Modal
-          isOpen={!!categoryToDelete}
-          onClose={() => setCategoryToDelete(null)}
-          title="Confirm Category Deletion"
-          maxWidth="400px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b' }}>
-              Are you sure you want to delete category <strong>"{categoryToDelete.name}"</strong>?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button type="button" className="btn btn-outline" onClick={() => setCategoryToDelete(null)} disabled={isDeleting}>Cancel</button>
-              <button type="button" className="btn btn-black" onClick={handleConfirmDelete} disabled={isDeleting} style={{ background: '#dc2626', borderColor: '#dc2626', color: '#fff' }}>
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!categoryToDelete}
+        onClose={() => setCategoryToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Confirm Category Deletion"
+        itemType="category"
+        itemName={categoryToDelete?.name}
+        isDeleting={isDeleting}
+        confirmText="Delete Category"
+      />
 
     </section>
   );

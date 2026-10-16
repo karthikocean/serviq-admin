@@ -1256,14 +1256,17 @@ div[style*="overflow-y"]::-webkit-scrollbar-thumb:hover {
 }
 
 .panel-inner-title,
-.header-title {
-  font-size: 22px !important;
-  font-weight: 800 !important;
+.header-title,
+.module-title,
+.page-title {
+  font-size: 24px !important;
+  font-weight: 600 !important;
   color: #000000 !important;
   background: none !important;
   -webkit-text-fill-color: initial !important;
   background-clip: initial !important;
   margin: 0 !important;
+  font-family: 'Outfit', sans-serif !important;
 }
 
 .panel-inner-desc {
@@ -1594,8 +1597,8 @@ table thead th {
   background: #f8fafc !important;
   color: #475569 !important;
   padding: 13px 14px !important;
-  font-weight: 700 !important;
-  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
   text-transform: uppercase !important;
   border-bottom: 2px solid #e2e8f0 !important;
   border-top: none !important;
@@ -1630,9 +1633,10 @@ table thead th:last-child {
   border-top-right-radius: 12px;
 }
 
-.menu-items-table tbody td, .admin-table tbody td, .data-table tbody td, .panel-view table tbody td {
+.menu-items-table tbody td, .admin-table tbody td, .data-table tbody td, .panel-view table tbody td, table tbody td {
   padding: 14px 16px;
-  font-size: 13px;
+  font-size: 14px !important;
+  font-weight: 400 !important;
   vertical-align: middle;
   border-bottom: 1px solid var(--border, #f1f5f9);
   color: var(--text-main, #0f172a);
@@ -4735,8 +4739,8 @@ table:not(.real-bill-receipt-card table) thead th,
   background-color: #f95e10 !important;
   background: #f95e10 !important;
   color: #ffffff !important;
-  font-weight: 700 !important;
-  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
   border-top: none !important;
@@ -4768,6 +4772,8 @@ table:not(.real-bill-receipt-card table) thead th *,
   color: #ffffff !important;
   border-bottom: none !important;
   box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
 }
 
 /* Sticky columns in thead */
@@ -4783,6 +4789,8 @@ table:not(.real-bill-receipt-card table) thead th.sticky-col-action,
   color: #ffffff !important;
   border-bottom: none !important;
   box-shadow: none !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
 }
 
 .sticky-col-1 {
@@ -4816,6 +4824,8 @@ table:not(.real-bill-receipt-card table) tbody td.sticky-col-action,
 table:not(.real-bill-receipt-card table) tbody td.orders-sticky-actions-cell {
   background-color: #ffffff !important;
   color: #1e293b !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
 }
 
 table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-1,
@@ -4839,7 +4849,8 @@ table:not(.real-bill-receipt-card table) tbody tr:hover {
 
 table:not(.real-bill-receipt-card table) td {
   border-bottom: 1px solid #f1f5f9;
-  font-size: 13px;
+  font-size: 14px !important;
+  font-weight: 400 !important;
   vertical-align: middle;
   color: #1e293b;
 }
@@ -4899,5 +4910,85 @@ table:not(.real-bill-receipt-card table) td {
 .real-bill-receipt-card::-webkit-scrollbar-thumb {
   background: #cbd5e1 !important;
 }
+
+/* ==========================================================================
+   GLOBAL TYPOGRAPHY RULES ACROSS ALL MODULES & TABLES
+   Section           Font Size   Font Weight
+   --------------------------------------------
+   Module Title      24px        Semi-Bold (600)
+   Table Header      14px        Semi-Bold (600)
+   Table Data        14px        Regular (400)
+   ========================================================================== */
+
+/* 1. Module Titles: 24px, Semi-Bold (600) */
+.module-title,
+.panel-inner-title,
+.header-title,
+.page-title,
+.panel-title,
+.panel-header-title,
+.page-header h1,
+.page-header h2,
+.panel-header-flex h1,
+.panel-header-flex h2,
+.panel-view > div:first-child h2,
+.panel-view > div:first-child h1,
+.settings-card-header h2,
+.settings-card-header h3,
+.overview-title,
+.page-heading {
+  font-size: 24px !important;
+  font-weight: 600 !important;
+  line-height: 1.3 !important;
+  font-family: 'Outfit', 'Inter', sans-serif !important;
+}
+
+/* 2. Table Headers: 14px, Semi-Bold (600) */
+table:not(.real-bill-receipt-card table) thead th,
+table:not(.real-bill-receipt-card table) th,
+.menu-items-table thead th,
+.admin-table thead th,
+.data-table thead th,
+.custom-table thead th,
+.panel-view table thead th,
+.billing-table thead th,
+.orders-table thead th,
+.reports-table-container table thead th,
+.reports-table-container table th,
+.help-support-container table thead th,
+.help-support-container .data-table thead th {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* 3. Table Data: 14px, Regular (400) */
+table:not(.real-bill-receipt-card table) tbody td,
+table:not(.real-bill-receipt-card table) td,
+.menu-items-table tbody td,
+.admin-table tbody td,
+.data-table tbody td,
+.custom-table tbody td,
+.panel-view table tbody td,
+.billing-table tbody td,
+.orders-table tbody td,
+.reports-table-container table tbody td,
+.reports-table-container table td,
+.help-support-container table tbody td,
+.help-support-container .data-table tbody td {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Ensure inner texts inside table data cells conform to 14px Regular (400) */
+table:not(.real-bill-receipt-card table) tbody td > span:not(.badge):not(.status-badge):not([class*="badge"]):not([class*="pill"]):not([class*="tag"]):not([class*="btn"]),
+table:not(.real-bill-receipt-card table) tbody td > div:not(.badge):not(.status-badge):not([class*="badge"]):not([class*="btn"]):not([class*="icon"]),
+table:not(.real-bill-receipt-card table) tbody td p {
+  font-size: 14px !important;
+  font-weight: 400 !important;
+}
+
 
 

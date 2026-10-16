@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import * as XLSX from 'xlsx';
 import BillingApi from '../api/Billing';
 import ShowNotifications from '../helper/ShowNotifications';
@@ -288,7 +289,31 @@ export default function BillingHistoryPanel({
   return (
     <section>
       <div style={{ width: '100%' }}>
-        {/* FILTERS AREA WITH DINING TABLE, CUSTOMER, CASHIER/STAFF & MORE - 3 COLUMNS x 3 ROWS */}
+        {/* 1. SUMMARY CARDS (First) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Bills</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--black)', marginTop: '8px' }}>{totalBills}</div>
+          </div>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Sales</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#10b981', marginTop: '8px' }}>₹{totalSales.toLocaleString()}</div>
+          </div>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cash</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--black)', marginTop: '8px' }}>₹{cashTotal.toLocaleString()}</div>
+          </div>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UPI</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6', marginTop: '8px' }}>₹{upiTotal.toLocaleString()}</div>
+          </div>
+          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Card</span>
+            <div style={{ fontSize: '24px', fontWeight: '800', color: '#8b5cf6', marginTop: '8px' }}>₹{cardTotal.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* 2. FILTERS AREA WITH DINING TABLE, CUSTOMER, CASHIER/STAFF & MORE (Second) */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
@@ -323,8 +348,6 @@ export default function BillingHistoryPanel({
               placeholder="Select Table..."
             />
           </div>
-
-
 
           {/* Row 2, Col 2: 5. Date Range */}
           <div>
@@ -407,7 +430,7 @@ export default function BillingHistoryPanel({
         </div>
 
         {dateRange === 'Custom' && (
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '11px', color: '#64748b' }}>From</label>
               <input type="date" value={customStartDate} onChange={e => setCustomStartDate(e.target.value)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--border)' }} />
@@ -418,30 +441,6 @@ export default function BillingHistoryPanel({
             </div>
           </div>
         )}
-
-        {/* SUMMARY CARDS */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Bills</span>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--black)', marginTop: '8px' }}>{totalBills}</div>
-          </div>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Sales</span>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#10b981', marginTop: '8px' }}>₹{totalSales.toLocaleString()}</div>
-          </div>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cash</span>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--black)', marginTop: '8px' }}>₹{cashTotal.toLocaleString()}</div>
-          </div>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>UPI</span>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6', marginTop: '8px' }}>₹{upiTotal.toLocaleString()}</div>
-          </div>
-          <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Card</span>
-            <div style={{ fontSize: '24px', fontWeight: '800', color: '#8b5cf6', marginTop: '8px' }}>₹{cardTotal.toLocaleString()}</div>
-          </div>
-        </div>
 
         {/* MAIN HISTORY TABLE WITH ALL 13 REQUIRED COLUMNS */}
         <div className="billing-table-card">
@@ -740,61 +739,16 @@ export default function BillingHistoryPanel({
       </Modal>
 
       {/* DELETE BILL CONFIRMATION MODAL */}
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!invoiceToDelete}
         onClose={() => { if (!isDeleting) setInvoiceToDelete(null); }}
+        onConfirm={handleConfirmDelete}
         title="Confirm Delete Bill"
-        maxWidth="420px"
-      >
-        {invoiceToDelete && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '6px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>
-              Are you sure you want to delete bill <strong>{invoiceToDelete.billNo || invoiceToDelete.invoiceNo}</strong>
-              {invoiceToDelete.table && invoiceToDelete.table !== '-' ? ` (${invoiceToDelete.table})` : ''}
-              {invoiceToDelete.amount ? ` for ₹${Number(invoiceToDelete.amount).toFixed(2)}` : ''}?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={() => setInvoiceToDelete(null)}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#475569',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  fontWeight: 600
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isDeleting}
-                onClick={handleConfirmDelete}
-                style={{
-                  background: '#dc2626',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '8px 18px',
-                  fontSize: '13px',
-                  fontWeight: 700,
-                  borderRadius: '8px',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        itemType="bill"
+        itemName={invoiceToDelete ? `${invoiceToDelete.billNo || invoiceToDelete.invoiceNo}${invoiceToDelete.table && invoiceToDelete.table !== '-' ? ` (${invoiceToDelete.table})` : ''}${invoiceToDelete.amount ? ` for ₹${Number(invoiceToDelete.amount).toFixed(2)}` : ''}` : ''}
+        isDeleting={isDeleting}
+        confirmText="Delete Bill"
+      />
     </section>
   );
 }

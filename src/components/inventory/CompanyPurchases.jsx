@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PlusIcon, SearchIcon, EyeIcon, TrashIcon, PencilIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import ShowNotifications from '../../helper/ShowNotifications';
+import DeleteConfirmationModal from '../DeleteConfirmationModal';
 import { useAppState } from '../../config/AppContext';
 import { isBranchMatch } from '../../helper/BranchHelper';
 
@@ -20,6 +21,7 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
   const [vendorsList, setVendorsList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [purchaseToDelete, setPurchaseToDelete] = useState(null);
 
   // Filters & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -368,18 +370,24 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     }
   };
 
-  const handleDelete = async (p) => {
-    if (window.confirm(`Are you sure you want to delete purchase ${p.purchaseNo || p.id}?`)) {
-      if (p._id) {
-        const res = await InventoryApi.deletePurchase(p._id);
-        if (res?.status) {
-          fetchData();
-        }
-      } else {
-        if (onDeletePurchase) onDeletePurchase(p);
-        setPurchasesList(prev => prev.filter(item => item.id !== p.id));
+  const handleDelete = (p) => {
+    setPurchaseToDelete(p);
+  };
+
+  const handleConfirmDeletePurchase = async () => {
+    if (!purchaseToDelete) return;
+    const p = purchaseToDelete;
+    if (p._id) {
+      const res = await InventoryApi.deletePurchase(p._id);
+      if (res?.status) {
+        ShowNotifications.showAlertNotification("Purchase deleted successfully.", true);
+        fetchData();
       }
+    } else {
+      if (onDeletePurchase) onDeletePurchase(p);
+      setPurchasesList(prev => prev.filter(item => item.id !== p.id));
     }
+    setPurchaseToDelete(null);
   };
 
   const getTypeBadgeStyle = (typeStr) => {
@@ -1106,6 +1114,15 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
         onPageChange={setCurrentPage}
       />
 
+      <DeleteConfirmationModal
+        isOpen={!!purchaseToDelete}
+        onClose={() => setPurchaseToDelete(null)}
+        onConfirm={handleConfirmDeletePurchase}
+        title="Confirm Purchase Deletion"
+        itemType="purchase"
+        itemName={purchaseToDelete?.purchaseNo || purchaseToDelete?.id}
+        confirmText="Delete Purchase"
+      />
     </div>
   );
 }

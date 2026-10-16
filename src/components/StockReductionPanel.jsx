@@ -4,6 +4,7 @@ import { useAppState, DEFAULT_INVENTORY_CATEGORIES } from '../config/AppContext'
 import InventoryApi from '../api/Inventory';
 import InventoryCategoryApi from '../api/InventoryCategory';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications';
 import SearchableSelect from './SearchableSelect.jsx';
 import { formatDateDMY, formatDateTimeDMY } from '../helper/DateHelper.js';
@@ -1945,91 +1946,39 @@ export default function StockReductionPanel() {
       </div>
 
       {/* Delete Reduction Log Confirmation Modal */}
-      {reductionToDelete && (
-        <Modal
-          isOpen={!!reductionToDelete}
-          onClose={() => setReductionToDelete(null)}
-          title="Confirm Reduction Log Deletion"
-          maxWidth="440px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete reduction log for <strong>"{reductionToDelete.itemName}"</strong>?
-            </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setReductionToDelete(null)}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={() => {
-                  if (deleteReductionRecord && activeRestaurant?.id && reductionToDelete) {
-                    deleteReductionRecord(activeRestaurant.id, reductionToDelete.record.id || reductionToDelete.record._id);
-                    fetchAllData();
-                  }
-                  setReductionToDelete(null);
-                }}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!reductionToDelete}
+        onClose={() => setReductionToDelete(null)}
+        onConfirm={() => {
+          if (deleteReductionRecord && activeRestaurant?.id && reductionToDelete) {
+            deleteReductionRecord(activeRestaurant.id, reductionToDelete.record.id || reductionToDelete.record._id);
+            fetchAllData();
+          }
+          setReductionToDelete(null);
+        }}
+        title="Confirm Reduction Log Deletion"
+        itemType="reduction log for"
+        itemName={reductionToDelete?.itemName}
+        confirmText="Delete Log"
+      />
 
       {/* Delete Purchase Record Confirmation Modal */}
-      {purchaseToDelete && (
-        <Modal
-          isOpen={!!purchaseToDelete}
-          onClose={() => setPurchaseToDelete(null)}
-          title="Confirm Purchase Record Deletion"
-          maxWidth="440px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete purchase record <strong>#{purchaseToDelete.invoiceNum}</strong>?
-            </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setPurchaseToDelete(null)}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={() => {
-                  if (deletePurchaseRecord && activeRestaurant?.id && purchaseToDelete) {
-                    deletePurchaseRecord(activeRestaurant.id, purchaseToDelete.purchase.id || purchaseToDelete.purchase._id);
-                    ShowNotifications.showAlertNotification("Purchase record removed.", true);
-                    fetchAllData();
-                  }
-                  setPurchaseToDelete(null);
-                }}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!purchaseToDelete}
+        onClose={() => setPurchaseToDelete(null)}
+        onConfirm={() => {
+          if (deletePurchaseRecord && activeRestaurant?.id && purchaseToDelete) {
+            deletePurchaseRecord(activeRestaurant.id, purchaseToDelete.purchase.id || purchaseToDelete.purchase._id);
+            ShowNotifications.showAlertNotification("Purchase record removed.", true);
+            fetchAllData();
+          }
+          setPurchaseToDelete(null);
+        }}
+        title="Confirm Purchase Record Deletion"
+        itemType="purchase record"
+        itemName={`#${purchaseToDelete?.invoiceNum}`}
+        confirmText="Delete Record"
+      />
     </section>
   );
 }

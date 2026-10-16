@@ -5,7 +5,7 @@ import TableApi from '../../api/Table';
 import OrderApi from '../../api/Order';
 import BranchApi from '../../api/Branch';
 import UserApi from '../../api/User';
-import { resolveBranchManagerName, resolveBranchContactNumber, isBranchMatch } from '../../helper/BranchHelper';
+import { resolveBranchManagerName, resolveBranchContactNumber, resolveBranchCity, resolveBranchLocation, isBranchMatch } from '../../helper/BranchHelper';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -31,11 +31,11 @@ export default function Dashboard() {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, page: 0, limit: 10 } : { page: 0, limit: 10 };
+      const branchParam = isSpecificBranch ? { branchId: selectedBranchId, page: 0, limit: 100 } : { page: 0, limit: 100 };
       const [tablesRes, ordersRes, branchesRes, usersRes] = await Promise.allSettled([
         TableApi.getTables(branchParam),
         OrderApi.getOrders(branchParam),
-        BranchApi.getBranches({ page: 0, limit: 10 }),
+        BranchApi.getBranches({ page: 0, limit: 100 }),
         UserApi.getUsers(branchParam)
       ]);
 
@@ -81,8 +81,12 @@ export default function Dashboard() {
   const branches = rawBranches.map(b => {
     const mgrName = resolveBranchManagerName(b, rawUsers, rawStaff);
     const contactNum = resolveBranchContactNumber(b, rawUsers, rawStaff);
+    const resolvedLoc = resolveBranchLocation(b, activeRestaurant?.branches || []);
+    const resolvedCity = resolveBranchCity(b, activeRestaurant?.branches || []);
     return {
       ...b,
+      location: resolvedLoc || b.location || resolvedCity || b.city || '',
+      city: resolvedCity || b.city || '',
       branchManager: mgrName,
       managerName: mgrName,
       mobileNumber: contactNum !== 'N/A' ? contactNum : (b.mobileNumber || b.contactNumber || b.phone || '')

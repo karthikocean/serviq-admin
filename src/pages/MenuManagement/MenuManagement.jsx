@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppState, DEFAULT_ROLES } from '../../config/AppContext';
 import MenuPanel from '../../components/MenuPanel';
 import { Modal } from '../../components/Modal';
+import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
 import ShowNotifications from '../../helper/ShowNotifications.js';
 import MenuApi from '../../api/Menu.js';
 import BranchApi from '../../api/Branch.js';
@@ -1133,43 +1134,16 @@ export default function MenuManagement() {
       </Modal>
 
       {/* Delete Menu Item Confirmation Modal */}
-      {itemToDelete && (
-        <Modal
-          isOpen={!!itemToDelete}
-          onClose={() => !isDeletingItem && setItemToDelete(null)}
-          title="Confirm Menu Item Deletion"
-          maxWidth="440px"
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '8px' }}>
-            <p style={{ margin: 0, fontSize: '14px', color: '#1e293b', lineHeight: '1.5' }}>
-              Are you sure you want to delete menu item <strong>"{itemToDelete?.name}"</strong>?
-            </p>
-            <div style={{ fontSize: '12px', color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', padding: '10px 14px', borderRadius: '8px' }}>
-              ⚠️ Warning: This action cannot be undone.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setItemToDelete(null)}
-                disabled={isDeletingItem}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-black"
-                onClick={handleConfirmDeleteMenu}
-                disabled={isDeletingItem}
-                style={{ padding: '8px 20px', background: '#dc2626', borderColor: '#dc2626', color: '#ffffff', fontWeight: 700 }}
-              >
-                {isDeletingItem ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <DeleteConfirmationModal
+        isOpen={!!itemToDelete}
+        onClose={() => setItemToDelete(null)}
+        onConfirm={handleConfirmDeleteMenu}
+        title="Confirm Menu Item Deletion"
+        itemType="menu item"
+        itemName={itemToDelete?.name}
+        isDeleting={isDeletingItem}
+        confirmText="Delete Menu Item"
+      />
     </div>
   );
 }

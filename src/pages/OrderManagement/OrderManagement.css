@@ -167,8 +167,8 @@
   padding: 12px 10px;
   color: #ffffff;
   background-color: #f95e10;
-  font-weight: 700;
-  font-size: 11px;
+  font-weight: 600;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -198,7 +198,8 @@
   white-space: nowrap;
   box-sizing: border-box;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .orders-sticky-actions-header {

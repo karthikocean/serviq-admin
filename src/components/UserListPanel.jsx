@@ -4,6 +4,7 @@ import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -1248,43 +1249,16 @@ export default function UserListPanel() {
         </div>
       </div>
 
-      <Modal
+      <DeleteConfirmationModal
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
+        onConfirm={handleDeleteConfirm}
         title="Delete User Account"
-        maxWidth="440px"
-      >
-        <div style={{ padding: '10px 0' }}>
-          <p style={{ margin: 0, fontSize: '14px', color: '#475569' }}>
-            Are you sure you want to delete user <strong>{userToDelete?.name}</strong>? This action cannot be undone and will immediately revoke their access.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={() => setUserToDelete(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              style={{
-                background: '#dc2626',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '10px 20px',
-                fontWeight: 700,
-                fontSize: '13px',
-                cursor: 'pointer'
-              }}
-              onClick={handleDeleteConfirm}
-            >
-              Delete User
-            </button>
-          </div>
-        </div>
-      </Modal>
+        itemType="user"
+        itemName={userToDelete?.name}
+        warningText="Warning: This action will immediately revoke their access and cannot be undone."
+        confirmText="Delete User"
+      />
 
       <Modal
         isOpen={!!changePasswordUserId}
