@@ -154,6 +154,37 @@ class BranchApi {
       };
     }
   }
+
+  async resetPassword(id, password) {
+    try {
+      const response = await apiClient.put(`/branches/${id}/reset-password`, {
+        password,
+        newPassword: password
+      });
+      if (response.status === 200 || response.status === 201) {
+        ShowNotifications.showAlertNotification(
+          response.data?.message || "Branch Password Reset Successfully!",
+          true
+        );
+        return { status: true, response: response.data, message: response.data?.message };
+      }
+      return {
+        status: false,
+        response: response.data,
+        message: response.data?.message || "Failed to reset branch password."
+      };
+    } catch (error) {
+      const errorMessage = extractErrorMessage(
+        error,
+        "Failed to Reset Branch Password. Please try again."
+      );
+      return {
+        status: false,
+        response: error?.response?.data || error,
+        message: errorMessage
+      };
+    }
+  }
 }
 
 export default new BranchApi();
