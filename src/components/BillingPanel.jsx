@@ -61,6 +61,8 @@ export default function BillingPanel({
   hasPermission,
   searchTerm: propSearchTerm,
   setSearchTerm: propSetSearchTerm,
+  orderType: propOrderType,
+  setOrderType: propSetOrderType,
   selectedTable: propSelectedTable,
   setSelectedTable: propSetSelectedTable,
   page: propPage,
@@ -74,7 +76,7 @@ export default function BillingPanel({
   const [viewingBill, setViewingBill] = useState(null); // Modal for View Bill
   const [paymentModalBill, setPaymentModalBill] = useState(null); // Modal for Collect Payment
   const [invoiceModalBill, setInvoiceModalBill] = useState(null); // Modal for Tax Invoice
-  
+
   // Payment Form States
   const [payMethod, setPayMethod] = useState('UPI');
   const [payAmount, setPayAmount] = useState('');
@@ -111,6 +113,17 @@ export default function BillingPanel({
   const searchTerm = propSearchTerm !== undefined ? propSearchTerm : localSearchTerm;
   const setSearchTerm = propSetSearchTerm || setLocalSearchTerm;
 
+  const [localOrderType, setLocalOrderType] = useState('All');
+  const orderType = propOrderType !== undefined ? propOrderType : localOrderType;
+  const setOrderType = propSetOrderType || setLocalOrderType;
+
+  const handleOrderTypeChange = (newType) => {
+    setOrderType(newType);
+    if (newType !== 'Dine-In') {
+      setSelectedTable('All');
+    }
+  };
+
   const [localSelectedTable, setLocalSelectedTable] = useState('All');
   const selectedTable = propSelectedTable !== undefined ? propSelectedTable : localSelectedTable;
   const setSelectedTable = propSetSelectedTable || setLocalSelectedTable;
@@ -126,7 +139,7 @@ export default function BillingPanel({
     if (propPage === undefined) {
       setLocalPage(0);
     }
-  }, [searchTerm, selectedTable]);
+  }, [searchTerm, orderType, selectedTable]);
 
   const displayBillingData = Array.isArray(billingData) ? billingData : [];
 
@@ -212,7 +225,7 @@ export default function BillingPanel({
     const paidAmt = Number(b.paidAmount ?? b.paid ?? 0);
     const balAmt = b.balanceAmount !== undefined ? Number(b.balanceAmount) : Math.max(0, billAmt - paidAmt);
 
-    const isPaid = 
+    const isPaid =
       payStatusStr === 'paid' ||
       b.isPaid === true ||
       b.paid === true ||
@@ -337,7 +350,7 @@ export default function BillingPanel({
     }
 
     if (!resolvedBranchId) {
-      const bFound = (activeRestaurant?.branches || []).find(b => 
+      const bFound = (activeRestaurant?.branches || []).find(b =>
         String(b.id || b._id) === String(selectedBranchId) ||
         String(b.branchCode) === String(selectedBranchId) ||
         String(b.branchName || b.name) === String(selectedBranchId)
@@ -368,15 +381,15 @@ export default function BillingPanel({
       const targetTblStr = String(paymentModalBill.table || paymentModalBill.tableNumber || paymentModalBill.tableId || '')
         .replace(/^Table\s*/i, '')
         .trim();
-      const matchedTable = 
-        (availableTables || []).find(t => 
+      const matchedTable =
+        (availableTables || []).find(t =>
           String(t._id || '') === String(paymentModalBill.tableId) ||
           String(t.id || '') === String(paymentModalBill.tableId) ||
           String(t.tableId || '') === String(paymentModalBill.tableId) ||
           String(t.tableNumber || t.tableNo || '').trim() === targetTblStr ||
           String(t.name || '').trim() === targetTblStr
         ) ||
-        (activeRestaurant?.tables || []).find(t => 
+        (activeRestaurant?.tables || []).find(t =>
           String(t._id || '') === String(paymentModalBill.tableId) ||
           String(t.id || '') === String(paymentModalBill.tableId) ||
           String(t.tableId || '') === String(paymentModalBill.tableId) ||
@@ -458,14 +471,14 @@ export default function BillingPanel({
       }
 
       const backendData = apiRes.response?.data || apiRes.response || {};
-      const generatedInvoiceNo = 
-        backendData.invoiceNo || 
-        backendData.invoiceNumber || 
-        backendData.taxInvoiceNo || 
+      const generatedInvoiceNo =
+        backendData.invoiceNo ||
+        backendData.invoiceNumber ||
+        backendData.taxInvoiceNo ||
         backendData.billNo ||
         backendData.invoice?.invoiceNo ||
-        paymentModalBill.invoiceNo || 
-        paymentModalBill.billNo || 
+        paymentModalBill.invoiceNo ||
+        paymentModalBill.billNo ||
         '-';
 
       const staffName = currentUser?.name || currentUser?.fullName || currentUser?.username || 'Staff';
@@ -491,7 +504,7 @@ export default function BillingPanel({
       // Immediately move to Billing History in memory / activeRestaurant state
       if (activeRestaurant) {
         if (Array.isArray(activeRestaurant.billingHistory)) {
-          const alreadyInHist = activeRestaurant.billingHistory.some(h => 
+          const alreadyInHist = activeRestaurant.billingHistory.some(h =>
             (updatedBill._id && (h._id === updatedBill._id || h.id === updatedBill._id)) ||
             (updatedBill.billNo && (h.billNo === updatedBill.billNo || h.billNumber === updatedBill.billNo))
           );
@@ -579,7 +592,7 @@ export default function BillingPanel({
         });
         if (histRes?.status && histRes?.response) {
           const list = Array.isArray(histRes.response.data) ? histRes.response.data : (Array.isArray(histRes.response) ? histRes.response : []);
-          const match = list.find(h => 
+          const match = list.find(h =>
             (bill.orderId && bill.orderId !== '-' && (h.orderId === bill.orderId || h.order_id === bill.orderId)) ||
             (bill.billNo && bill.billNo !== '-' && (h.billNo === bill.billNo || h.billNumber === bill.billNo)) ||
             (h.table === bill.table || h.tableId === bill.tableId)
@@ -870,7 +883,7 @@ export default function BillingPanel({
 
   return (
     <section className="panel-view active" style={{ width: '100%', boxSizing: 'border-box' }}>
-      
+
       {/* HEADER & SUB MODULE TITLE */}
       <div style={{
         background: '#ffffff',
@@ -912,16 +925,34 @@ export default function BillingPanel({
           />
         </div>
 
-        {/* Dining Table */}
+        {/* Order Type */}
         <div>
-          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Dining Table</label>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Order Type</label>
           <SearchableSelect
-            value={selectedTable}
-            onChange={(e) => setSelectedTable(e.target.value)}
-            options={tableOptions}
-            placeholder="Select Table..."
+            value={orderType}
+            onChange={(e) => handleOrderTypeChange(e.target.value)}
+            options={[
+              { value: 'All', label: 'All Types' },
+              { value: 'Dine-In', label: 'Dine-In' },
+              { value: 'Takeaway', label: 'Takeaway' },
+              { value: 'Delivery', label: 'Delivery' }
+            ]}
+            placeholder="Select Type..."
           />
         </div>
+
+        {/* Dining Table - only displayed when Dine-In is selected */}
+        {orderType === 'Dine-In' && (
+          <div>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, marginBottom: '4px', color: '#64748b', textTransform: 'uppercase' }}>Dining Table</label>
+            <SearchableSelect
+              value={selectedTable}
+              onChange={(e) => setSelectedTable(e.target.value)}
+              options={tableOptions}
+              placeholder="Select Table..."
+            />
+          </div>
+        )}
       </div>
 
       {/* CURRENT BILLING LIST TABLE */}
@@ -1064,27 +1095,27 @@ export default function BillingPanel({
                       <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                         {/* 1. View Bill (Icon without text) */}
                         {canView && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenViewBill(currentBill)}
-                          title="View Bill"
-                          aria-label="View Bill"
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            color: '#334155',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          <EyeIcon size={15} color="#334155" />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenViewBill(currentBill)}
+                            title="View Bill"
+                            aria-label="View Bill"
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#f8fafc',
+                              color: '#334155',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <EyeIcon size={15} color="#334155" />
+                          </button>
                         )}
 
                         {!isPaid ? (
@@ -1113,27 +1144,27 @@ export default function BillingPanel({
                             </button>
                             {/* 3. Collect Payment (Icon without text) */}
                             {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenCollectPayment(currentBill)}
-                              title="Collect Payment"
-                              aria-label="Collect Payment"
-                              style={{
-                                width: '32px',
-                                height: '32px',
-                                borderRadius: '6px',
-                                border: 'none',
-                                background: '#ff5a1f',
-                                color: '#ffffff',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
-                              }}
-                            >
-                              <CreditCardIcon size={15} color="#ffffff" />
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCollectPayment(currentBill)}
+                                title="Collect Payment"
+                                aria-label="Collect Payment"
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '6px',
+                                  border: 'none',
+                                  background: '#ff5a1f',
+                                  color: '#ffffff',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                              >
+                                <CreditCardIcon size={15} color="#ffffff" />
+                              </button>
                             )}
                           </>
                         ) : (

@@ -25,11 +25,19 @@ export default function Billing() {
 
   // Filters State
   const [searchTerm, setSearchTerm] = useState('');
+  const [orderType, setOrderType] = useState('All');
   const [selectedTable, setSelectedTable] = useState('All');
   const [page, setPage] = useState(0);
   const limit = 10;
   const [totalItems, setTotalItems] = useState(0);
   const [availableTables, setAvailableTables] = useState([]);
+
+  const handleOrderTypeChange = (newType) => {
+    setOrderType(newType);
+    if (newType !== 'Dine-In') {
+      setSelectedTable('All');
+    }
+  };
 
   // Fetch tables from backend to map human codes to MongoDB _id
   useEffect(() => {
@@ -87,6 +95,7 @@ export default function Billing() {
     activeRestaurant,
     selectedBranchId,
     searchTerm,
+    orderType,
     selectedTable,
     page,
     refreshTrigger
@@ -95,7 +104,7 @@ export default function Billing() {
   // Reset page to 0 when filter inputs change
   useEffect(() => {
     setPage(0);
-  }, [searchTerm, selectedTable, selectedBranchId]);
+  }, [searchTerm, orderType, selectedTable, selectedBranchId]);
 
   const fetchBillingData = async () => {
     setIsLoading(true);
@@ -134,6 +143,7 @@ export default function Billing() {
       branchId: isSingleBranch ? selectedBranchId : 'ALL',
       search: searchTerm ? searchTerm.trim() : undefined,
       q: searchTerm ? searchTerm.trim() : undefined,
+      orderType: orderType && orderType !== 'All' ? orderType : undefined,
       tableId: resolvedTableId,
       table: resolvedTableId,
       page: page !== undefined ? page : 0,
@@ -197,11 +207,22 @@ export default function Billing() {
             const paidAmount = isPaid ? (rawPaidAmount > 0 ? rawPaidAmount : billAmount) : rawPaidAmount;
             const balanceAmount = isPaid ? 0 : Math.max(0, billAmount - paidAmount);
 
-            const cleanTable = String(t.table || t.tableNumber || t.tableNo || '').trim();
-            const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
+            const rawOrdType = t.orderType || t.order_type || 'Dine-In';
+            const isTakeawayOrDelivery = String(rawOrdType).toLowerCase().includes('takeaway') || String(rawOrdType).toLowerCase().includes('take away') || String(rawOrdType).toLowerCase().includes('delivery');
+
+            let tableDisplay = '-';
+            let mongoTableId = '-';
+            if (!isTakeawayOrDelivery) {
+              const cleanTable = String(t.table || t.tableNumber || t.tableNo || '').trim();
+              if (cleanTable && cleanTable !== '-' && cleanTable.toLowerCase() !== 'null' && cleanTable.toLowerCase() !== 'undefined') {
+                tableDisplay = cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`;
+              } else {
+                tableDisplay = `Table ${idx + 1}`;
+              }
+              mongoTableId = t.tableId || t.id || t._id || `tbl-${idx + 1}`;
+            }
 
             const mongoOrderId = t.orderId || t.order_id || t.id || t._id || `${1000 + idx + 1}`;
-            const mongoTableId = t.tableId || t.id || t._id || `tbl-${idx + 1}`;
 
             const rawBillNo = t.billNo || t.billNumber || `BILL-${mongoOrderId}`;
             const rawInvoiceNo = t.invoiceNo || t.invoiceNumber || t.invoiceId || t.taxInvoiceNo || (t.invoice && typeof t.invoice === 'object' ? (t.invoice.invoiceNo || t.invoice.invoiceNumber || t.invoice.id) : t.invoice) || '';
@@ -227,7 +248,7 @@ export default function Billing() {
               invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
               invoiceId: rawInvoiceNo || fallbackInvoiceNo,
               orderId: t.orderId || t.order_id || mongoOrderId,
-              orderType: t.orderType || 'Dine-In',
+              orderType: rawOrdType,
               orderStatus: rawOrderStatus,
               originalStatus: t.status,
               tableId: mongoTableId,
@@ -344,6 +365,7 @@ export default function Billing() {
 
     const hasActiveFilters = Boolean(
       (searchTerm && searchTerm.trim()) ||
+      (orderType && orderType !== 'All' && orderType !== 'ALL') ||
       (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL')
     );
 
@@ -377,9 +399,21 @@ export default function Billing() {
           const balanceAmount = Number(b.balanceAmount ?? Math.max(0, billAmount - paidAmount));
           const isPaid = (b.status || b.paymentStatus || '').toLowerCase() === 'paid' || balanceAmount <= 0;
 
-          const cleanTable = String(b.table || b.tableNumber || b.tableNo || '').trim();
-          const tableDisplay = cleanTable ? (cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`) : `Table ${idx + 1}`;
-          const tId = b.tableId || b._id || b.id || `tbl-${idx + 1}`;
+          const rawOrdType = b.orderType || b.order_type || 'Dine-In';
+          const isTakeawayOrDelivery = String(rawOrdType).toLowerCase().includes('takeaway') || String(rawOrdType).toLowerCase().includes('take away') || String(rawOrdType).toLowerCase().includes('delivery');
+
+          let tableDisplay = '-';
+          let tId = '-';
+          if (!isTakeawayOrDelivery) {
+            const cleanTable = String(b.table || b.tableNumber || b.tableNo || '').trim();
+            if (cleanTable && cleanTable !== '-' && cleanTable.toLowerCase() !== 'null' && cleanTable.toLowerCase() !== 'undefined') {
+              tableDisplay = cleanTable.startsWith('Table') ? cleanTable : `Table ${cleanTable}`;
+            } else {
+              tableDisplay = `Table ${idx + 1}`;
+            }
+            tId = b.tableId || b._id || b.id || `tbl-${idx + 1}`;
+          }
+
           const ordId = b.orderId || b.order_id || `#ORD-${1000 + idx + 1}`;
 
           const rawBillNo = b.billNo || b.billNumber || `BILL-${200 + idx + 1}`;
@@ -395,7 +429,7 @@ export default function Billing() {
             invoiceNo: rawInvoiceNo || fallbackInvoiceNo,
             invoiceId: rawInvoiceNo || fallbackInvoiceNo,
             orderId: ordId,
-            orderType: b.orderType || 'Dine-In',
+            orderType: rawOrdType,
             tableId: tId,
             table: tableDisplay,
             billDateTime: rawBillDate,
@@ -497,13 +531,36 @@ export default function Billing() {
               String(b.customerName || '').toLowerCase().includes(st)
             );
           }
-          if (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
+          if (orderType && orderType !== 'All' && orderType !== 'ALL') {
+            const ot = String(orderType).toLowerCase().trim();
+            pool = pool.filter(b => {
+              const bOt = String(b.orderType || b.order_type || b.type || '').toLowerCase().trim();
+              if (ot.includes('dine')) {
+                return bOt.includes('dine') || bOt === 'dine-in' || bOt === 'dine_in' || (!bOt && b.table && b.table !== '-');
+              } else if (ot.includes('takeaway') || ot.includes('take away')) {
+                return bOt.includes('takeaway') || bOt.includes('take away') || bOt.includes('take_away');
+              } else if (ot.includes('delivery')) {
+                return bOt.includes('delivery');
+              }
+              return bOt === ot;
+            });
+          }
+          if (orderType === 'Dine-In' && selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
             const st = String(selectedTable).toLowerCase();
-            pool = pool.filter(b => 
-              String(b.tableId || '').toLowerCase() === st ||
-              String(b.table || '').toLowerCase().includes(st) ||
-              String(b.tableNumber || '').toLowerCase() === st
-            );
+            pool = pool.filter(b => {
+              const ordTypeVal = String(b.orderType || b.order_type || b.type || '').toLowerCase().trim();
+              if (ordTypeVal.includes('takeaway') || ordTypeVal.includes('take away') || ordTypeVal.includes('take_away') || ordTypeVal.includes('delivery')) {
+                return false;
+              }
+              const tName = String(b.table || '').toLowerCase().trim();
+              if (!tName || tName === '-' || tName === 'null') return false;
+
+              return (
+                String(b.tableId || '').toLowerCase() === st ||
+                tName.includes(st) ||
+                String(b.tableNumber || '').toLowerCase() === st
+              );
+            });
           }
         }
 
@@ -524,14 +581,34 @@ export default function Billing() {
           (Array.isArray(b.items) && b.items.some(dish => String(dish.name || '').toLowerCase().includes(st)))
         );
       }
-      if (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
+      if (orderType && orderType !== 'All' && orderType !== 'ALL') {
+        const ot = String(orderType).toLowerCase().trim();
+        fetchedTables = fetchedTables.filter(b => {
+          const bOt = String(b.orderType || b.order_type || b.type || '').toLowerCase().trim();
+          if (ot.includes('dine')) {
+            return bOt.includes('dine') || bOt === 'dine-in' || bOt === 'dine_in' || (!bOt && b.table && b.table !== '-');
+          } else if (ot.includes('takeaway') || ot.includes('take away')) {
+            return bOt.includes('takeaway') || bOt.includes('take away') || bOt.includes('take_away');
+          } else if (ot.includes('delivery')) {
+            return bOt.includes('delivery');
+          }
+          return bOt === ot;
+        });
+      }
+      if (orderType === 'Dine-In' && selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL') {
         const st = String(selectedTable).trim().toLowerCase();
         const numOnly = st.replace(/\D/g, '');
         fetchedTables = fetchedTables.filter(b => {
+          const ordTypeVal = String(b.orderType || b.order_type || b.type || '').toLowerCase().trim();
+          if (ordTypeVal.includes('takeaway') || ordTypeVal.includes('take away') || ordTypeVal.includes('take_away') || ordTypeVal.includes('delivery')) {
+            return false;
+          }
+          const tName = String(b.table || '').toLowerCase().trim();
+          if (!tName || tName === '-' || tName === 'null') return false;
+
           const tId = String(b.tableId || '').toLowerCase();
-          const tName = String(b.table || '').toLowerCase();
           const tNum = String(b.tableNumber || b.tableNo || '').toLowerCase();
-          const bNum = (tName || tNum || tId).replace(/\D/g, '');
+          const bNum = (tName || tNum).replace(/\D/g, '');
           if (tId === st || tId.includes(st) || st.includes(tId)) return true;
           if (tName === st || tName.includes(st) || st.includes(tName)) return true;
           if (tNum === st || tNum.includes(st) || st.includes(tNum)) return true;
@@ -588,6 +665,8 @@ export default function Billing() {
       currentUser={currentUser}
       searchTerm={searchTerm}
       setSearchTerm={setSearchTerm}
+      orderType={orderType}
+      setOrderType={handleOrderTypeChange}
       selectedTable={selectedTable}
       setSelectedTable={setSelectedTable}
       page={page}

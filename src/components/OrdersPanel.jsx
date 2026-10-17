@@ -879,7 +879,7 @@ export default function OrdersPanel({
       }
 
       const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-      const currentBranchObj = allBranchesList.find(b => 
+      const currentBranchObj = allBranchesList.find(b =>
         String(b._id || b.id || '').toLowerCase() === String(branchId || '').toLowerCase() ||
         String(b.branchCode || b.code || '').toLowerCase() === String(branchId || '').toLowerCase()
       );
@@ -1876,7 +1876,7 @@ export default function OrdersPanel({
 
       // 4. Construct params object for backend query
       const params = {
-        page: 0,
+        page: page,
         limit: 10
       };
 
@@ -2366,10 +2366,10 @@ export default function OrdersPanel({
     const allTableCards = (Array.isArray(apiTables) && apiTables.length > 0)
       ? apiTables
       : ((Array.isArray(tables) && tables.length > 0)
-          ? tables
-          : ((Array.isArray(activeRestaurant?.tables) && activeRestaurant.tables.length > 0)
-              ? activeRestaurant.tables
-              : displayTables.map(tNo => ({ tableNumber: tNo }))));
+        ? tables
+        : ((Array.isArray(activeRestaurant?.tables) && activeRestaurant.tables.length > 0)
+          ? activeRestaurant.tables
+          : displayTables.map(tNo => ({ tableNumber: tNo }))));
 
     return (
       <section className="panel-view active" style={{ padding: '0 24px 40px 24px', width: '100%', boxSizing: 'border-box', background: '#f8fafc', minHeight: '100vh' }}>
@@ -2831,7 +2831,7 @@ export default function OrdersPanel({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <DeliveryIcon size={18} color="#2563eb" />
                     <span style={{ fontSize: '13px', fontWeight: 800, color: '#1e40af' }}>
-                      Delivery Details 
+                      Delivery Details
                     </span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -4346,7 +4346,13 @@ export default function OrdersPanel({
                 <SearchableSelect
                   isCompact
                   value={orderTypeFilter}
-                  onChange={e => setOrderTypeFilter(e.target.value)}
+                  onChange={e => {
+                    const newType = e.target.value;
+                    setOrderTypeFilter(newType);
+                    if (newType !== 'Dine-In') {
+                      setSelectedTableFilter('All');
+                    }
+                  }}
                   options={[
                     { value: 'All', label: 'All Types' },
                     { value: 'Dine-In', label: 'Dine-In' },
@@ -4360,25 +4366,27 @@ export default function OrdersPanel({
 
             {/* ROW 2: 4 FILTERS (Dining Table + Assigned Waiter + Payment Status + Date Range) */}
             <div className="orders-filter-row-bottom">
-              {/* 4. Dining Table Filter */}
-              <div>
-                <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dining Table</label>
-                <SearchableSelect
-                  isCompact
-                  value={selectedTableFilter}
-                  onChange={e => setSelectedTableFilter(e.target.value)}
-                  options={[
-                    { value: 'All', label: 'All Tables' },
-                    ...(apiTables.length > 0
-                      ? apiTables.map(t => ({
-                        value: t.tableNumber || t.tableNo || t.name,
-                        label: `Table ${t.tableNumber || t.tableNo || t.name}`
-                      }))
-                      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
-                  ]}
-                  placeholder="Select Table..."
-                />
-              </div>
+              {/* 4. Dining Table Filter - only displayed when Dine-In is selected */}
+              {orderTypeFilter === 'Dine-In' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 700, color: '#64748b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Dining Table</label>
+                  <SearchableSelect
+                    isCompact
+                    value={selectedTableFilter}
+                    onChange={e => setSelectedTableFilter(e.target.value)}
+                    options={[
+                      { value: 'All', label: 'All Tables' },
+                      ...(apiTables.length > 0
+                        ? apiTables.map(t => ({
+                          value: t.tableNumber || t.tableNo || t.name,
+                          label: `Table ${t.tableNumber || t.tableNo || t.name}`
+                        }))
+                        : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => ({ value: String(n), label: `Table ${n}` })))
+                    ]}
+                    placeholder="Select Table..."
+                  />
+                </div>
+              )}
 
               {/* 5. Assigned Waiter Filter */}
               <div>

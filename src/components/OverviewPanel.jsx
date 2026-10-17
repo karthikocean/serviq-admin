@@ -320,6 +320,9 @@ export default function OverviewPanel({
     fetchAllBranchTables();
   }, [selectedBranchId, isSpecificBranch]);
 
+  // Combined tables from fetched all branch tables or allTables prop
+  const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
+
   // Current view tables and orders
   const displayTables = isSpecificBranch
     ? (combinedTables || tables || []).filter(t => isBranchMatch(t, selectedBranchId, branches))
@@ -516,8 +519,6 @@ export default function OverviewPanel({
   }, [displayOrders]);
 
   // Branch statistics computation for All Branches view
-  const combinedTables = (fetchedAllTables && fetchedAllTables.length > 0) ? fetchedAllTables : allTables;
-
   const branchAnalytics = branches.map(branch => {
     const branchTarget = branch._id || branch.id || branch.branchCode;
     const branchOrders = (allOrders && allOrders.length > 0 ? allOrders : orders).filter(o => isBranchMatch(o, branchTarget, branches));

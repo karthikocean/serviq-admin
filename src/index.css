@@ -4783,14 +4783,16 @@ table:not(.real-bill-receipt-card table) thead th *,
   font-weight: 600 !important;
 }
 
-/* Sticky columns in thead */
+/* Fully scrollable tables - Action columns and fixed columns scroll naturally */
 table:not(.real-bill-receipt-card table) thead th.sticky-col-1,
 table:not(.real-bill-receipt-card table) thead th.sticky-col-2,
 table:not(.real-bill-receipt-card table) thead th.sticky-col-3,
 table:not(.real-bill-receipt-card table) thead th.sticky-col-action,
 .orders-sticky-actions-header,
 .sticky-actions-header {
-  position: sticky !important;
+  position: static !important;
+  right: auto !important;
+  left: auto !important;
   background-color: #f95e10 !important;
   background: #f95e10 !important;
   color: #ffffff !important;
@@ -4800,36 +4802,33 @@ table:not(.real-bill-receipt-card table) thead th.sticky-col-action,
   font-weight: 600 !important;
 }
 
-.sticky-col-1 {
-  left: 0 !important;
-  z-index: 15 !important;
-}
-
-.sticky-col-2 {
-  left: 70px !important;
-  z-index: 15 !important;
-}
-
-.sticky-col-3 {
-  left: 150px !important;
-  z-index: 15 !important;
-}
-
+.sticky-col-1,
+.sticky-col-2,
+.sticky-col-3,
 .sticky-col-action,
 .orders-sticky-actions-cell,
 .orders-sticky-actions-header,
-.sticky-actions-header {
-  right: 0 !important;
-  z-index: 15 !important;
+.sticky-actions-header,
+.sticky-actions-cell {
+  position: static !important;
+  right: auto !important;
+  left: auto !important;
+  z-index: auto !important;
+  box-shadow: none !important;
 }
 
-/* Sticky columns in tbody */
+/* Table columns in tbody - static positioning for natural horizontal scroll */
 table:not(.real-bill-receipt-card table) tbody td.sticky-col-1,
 table:not(.real-bill-receipt-card table) tbody td.sticky-col-2,
 table:not(.real-bill-receipt-card table) tbody td.sticky-col-3,
 table:not(.real-bill-receipt-card table) tbody td.sticky-col-action,
-table:not(.real-bill-receipt-card table) tbody td.orders-sticky-actions-cell {
-  background-color: #ffffff !important;
+table:not(.real-bill-receipt-card table) tbody td.orders-sticky-actions-cell,
+table:not(.real-bill-receipt-card table) tbody td.sticky-actions-cell {
+  position: static !important;
+  right: auto !important;
+  left: auto !important;
+  box-shadow: none !important;
+  background-color: inherit !important;
   color: #1e293b !important;
   font-size: 14px !important;
   font-weight: 400 !important;
@@ -4839,7 +4838,8 @@ table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-1,
 table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-2,
 table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-3,
 table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-col-action,
-table:not(.real-bill-receipt-card table) tbody tr:hover td.orders-sticky-actions-cell {
+table:not(.real-bill-receipt-card table) tbody tr:hover td.orders-sticky-actions-cell,
+table:not(.real-bill-receipt-card table) tbody tr:hover td.sticky-actions-cell {
   background-color: #fff7ed !important;
 }
 

@@ -32,8 +32,11 @@ class UserApi {
         delete cleanParams.branchId;
       }
 
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      if (params.page !== undefined) {
+        const pNum = Number(params.page);
+        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+      } else {
+        cleanParams.page = 1;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
@@ -63,8 +66,11 @@ class UserApi {
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
 
-      if (cleanParams.page !== undefined) {
-        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      if (params.page !== undefined) {
+        const pNum = Number(params.page);
+        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+      } else {
+        cleanParams.page = 1;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);

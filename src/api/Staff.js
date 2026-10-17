@@ -28,8 +28,11 @@ class StaffApi {
         if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
         const roleVal = params.role || params.roleFilter;
         if (roleVal && !cleanParams.role && roleVal !== 'All' && roleVal !== 'ALL') cleanParams.role = roleVal;
-        if (cleanParams.page !== undefined) {
-          cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+        if (params.page !== undefined) {
+          const pNum = Number(params.page);
+          cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        } else {
+          cleanParams.page = 1;
         }
         if (cleanParams.limit !== undefined) {
           cleanParams.limit = Number(cleanParams.limit);

@@ -475,7 +475,7 @@ export default function BillingHistoryPanel({
                   <th style={{ textAlign: 'center' }}>PAYMENT METHOD</th>
                   <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                   <th style={{ textAlign: 'left' }}>BILLED BY</th>
-                  <th style={{ textAlign: 'center' }} className="sticky-actions-header">ACTIONS</th>
+                  <th style={{ textAlign: 'center' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -563,7 +563,7 @@ export default function BillingHistoryPanel({
                           <td style={{ textAlign: 'left', fontSize: '13px', color: '#0f172a', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {invoice.staff || invoice.cashier || invoice.billedBy || '-'}
                           </td>
-                          <td style={{ textAlign: 'center' }} className="sticky-actions-cell">
+                          <td style={{ textAlign: 'center' }}>
                             <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                               {/* 1. View Invoice (Icon without text) */}
                               {canView && (
