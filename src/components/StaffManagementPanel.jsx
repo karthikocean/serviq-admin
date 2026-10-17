@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AppContext } from '../config/AppContext';
 import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import TableApi from '../api/Table';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -307,21 +307,24 @@ export default function StaffManagementPanel({
         ?? (usersRes.response?.data?.total || list.length);
     }
 
-    // Also merge any local staff from activeRestaurant
-    const localStaffPool = [
-      ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
-      ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
-    ];
-    localStaffPool.forEach(st => {
-      const exists = list.some(u => 
-        String(u._id || u.id) === String(st._id || st.id) ||
-        (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
-        (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
-      );
-      if (!exists) {
-        list.push(st);
-      }
-    });
+    // Also merge any local staff from activeRestaurant ONLY when API call returns empty and no filters are applied
+    const hasActiveFilter = (searchQuery && searchQuery.trim()) || (roleFilter && roleFilter !== 'All') || (statusFilter && statusFilter !== 'All') || (dutyFilter && dutyFilter !== 'All');
+    if (!hasActiveFilter && (!usersRes?.status || list.length === 0)) {
+      const localStaffPool = [
+        ...(Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff : []),
+        ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
+      ];
+      localStaffPool.forEach(st => {
+        const exists = list.some(u => 
+          String(u._id || u.id) === String(st._id || st.id) ||
+          (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
+          (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
+        );
+        if (!exists) {
+          list.push(st);
+        }
+      });
+    }
 
     const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
     const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
@@ -363,7 +366,7 @@ export default function StaffManagementPanel({
       if (isKnownActive && !isKnownInactive) {
         return { ...u, status: 'Active', isActive: true, active: true };
       }
-      return { ...u, status: 'Active', isActive: true, active: true };
+      return { ...u, status: u.status || 'Active', isActive: u.isActive !== false, active: u.active !== false };
     });
 
     setApiUsers(syncedList);
@@ -394,8 +397,129 @@ export default function StaffManagementPanel({
 
   const isCompanyLogin = isCompanyScope;
 
-  const totalPages = Math.max(1, Math.ceil((totalRecords || apiUsers.length) / limit));
-  const paginatedUsers = apiUsers;
+  const checkUserIsActive = (user) => {
+    if (!user) return true;
+    const uIdStr = String(user._id || user.id || '').trim();
+    const uEmailStr = String(user.email || '').toLowerCase().trim();
+    const storedInactiveIdsList = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+    const storedInactiveEmailsList = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+    const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
+
+    const uStatusStr = String(user.status || '').toLowerCase().trim();
+    const isStaffInactiveLocal = 
+      (uIdStr && storedInactiveIdsList.map(String).includes(uIdStr)) ||
+      (uEmailStr && storedInactiveEmailsList.includes(uEmailStr)) ||
+      storedStatusesMap[uIdStr]?.status === 'Inactive' ||
+      storedStatusesMap[uEmailStr]?.status === 'Inactive' ||
+      storedStatusesMap[uIdStr]?.isActive === false ||
+      storedStatusesMap[uEmailStr]?.isActive === false ||
+      storedStatusesMap[uIdStr]?.active === false ||
+      storedStatusesMap[uEmailStr]?.active === false ||
+      uStatusStr === 'inactive' ||
+      uStatusStr === 'disabled' ||
+      uStatusStr === 'deactivated' ||
+      user.isActive === false ||
+      String(user.isActive) === 'false' ||
+      user.isActive === 0 ||
+      user.active === false;
+
+    if (isStaffInactiveLocal) return false;
+
+    const isStaffActiveLocal = 
+      storedStatusesMap[uIdStr]?.status === 'Active' ||
+      storedStatusesMap[uEmailStr]?.status === 'Active' ||
+      storedStatusesMap[uIdStr]?.isActive === true ||
+      storedStatusesMap[uEmailStr]?.isActive === true ||
+      storedStatusesMap[uIdStr]?.active === true ||
+      storedStatusesMap[uEmailStr]?.active === true;
+
+    if (isStaffActiveLocal) return true;
+
+    return uStatusStr === 'active' || user.isActive === true || user.active === true || (!uStatusStr && user.isActive !== false);
+  };
+
+  const getUserRoleTitle = (u) => {
+    const uRoleId = typeof u.roleId === 'object' ? (u.roleId?._id || u.roleId?.id) : u.roleId;
+    return (
+      u.roleId?.roleName || 
+      apiRoles.find(r => String(r._id) === String(uRoleId) || String(r.id) === String(uRoleId))?.roleName ||
+      (typeof u.role === 'object' ? u.role?.roleName || u.role?.name : u.role) ||
+      u.roleName ||
+      u.designation ||
+      u.userType ||
+      'Staff'
+    );
+  };
+
+  const filteredUsers = useMemo(() => {
+    let list = Array.isArray(apiUsers) ? [...apiUsers] : [];
+
+    // 1. Branch filter
+    if (isCompanyLogin && branchFilter && branchFilter !== 'All') {
+      list = list.filter(u => {
+        const bId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+        return String(bId) === String(branchFilter) || isBranchMatch(u, branchFilter, apiBranches);
+      });
+    }
+
+    // 2. Role filter
+    if (roleFilter && roleFilter !== 'All') {
+      const targetRoleObj = apiRoles.find(r => String(r._id) === String(roleFilter) || String(r.id) === String(roleFilter) || String(r.roleName).toLowerCase() === String(roleFilter).toLowerCase());
+      const targetRoleName = String(targetRoleObj ? targetRoleObj.roleName : roleFilter).trim().toLowerCase();
+
+      list = list.filter(u => {
+        const uRoleId = typeof u.roleId === 'object' ? (u.roleId?._id || u.roleId?.id) : u.roleId;
+        if (uRoleId && String(uRoleId) === String(roleFilter)) return true;
+
+        const rName = String(getUserRoleTitle(u)).trim().toLowerCase();
+        if (rName === targetRoleName) return true;
+        if (targetRoleName.includes('waiter') && (rName.includes('waiter') || rName.includes('server') || String(u.userType).toUpperCase() === 'WAITER' || String(u.userType).toUpperCase() === 'SERVER')) return true;
+        if (targetRoleName.includes('kitchen') && (rName.includes('kitchen') || rName.includes('chef') || rName.includes('cook') || String(u.userType).toUpperCase() === 'KITCHEN')) return true;
+        if (targetRoleName.includes('manager') && (rName.includes('manager') || rName.includes('admin') || String(u.userType).toUpperCase() === 'BRANCH_ADMIN')) return true;
+        return rName.includes(targetRoleName);
+      });
+    }
+
+    // 3. Status filter (Active / Inactive)
+    if (statusFilter && statusFilter !== 'All') {
+      const wantActive = statusFilter === 'Active';
+      list = list.filter(u => checkUserIsActive(u) === wantActive);
+    }
+
+    // 4. Duty filter (ON_DUTY / OFF_DUTY)
+    if (dutyFilter && dutyFilter !== 'All') {
+      const wantDuty = dutyFilter === 'ON_DUTY';
+      list = list.filter(u => {
+        const isOnDuty = u.dutyStatus === 'ON_DUTY' || u.status === 'On Duty' || (!u.dutyStatus && u.status !== 'Off Duty' && u.dutyStatus !== 'OFF_DUTY');
+        return isOnDuty === wantDuty;
+      });
+    }
+
+    // 5. Search query
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(u => {
+        const name = String(u.name || '').toLowerCase();
+        const email = String(u.email || '').toLowerCase();
+        const phone = String(u.phone || u.phoneNumber || u.mobile || '').toLowerCase();
+        const code = String(u.employeeCode || u.empCode || u.code || u.id || u._id || '').toLowerCase();
+        const rName = String(getUserRoleTitle(u)).toLowerCase();
+
+        return (
+          name.includes(q) ||
+          email.includes(q) ||
+          phone.includes(q) ||
+          code.includes(q) ||
+          rName.includes(q)
+        );
+      });
+    }
+
+    return list;
+  }, [apiUsers, roleFilter, statusFilter, dutyFilter, branchFilter, searchQuery, isCompanyLogin, apiRoles, apiBranches]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / limit));
+  const paginatedUsers = (filteredUsers.length > limit) ? filteredUsers.slice(page * limit, (page + 1) * limit) : filteredUsers;
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -432,11 +556,22 @@ export default function StaffManagementPanel({
   });
   const [formErrors, setFormErrors] = useState({});
 
+  useEffect(() => {
+    if (viewState === 'form' && !editingUserId) {
+      if (!isAdmin && currentBranchId) {
+        setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      }
+    }
+  }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
+
   const openAddUser = () => {
     setEditingUserId(null);
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
     const initialBranchId = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : ((selectedBranchId && selectedBranchId !== 'ALL') ? selectedBranchId : (apiBranches[0]?._id || ''));
+      : (cleanBranch || (apiBranches[0]?._id || ''));
     const waiterRole = apiRoles.find(r => r.roleName.toLowerCase().includes('waiter'));
     const autoCode = `EMP-${String(apiUsers.length + 1).padStart(3, '0')}`;
     setUserForm({
@@ -458,7 +593,9 @@ export default function StaffManagementPanel({
 
   const openEditUser = (user) => {
     setEditingUserId(user._id);
-    const userBranchId = (typeof user.branchId === 'object' ? user.branchId?._id : user.branchId) || (apiBranches.length > 0 ? apiBranches[0]._id : '');
+    const rawBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
+    const isComp = !rawBranchId || rawBranchId === 'COMPANY' || rawBranchId === 'Company' || user.userType === 'RESTAURANT_OWNER' || user.userType === 'SUPER_ADMIN';
+    const userBranchId = isComp ? 'COMPANY' : (rawBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     const userAssignedTableIds = apiTables
       .filter(t => {
         const wId = t.assignedWaiterId || (typeof t.assignedWaiter === 'object' ? t.assignedWaiter?._id : t.assignedWaiter);
@@ -515,7 +652,9 @@ export default function StaffManagementPanel({
       errors.name = 'Full Name should contain letters and spaces only.';
     }
 
-    if (!userForm.branchId) {
+    const isCompanySelected = userForm.branchId === 'COMPANY' || userForm.branchId === 'Company';
+    const effectiveBranchVal = userForm.branchId || (!isAdmin && currentBranchId) || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
+    if (!effectiveBranchVal && !isCompanySelected && isCompanyScope) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -554,6 +693,16 @@ export default function StaffManagementPanel({
     e.preventDefault();
     if (!validate()) return;
 
+    const isCompanyBranchSelected = userForm.branchId === 'COMPANY' || userForm.branchId === 'Company';
+    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const effectiveBranch = isCompanyBranchSelected
+      ? null
+      : ((!isAdmin && currentBranchId)
+          ? currentBranchId
+          : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+              ? userForm.branchId
+              : (cleanSelected || currentBranchId || (apiBranches[0]?._id || ''))));
+
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
@@ -561,19 +710,29 @@ export default function StaffManagementPanel({
 
     const isStatusActive = userForm.status === 'Active';
     const payload = {
-      employeeCode: userForm.employeeCode.trim(),
       name: userForm.name.trim(),
-      roleId: resolvedRoleId,
-      branchId: userForm.branchId,
-      userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
+      userType: isCompanyBranchSelected ? (isBranchAdmin ? 'SUPER_ADMIN' : 'STAFF') : (isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF'),
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
       dutyStatus: userForm.dutyStatus,
-      phoneNumber: userForm.phone.trim(),
     };
 
-    if (!isKitchenEmployee && userForm.email.trim()) {
+    if (userForm.employeeCode && userForm.employeeCode.trim()) {
+      payload.employeeCode = userForm.employeeCode.trim();
+    }
+    if (isCompanyBranchSelected) {
+      payload.branchId = null;
+    } else if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+      payload.branchId = String(effectiveBranch);
+    }
+    if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
+      payload.roleId = String(resolvedRoleId);
+    }
+    if (userForm.phone && userForm.phone.trim()) {
+      payload.phoneNumber = userForm.phone.trim();
+    }
+    if (!isKitchenEmployee && userForm.email && userForm.email.trim()) {
       payload.email = userForm.email.trim();
     }
 
@@ -581,7 +740,7 @@ export default function StaffManagementPanel({
     if (editingUserId) {
       res = await UserApi.updateUser(editingUserId, payload);
     } else {
-      if (!isKitchenEmployee) {
+      if (!isKitchenEmployee && userForm.password && userForm.password.trim()) {
         payload.password = userForm.password;
       }
       res = await UserApi.createUser(payload);
@@ -1267,17 +1426,17 @@ export default function StaffManagementPanel({
                 let currentBranchVal = userForm.branchId;
                 if (!isCompanyScopeEffective) {
                   currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
-                } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
-                  currentBranchVal = '';
                 }
 
-                const currentBranchObj = currentBranchVal
+                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                const currentBranchObj = (!isCompanySelected && currentBranchVal)
                   ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                   : null;
-                let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
+                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
 
                 const branchOptions = [
-                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
+                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : []),
+                  { value: 'COMPANY', label: 'Company' },
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
                     label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -1802,7 +1961,8 @@ export default function StaffManagementPanel({
               const uBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
               const uRoleName = user.roleId?.roleName || apiRoles.find(r => r._id === uRoleId)?.roleName || 'Unknown';
               const branchObj = user.branchId?.branchName ? user.branchId : (apiBranches.find(b => b._id === uBranchId || b.id === uBranchId));
-              const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
+              const isCompanyStaff = !uBranchId || uBranchId === 'COMPANY' || uBranchId === 'Company' || user.userType === 'RESTAURANT_OWNER' || user.userType === 'SUPER_ADMIN';
+              const uBranchName = branchObj ? (branchObj.branchName || branchObj.name) : (isCompanyStaff ? 'Company' : (uBranchId ? 'Main Branch' : 'Company'));
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
@@ -1814,39 +1974,7 @@ export default function StaffManagementPanel({
                 String(user.designation || '').toLowerCase().includes('manager');
               const canChangeDuty = hasPermission('staff', 'edit') && (!isManager || isCompanyUser || isCompanyScope);
               const isOnDuty = user.dutyStatus === 'ON_DUTY' || user.status === 'On Duty' || (!user.dutyStatus && user.status !== 'Off Duty' && user.dutyStatus !== 'OFF_DUTY');
-              const uIdStr = String(user._id || user.id || '');
-              const uEmailStr = String(user.email || '').toLowerCase().trim();
-              const storedInactiveIdsList = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
-              const storedInactiveEmailsList = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
-              const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
-
-              const uStatusStr = String(user.status || '').toLowerCase().trim();
-              const isStaffInactiveLocal = 
-                (uIdStr && storedInactiveIdsList.map(String).includes(uIdStr)) ||
-                (uEmailStr && storedInactiveEmailsList.includes(uEmailStr)) ||
-                storedStatusesMap[uIdStr]?.status === 'Inactive' ||
-                storedStatusesMap[uEmailStr]?.status === 'Inactive' ||
-                storedStatusesMap[uIdStr]?.isActive === false ||
-                storedStatusesMap[uEmailStr]?.isActive === false ||
-                uStatusStr === 'inactive' ||
-                uStatusStr === 'disabled' ||
-                uStatusStr === 'deactivated' ||
-                user.isActive === false ||
-                String(user.isActive) === 'false' ||
-                user.isActive === 0 ||
-                user.active === false;
-
-              const isStaffActiveLocal = 
-                storedStatusesMap[uIdStr]?.status === 'Active' ||
-                storedStatusesMap[uEmailStr]?.status === 'Active' ||
-                storedStatusesMap[uIdStr]?.isActive === true ||
-                storedStatusesMap[uEmailStr]?.isActive === true;
-
-              const isStaffActive = isStaffInactiveLocal 
-                ? false 
-                : isStaffActiveLocal 
-                  ? true 
-                  : (uStatusStr === 'active' || user.isActive === true);
+              const isStaffActive = checkUserIsActive(user);
               const assignedTables = isWaiter ? apiTables
                 .filter(t => {
                   const assigned = resolveTableAssignedWaiter(t, apiUsers);
@@ -2150,7 +2278,7 @@ export default function StaffManagementPanel({
                       {hasPermission('staff', 'edit') && (
                       <button
                         type="button"
-                        title={isStaffActive ? "Deactivate Account" : "Activate Account"}
+                        title={isStaffActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
                         onClick={() => handleToggleAccountStatus(user)}
                         style={{
                           background: isStaffActive ? '#ecfdf5' : '#fef2f2',
@@ -2173,7 +2301,7 @@ export default function StaffManagementPanel({
                           e.currentTarget.style.background = isStaffActive ? '#ecfdf5' : '#fef2f2';
                         }}
                       >
-                        {isStaffActive ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                        {isStaffActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
                       </button>
                       )}
                     </div>
@@ -2226,7 +2354,7 @@ export default function StaffManagementPanel({
       }}>
         {/* Left Info Text */}
         <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-          Showing {totalRecords === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, totalRecords)} of {totalRecords} entries
+          Showing {filteredUsers.length === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, filteredUsers.length)} of {filteredUsers.length} entries
         </div>
 
         {/* Right Pagination Buttons */}

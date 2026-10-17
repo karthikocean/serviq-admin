@@ -282,6 +282,16 @@ export default function TableManagement() {
           if (tableId) {
             navigate(`/tables/edit/${tableId}`);
           } else {
+            const isCompanyScope = !selectedBranchId ||
+              selectedBranchId === 'ALL' ||
+              selectedBranchId === 'All' ||
+              selectedBranchId === 'all' ||
+              String(selectedBranchId).toUpperCase() === 'COMPANY' ||
+              String(selectedBranchId).toLowerCase() === 'all branches';
+            if (isCompanyScope) {
+              ShowNotifications.showAlertNotification("Please select a specific branch to add a dining table.", false);
+              return;
+            }
             navigate('/tables/add');
           }
         }}

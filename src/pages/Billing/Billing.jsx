@@ -131,15 +131,13 @@ export default function Billing() {
 
 
     const params = {
-      branchId: isSingleBranch ? selectedBranchId : undefined,
+      branchId: isSingleBranch ? selectedBranchId : 'ALL',
       search: searchTerm ? searchTerm.trim() : undefined,
       q: searchTerm ? searchTerm.trim() : undefined,
       tableId: resolvedTableId,
       table: resolvedTableId,
       page: page !== undefined ? page : 0,
-      limit: 50,
-      sortBy: 'createdAt',
-      sortOrder: 'desc'
+      limit: 10,
     };
 
     let fetchedTables = [];
@@ -307,10 +305,9 @@ export default function Billing() {
               }
             }
 
-            // If order status is known, strictly require it to be completed/served/done
-            if (ordStatus) {
-              const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
-              if (!isCompleted) return false;
+            // Exclude cancelled orders from Current Billing
+            if (ordStatus === 'cancelled' || ordStatus === 'canceled') {
+              return false;
             }
 
             return true;
@@ -459,9 +456,9 @@ export default function Billing() {
             }
           }
 
-          if (ordStatus) {
-            const isCompleted = ordStatus === 'completed' || ordStatus === 'served' || ordStatus === 'done';
-            if (!isCompleted) return false;
+          // Exclude cancelled orders from Current Billing
+          if (ordStatus === 'cancelled' || ordStatus === 'canceled') {
+            return false;
           }
 
           return true;

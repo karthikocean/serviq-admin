@@ -405,11 +405,47 @@ export default function BillingPanel({
 
     const normalizedPaymentMethod = (payMethod || 'cash').toLowerCase();
 
+    // Ensure items is strictly an array (even if incoming was an object)
+    const rawItems = Array.isArray(paymentModalBill.items)
+      ? paymentModalBill.items
+      : (paymentModalBill.items && typeof paymentModalBill.items === 'object' ? Object.values(paymentModalBill.items) : []);
+
+    const formattedItems = rawItems.map(it => {
+      const q = Number(it.qty ?? it.quantity ?? 1) || 1;
+      const r = Number(it.rate ?? it.price ?? 0) || 0;
+      const a = Number(it.amount ?? (q * r)) || (q * r);
+      return {
+        name: it.name || it.itemName || 'Item',
+        qty: q,
+        quantity: q,
+        price: r,
+        rate: r,
+        amount: a,
+        ...(it.menuId || it._id || it.id ? { menuId: it.menuId || it._id || it.id } : {})
+      };
+    });
+
+    const calcSubtotal = paymentModalBill.subtotal != null
+      ? Number(paymentModalBill.subtotal)
+      : formattedItems.reduce((acc, curr) => acc + curr.amount, 0);
+
+    const calcTax = paymentModalBill.tax != null
+      ? Number(paymentModalBill.tax)
+      : parseFloat((calcSubtotal * 0.05).toFixed(2));
+
+    const totalVal = paymentModalBill.total != null
+      ? Number(paymentModalBill.total)
+      : (paymentModalBill.billAmount != null ? Number(paymentModalBill.billAmount) : (parseFloat(payAmount) || (calcSubtotal + calcTax)));
+
     const payload = {
       branchId: resolvedBranchId,
       tableId: resolvedTableId,
       paymentMethod: normalizedPaymentMethod,
-      amount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? paymentModalBill.total ?? 0),
+      amount: parseFloat(payAmount) || (paymentModalBill.balanceAmount ?? totalVal),
+      items: formattedItems,
+      subtotal: Number(calcSubtotal) || 0,
+      tax: Number(calcTax) || 0,
+      total: Number(totalVal) || 0,
       ...(payRefNo && payRefNo.trim() ? { referenceNumber: payRefNo.trim() } : {})
     };
 

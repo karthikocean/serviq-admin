@@ -195,14 +195,14 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: true, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
-      tables: { view: true, add: false, edit: true, delete: false },
+      tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
-      waiter: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
+      waiter: { view: false, add: false, edit: false, delete: false },
       kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
@@ -217,15 +217,15 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: false, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
-      kitchen: { view: true, add: false, edit: false, delete: false },
+      kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
@@ -239,15 +239,15 @@ export const DEFAULT_ROLES = {
       overview: { view: false, add: false, edit: false, delete: false },
       'branch-management': { view: false, add: false, edit: false, delete: false },
       'plans-management': { view: false, add: false, edit: false, delete: false },
-      orders: { view: true, add: false, edit: true, delete: false },
+      orders: { view: false, add: false, edit: false, delete: false },
       menu: { view: false, add: false, edit: false, delete: false },
       tables: { view: false, add: false, edit: false, delete: false },
       billing: { view: false, add: false, edit: false, delete: false },
       billing_current: { view: false, add: false, edit: false, delete: false },
       billing_history: { view: false, add: false, edit: false, delete: false },
-      staff: { view: true, add: false, edit: false, delete: false },
+      staff: { view: false, add: false, edit: false, delete: false },
       waiter: { view: false, add: false, edit: false, delete: false },
-      kitchen: { view: true, add: false, edit: false, delete: false },
+      kitchen: { view: false, add: false, edit: false, delete: false },
       Reports: { view: false, add: false, edit: false, delete: false },
       users: { view: false, add: false, edit: false, delete: false },
       'roles-permissions': { view: false, add: false, edit: false, delete: false },
@@ -289,6 +289,25 @@ export const checkHasPermission = (currentUser, activeRestaurant, moduleName, ac
 
   // Pure Restaurant Owner & Super Admin (without a specific custom role) have full access
   if (isRestaurantOwner) return true;
+
+  // Waiter and Kitchen staff are strictly mobile app users and have ZERO permissions in the admin panel
+  const roleNameLower = String(roleNameStr || '').toLowerCase();
+  const isWaiterOrKitchenRole = 
+    roleUpper === 'WAITER' ||
+    roleUpper === 'KITCHEN' ||
+    roleUpper === 'KITCHEN_STAFF' ||
+    roleUpper === 'KITCHEN STAFF' ||
+    roleNameLower.includes('waiter') ||
+    roleNameLower.includes('kitchen') ||
+    roleNameLower.includes('chef') ||
+    roleNameLower.includes('cook') ||
+    userTypeUpper === 'STATION' ||
+    userTypeUpper === 'WAITER' ||
+    userTypeUpper === 'KITCHEN';
+
+  if (isWaiterOrKitchenRole) {
+    return false;
+  }
 
   // Block permission immediately if staff user account itself is inactive or deleted
   const isUserAccountInactive = 
@@ -666,6 +685,51 @@ export const AppProvider = ({ children }) => {
       clearInterval(interval);
     };
   }, []);
+
+  // Immediate auto-logout if current branch is inactivated
+  useEffect(() => {
+    const handleBranchStatusChange = (e) => {
+      let branchId = null;
+      let status = null;
+
+      if (e?.key === 'serviq_branch_status_change' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          branchId = parsed.branchId;
+          status = parsed.status;
+        } catch (_) {}
+      } else if (e?.detail) {
+        branchId = e.detail.branchId;
+        status = e.detail.status;
+      }
+
+      if (status === 'Inactive' && branchId) {
+        const uRole = String(
+          typeof currentUser?.role === 'object' && currentUser?.role !== null
+            ? (currentUser?.role?.roleName || currentUser?.role?.name || '')
+            : (currentUser?.role || currentUser?.userType || '')
+        ).toLowerCase();
+        const isOwner = uRole.includes('owner') || String(currentUser?.userType || '').toUpperCase() === 'RESTAURANT_OWNER';
+
+        // Only log out users tied to this particular inactivated branch
+        const assignedBranchId = getUserAssignedBranchId(currentUser) || (currentUser?.branchId?._id || currentUser?.branchId?.id || currentUser?.branchId);
+        const isCurrentBranchSession = String(assignedBranchId) === String(branchId) || (!isOwner && String(selectedBranchId) === String(branchId));
+
+        if (isCurrentBranchSession && !isOwner) {
+          ShowNotifications.showAlertNotification("This branch has been deactivated. You have been logged out.", false);
+          logout();
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleBranchStatusChange);
+    window.addEventListener('serviq_branch_status_change', handleBranchStatusChange);
+
+    return () => {
+      window.removeEventListener('storage', handleBranchStatusChange);
+      window.removeEventListener('serviq_branch_status_change', handleBranchStatusChange);
+    };
+  }, [currentUser, selectedBranchId]);
 
 
   // Fallback empty tenant with Premium plan defaults
@@ -1973,7 +2037,7 @@ export const AppProvider = ({ children }) => {
 
           if (!backendStaffRecord) {
             try {
-              const fullListRes = await UserApi.getUsers({ limit: 100 });
+              const fullListRes = await UserApi.getUsers({ limit: 10 });
               if (fullListRes && fullListRes.status && fullListRes.response) {
                 const fullList = fullListRes.response?.data?.users || fullListRes.response?.data || fullListRes.response?.users || (Array.isArray(fullListRes.response) ? fullListRes.response : []);
                 if (Array.isArray(fullList)) {
@@ -2158,6 +2222,28 @@ export const AppProvider = ({ children }) => {
                 userTypeUpper === 'KITCHEN';
               hasExplicitAdminAccess = !isNonAdminStaff;
             }
+          }
+
+          const isWaiterOrKitchenStaff = 
+            roleLower.includes('waiter') ||
+            roleLower.includes('kitchen') ||
+            roleLower.includes('chef') ||
+            roleLower.includes('cook') ||
+            userTypeUpper === 'STATION' ||
+            userTypeUpper === 'WAITER' ||
+            userTypeUpper === 'KITCHEN';
+
+          if (!isRestaurantOwner && isWaiterOrKitchenStaff) {
+            sessionStorage.removeItem("userToken");
+            sessionStorage.removeItem("token");
+            sessionStorage.removeItem("currentUser");
+            sessionStorage.clear();
+            try { localStorage.clear(); } catch (e) { }
+            setCurrentUser(null);
+            return {
+              success: false,
+              error: "Access denied. Waiter and Kitchen staff must use the mobile application."
+            };
           }
 
           if (hasExplicitAdminAccess === false) {
@@ -2525,7 +2611,16 @@ export const AppProvider = ({ children }) => {
     }
 
     const payload = {
-      items: updatedItems,
+      items: updatedItems.map(it => ({
+        menuId: it.menuId || it._id || it.id || '',
+        name: it.name || it.dishName || '',
+        qty: Number(it.qty || 1),
+        price: Number(it.price || 0),
+        status: it.status || 'new'
+      })),
+      subtotal: Number(order.subtotal || order.billAmount || 0),
+      tax: Number(order.tax || 0),
+      total: Number(order.total || order.billAmount || 0),
       status: newOrderStatus
     };
 
@@ -2733,7 +2828,21 @@ export const AppProvider = ({ children }) => {
       if (rest) {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
-          const payload = { status: nextStatus };
+          const itemsArray = (order.items || []).map(it => ({
+            menuId: it.menuId || it._id || it.id || '',
+            name: it.name || it.dishName || '',
+            qty: Number(it.qty || 1),
+            price: Number(it.price || 0),
+            status: nextStatus
+          }));
+
+          const payload = {
+            items: itemsArray,
+            subtotal: Number(order.subtotal || order.billAmount || 0),
+            tax: Number(order.tax || 0),
+            total: Number(order.total || order.billAmount || 0),
+            status: nextStatus
+          };
           const idToUpdate = order._id || order.id || order.orderId;
           await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
@@ -2774,8 +2883,22 @@ export const AppProvider = ({ children }) => {
       if (rest) {
         const order = (rest.orders || []).find(o => o.orderId === orderId || o.id === orderId || o._id === orderId || String(o.id) === String(orderId));
         if (order) {
+          const itemsArray = (order.items || []).map(it => ({
+            menuId: it.menuId || it._id || it.id || '',
+            name: it.name || it.dishName || '',
+            qty: Number(it.qty || 1),
+            price: Number(it.price || 0),
+            status: it.status || order.status || 'new'
+          }));
+          const payload = {
+            waiter: waiterName,
+            items: itemsArray,
+            subtotal: Number(order.subtotal || order.billAmount || 0),
+            tax: Number(order.tax || 0),
+            total: Number(order.total || order.billAmount || 0)
+          };
           const idToUpdate = order._id || order.id || order.orderId;
-          await OrderApi.updateOrder(idToUpdate, { waiter: waiterName }).catch(() => { });
+          await OrderApi.updateOrder(idToUpdate, payload).catch(() => { });
         }
       }
     } catch (e) {

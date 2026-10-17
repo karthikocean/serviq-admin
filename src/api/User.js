@@ -25,7 +25,12 @@ class UserApi {
       if (roleVal && !cleanParams.role && roleVal !== 'All' && roleVal !== 'ALL') cleanParams.role = roleVal;
       const statusVal = params.status || params.statusFilter;
       if (statusVal && !cleanParams.status && statusVal !== 'All' && statusVal !== 'ALL') cleanParams.status = statusVal;
-      if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL') cleanParams.branchId = params.branchId;
+      if (params.branchId && !cleanParams.branchId && params.branchId !== 'All' && params.branchId !== 'ALL' && String(params.branchId).toUpperCase() !== 'COMPANY') {
+        cleanParams.branchId = params.branchId;
+      }
+      if (cleanParams.branchId && (cleanParams.branchId === 'ALL' || cleanParams.branchId === 'All' || String(cleanParams.branchId).toUpperCase() === 'COMPANY')) {
+        delete cleanParams.branchId;
+      }
 
       if (cleanParams.page !== undefined) {
         cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
@@ -77,16 +82,18 @@ class UserApi {
     }
   }
 
-  async createUser(data) {
+  async createUser(data, options = {}) {
     try {
       const response = await apiClient.post("/users", data);
       if (response.status === 200 || response.status === 201) {
-        ShowNotifications.showAlertNotification(response.data.message || "User Created Successfully!", true);
+        if (!options.silent) {
+          ShowNotifications.showAlertNotification(response.data.message || "User Created Successfully!", true);
+        }
         return { status: true, response: response.data };
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error, "Failed to create user.");
-      if (error?.response?.status !== 401) {
+      if (error?.response?.status !== 401 && !options.silent) {
         ShowNotifications.showAlertNotification(errorMessage, false);
       }
       return { status: false, response: error?.response?.data || error };

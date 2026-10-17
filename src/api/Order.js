@@ -95,7 +95,24 @@ class OrderApi {
       }
 
       const targetId = String(id || '').trim();
-      const response = await apiClient.put(`/orders/${targetId}`, data);
+      let payloadData = typeof data === 'object' && data !== null ? { ...data } : {};
+      if (!Array.isArray(payloadData.items)) {
+        payloadData.items = [];
+      }
+      if (payloadData.subtotal === undefined) payloadData.subtotal = 0;
+      if (payloadData.tax === undefined) payloadData.tax = 0;
+      if (payloadData.total === undefined) payloadData.total = 0;
+
+      let response;
+      if (data && typeof data === 'object' && Object.keys(data).length === 1 && data.status) {
+        try {
+          response = await apiClient.patch(`/orders/${targetId}/status`, { status: data.status });
+        } catch (patchErr) {
+          response = await apiClient.put(`/orders/${targetId}`, payloadData);
+        }
+      } else {
+        response = await apiClient.put(`/orders/${targetId}`, payloadData);
+      }
       if (response.status === 200 || response.status === 201) {
         ShowNotifications.showAlertNotification(
           response.data.message || "Order Updated Successfully!",

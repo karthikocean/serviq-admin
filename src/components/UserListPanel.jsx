@@ -4,7 +4,7 @@ import UserApi from '../api/User';
 import BranchApi from '../api/Branch';
 import RoleApi from '../api/Role';
 import { Modal } from './Modal';
-import DeleteConfirmationModal from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { sanitizeMobile, validateMobile, validatePassword } from '../helper/ValidationHelper.js';
 import PasswordRequirements from './common/PasswordRequirements';
@@ -194,9 +194,6 @@ export default function UserListPanel() {
     if (usersRes?.status) {
       const uData = usersRes.response?.data || usersRes.response || [];
       let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
-      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && activeFilteredBranchId !== 'All') {
-        list = list.filter(u => isBranchMatch(u, activeFilteredBranchId, currentBranches));
-      }
       setApiUsers(list);
       const totalNum = usersRes.response?.total ?? usersRes.response?.totalRecords ?? usersRes.response?.totalUsers ?? usersRes.response?.count ?? usersRes.response?.pagination?.total ?? (usersRes.response?.data?.total ?? list.length);
       setTotalRecords(totalNum);
@@ -266,11 +263,22 @@ export default function UserListPanel() {
   });
   const [formErrors, setFormErrors] = useState({});
 
+  useEffect(() => {
+    if (viewState === 'form' && !editingUserId) {
+      if (!isAdmin && currentBranchId) {
+        setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+        setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      }
+    }
+  }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
+
   const openAddUser = () => {
     setEditingUserId(null);
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
     const defaultBranch = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : (activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
+      : (cleanBranch || activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     setUserForm({
       name: '',
       branchId: defaultBranch || '',
@@ -309,7 +317,8 @@ export default function UserListPanel() {
       errors.name = 'Full Name should contain letters only.';
     }
 
-    if (!userForm.branchId) {
+    const effectiveBranchVal = userForm.branchId || (!isAdmin && currentBranchId) || (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY' ? selectedBranchId : '');
+    if (!effectiveBranchVal && isCompanyScope) {
       errors.branchId = 'Branch selection is required.';
     }
 
@@ -347,6 +356,13 @@ export default function UserListPanel() {
       return;
     }
 
+    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const effectiveBranch = (!isAdmin && currentBranchId)
+      ? currentBranchId
+      : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+          ? userForm.branchId
+          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || '')));
+
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
     const isBranchAdmin = roleName.toLowerCase().includes('admin') || roleName.toLowerCase().includes('manager');
@@ -354,16 +370,22 @@ export default function UserListPanel() {
     const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
-      roleId: resolvedRoleId,
-      branchId: userForm.branchId,
       userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
-      phoneNumber: userForm.phone.trim(),
     };
 
-    if (userForm.email.trim()) {
+    if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+      payload.branchId = String(effectiveBranch);
+    }
+    if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
+      payload.roleId = String(resolvedRoleId);
+    }
+    if (userForm.phone && userForm.phone.trim()) {
+      payload.phoneNumber = userForm.phone.trim();
+    }
+    if (userForm.email && userForm.email.trim()) {
       payload.email = userForm.email.trim();
     }
 
@@ -371,7 +393,9 @@ export default function UserListPanel() {
     if (editingUserId) {
       res = await UserApi.updateUser(editingUserId, payload);
     } else {
-      payload.password = userForm.password;
+      if (userForm.password && userForm.password.trim()) {
+        payload.password = userForm.password;
+      }
       res = await UserApi.createUser(payload);
     }
 
@@ -398,6 +422,56 @@ export default function UserListPanel() {
 
       setViewState('list');
       fetchData();
+    }
+  };
+
+  const handleToggleUserStatus = async (user) => {
+    const targetId = user._id || user.id;
+    const isCurrentlyActive = user.status === 'Active' || (!user.status && user.isActive);
+    const nextStatus = isCurrentlyActive ? 'Inactive' : 'Active';
+    const nextIsActive = !isCurrentlyActive;
+
+    // Optimistic UI update
+    setApiUsers(prev => prev.map(u => {
+      if ((u._id || u.id) === targetId) {
+        return { ...u, status: nextStatus, isActive: nextIsActive, active: nextIsActive };
+      }
+      return u;
+    }));
+
+    try {
+      const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
+      const storedInactiveEmails = JSON.parse(localStorage.getItem('serviq_inactive_staff_emails') || '[]');
+      const uId = String(targetId || '');
+      const uEmail = (user.email || '').toLowerCase().trim();
+
+      if (!nextIsActive) {
+        if (uId && !storedInactiveIds.includes(uId)) storedInactiveIds.push(uId);
+        if (uEmail && !storedInactiveEmails.includes(uEmail)) storedInactiveEmails.push(uEmail);
+      } else {
+        const idIdx = storedInactiveIds.indexOf(uId);
+        if (idIdx > -1) storedInactiveIds.splice(idIdx, 1);
+        const emailIdx = storedInactiveEmails.indexOf(uEmail);
+        if (emailIdx > -1) storedInactiveEmails.splice(emailIdx, 1);
+      }
+      localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
+      localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
+
+      const res = await UserApi.updateUser(targetId, {
+        name: user.name,
+        roleId: user.role?._id || user.roleId || user.role,
+        branchId: user.branchId || user.branch?._id || user.branch,
+        phoneNumber: user.phoneNumber,
+        status: nextStatus,
+        isActive: nextIsActive,
+        active: nextIsActive
+      });
+
+      if (res?.status) {
+        ShowNotifications.showAlertNotification(`User account ${nextStatus === 'Active' ? 'unlocked / activated' : 'locked / deactivated'} successfully!`, true);
+      }
+    } catch (e) {
+      console.warn("User status toggle error:", e);
     }
   };
 
@@ -579,17 +653,17 @@ export default function UserListPanel() {
                   let currentBranchVal = userForm.branchId;
                   if (!isCompanyScope) {
                     currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
-                  } else if (currentBranchVal === 'COMPANY' || currentBranchVal === 'ALL' || currentBranchVal === 'all') {
-                    currentBranchVal = '';
                   }
 
-                  const currentBranchObj = currentBranchVal
+                  const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                  const currentBranchObj = (!isCompanySelected && currentBranchVal)
                     ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                     : null;
-                  let effectiveVal = currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || '');
+                  let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
 
                   const branchOptions = [
-                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : [{ value: '', label: activeRestaurant?.name || activeRestaurant?.restaurantName || activeRestaurant?.businessName || 'Main Branch' }]),
+                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : []),
+                    { value: 'COMPANY', label: 'Company' },
                     ...allBranchesList.map(b => ({
                       value: b._id || b.id,
                       label: `${b.branchName || b.name || 'Branch'}${b.branchCode ? ` (${b.branchCode})` : ''}`
@@ -1122,6 +1196,38 @@ export default function UserListPanel() {
                             <KeyIcon />
                           </button>
                         )}
+                        {hasPermission('users', 'edit') && (() => {
+                          const isUserActive = user.status === 'Active' || (!user.status && user.isActive);
+                          return (
+                            <button
+                              type="button"
+                              title={isUserActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
+                              onClick={() => handleToggleUserStatus(user)}
+                              style={{
+                                background: isUserActive ? '#ecfdf5' : '#fef2f2',
+                                border: `1px solid ${isUserActive ? '#a7f3d0' : '#fecaca'}`,
+                                color: isUserActive ? '#16a34a' : '#dc2626',
+                                cursor: 'pointer',
+                                width: '28px',
+                                height: '28px',
+                                padding: '0',
+                                borderRadius: '6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = isUserActive ? '#d1fae5' : '#fee2e2';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = isUserActive ? '#ecfdf5' : '#fef2f2';
+                              }}
+                            >
+                              {isUserActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
+                            </button>
+                          );
+                        })()}
                         {hasPermission('users', 'delete') && (
                           <button
                             type="button"

@@ -17,19 +17,25 @@ export const AlertCircleIcon = ({ size = 16, color = '#dc2626' }) => (
   </svg>
 );
 
-export const ToggleRightIcon = ({ size = 18, color = '#16a34a' }) => (
+export const UnlockIcon = ({ size = 16, color = '#16a34a' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <rect width="20" height="12" x="2" y="6" rx="6" ry="6" fill={color} fillOpacity="0.18" />
-    <circle cx="16" cy="12" r="3.5" fill={color} />
+    <rect width="18" height="11" x="3" y="11" rx="2.5" ry="2.5" fill={color} fillOpacity="0.14" />
+    <path d="M7 11V7a5 5 0 0 1 9.9-1" />
   </svg>
 );
 
-export const ToggleLeftIcon = ({ size = 18, color = '#dc2626' }) => (
+export const LockIcon = ({ size = 16, color = '#dc2626' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-    <rect width="20" height="12" x="2" y="6" rx="6" ry="6" fill={color} fillOpacity="0.18" />
-    <circle cx="8" cy="12" r="3.5" fill={color} />
+    <rect width="18" height="11" x="3" y="11" rx="2.5" ry="2.5" fill={color} fillOpacity="0.14" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
   </svg>
 );
+
+// Aliases for compatibility
+export const ToggleRightIcon = UnlockIcon;
+export const ToggleLeftIcon = LockIcon;
+export const LockOpenIcon = UnlockIcon;
+export const LockClosedIcon = LockIcon;
 
 export default function DeleteConfirmationModal({
   isOpen,

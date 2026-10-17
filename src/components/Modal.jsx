@@ -1,6 +1,15 @@
 import React, { useEffect } from 'react';
 
-export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) => {
+export const Modal = ({
+  isOpen,
+  onClose,
+  title,
+  maxWidth = '480px',
+  hideHeader = false,
+  style = {},
+  overlayStyle = {},
+  children
+}) => {
   useEffect(() => {
     if (isOpen) {
       const prevOverflow = document.body.style.overflow;
@@ -33,7 +42,8 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
         zIndex: 99999,
         padding: '16px',
         boxSizing: 'border-box',
-        overflowY: 'auto'
+        overflowY: 'auto',
+        ...overlayStyle
       }}
     >
       <div 
@@ -46,32 +56,35 @@ export const Modal = ({ isOpen, onClose, title, maxWidth = '480px', children }) 
           margin: 'auto',
           boxSizing: 'border-box',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          ...style
         }}
       >
-        <div 
-          className="modal-header-flex" 
-          style={{ 
-            marginBottom: '12px', 
-            paddingBottom: '10px',
-            position: 'sticky',
-            top: 0,
-            background: 'inherit',
-            zIndex: 10,
-            flexShrink: 0
-          }}
-        >
-          {title && <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{title}</h3>}
-          {onClose && (
-            <span 
-              className="modal-close" 
-              onClick={onClose} 
-              style={{ cursor: 'pointer', fontSize: '18px' }}
-            >
-              ✕
-            </span>
-          )}
-        </div>
+        {!hideHeader && (
+          <div 
+            className="modal-header-flex" 
+            style={{ 
+              marginBottom: '12px', 
+              paddingBottom: '10px',
+              position: 'sticky',
+              top: 0,
+              background: 'inherit',
+              zIndex: 10,
+              flexShrink: 0
+            }}
+          >
+            {title && <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>{title}</h3>}
+            {onClose && (
+              <span 
+                className="modal-close" 
+                onClick={onClose} 
+                style={{ cursor: 'pointer', fontSize: '18px' }}
+              >
+                ✕
+              </span>
+            )}
+          </div>
+        )}
         {children}
       </div>
     </div>

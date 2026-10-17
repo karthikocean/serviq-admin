@@ -9,10 +9,11 @@ import MenuApi from '../api/Menu.js';
 import { useAppState, DEFAULT_ROLES } from '../config/AppContext';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
-import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon } from './DeleteConfirmationModal';
+import DeleteConfirmationModal, { ToggleRightIcon, ToggleLeftIcon, UnlockIcon, LockIcon } from './DeleteConfirmationModal';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import SearchableSelect from './SearchableSelect.jsx';
 import { OtpPasswordInput } from './OtpPasswordInput';
+import PasswordRequirements from './common/PasswordRequirements';
 import { 
   resolveBranchManagerName, 
   resolveBranchContactNumber,
@@ -30,7 +31,8 @@ import {
   validatePincode,
   validateBranchName,
   validateBranchCode,
-  validatePassword
+  validatePassword,
+  validateGstin
 } from '../helper/ValidationHelper';
 
 const TableIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -303,6 +305,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [resetPasswordError, setResetPasswordError] = useState('');
+  const [resetPasswordErrors, setResetPasswordErrors] = useState({ newPassword: '', confirmPassword: '', general: '' });
   const [isSavingResetPassword, setIsSavingResetPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showResetConfirmPassword, setShowResetConfirmPassword] = useState(false);
@@ -375,7 +378,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           const resolvedGst = b.gstNumber || b.gstinNumber || b.gstin || b.taxId || b.taxNumber || meta.gstNumber || meta.gstinNumber || meta.gstin || '';
           const resolvedFssai = b.fssaiNumber || b.fssaiLicense || b.fssai || b.fssaiNo || meta.fssaiNumber || meta.fssaiLicense || '';
           const autoCodePref = bCodeStr ? `${String(bCodeStr).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-` : 'INV-';
-          const resolvedBillPrefix = b.billPrefix || b.invoicePrefix || b.billingPrefix || b.prefix || meta.billPrefix || meta.invoicePrefix || autoCodePref;
+          let resolvedBillPrefix = b.billPrefix || b.invoicePrefix || b.billingPrefix || b.prefix || meta.billPrefix || meta.invoicePrefix || '';
+          if (resolvedBillPrefix && (resolvedBillPrefix === autoCodePref || resolvedBillPrefix === `${bCodeStr}-` || resolvedBillPrefix === 'INV-')) {
+            resolvedBillPrefix = '';
+          }
 
           return {
             id: bId,
@@ -397,7 +403,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               pincode: pincodeStr,
               openingDate: b.branchOpeningDate ? b.branchOpeningDate.split('T')[0] : (b.openingDate ? b.openingDate.split('T')[0] : ''),
               status: b.status || 'Active',
-              totalTables: b.totalTables || (Array.isArray(b.tables) ? b.tables.length : 0),
+              totalTables: b.totalTables || b.tablesCount || b.capacity || b.seatingCapacity || b.tableCount || (Array.isArray(b.tables) && b.tables.length > 0 ? b.tables.length : 0) || meta.totalTables || meta.tablesCount || meta.capacity || 10,
               gstNumber: resolvedGst,
               gstinNumber: resolvedGst,
               gstin: resolvedGst,
@@ -406,8 +412,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
               fssai: resolvedFssai,
               billPrefix: resolvedBillPrefix,
               invoicePrefix: resolvedBillPrefix,
-              isMainBranch: b.isMainBranch || false,
-              useCustomMenu: Boolean(b.useCustomMenu)
+              isMainBranch: Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN' || meta.isMainBranch),
+              useCustomMenu: Boolean(b.useCustomMenu ?? b.customMenu ?? b.hasCustomMenu ?? meta.useCustomMenu ?? meta.customMenu ?? false)
             };
         });
         setApiBranches(mappedBranches);
@@ -695,13 +701,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     : (sub.extraBranchPrice || (planName.toLowerCase().includes('premium') ? 499 : (planName.toLowerCase().includes('basic') ? 799 : 699)));
   const extraBranchTotalWithGst = Math.round(extraBranchUnitPrice * 1.18);
 
-  // Branches are fetched with filters and pagination from backend API
-  const filteredBranches = branches;
+  // Branches filtered by status and search term
+  const filteredBranches = useMemo(() => {
+    return (branches || []).filter(b => {
+      if (statusFilter && statusFilter !== 'All') {
+        const bStatus = String(b.status || 'Active').toLowerCase();
+        if (bStatus !== statusFilter.toLowerCase()) return false;
+      }
+      if (searchTerm && searchTerm.trim()) {
+        const q = searchTerm.trim().toLowerCase();
+        const bName = String(b.branchName || b.name || '').toLowerCase();
+        const bCode = String(b.branchCode || b.code || '').toLowerCase();
+        const bMgr = String(b.managerName || b.branchManager || '').toLowerCase();
+        const bCity = String(b.city || '').toLowerCase();
+        const bPhone = String(b.mobileNumber || b.contactNumber || '').toLowerCase();
+        return bName.includes(q) || bCode.includes(q) || bMgr.includes(q) || bCity.includes(q) || bPhone.includes(q);
+      }
+      return true;
+    });
+  }, [branches, statusFilter, searchTerm]);
+
   const limit = 10;
-  const totalPages = Math.max(1, Math.ceil((totalBranchRecords || filteredBranches.length) / limit));
-  const paginatedBranches = (apiBranches && apiBranches.length > 0)
-    ? filteredBranches
-    : filteredBranches.slice(page * limit, (page + 1) * limit);
+  const totalPages = Math.max(1, Math.ceil(filteredBranches.length / limit));
+  const paginatedBranches = filteredBranches.slice(page * limit, (page + 1) * limit);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -858,10 +880,6 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ''
     );
 
-    const isCustomMenuVal = freshBranch.useCustomMenu !== undefined 
-      ? Boolean(freshBranch.useCustomMenu) 
-      : Boolean(branch.useCustomMenu);
-
     const cachedMeta = {
       ...getBranchMetadataFromStorage(targetCode),
       ...getBranchMetadataFromStorage(branch.id),
@@ -870,6 +888,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     };
     const restBranches = activeRestaurant?.branches || [];
     const matchedRestBranch = restBranches.find(rb => String(rb.id || rb._id) === String(targetId)) || {};
+
+    const isCustomMenuVal = Boolean(
+      freshBranch.useCustomMenu ||
+      freshBranch.customMenu ||
+      freshBranch.hasCustomMenu ||
+      freshBranch.menuConfig ||
+      freshBranch.isCustomMenu ||
+      branch.useCustomMenu ||
+      branch.customMenu ||
+      branch.hasCustomMenu ||
+      cachedMeta.useCustomMenu ||
+      cachedMeta.customMenu ||
+      matchedRestBranch.useCustomMenu ||
+      matchedRestBranch.customMenu ||
+      false
+    );
 
     const resolvedGst = (
       (freshBranch.gstNumber && String(freshBranch.gstNumber).trim()) ||
@@ -949,24 +983,29 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ''
     ).trim();
 
-    const fallbackAutoPrefix = branchCodeVal
-      ? `${String(branchCodeVal).replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}-`
-      : 'INV-';
+    const cleanCode = branchCodeVal.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const autoPrefix1 = cleanCode ? `${cleanCode}-` : '';
+    const autoPrefix2 = branchCodeVal ? `${branchCodeVal.toUpperCase()}-` : '';
 
-    const resolvedBillPrefix = (rawBillPrefix && String(rawBillPrefix).trim())
+    let resolvedBillPrefix = (rawBillPrefix && String(rawBillPrefix).trim())
       ? String(rawBillPrefix).trim().toUpperCase()
-      : fallbackAutoPrefix;
+      : '';
+
+    // If resolvedBillPrefix was just the auto-generated code prefix (e.g. BR473- or INV-) that was automatically injected, clear it so it stays empty
+    if (resolvedBillPrefix && (resolvedBillPrefix === autoPrefix1 || resolvedBillPrefix === autoPrefix2 || resolvedBillPrefix === 'INV-')) {
+      resolvedBillPrefix = '';
+    }
 
     const rawAddress = (typeof freshBranch.address === 'string' && freshBranch.address.trim()) ? freshBranch.address.trim() : ((typeof branch.address === 'string' && branch.address.trim()) ? branch.address.trim() : ((typeof matchedRestBranch.address === 'string' && matchedRestBranch.address.trim()) ? matchedRestBranch.address.trim() : ''));
     const streetFallback = freshBranch.address?.street || freshBranch.address?.addressLine1 || freshBranch.street || branch.address?.street || branch.street || matchedRestBranch.address?.street || cachedMeta?.address || '';
     const resolvedAddress = rawAddress || streetFallback || '';
 
     const resolvedCity = freshBranch.city || freshBranch.address?.city || branch.city || branch.address?.city || matchedRestBranch.city || matchedRestBranch.address?.city || cachedMeta?.city || '';
-    const resolvedState = freshBranch.state || freshBranch.address?.state || branch.state || branch.address?.state || matchedRestBranch.state || matchedRestBranch.address?.state || cachedMeta?.state || 'Tamil Nadu';
-    const resolvedCountry = freshBranch.country || freshBranch.address?.country || branch.country || branch.address?.country || matchedRestBranch.country || cachedMeta?.country || 'India';
+    const resolvedState = freshBranch.state || freshBranch.address?.state || branch.state || branch.address?.state || matchedRestBranch.state || matchedRestBranch.address?.state || cachedMeta?.state || '';
+    const resolvedCountry = freshBranch.country || freshBranch.address?.country || branch.country || branch.address?.country || matchedRestBranch.country || cachedMeta?.country || '';
     const resolvedPincode = freshBranch.pincode || freshBranch.address?.pincode || freshBranch.postalCode || branch.pincode || branch.address?.pincode || branch.postalCode || matchedRestBranch.pincode || cachedMeta?.pincode || '';
 
-    const rawTables = freshBranch.totalTables || freshBranch.tablesCount || freshBranch.capacity || branch.totalTables || branch.tablesCount || matchedRestBranch.totalTables || (Array.isArray(freshBranch.tables) && freshBranch.tables.length > 0 ? freshBranch.tables.length : (Array.isArray(branch.tables) && branch.tables.length > 0 ? branch.tables.length : 10));
+    const rawTables = freshBranch.totalTables || freshBranch.tablesCount || freshBranch.capacity || branch.totalTables || branch.tablesCount || cachedMeta.totalTables || cachedMeta.tablesCount || cachedMeta.capacity || matchedRestBranch.totalTables || (Array.isArray(freshBranch.tables) && freshBranch.tables.length > 0 ? freshBranch.tables.length : (Array.isArray(branch.tables) && branch.tables.length > 0 ? branch.tables.length : ''));
 
     setBranchForm({
       id: freshBranch.id || freshBranch._id || targetId,
@@ -984,9 +1023,9 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       state: resolvedState,
       city: resolvedCity,
       pincode: resolvedPincode,
-      openingDate: freshBranch.openingDate ? String(freshBranch.openingDate).split('T')[0] : (freshBranch.branchOpeningDate ? String(freshBranch.branchOpeningDate).split('T')[0] : (branch.openingDate ? String(branch.openingDate).split('T')[0] : new Date().toISOString().split('T')[0])),
+      openingDate: freshBranch.openingDate ? String(freshBranch.openingDate).split('T')[0] : (freshBranch.branchOpeningDate ? String(freshBranch.branchOpeningDate).split('T')[0] : (branch.openingDate ? String(branch.openingDate).split('T')[0] : '')),
       status: freshBranch.status || branch.status || matchedRestBranch.status || 'Active',
-      totalTables: Number(rawTables) || 10,
+      totalTables: rawTables !== '' && rawTables !== undefined && rawTables !== null ? Number(rawTables) : '',
       username: freshBranch.username || branch.username || '',
       gstNumber: resolvedGst,
       fssaiNumber: resolvedFssai,
@@ -1065,6 +1104,12 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       if (typeof updateBranch === 'function') {
         updateBranch(branchId, { status: newStatus });
       }
+      if (newStatus === 'Inactive') {
+        try {
+          localStorage.setItem('serviq_branch_status_change', JSON.stringify({ branchId: String(branchId), status: 'Inactive', timestamp: Date.now() }));
+          window.dispatchEvent(new CustomEvent('serviq_branch_status_change', { detail: { branchId: String(branchId), status: 'Inactive' } }));
+        } catch (_) {}
+      }
       ShowNotifications.showAlertNotification(
         `Branch "${branch.branchName || branch.name}" is now ${newStatus}.`,
         true
@@ -1073,10 +1118,62 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     } catch (err) {
       console.error("Failed to update branch status", err);
       setApiBranches(prev => prev.map(b => (b.id === branchId || b._id === branchId) ? { ...b, status: newStatus } : b));
+      if (newStatus === 'Inactive') {
+        try {
+          localStorage.setItem('serviq_branch_status_change', JSON.stringify({ branchId: String(branchId), status: 'Inactive', timestamp: Date.now() }));
+          window.dispatchEvent(new CustomEvent('serviq_branch_status_change', { detail: { branchId: String(branchId), status: 'Inactive' } }));
+        } catch (_) {}
+      }
       ShowNotifications.showAlertNotification(
         `Branch "${branch.branchName || branch.name}" is now ${newStatus}.`,
         true
       );
+    }
+  };
+
+  const handlePromoteToMain = async (targetBranch) => {
+    const targetId = targetBranch.id || targetBranch._id;
+    try {
+      // 1. Demote any currently active main branch
+      const currentMain = (apiBranches || []).find(b => {
+        const bId = b.id || b._id;
+        return String(bId) !== String(targetId) && Boolean(b.isMainBranch || b.branchType === 'MAIN');
+      });
+      if (currentMain) {
+        const cId = currentMain.id || currentMain._id;
+        try {
+          await BranchApi.updateBranch(cId, { isMainBranch: false, branchType: 'SUB' });
+        } catch (_) {}
+        saveBranchMetadataToStorage(cId, { isMainBranch: false, branchType: 'SUB' }, currentMain.branchCode);
+      }
+      // 2. Promote target branch to main branch
+      await BranchApi.updateBranch(targetId, { isMainBranch: true, branchType: 'MAIN' });
+      saveBranchMetadataToStorage(targetId, { isMainBranch: true, branchType: 'MAIN' }, targetBranch.branchCode);
+      setApiBranches(prev => prev.map(b => {
+        const bId = b.id || b._id;
+        if (String(bId) === String(targetId)) return { ...b, isMainBranch: true, branchType: 'MAIN' };
+        if (currentMain && String(bId) === String(currentMain.id || currentMain._id)) return { ...b, isMainBranch: false, branchType: 'SUB' };
+        return b;
+      }));
+      ShowNotifications.showAlertNotification(`"${targetBranch.branchName || targetBranch.name}" is now the Main Branch.`, true);
+      fetchBranches();
+    } catch (err) {
+      console.error("Failed to promote branch to main:", err);
+      ShowNotifications.showAlertNotification("Failed to update branch type. Please try again.", false);
+    }
+  };
+
+  const handleDemoteToSub = async (targetBranch) => {
+    const targetId = targetBranch.id || targetBranch._id;
+    try {
+      await BranchApi.updateBranch(targetId, { isMainBranch: false, branchType: 'SUB' });
+      saveBranchMetadataToStorage(targetId, { isMainBranch: false, branchType: 'SUB' }, targetBranch.branchCode);
+      setApiBranches(prev => prev.map(b => (String(b.id || b._id) === String(targetId)) ? { ...b, isMainBranch: false, branchType: 'SUB' } : b));
+      ShowNotifications.showAlertNotification(`"${targetBranch.branchName || targetBranch.name}" is now a Sub Branch.`, true);
+      fetchBranches();
+    } catch (err) {
+      console.error("Failed to demote branch to sub:", err);
+      ShowNotifications.showAlertNotification("Failed to update branch type. Please try again.", false);
     }
   };
 
@@ -1085,23 +1182,31 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
     setNewPassword('');
     setConfirmNewPassword('');
     setResetPasswordError('');
+    setResetPasswordErrors({ newPassword: '', confirmPassword: '', general: '' });
     setShowResetPassword(false);
     setShowResetConfirmPassword(false);
   };
 
   const handleSaveResetPassword = async (e) => {
     e.preventDefault();
-    const pwdErr = validatePassword(newPassword, 'New Password');
-    if (pwdErr) {
-      setResetPasswordError(pwdErr);
-      return;
+    const newErrors = { newPassword: '', confirmPassword: '', general: '' };
+    if (!newPassword || !String(newPassword).trim()) {
+      newErrors.newPassword = 'New password is required.';
+    } else {
+      const pwdErr = validatePassword(newPassword, 'New Password');
+      if (pwdErr) {
+        newErrors.newPassword = pwdErr;
+      }
     }
-    if (!confirmNewPassword) {
-      setResetPasswordError('Please confirm the new password.');
-      return;
+    if (!confirmNewPassword || !String(confirmNewPassword).trim()) {
+      newErrors.confirmPassword = 'Confirm new password is required.';
+    } else if (newPassword !== confirmNewPassword) {
+      newErrors.confirmPassword = 'Passwords do not match.';
     }
-    if (newPassword !== confirmNewPassword) {
-      setResetPasswordError('Passwords do not match.');
+
+    if (newErrors.newPassword || newErrors.confirmPassword) {
+      setResetPasswordErrors(newErrors);
+      setResetPasswordError('');
       return;
     }
 
@@ -1120,6 +1225,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         setNewPassword('');
         setConfirmNewPassword('');
         setResetPasswordError('');
+        setResetPasswordErrors({ newPassword: '', confirmPassword: '', general: '' });
         return;
       }
 
@@ -1137,17 +1243,20 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           setNewPassword('');
           setConfirmNewPassword('');
           setResetPasswordError('');
+          setResetPasswordErrors({ newPassword: '', confirmPassword: '', general: '' });
           return;
         }
       }
 
-      ShowNotifications.showAlertNotification(
-        branchRes?.message || "Could not update password. Please check the branch manager account and try again.",
-        false
-      );
+      const failMsg = branchRes?.message || "Could not update password. Please check the branch manager account and try again.";
+      setResetPasswordErrors(prev => ({ ...prev, general: failMsg }));
+      setResetPasswordError(failMsg);
+      ShowNotifications.showAlertNotification(failMsg, false);
     } catch (err) {
       console.error("Failed to reset password:", err);
-      ShowNotifications.showAlertNotification("Failed to reset password. Please try again.", false);
+      const errDetail = err?.response?.data?.message || err?.message || "An unexpected error occurred while resetting password.";
+      setResetPasswordErrors(prev => ({ ...prev, general: errDetail }));
+      setResetPasswordError(errDetail);
     } finally {
       setIsSavingResetPassword(false);
     }
@@ -1191,17 +1300,17 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.totalTables = 'Total Tables Capacity is required (at least 1 table).';
     }
 
-    // 5. Branch Manager (Manager Name) validation
+    // 5. Branch Manager (Manager Name) validation (Letters & spaces only)
     const managerTrimmed = (branchForm.managerName || branchForm.branchManager || '').trim();
     if (!managerTrimmed || managerTrimmed.toLowerCase() === 'unassigned') {
       errors.managerName = 'Branch Manager name is required.';
     } else if (managerTrimmed.length < 2) {
       errors.managerName = 'Branch Manager name must be at least 2 characters.';
-    } else if (!/^[a-zA-Z0-9\s.'()-]+$/.test(managerTrimmed)) {
-      errors.managerName = 'Branch Manager name contains invalid special characters.';
+    } else if (!/^[a-zA-Z\s.,'’-]+$/.test(managerTrimmed)) {
+      errors.managerName = 'Branch Manager name must contain letters only (no numbers or special symbols).';
     }
 
-    // 6. Mobile Number (Exactly 10 digits)
+    // 6. Mobile Number (Exactly 10 digits) - Single manager can handle multiple branches
     const mobileTrimmed = (branchForm.mobileNumber || '').trim();
     const mobileErr = validateMobile(mobileTrimmed);
     if (mobileErr) {
@@ -1210,7 +1319,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number.';
     }
 
-    // 7. Email Address validation
+    // 7. Email Address validation - Single manager can handle multiple branches
     const emailTrimmed = (branchForm.email || '').trim().toLowerCase();
     const emailErr = validateEmail(emailTrimmed);
     if (emailErr) {
@@ -1225,34 +1334,34 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.address = 'Street Address must be at least 3 characters.';
     }
 
-    // 9. City validation
+    // 9. City validation (Letters & spaces only)
     const cityTrimmed = (branchForm.city || '').trim();
     if (!cityTrimmed) {
       errors.city = 'City is required.';
     } else if (cityTrimmed.length < 2) {
       errors.city = 'City must be at least 2 characters.';
-    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(cityTrimmed)) {
-      errors.city = 'City contains invalid characters.';
+    } else if (!/^[a-zA-Z\s.,'’-]+$/.test(cityTrimmed)) {
+      errors.city = 'City must contain letters only (no numbers or special symbols).';
     }
 
-    // 10. State validation
+    // 10. State validation (Letters & spaces only)
     const stateTrimmed = (branchForm.state || '').trim();
     if (!stateTrimmed) {
       errors.state = 'State is required.';
     } else if (stateTrimmed.length < 2) {
       errors.state = 'State must be at least 2 characters.';
-    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(stateTrimmed)) {
-      errors.state = 'State contains invalid characters.';
+    } else if (!/^[a-zA-Z\s.,'’&-]+$/.test(stateTrimmed)) {
+      errors.state = 'State must contain letters only (no numbers or special symbols).';
     }
 
-    // 11. Country validation
+    // 11. Country validation (Letters & spaces only)
     const countryTrimmed = (branchForm.country || '').trim();
     if (!countryTrimmed) {
       errors.country = 'Country is required.';
     } else if (countryTrimmed.length < 2) {
       errors.country = 'Country must be at least 2 characters.';
-    } else if (!/^[a-zA-Z0-9\s.,'/-]+$/.test(countryTrimmed)) {
-      errors.country = 'Country contains invalid characters.';
+    } else if (!/^[a-zA-Z\s.,'’-]+$/.test(countryTrimmed)) {
+      errors.country = 'Country must contain letters only (no numbers or special symbols).';
     }
 
     // 12. Pincode (Postal Code) - Exactly 6 digits
@@ -1262,10 +1371,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.pincode = pinErr;
     }
 
-    // 13. GSTIN validation (if entered, exactly 15 characters)
+    // 13. GSTIN validation (if entered, valid 15-character format)
     const gstTrimmed = (branchForm.gstNumber || '').trim();
-    if (gstTrimmed && gstTrimmed.length !== 15) {
-      errors.gstNumber = 'GSTIN must contain exactly 15 alphanumeric characters.';
+    if (gstTrimmed) {
+      const gstErr = validateGstin(gstTrimmed);
+      if (gstErr) errors.gstNumber = gstErr;
     }
 
     // 14. FSSAI License validation (if entered, exactly 14 digits)
@@ -1274,11 +1384,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       errors.fssaiNumber = 'FSSAI License Number must contain exactly 14 digits.';
     }
 
-    // 15. Manager Password validation (Required on Add Branch, or when updating password on Edit)
-    if (!isEditing || (isEditing && (branchForm.password || branchForm.confirmPassword))) {
-      const passErr = validatePassword(branchForm.password, 'Manager Password');
-      if (passErr) {
-        errors.password = passErr;
+    // 15. Manager Password validation (Required on Add Branch only)
+    if (!isEditing) {
+      if (!branchForm.password) {
+        errors.password = 'Manager Password is required.';
+      } else {
+        const passErr = validatePassword(branchForm.password, 'Manager Password');
+        if (passErr) {
+          errors.password = passErr;
+        }
       }
       if (!branchForm.confirmPassword) {
         errors.confirmPassword = 'Please confirm the password.';
@@ -1301,25 +1415,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       return;
     }
 
-    // Verify only one branch can be the Main Branch
+    // Check if another branch is currently Main Branch so we can seamlessly switch upon save
+    let previousMainBranchToDemote = null;
     if (branchForm.isMainBranch) {
       const allExisting = (apiBranches && apiBranches.length > 0)
         ? apiBranches
         : (activeRestaurant?.branches || []);
       const currentIdStr = String(branchForm.id || '');
-      const existingMain = allExisting.find(b => {
+      previousMainBranchToDemote = allExisting.find(b => {
         const bId = String(b.id || b._id || '');
         const isOther = !currentIdStr || bId !== currentIdStr;
         return isOther && Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN');
       });
-      if (existingMain) {
-        const mainName = existingMain.branchName || existingMain.name || 'Another branch';
-        ShowNotifications.showAlertNotification(
-          `"${mainName}" is already set as the Main Branch. Only one branch can be the Main Branch.`,
-          false
-        );
-        return;
-      }
     }
 
     const branchNameTrimmed = (branchForm.branchName || branchForm.name || '').trim();
@@ -1400,15 +1507,15 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       fssaiNumber: (branchForm.fssaiNumber || '').trim(),
       fssaiLicense: (branchForm.fssaiNumber || '').trim(),
       fssai: (branchForm.fssaiNumber || '').trim(),
-      billPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-      invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-      billingPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-      prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-      bill_prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-      invoice_prefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
+      billPrefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+      invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+      billingPrefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+      prefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+      bill_prefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+      invoice_prefix: (branchForm.billPrefix || '').trim().toUpperCase(),
       billingConfig: {
-        billPrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-'),
-        invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase() || ((branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-')
+        billPrefix: (branchForm.billPrefix || '').trim().toUpperCase(),
+        invoicePrefix: (branchForm.billPrefix || '').trim().toUpperCase()
       },
       ...(restId ? { restaurantId: restId, restaurant: restId } : {})
     };
@@ -1421,6 +1528,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
       const res = await BranchApi.updateBranch(branchForm.id, payload);
       if (res && res.status) {
+        if (payload.status === 'Inactive') {
+          try {
+            localStorage.setItem('serviq_branch_status_change', JSON.stringify({ branchId: String(branchForm.id), status: 'Inactive', timestamp: Date.now() }));
+            window.dispatchEvent(new CustomEvent('serviq_branch_status_change', { detail: { branchId: String(branchForm.id), status: 'Inactive' } }));
+          } catch (_) {}
+        }
+
+        if (previousMainBranchToDemote) {
+          const prevId = previousMainBranchToDemote.id || previousMainBranchToDemote._id;
+          try {
+            await BranchApi.updateBranch(prevId, { isMainBranch: false, branchType: 'SUB' });
+          } catch (_) {}
+          saveBranchMetadataToStorage(prevId, { isMainBranch: false, branchType: 'SUB' }, previousMainBranchToDemote.branchCode);
+          setApiBranches(prev => prev.map(b => (b.id === prevId || b._id === prevId) ? { ...b, isMainBranch: false, branchType: 'SUB' } : b));
+        }
+
         // Synchronize manager name, email, phone with associated manager user record
         const targetBranch = apiBranches.find(b => (b.id === branchForm.id || b._id === branchForm.id));
         
@@ -1484,26 +1607,33 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           } catch (passErr) {
             console.warn("Could not update manager user info via UserApi:", passErr);
           }
-        } else if (managerVal) {
-          // If no user exists for this branch manager yet, create one
-          try {
-            await UserApi.createUser({
-              name: managerVal,
-              email: branchForm.email,
-              phoneNumber: branchForm.mobileNumber,
-              password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
-              role: 'Manager',
-              branchId: branchForm.id
-            });
-          } catch (createErr) {
-            console.warn("Could not create manager user on branch edit:", createErr);
+        } else if (managerVal && branchForm.email) {
+          // If no user exists for this branch manager yet, create one silently if not already in system
+          const userAlreadyExists = (apiUsers || []).some(u => {
+            const uEmail = String(u.email || '').toLowerCase().trim();
+            const uPhone = String(u.phone || u.phoneNumber || u.mobileNumber || '').trim();
+            return (uEmail && uEmail === branchForm.email?.toLowerCase().trim()) || (branchForm.mobileNumber && uPhone === branchForm.mobileNumber);
+          });
+          if (!userAlreadyExists) {
+            try {
+              await UserApi.createUser({
+                name: managerVal,
+                email: branchForm.email,
+                phoneNumber: branchForm.mobileNumber,
+                password: branchForm.password && String(branchForm.password).trim() ? String(branchForm.password).trim() : '123456',
+                role: 'Manager',
+                branchId: branchForm.id
+              }, { silent: true });
+            } catch (createErr) {
+              console.warn("Could not create manager user on branch edit:", createErr);
+            }
           }
         }
 
         const autoPrefix = (branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-';
         const gstVal = (branchForm.gstNumber || '').trim().toUpperCase();
         const fssaiVal = (branchForm.fssaiNumber || '').trim();
-        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase() || autoPrefix;
+        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase();
 
         const updatedBranchObj = {
           ...payload,
@@ -1513,6 +1643,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           branchName: branchNameTrimmed,
           managerName: managerVal,
           branchManager: managerVal,
+          totalTables: totalTablesVal,
+          tablesCount: totalTablesVal,
+          capacity: totalTablesVal,
+          isMainBranch: Boolean(branchForm.isMainBranch),
+          branchType: branchForm.isMainBranch ? 'MAIN' : 'SUB',
           gstNumber: gstVal,
           gstinNumber: gstVal,
           gstin: gstVal,
@@ -1523,7 +1658,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           invoicePrefix: billPrefixVal,
           billingPrefix: billPrefixVal,
           prefix: billPrefixVal,
-          useCustomMenu: !!branchForm.useCustomMenu
+          useCustomMenu: Boolean(branchForm.useCustomMenu),
+          customMenu: Boolean(branchForm.useCustomMenu)
         };
 
         // Cache immediately so entered metadata is never lost
@@ -1537,36 +1673,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         await fetchBranches();
         setActiveView('list');
       } else {
-        const rawErr = String(
-          res?.message ||
-          res?.response?.message ||
-          res?.response?.data?.message ||
-          res?.response?.data?.error ||
-          res?.response?.error ||
-          (typeof res?.response === 'string' ? res.response : '') ||
-          ''
-        );
-        const hasEmailErr = /email/i.test(rawErr);
-        const hasMobileErr = /mobile|phone|contact/i.test(rawErr);
-        const hasDuplicateErr = /duplicate|already exists/i.test(rawErr);
-
-        if (hasEmailErr && hasMobileErr) {
-          setFormErrors(prev => ({
-            ...prev,
-            email: 'A user with this email already exists.',
-            mobileNumber: 'A user with this mobile number already exists.'
-          }));
-        } else if (hasEmailErr) {
-          setFormErrors(prev => ({
-            ...prev,
-            email: 'This email is already registered to another branch/user.'
-          }));
-        } else if (hasMobileErr || (hasDuplicateErr && !/name|code/i.test(rawErr))) {
-          setFormErrors(prev => ({
-            ...prev,
-            mobileNumber: 'This mobile number is already registered to another branch/user.'
-          }));
-        }
+        ShowNotifications.showAlertNotification(res?.message || res?.response?.message || "Failed to update branch. Please try again.", false);
       }
     } else {
       if (branches.length >= totalAllowedBranches) {
@@ -1578,6 +1685,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         return;
       }
       if (!hasPermission('branch-management', 'add')) {
+        
         ShowNotifications.showAlertNotification("You do not have permission to add new branches.", false);
         return;
       }
@@ -1593,28 +1701,52 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         const branchDoc = createdData?.branch || createdData?.data?.branch || createdData;
         const createdId = branchDoc?._id || branchDoc?.id || createdData?._id || createdData?.id;
 
-        // Create manager user if manager details were provided
-        if (managerVal && emailStr) {
+        if (payload.status === 'Inactive') {
           try {
-            await UserApi.createUser({
-              name: managerVal,
-              email: emailStr,
-              phoneNumber: phoneStr,
-              mobileNumber: phoneStr,
-              password: String(branchForm.password).trim(),
-              role: 'Manager',
-              branchId: createdId,
-              status: 'Active'
-            });
-          } catch (mgrErr) {
-            console.warn("Manager user sync note:", mgrErr);
+            localStorage.setItem('serviq_branch_status_change', JSON.stringify({ branchId: String(createdId), status: 'Inactive', timestamp: Date.now() }));
+            window.dispatchEvent(new CustomEvent('serviq_branch_status_change', { detail: { branchId: String(createdId), status: 'Inactive' } }));
+          } catch (_) {}
+        }
+
+        if (previousMainBranchToDemote) {
+          const prevId = previousMainBranchToDemote.id || previousMainBranchToDemote._id;
+          try {
+            await BranchApi.updateBranch(prevId, { isMainBranch: false, branchType: 'SUB' });
+          } catch (_) {}
+          saveBranchMetadataToStorage(prevId, { isMainBranch: false, branchType: 'SUB' }, previousMainBranchToDemote.branchCode);
+          setApiBranches(prev => prev.map(b => (b.id === prevId || b._id === prevId) ? { ...b, isMainBranch: false, branchType: 'SUB' } : b));
+        }
+
+        // Create manager user if manager details were provided and user doesn't already exist
+        // Note: Call with { silent: true } to prevent spurious error notifications overriding the branch success toast
+        if (managerVal && emailStr) {
+          const userAlreadyExists = (apiUsers || []).some(u => {
+            const uEmail = String(u.email || '').toLowerCase().trim();
+            const uPhone = String(u.phone || u.phoneNumber || u.mobileNumber || '').trim();
+            return (uEmail && uEmail === emailStr.toLowerCase().trim()) || (phoneStr && uPhone === phoneStr);
+          });
+          if (!userAlreadyExists) {
+            try {
+              await UserApi.createUser({
+                name: managerVal,
+                email: emailStr,
+                phoneNumber: phoneStr,
+                mobileNumber: phoneStr,
+                password: String(branchForm.password).trim(),
+                role: 'Manager',
+                branchId: createdId,
+                status: 'Active'
+              }, { silent: true });
+            } catch (mgrErr) {
+              console.warn("Manager user sync note:", mgrErr);
+            }
           }
         }
 
         const autoPrefix = (branchForm.branchCode || 'INV').replace(/[^a-zA-Z0-9]/g, '').toUpperCase() + '-';
         const gstVal = (branchForm.gstNumber || '').trim().toUpperCase();
         const fssaiVal = (branchForm.fssaiNumber || '').trim();
-        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase() || autoPrefix;
+        const billPrefixVal = (branchForm.billPrefix || '').trim().toUpperCase();
 
         const newBranchObj = {
           ...payload,
@@ -1622,6 +1754,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           _id: createdId,
           branchManager: managerVal,
           managerName: managerVal,
+          totalTables: totalTablesVal,
+          tablesCount: totalTablesVal,
+          capacity: totalTablesVal,
+          isMainBranch: Boolean(branchForm.isMainBranch),
+          branchType: branchForm.isMainBranch ? 'MAIN' : 'SUB',
           gstNumber: gstVal,
           gstinNumber: gstVal,
           gstin: gstVal,
@@ -1632,7 +1769,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
           invoicePrefix: billPrefixVal,
           billingPrefix: billPrefixVal,
           prefix: billPrefixVal,
-          useCustomMenu: Boolean(branchForm.useCustomMenu)
+          useCustomMenu: Boolean(branchForm.useCustomMenu),
+          customMenu: Boolean(branchForm.useCustomMenu)
         };
 
         // Cache immediately so entered metadata is never lost
@@ -1646,39 +1784,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         await fetchBranches();
         setActiveView('list');
       } else {
-        const rawErr = String(
-          res?.message ||
-          res?.response?.message ||
-          res?.response?.data?.message ||
-          res?.response?.data?.error ||
-          res?.response?.error ||
-          (typeof res?.response === 'string' ? res.response : '') ||
-          ''
-        );
-
-        const hasEmailErr = /email/i.test(rawErr);
-        const hasMobileErr = /mobile|phone|contact/i.test(rawErr);
-        const hasDuplicateErr = /duplicate|already exists/i.test(rawErr);
-
-        if (hasEmailErr && hasMobileErr) {
-          setFormErrors(prev => ({
-            ...prev,
-            email: 'A user with this email already exists.',
-            mobileNumber: 'A user with this mobile number already exists.'
-          }));
-        } else if (hasEmailErr && hasDuplicateErr) {
-          setFormErrors(prev => ({
-            ...prev,
-            email: 'This email is already registered to another branch/user.'
-          }));
-        } else if (hasMobileErr && hasDuplicateErr) {
-          setFormErrors(prev => ({
-            ...prev,
-            mobileNumber: 'This mobile number is already registered to another branch/user.'
-          }));
-        } else {
-          ShowNotifications.showAlertNotification(res?.message || res?.response?.message || "Failed to create branch. Please try again.", false);
-        }
+        ShowNotifications.showAlertNotification(res?.message || res?.response?.message || "Failed to create branch. Please try again.", false);
       }
     }
   };
@@ -1715,7 +1821,10 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
       ...baseCurrentViewBranch,
       gstNumber: baseCurrentViewBranch.gstNumber || baseCurrentViewBranch.gstinNumber || baseCurrentViewBranch.gstin || meta.gstNumber || meta.gstinNumber || meta.gstin || '',
       fssaiNumber: baseCurrentViewBranch.fssaiNumber || baseCurrentViewBranch.fssaiLicense || baseCurrentViewBranch.fssai || meta.fssaiNumber || meta.fssaiLicense || '',
-      billPrefix: baseCurrentViewBranch.billPrefix || baseCurrentViewBranch.invoicePrefix || meta.billPrefix || meta.invoicePrefix || autoCodePref
+      billPrefix: (() => {
+        const pref = baseCurrentViewBranch.billPrefix || baseCurrentViewBranch.invoicePrefix || meta.billPrefix || meta.invoicePrefix || '';
+        return (pref === autoCodePref || pref === `${bCode}-` || pref === 'INV-') ? '' : pref;
+      })()
     };
   }, [baseCurrentViewBranch]);
 
@@ -2375,7 +2484,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 </span>
                 <div style={{ fontSize: '13px', fontWeight: 800, color: '#ea580c', fontFamily: 'monospace' }}>
                   <span style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', padding: '4px 10px', borderRadius: '6px', display: 'inline-block' }}>
-                    {currentViewBranch?.billPrefix || currentViewBranch?.invoicePrefix || currentViewBranch?.billingPrefix || 'Default (Auto)'}
+                    {currentViewBranch?.billPrefix || currentViewBranch?.invoicePrefix || currentViewBranch?.billingPrefix || 'Not Configured'}
                   </span>
                 </div>
               </div>
@@ -3242,26 +3351,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         checked={!!branchForm.isMainBranch}
                         onChange={e => {
                           const willBeMain = e.target.checked;
-                          if (willBeMain) {
-                            const allExisting = (apiBranches && apiBranches.length > 0)
-                              ? apiBranches
-                              : (activeRestaurant?.branches || []);
-                            const currentIdStr = String(branchForm.id || '');
-                            const existingMain = allExisting.find(b => {
-                              const bId = String(b.id || b._id || '');
-                              const isOther = !currentIdStr || bId !== currentIdStr;
-                              return isOther && Boolean(b.isMainBranch || b.branchType === 'MAIN' || b.type === 'MAIN');
-                            });
-                            if (existingMain) {
-                              const mainName = existingMain.branchName || existingMain.name || 'Another branch';
-                              ShowNotifications.showAlertNotification(
-                                `"${mainName}" is already set as the Main Branch. Only one branch can be the Main Branch.`,
-                                false
-                              );
-                              return;
-                            }
-                          }
                           setBranchForm({ ...branchForm, isMainBranch: willBeMain });
+                          if (formErrors.isMainBranch) setFormErrors({ ...formErrors, isMainBranch: '' });
                         }}
                         style={{
                           width: '18px',
@@ -3275,16 +3366,22 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
-                            Set as Main Branch
+                            {branchForm.isMainBranch ? 'Main Branch (Headquarter)' : 'Set as Main Branch'}
                           </span>
-                          {branchForm.isMainBranch && (
+                          {branchForm.isMainBranch ? (
                             <span style={{ fontSize: '10px', background: '#fef3c7', color: '#b45309', padding: '1px 7px', borderRadius: '12px', fontWeight: 800, border: '1px solid #fde68a' }}>
                               ★ Primary Headquarter
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '10px', background: '#f1f5f9', color: '#475569', padding: '1px 7px', borderRadius: '12px', fontWeight: 700, border: '1px solid #e2e8f0' }}>
+                              Sub Branch
                             </span>
                           )}
                         </div>
                         <span style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
-                          Mark this branch as the primary / headquarter location for centralized operations and full visibility.
+                          {branchForm.isMainBranch
+                            ? '★ Designated as Main Branch. (If another branch was currently Main Branch, saving will automatically set it as a Sub Branch).'
+                            : 'Currently set as a Sub Branch. Check this box to convert this location into the primary Main Branch.'}
                         </span>
                       </div>
                     </label>
@@ -3297,7 +3394,8 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                 <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   2. Branch Manager & Contact Information
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                {/* Top Row: Manager Name, Mobile, Email */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: !isEditing ? '16px' : '0' }}>
                   
                   {/* Field 5: Manager Name */}
                   <div>
@@ -3311,6 +3409,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       onChange={e => {
                         setBranchForm({ ...branchForm, managerName: e.target.value, branchManager: e.target.value });
                         if (formErrors.managerName) setFormErrors({ ...formErrors, managerName: '' });
+                      }}
+                      onBlur={() => {
+                        const val = (branchForm.managerName || '').trim();
+                        if (!val) {
+                          setFormErrors(prev => ({ ...prev, managerName: 'Branch Manager name is required.' }));
+                        } else if (val.length < 2) {
+                          setFormErrors(prev => ({ ...prev, managerName: 'Branch Manager name must be at least 2 characters.' }));
+                        } else if (!/^[a-zA-Z\s.,'’-]+$/.test(val)) {
+                          setFormErrors(prev => ({ ...prev, managerName: 'Branch Manager name must contain letters only (no numbers or special symbols).' }));
+                        }
                       }}
                       style={{
                         width: '100%',
@@ -3398,289 +3506,128 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                       </span>
                     )}
                   </div>
+                </div>
 
-                  {/* Field 8 & 9: Manager Password & Confirm Password */}
-                  {!isEditing ? (
-                    <>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                          Manager Password <span style={{ color: '#ef4444' }}>*</span>
-                        </label>
-                        <div style={{ position: 'relative' }}>
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            name="branch_mgr_password_field"
-                            autoComplete="new-password"
-                            placeholder="Enter manager password"
-                            value={branchForm.password}
-                            onChange={e => {
-                              setBranchForm({ ...branchForm, password: e.target.value });
-                              if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '12px 42px 12px 16px',
-                              borderRadius: '8px',
-                              border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                              backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
-                              boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
-                              fontSize: '14px',
-                              boxSizing: 'border-box'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            style={{
-                              position: 'absolute',
-                              right: '12px',
-                              top: '50%',
-                              transform: 'translateY(-50%)',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              color: '#64748b',
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '4px'
-                            }}
-                            title={showPassword ? "Hide password" : "Show password"}
-                          >
-                            {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                          </button>
-                        </div>
-                        {formErrors.password && (
-                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                            {formErrors.password}
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                          Confirm Password <span style={{ color: '#ef4444' }}>*</span>
-                        </label>
-                        <div style={{ position: 'relative' }}>
-                          <input
-                            type={showConfirmPassword ? 'text' : 'password'}
-                            name="branch_mgr_confirm_password_field"
-                            autoComplete="new-password"
-                            placeholder="Re-enter password"
-                            value={branchForm.confirmPassword}
-                            onChange={e => {
-                              setBranchForm({ ...branchForm, confirmPassword: e.target.value });
-                              if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '12px 42px 12px 16px',
-                              borderRadius: '8px',
-                              border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                              backgroundColor: formErrors.confirmPassword ? '#fef2f2' : '#ffffff',
-                              boxShadow: formErrors.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
-                              fontSize: '14px',
-                              boxSizing: 'border-box'
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            style={{
-                              position: 'absolute',
-                              right: '12px',
-                              top: '50%',
-                              transform: 'translateY(-50%)',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              color: '#64748b',
-                              display: 'flex',
-                              alignItems: 'center',
-                              padding: '4px'
-                            }}
-                            title={showConfirmPassword ? "Hide password" : "Show password"}
-                          >
-                            {showConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                          </button>
-                        </div>
-                        {formErrors.confirmPassword && (
-                          <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                            {formErrors.confirmPassword}
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ gridColumn: '1 / -1' }}>
-                        <PasswordRequirements
-                          password={branchForm.password}
-                          confirmPassword={branchForm.confirmPassword}
-                          showConfirmMatch={true}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ gridColumn: '1 / -1', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
-                            Reset / Forgot Manager Password
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                            Update or reset the login password for branch manager <strong>{branchForm.managerName || branchForm.branchManager || 'Manager'}</strong>.
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextState = !showEditPasswordFields;
-                            setShowEditPasswordFields(nextState);
-                            if (!nextState) {
-                              setBranchForm(prev => ({ ...prev, password: '', confirmPassword: '' }));
-                              setFormErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
-                            }
+                {/* Bottom Row: Manager Password & Confirm Password Side-by-Side */}
+                {!isEditing && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                        Manager Password <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          name="branch_mgr_password_field"
+                          autoComplete="new-password"
+                          placeholder="Enter manager password"
+                          value={branchForm.password}
+                          onChange={e => {
+                            setBranchForm({ ...branchForm, password: e.target.value });
+                            if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
                           }}
                           style={{
-                            padding: '8px 16px',
+                            width: '100%',
+                            padding: '12px 42px 12px 16px',
                             borderRadius: '8px',
-                            border: '1.5px solid #7c3aed',
-                            background: showEditPasswordFields ? '#ede9fe' : '#ffffff',
-                            color: '#7c3aed',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            transition: 'all 0.15s ease'
+                            border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                            backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
+                            boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                            fontSize: '14px',
+                            boxSizing: 'border-box'
                           }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '4px'
+                          }}
+                          title={showPassword ? "Hide password" : "Show password"}
                         >
-                          <KeyIcon size={14} color="#7c3aed" />
-                          {showEditPasswordFields ? 'Cancel Password Reset' : 'Reset / Forgot Password'}
+                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                         </button>
                       </div>
-
-                      {showEditPasswordFields && (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                              New Password <span style={{ color: '#ef4444' }}>*</span>
-                            </label>
-                            <div style={{ position: 'relative' }}>
-                              <input
-                                type={showPassword ? 'text' : 'password'}
-                                name="branch_mgr_edit_password_field"
-                                autoComplete="new-password"
-                                placeholder="Enter new password"
-                                value={branchForm.password}
-                                onChange={e => {
-                                  setBranchForm({ ...branchForm, password: e.target.value });
-                                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '12px 42px 12px 16px',
-                                  borderRadius: '8px',
-                                  border: formErrors.password ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                                  backgroundColor: formErrors.password ? '#fef2f2' : '#ffffff',
-                                  boxShadow: formErrors.password ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
-                                  fontSize: '14px',
-                                  boxSizing: 'border-box'
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                style={{
-                                  position: 'absolute',
-                                  right: '12px',
-                                  top: '50%',
-                                  transform: 'translateY(-50%)',
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: '#64748b',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  padding: '4px'
-                                }}
-                                title={showPassword ? "Hide password" : "Show password"}
-                              >
-                                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                              </button>
-                            </div>
-                            {formErrors.password && (
-                              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                                {formErrors.password}
-                              </span>
-                            )}
-                          </div>
-
-                          <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
-                              Confirm New Password <span style={{ color: '#ef4444' }}>*</span>
-                            </label>
-                            <div style={{ position: 'relative' }}>
-                              <input
-                                type={showConfirmPassword ? 'text' : 'password'}
-                                name="branch_mgr_edit_confirm_password_field"
-                                autoComplete="new-password"
-                                placeholder="Confirm new password"
-                                value={branchForm.confirmPassword}
-                                onChange={e => {
-                                  setBranchForm({ ...branchForm, confirmPassword: e.target.value });
-                                  if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
-                                }}
-                                style={{
-                                  width: '100%',
-                                  padding: '12px 42px 12px 16px',
-                                  borderRadius: '8px',
-                                  border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
-                                  backgroundColor: formErrors.confirmPassword ? '#fef2f2' : '#ffffff',
-                                  boxShadow: formErrors.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
-                                  fontSize: '14px',
-                                  boxSizing: 'border-box'
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                style={{
-                                  position: 'absolute',
-                                  right: '12px',
-                                  top: '50%',
-                                  transform: 'translateY(-50%)',
-                                  background: 'none',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  color: '#64748b',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  padding: '4px'
-                                }}
-                                title={showConfirmPassword ? "Hide password" : "Show password"}
-                              >
-                                {showConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                              </button>
-                            </div>
-                            {formErrors.confirmPassword && (
-                              <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                                {formErrors.confirmPassword}
-                              </span>
-                            )}
-                          </div>
-
-                          <div style={{ gridColumn: '1 / -1' }}>
-                            <PasswordRequirements
-                              password={branchForm.password}
-                              confirmPassword={branchForm.confirmPassword}
-                              showConfirmMatch={true}
-                            />
-                          </div>
-                        </div>
+                      {formErrors.password && (
+                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {formErrors.password}
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>
+                        Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          name="branch_mgr_confirm_password_field"
+                          autoComplete="new-password"
+                          placeholder="Re-enter password"
+                          value={branchForm.confirmPassword}
+                          onChange={e => {
+                            setBranchForm({ ...branchForm, confirmPassword: e.target.value });
+                            if (formErrors.confirmPassword) setFormErrors({ ...formErrors, confirmPassword: '' });
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '12px 42px 12px 16px',
+                            borderRadius: '8px',
+                            border: formErrors.confirmPassword ? '1.5px solid #ef4444' : '1px solid var(--border)',
+                            backgroundColor: formErrors.confirmPassword ? '#fef2f2' : '#ffffff',
+                            boxShadow: formErrors.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
+                            fontSize: '14px',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#64748b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '4px'
+                          }}
+                          title={showConfirmPassword ? "Hide password" : "Show password"}
+                        >
+                          {showConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                        </button>
+                      </div>
+                      {formErrors.confirmPassword && (
+                        <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {formErrors.confirmPassword}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <PasswordRequirements
+                        password={branchForm.password}
+                        confirmPassword={branchForm.confirmPassword}
+                        showConfirmMatch={true}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Section 3: Address & Location */}
@@ -3732,6 +3679,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           setBranchForm({ ...branchForm, city: e.target.value });
                           if (formErrors.city) setFormErrors({ ...formErrors, city: '' });
                         }}
+                        onBlur={() => {
+                          const val = (branchForm.city || '').trim();
+                          if (!val) {
+                            setFormErrors(prev => ({ ...prev, city: 'City is required.' }));
+                          } else if (val.length < 2) {
+                            setFormErrors(prev => ({ ...prev, city: 'City must be at least 2 characters.' }));
+                          } else if (!/^[a-zA-Z\s.,'’-]+$/.test(val)) {
+                            setFormErrors(prev => ({ ...prev, city: 'City must contain letters only (no numbers or special symbols).' }));
+                          }
+                        }}
                         style={{
                           width: '100%',
                           padding: '10px 14px',
@@ -3744,7 +3701,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         }}
                       />
                       {formErrors.city && (
-                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block' }}>{formErrors.city}</span>
+                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block', fontWeight: 600 }}>{formErrors.city}</span>
                       )}
                     </div>
                     <div>
@@ -3759,6 +3716,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           setBranchForm({ ...branchForm, state: e.target.value });
                           if (formErrors.state) setFormErrors({ ...formErrors, state: '' });
                         }}
+                        onBlur={() => {
+                          const val = (branchForm.state || '').trim();
+                          if (!val) {
+                            setFormErrors(prev => ({ ...prev, state: 'State is required.' }));
+                          } else if (val.length < 2) {
+                            setFormErrors(prev => ({ ...prev, state: 'State must be at least 2 characters.' }));
+                          } else if (!/^[a-zA-Z\s.,'’&-]+$/.test(val)) {
+                            setFormErrors(prev => ({ ...prev, state: 'State must contain letters only (no numbers or special symbols).' }));
+                          }
+                        }}
                         style={{
                           width: '100%',
                           padding: '10px 14px',
@@ -3771,7 +3738,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         }}
                       />
                       {formErrors.state && (
-                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block' }}>{formErrors.state}</span>
+                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block', fontWeight: 600 }}>{formErrors.state}</span>
                       )}
                     </div>
                     <div>
@@ -3786,6 +3753,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           setBranchForm({ ...branchForm, country: e.target.value });
                           if (formErrors.country) setFormErrors({ ...formErrors, country: '' });
                         }}
+                        onBlur={() => {
+                          const val = (branchForm.country || '').trim();
+                          if (!val) {
+                            setFormErrors(prev => ({ ...prev, country: 'Country is required.' }));
+                          } else if (val.length < 2) {
+                            setFormErrors(prev => ({ ...prev, country: 'Country must be at least 2 characters.' }));
+                          } else if (!/^[a-zA-Z\s.,'’-]+$/.test(val)) {
+                            setFormErrors(prev => ({ ...prev, country: 'Country must contain letters only (no numbers or special symbols).' }));
+                          }
+                        }}
                         style={{
                           width: '100%',
                           padding: '10px 14px',
@@ -3798,7 +3775,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         }}
                       />
                       {formErrors.country && (
-                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block' }}>{formErrors.country}</span>
+                        <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '2px', display: 'block', fontWeight: 600 }}>{formErrors.country}</span>
                       )}
                     </div>
                     <div>
@@ -3853,6 +3830,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
                         setBranchForm({ ...branchForm, gstNumber: val });
                         if (formErrors.gstNumber) setFormErrors({ ...formErrors, gstNumber: '' });
+                      }}
+                      onBlur={() => {
+                        const val = (branchForm.gstNumber || '').trim();
+                        if (val) {
+                          const gstErr = validateGstin(val);
+                          if (gstErr) setFormErrors(prev => ({ ...prev, gstNumber: gstErr }));
+                        }
                       }}
                       style={{
                         width: '100%',
@@ -4042,17 +4026,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         {/* Card 1: Total Branches */}
         <div 
           className="stat-card" 
-          onClick={() => { setStatusFilter('All'); setPage(0); }}
           style={{ 
             borderLeft: '5px solid var(--primary)', 
-            cursor: 'pointer',
             backgroundColor: '#ffffff',
-            boxShadow: statusFilter === 'All' ? '0 0 0 2px var(--primary), 0 4px 12px rgba(249, 94, 16, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
-            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             padding: '18px 20px',
             borderRadius: '12px'
           }}
-          title="Click to view all branches"
         >
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
@@ -4075,17 +4055,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         {/* Card 2: Active Branches */}
         <div 
           className="stat-card" 
-          onClick={() => { setStatusFilter('Active'); setPage(0); }}
           style={{ 
             borderLeft: '5px solid #16a34a', 
-            cursor: 'pointer',
             backgroundColor: '#ffffff',
-            boxShadow: statusFilter === 'Active' ? '0 0 0 2px #16a34a, 0 4px 12px rgba(22, 163, 74, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
-            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             padding: '18px 20px',
             borderRadius: '12px'
           }}
-          title="Click to filter active branches"
         >
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
@@ -4111,17 +4087,13 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
         {/* Card 3: Inactive Branches */}
         <div 
           className="stat-card" 
-          onClick={() => { setStatusFilter('Inactive'); setPage(0); }}
           style={{ 
             borderLeft: '5px solid #64748b', 
-            cursor: 'pointer',
             backgroundColor: '#ffffff',
-            boxShadow: statusFilter === 'Inactive' ? '0 0 0 2px #64748b, 0 4px 12px rgba(100, 116, 139, 0.15)' : '0 2px 8px rgba(0,0,0,0.04)',
-            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
             padding: '18px 20px',
             borderRadius: '12px'
           }}
-          title="Click to filter inactive branches"
         >
           <div className="stat-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="stat-info" style={{ width: '100%', minWidth: 0 }}>
@@ -4284,37 +4256,18 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
 
                   {/* 2. Branch Name (Professional Style) */}
                   <td style={{ padding: '14px 16px', verticalAlign: 'middle', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      {/* Store emblem badge */}
-                      <div style={{
-                        width: '38px',
-                        height: '38px',
-                        minWidth: '38px',
-                        minHeight: '38px',
-                        borderRadius: '9px',
-                        background: b.isMainBranch ? '#fff7ed' : '#f8fafc',
-                        border: b.isMainBranch ? '1.5px solid #fed7aa' : '1px solid #e2e8f0',
-                        color: b.isMainBranch ? '#ea580c' : '#475569',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <BuildingStoreIcon size={18} color={b.isMainBranch ? '#ea580c' : '#475569'} />
-                      </div>
-
-                      {/* Name and Address info */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
-                          <span style={{
-                            fontWeight: 700,
-                            color: '#0f172a',
-                            fontSize: '13.5px',
-                            letterSpacing: '-0.1px',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {b.branchName || b.name}
-                          </span>
+                    {/* Name and Address info */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: '#0f172a',
+                          fontSize: '13.5px',
+                          letterSpacing: '-0.1px',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          {b.branchName || b.name}
+                        </span>
                           {b.isMainBranch && (
                             <span style={{
                               fontSize: '10px',
@@ -4361,8 +4314,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           </div>
                         )}
                       </div>
-                    </div>
-                  </td>
+                    </td>
 
                   {/* 3. Menu Type (Dedicated Column) */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -4468,7 +4420,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {/* 6. Tables */}
                   <td style={{ padding: '14px 14px', verticalAlign: 'middle', textAlign: 'center' }}>
                     <span style={{ background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 700 }}>
-                      {b.totalTables || 0}
+                      {b.totalTables || b.tablesCount || b.capacity || b.seatingCapacity || (Array.isArray(b.tables) && b.tables.length > 0 ? b.tables.length : 0) || getBranchMetadataFromStorage(b.id || b._id, b.branchCode)?.totalTables || getBranchMetadataFromStorage(b.id || b._id, b.branchCode)?.tablesCount || 0}
                     </span>
                   </td>
 
@@ -4513,10 +4465,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                         </button>
                       )}
 
+
                       {hasPermission('branch-management', 'edit') && (
                         <button
                           type="button"
-                          title={b.status === 'Active' ? 'Deactivate Branch' : 'Activate Branch'}
+                          title={b.status === 'Active' ? 'Deactivate / Lock Branch' : 'Activate / Unlock Branch'}
                           onClick={() => handleToggleBranchStatus(b)}
                           style={{
                             border: `1px solid ${b.status === 'Active' ? '#bbf7d0' : '#fecaca'}`,
@@ -4535,7 +4488,7 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                           onMouseEnter={e => e.currentTarget.style.background = b.status === 'Active' ? '#dcfce7' : '#fee2e2'}
                           onMouseLeave={e => e.currentTarget.style.background = b.status === 'Active' ? '#f0fdf4' : '#fef2f2'}
                         >
-                          {b.status === 'Active' ? <ToggleRightIcon size={18} color="#16a34a" /> : <ToggleLeftIcon size={18} color="#dc2626" />}
+                          {b.status === 'Active' ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
                         </button>
                       )}
 
@@ -4810,13 +4763,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   value={newPassword}
                   onChange={e => {
                     setNewPassword(e.target.value);
+                    if (resetPasswordErrors?.newPassword) setResetPasswordErrors(prev => ({ ...prev, newPassword: '' }));
                     if (resetPasswordError) setResetPasswordError('');
                   }}
                   style={{
                     width: '100%',
                     padding: '10px 40px 10px 14px',
                     borderRadius: '8px',
-                    border: resetPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    border: resetPasswordErrors?.newPassword ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    backgroundColor: resetPasswordErrors?.newPassword ? '#fef2f2' : '#ffffff',
+                    boxShadow: resetPasswordErrors?.newPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
                     fontSize: '13px',
                     boxSizing: 'border-box'
                   }}
@@ -4839,6 +4795,11 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {showResetPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
               </div>
+              {resetPasswordErrors?.newPassword && (
+                <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                  {resetPasswordErrors.newPassword}
+                </span>
+              )}
             </div>
 
             <div>
@@ -4853,13 +4814,16 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   value={confirmNewPassword}
                   onChange={e => {
                     setConfirmNewPassword(e.target.value);
+                    if (resetPasswordErrors?.confirmPassword) setResetPasswordErrors(prev => ({ ...prev, confirmPassword: '' }));
                     if (resetPasswordError) setResetPasswordError('');
                   }}
                   style={{
                     width: '100%',
                     padding: '10px 40px 10px 14px',
                     borderRadius: '8px',
-                    border: resetPasswordError ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    border: resetPasswordErrors?.confirmPassword ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                    backgroundColor: resetPasswordErrors?.confirmPassword ? '#fef2f2' : '#ffffff',
+                    boxShadow: resetPasswordErrors?.confirmPassword ? '0 0 0 3px rgba(239, 68, 68, 0.15)' : 'none',
                     fontSize: '13px',
                     boxSizing: 'border-box'
                   }}
@@ -4882,9 +4846,14 @@ export default function BranchManagementPanel({ hasPermission: hasPermissionProp
                   {showResetConfirmPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
               </div>
-              {resetPasswordError && (
+              {resetPasswordErrors?.confirmPassword && (
                 <span style={{ color: '#ef4444', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
-                  {resetPasswordError}
+                  {resetPasswordErrors.confirmPassword}
+                </span>
+              )}
+              {resetPasswordErrors?.general && (
+                <span style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', padding: '6px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', display: 'block', fontWeight: 600 }}>
+                  {resetPasswordErrors.general}
                 </span>
               )}
             </div>

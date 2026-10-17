@@ -346,8 +346,16 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
     if (targetBranchObj.branchName) targetKeys.add(String(targetBranchObj.branchName).toLowerCase().trim());
     if (targetBranchObj.name) targetKeys.add(String(targetBranchObj.name).toLowerCase().trim());
 
-    // If branch uses Company Menu, also match items belonging to Main Branch or default non-custom branch
-    if (!isCustomMenuBranch && Array.isArray(branchesList)) {
+    // If branch uses Company Menu, ONLY menu items should inherit items belonging to Main Branch
+    const isMenuItem = itemBranch && (
+      itemBranch.isCompanyMenu === true ||
+      itemBranch.isMenuItem === true ||
+      itemBranch.dishName !== undefined ||
+      itemBranch.price !== undefined ||
+      itemBranch.category !== undefined
+    );
+
+    if (isMenuItem && !isCustomMenuBranch && Array.isArray(branchesList)) {
       let mainBranch = branchesList.find(b => b.isMainBranch || b.branchType === 'MAIN');
       if (!mainBranch) {
         mainBranch = branchesList.find(b => !b.useCustomMenu && String(b.useCustomMenu) !== 'true');
@@ -382,15 +390,23 @@ export const isBranchMatch = (itemBranch, targetBranchId, branchesList = []) => 
   };
 
   if (typeof itemBranch === 'object' && itemBranch !== null) {
-    // 1. Direct object identifiers (in case itemBranch is a branch itself or entity with _id/branchCode/branchName)
-    if (itemBranch._id) itemIds.push(String(itemBranch._id).toLowerCase().trim());
-    if (itemBranch.id) itemIds.push(String(itemBranch.id).toLowerCase().trim());
-    if (itemBranch.branchCode) itemIds.push(String(itemBranch.branchCode).toLowerCase().trim());
-    if (itemBranch.code) itemIds.push(String(itemBranch.code).toLowerCase().trim());
-    if (itemBranch.branchName) itemIds.push(String(itemBranch.branchName).toLowerCase().trim());
-    if (itemBranch.name) itemIds.push(String(itemBranch.name).toLowerCase().trim());
+    // 1. Direct object identifiers (ONLY if itemBranch is a branch itself)
+    const isDirectBranchEntity = (
+      itemBranch.branchCode !== undefined || 
+      itemBranch.branchType !== undefined || 
+      itemBranch.totalTables !== undefined ||
+      itemBranch.branchManager !== undefined
+    );
+    if (isDirectBranchEntity) {
+      if (itemBranch._id) itemIds.push(String(itemBranch._id).toLowerCase().trim());
+      if (itemBranch.id) itemIds.push(String(itemBranch.id).toLowerCase().trim());
+      if (itemBranch.branchCode) itemIds.push(String(itemBranch.branchCode).toLowerCase().trim());
+      if (itemBranch.code) itemIds.push(String(itemBranch.code).toLowerCase().trim());
+      if (itemBranch.branchName) itemIds.push(String(itemBranch.branchName).toLowerCase().trim());
+      if (itemBranch.name) itemIds.push(String(itemBranch.name).toLowerCase().trim());
+    }
 
-    // 2. Check entity branch reference fields
+    // 2. Check entity branch reference fields (for tables, orders, staff, etc.)
     const branchFields = [
       itemBranch.branchId,
       itemBranch.branch,

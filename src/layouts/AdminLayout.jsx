@@ -32,6 +32,24 @@ export default function AdminLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  // Strictly block Waiter and Kitchen staff from accessing Admin panel layout
+  const roleNameStr = (currentUser?.role?.roleName || currentUser?.role?.name || currentUser?.roleName || (typeof currentUser?.role === 'string' ? currentUser.role : '') || '').toLowerCase();
+  const userTypeStr = String(currentUser?.userType || '').toLowerCase();
+  const isWaiterOrKitchen = 
+    roleNameStr.includes('waiter') || 
+    roleNameStr.includes('kitchen') || 
+    roleNameStr.includes('chef') || 
+    roleNameStr.includes('cook') ||
+    userTypeStr === 'station' ||
+    userTypeStr === 'waiter' ||
+    userTypeStr === 'kitchen';
+
+  if (isWaiterOrKitchen) {
+    sessionStorage.clear();
+    ShowNotifications.showAlertNotification("Access denied. Waiter and Kitchen staff must use the mobile application.", false);
+    return <Navigate to="/login" replace />;
+  }
+
   const [sidebarWaiterOpen, setSidebarWaiterOpen] = useState(false);
   const [sidebarKitchenOpen, setSidebarKitchenOpen] = useState(false);
   const [sidebarBillingOpen, setSidebarBillingOpen] = useState(false);
@@ -447,7 +465,7 @@ export default function AdminLayout() {
   // Strictly restricted to userType: "RESTAURANT_OWNER" only
   const isRestaurantOwnerUser = String(currentUser?.userType || '').toUpperCase().trim() === 'RESTAURANT_OWNER';
   if ((isBranchActive || isPlansActive) && !isRestaurantOwnerUser) {
-    ShowNotifications.showAlertNotification("Access Denied: Branch Management and Plans Management are restricted to Restaurant Owners.", false);
+    ShowNotifications.showAlertNotification("Access Denied: Branch Management and Subscription are restricted to Restaurant Owners.", false);
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -514,7 +532,7 @@ export default function AdminLayout() {
                 <span className="sidebar-icon-box">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line><path d="M12 15h2"></path><path d="M6 15h2"></path></svg>
                 </span>
-                <span className="sidebar-item-label">Plans Management</span>
+                <span className="sidebar-item-label">Subscription</span>
               </Link>
             </li>
           )}
