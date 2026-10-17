@@ -321,21 +321,31 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
 
     try {
       const res = await InventoryApi.createTransfer(payload);
+      const createdT = (res?.status && (res.response?.data || res.response)) || {};
+      const newTransferEntry = {
+        ...payload,
+        id: createdT._id || createdT.id || `trf-local-${Date.now()}`,
+        _id: createdT._id || createdT.id || `trf-local-${Date.now()}`,
+        transferNo: createdT.transferNo || `TRF-${Date.now().toString().slice(-4)}`,
+        status: 'In Transit',
+        date: new Date().toISOString().split('T')[0]
+      };
+      setTransfersList(prev => [newTransferEntry, ...(Array.isArray(prev) ? prev : [])]);
       if (res?.status) {
         await fetchTransfers();
-        if (onSaveTransfer && res?.response?.data) {
-          onSaveTransfer(res.response.data);
-        }
-        setViewState(null);
-        setTrfForm(prev => ({
-          fromBranch: loginRestaurantName,
-          toBranch: availableBranches.find(b => b !== loginRestaurantName) || '',
-          item: displayItems[0]?.name || '',
-          quantity: '',
-          unit: displayItems[0]?.unit || 'kg',
-          remarks: ''
-        }));
       }
+      if (onSaveTransfer) {
+        onSaveTransfer(res?.response?.data || newTransferEntry);
+      }
+      setViewState(null);
+      setTrfForm(prev => ({
+        fromBranch: loginRestaurantName,
+        toBranch: availableBranches.find(b => b !== loginRestaurantName) || '',
+        item: displayItems[0]?.name || '',
+        quantity: '',
+        unit: displayItems[0]?.unit || 'kg',
+        remarks: ''
+      }));
     } catch (err) {
       console.error('Submit transfer error:', err);
     } finally {
@@ -680,6 +690,18 @@ export default function BranchTransfer({ transfers: initialTransfers, items: ini
             </button>
           </div>
         </form>
+      </div>
+    );
+  }
+
+  // If company filter is active, Branch Transfer should not show
+  if (isCompanyFilter) {
+    return (
+      <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '40px 20px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>Branch Transfer is not available in Company view</h3>
+        <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '480px', margin: '0 auto' }}>
+          Branch Transfer is exclusively for transfers between individual branches. Please select a specific branch from the header dropdown to initiate or view branch transfer requests.
+        </p>
       </div>
     );
   }

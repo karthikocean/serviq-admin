@@ -237,23 +237,37 @@ export default function BranchDirectPurchase({ purchases, items: initialItems, o
         totalAmount: Number(purForm.quantity) * Number(purForm.rate)
       };
       const res = await InventoryApi.recordPurchase(payload);
+      const createdP = (res?.status && (res.response?.data || res.response)) || {};
+      const newPurchaseEntry = {
+        ...payload,
+        id: createdP._id || createdP.id || `pur-local-${Date.now()}`,
+        _id: createdP._id || createdP.id || `pur-local-${Date.now()}`,
+        purchaseNo: createdP.purchaseNo || `PU-${Date.now().toString().slice(-4)}`,
+        date: purForm.purchaseDate,
+        purchaseDate: purForm.purchaseDate,
+        supplier: purForm.supplier,
+        supplierName: purForm.supplier,
+        invoiceNo: purForm.invoiceNo,
+        total: Number(purForm.quantity) * Number(purForm.rate)
+      };
+      setApiPurchases(prev => [newPurchaseEntry, ...(Array.isArray(prev) ? prev : [])]);
       if (res?.status) {
         await fetchPurchases();
         await fetchItems();
-        if (onSaveDirectPurchase) onSaveDirectPurchase(purForm);
-        setViewState(null);
-        setPurForm({
-          supplier: '',
-          purchaseType: 'Vendor Direct Purchase',
-          purchaseDate: new Date().toISOString().split('T')[0],
-          invoiceNo: '',
-          item: displayItems[0]?.name || '',
-          quantity: '',
-          unit: displayItems[0]?.unit || 'kg',
-          rate: '',
-          remarks: ''
-        });
       }
+      if (onSaveDirectPurchase) onSaveDirectPurchase(newPurchaseEntry);
+      setViewState(null);
+      setPurForm({
+        supplier: '',
+        purchaseType: 'Vendor Direct Purchase',
+        purchaseDate: new Date().toISOString().split('T')[0],
+        invoiceNo: '',
+        item: displayItems[0]?.name || '',
+        quantity: '',
+        unit: displayItems[0]?.unit || 'kg',
+        rate: '',
+        remarks: ''
+      });
     } catch (err) {
       console.warn('Record direct purchase note:', err);
     } finally {

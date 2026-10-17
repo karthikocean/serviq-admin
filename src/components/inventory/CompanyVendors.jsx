@@ -136,14 +136,26 @@ export default function CompanyVendors({ hasPermission }) {
     try {
       if (editingVendor) {
         const res = await InventoryApi.updateVendor(editingVendor._id || editingVendor.id, vendorForm);
+        setVendorsList(prev => prev.map(v => (v._id || v.id) === (editingVendor._id || editingVendor.id) ? { ...v, ...vendorForm } : v));
+        setViewState(null);
         if (res?.status) {
-          setViewState(null);
           fetchVendors();
         }
       } else {
         const res = await InventoryApi.createVendor(vendorForm);
+        const created = (res?.status && (res?.response?.data || res?.response?.vendor || res?.response)) || {};
+        const newVendor = {
+          id: created._id || created.id || `VEN-${Date.now().toString().slice(-4)}`,
+          _id: created._id || created.id || `VEN-${Date.now().toString().slice(-4)}`,
+          vendorCode: created.vendorCode || vendorForm.vendorCode,
+          name: vendorForm.name,
+          companyName: vendorForm.companyName,
+          phone: vendorForm.phone,
+          status: vendorForm.status || 'ACTIVE'
+        };
+        setVendorsList(prev => [newVendor, ...(Array.isArray(prev) ? prev : [])]);
+        setViewState(null);
         if (res?.status) {
-          setViewState(null);
           fetchVendors();
         }
       }

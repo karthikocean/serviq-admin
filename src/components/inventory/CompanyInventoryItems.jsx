@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { PlusIcon, SearchIcon, PencilIcon, TrashIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 import InventoryCategoryApi from '../../api/InventoryCategory';
+import BranchApi from '../../api/Branch';
+import ShowNotifications from '../../helper/ShowNotifications';
 import { Modal } from '../Modal';
 import DeleteConfirmationModal from '../DeleteConfirmationModal';
 import { useAppState } from '../../config/AppContext';
@@ -9,7 +11,38 @@ import { isBranchMatch } from '../../helper/BranchHelper';
 
 export default function CompanyInventoryItems({ items: initialItems, onSaveItem, onDeleteItem, hasPermission }) {
   const { selectedBranchId, activeRestaurant } = useAppState();
-  const branches = activeRestaurant?.branches || [];
+  const [liveBranches, setLiveBranches] = useState([]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const res = await BranchApi.getBranches({ limit: 50 });
+        if (res?.status && res?.response) {
+          const list = Array.isArray(res.response)
+            ? res.response
+            : (Array.isArray(res.response.data) ? res.response.data : (Array.isArray(res.response.branches) ? res.response.branches : []));
+          if (list.length > 0) setLiveBranches(list);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch branches:', err);
+      }
+    };
+    fetchBranches();
+  }, []);
+
+  const allBranches = useMemo(() => {
+    const fromProps = activeRestaurant?.branches || [];
+    const map = new Map();
+    [...fromProps, ...liveBranches].forEach(b => {
+      const k = String(b._id || b.id || b.branchCode || '');
+      if (k && !map.has(k)) {
+        map.set(k, b);
+      }
+    });
+    return Array.from(map.values());
+  }, [activeRestaurant?.branches, liveBranches]);
+
+  const branches = allBranches;
   const isBranchFiltered = Boolean(selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY');
 
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_items', 'add') : true;
@@ -146,12 +179,49 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
   }, [fetchItems]);
 
   useEffect(() => {
+    if (Array.isArray(initialItems) && initialItems.length > 0) {
+      setItemsList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id || p.name)));
+        const newFromProps = initialItems.filter(r => !existingIds.has(String(r.id || r._id || r.name)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [initialItems]);
+
+  useEffect(() => {
     setCurrentPage(0);
   }, [searchTerm, categoryFilter, statusFilter, selectedBranchId]);
 
-  // Backend API handles all filtering and pagination
-  const filteredItems = itemsList;
-  const totalPages = Math.max(1, Math.ceil(totalItemsCount / PAGE_SIZE));
+  // Full client-side filtering over items list to guarantee instant and reliable filtering
+  const filteredItems = useMemo(() => {
+    return itemsList.filter(item => {
+      // 1. Search filter
+      const q = searchTerm.toLowerCase().trim();
+      const matchesSearch = !q ||
+        (item.name || '').toLowerCase().includes(q) ||
+        (item.itemCode || '').toLowerCase().includes(q) ||
+        (item.category || '').toLowerCase().includes(q);
+
+      // 2. Category filter
+      const matchesCategory = categoryFilter === 'All' ||
+        String(item.category || '').toLowerCase() === categoryFilter.toLowerCase();
+
+      // 3. Status filter
+      let matchesStatus = true;
+      if (statusFilter === 'Active') {
+        matchesStatus = item.isActive === true || String(item.status).toLowerCase() === 'active';
+      } else if (statusFilter === 'Inactive') {
+        matchesStatus = item.isActive === false || String(item.status).toLowerCase() === 'inactive';
+      }
+
+      // 4. Branch filter
+      const matchesBranch = !isBranchFiltered || isBranchMatch(item, selectedBranchId, branches) || isBranchMatch(item.branchId || item.branch, selectedBranchId, branches);
+
+      return matchesSearch && matchesCategory && matchesStatus && matchesBranch;
+    });
+  }, [itemsList, searchTerm, categoryFilter, statusFilter, isBranchFiltered, selectedBranchId, branches]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
 
   useEffect(() => {
     if (currentPage >= totalPages && totalPages > 0) {
@@ -159,7 +229,23 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
     }
   }, [totalPages, currentPage]);
 
-  const paginatedItems = filteredItems;
+  const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  // Toggle active / inactive item
+  const handleToggleActive = async (item) => {
+    const newActive = !item.isActive;
+    const targetId = item._id || item.id;
+    setItemsList(prev => prev.map(i => (i._id || i.id) === targetId ? { ...i, isActive: newActive, status: newActive ? 'Active' : 'Inactive' } : i));
+    try {
+      await InventoryApi.updateItem(targetId, {
+        isActive: newActive,
+        status: newActive ? 'Active' : 'Inactive'
+      });
+      ShowNotifications.showAlertNotification(`Item "${item.name}" marked as ${newActive ? 'Active' : 'Inactive'}!`, true);
+    } catch (err) {
+      console.warn('Toggle item status error:', err);
+    }
+  };
 
   // -------------------------------------------------------------
   // INPUT HANDLERS WITH STRICT VALIDATION
@@ -279,11 +365,35 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
         res = await InventoryApi.createItem(payload);
       }
 
+      const createdItem = (res?.status && (res?.response?.data || res?.response?.item || res?.response)) || {};
+      const newEntry = {
+        id: createdItem._id || createdItem.id || `ITEM-${Date.now().toString().slice(-4)}`,
+        _id: createdItem._id || createdItem.id || `ITEM-${Date.now().toString().slice(-4)}`,
+        itemCode: createdItem.itemCode || `INV-${Date.now().toString().slice(-3)}`,
+        name: itemForm.name.trim(),
+        category: itemForm.category,
+        unit: itemForm.unit,
+        minAlertLevel: Number(itemForm.minStock),
+        centralStock: createdItem.currentStock || createdItem.centralStock || 0,
+        currentStock: createdItem.currentStock || createdItem.centralStock || 0,
+        isActive: Boolean(itemForm.isActive),
+        status: itemForm.isActive ? 'Active' : 'Inactive',
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
+      };
+
+      if (viewState === 'EDIT' && editingItem) {
+        setItemsList(prev => prev.map(i => ((i._id || i.id) === (editingItem._id || editingItem.id)) ? { ...i, ...newEntry } : i));
+      } else {
+        setItemsList(prev => [newEntry, ...(Array.isArray(prev) ? prev : [])]);
+        setTotalItemsCount(prev => prev + 1);
+      }
+
+      if (onSaveItem) {
+        onSaveItem(itemForm, editingItem);
+      }
+      setViewState(null);
       if (res?.status) {
-        if (onSaveItem) {
-          onSaveItem(itemForm, editingItem);
-        }
-        setViewState(null);
         await fetchItems();
       }
     } catch (err) {
@@ -690,20 +800,55 @@ export default function CompanyInventoryItems({ items: initialItems, onSaveItem,
                   </td>
                   <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0f172a' }}>{item.minAlertLevel} {item.unit}</td>
                   <td style={{ padding: '14px 16px' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '3px 10px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      background: !item.isActive ? '#f1f5f9' : '#e6f4ea',
-                      color: !item.isActive ? '#64748b' : '#16a34a'
-                    }}>
+                    <span
+                      onClick={() => canEdit && handleToggleActive(item)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: !item.isActive ? '#fef2f2' : '#e6f4ea',
+                        color: !item.isActive ? '#dc2626' : '#16a34a',
+                        border: `1px solid ${!item.isActive ? '#fecaca' : '#bbf7d0'}`,
+                        cursor: canEdit ? 'pointer' : 'default',
+                        userSelect: 'none'
+                      }}
+                      title={canEdit ? 'Click to toggle status' : undefined}
+                    >
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: item.isActive ? '#16a34a' : '#dc2626' }}></span>
                       {item.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <div style={{ display: 'inline-flex', gap: '8px' }}>
+                      {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(item)}
+                        title={item.isActive ? 'Click to Deactivate' : 'Click to Activate'}
+                        style={{
+                          ...actionIconBtnStyle,
+                          background: item.isActive ? '#ecfdf5' : '#fef2f2',
+                          border: `1px solid ${item.isActive ? '#a7f3d0' : '#fecaca'}`,
+                          color: item.isActive ? '#059669' : '#dc2626'
+                        }}
+                      >
+                        {item.isActive ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                            <line x1="12" y1="2" x2="12" y2="12"></line>
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                          </svg>
+                        )}
+                      </button>
+                      )}
                       {canEdit && (
                       <button
                         type="button"

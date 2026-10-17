@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusIcon, SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import { notificationApi } from '../../api/Notification';
 import { useAppState } from '../../config/AppContext';
 import { isBranchMatch } from '../../helper/BranchHelper';
 
@@ -11,7 +12,24 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
 
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_request', 'view') : true;
-  const [requestsList, setRequestsList] = useState(initialRequests || []);
+  const [requestsList, setRequestsList] = useState(() => {
+    let localSaved = [];
+    try {
+      const stored = localStorage.getItem('serviq_branch_requests');
+      if (stored) localSaved = JSON.parse(stored);
+    } catch (e) {}
+    const initial = Array.isArray(initialRequests) ? initialRequests : [];
+    const seen = new Set();
+    const list = [];
+    [...initial, ...localSaved].forEach(item => {
+      const k = String(item._id || item.id || item.requestNo || '');
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        list.push(item);
+      }
+    });
+    return list;
+  });
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,24 +81,42 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
   const fetchRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await InventoryApi.getStockRequests();
+      const res = await InventoryApi.getStockRequests({
+        branchId: isBranchFiltered ? selectedBranchId : undefined
+      });
       if (res?.status && res?.response) {
-        const rawReqs = res.response.data || res.response || [];
-        if (Array.isArray(rawReqs) && rawReqs.length > 0) {
+        const rawReqs = res.response.data || res.response.requests || (Array.isArray(res.response) ? res.response : []);
+        if (Array.isArray(rawReqs)) {
           const formatted = rawReqs.map(r => ({
             id: r._id || r.id,
             _id: r._id || r.id,
             branchId: r.branchId || r.branch?._id || r.branch?.id || r.branch,
-            branchName: r.branchName || r.branch || '',
+            branchName: r.branchName || (typeof r.branch === 'object' ? r.branch?.branchName : r.branch) || '',
+            branch: r.branchName || (typeof r.branch === 'object' ? r.branch?.branchName : r.branch) || '',
             requestNo: r.requestNo || `BR-REQ-${String(r._id || '').slice(-3).toUpperCase()}`,
-            item: r.itemName || (typeof r.itemId === 'object' ? r.itemId?.name : '') || r.item || 'General Material',
+            item: r.itemName || (typeof r.itemId === 'object' ? (r.itemId?.name || r.itemId?.itemName) : '') || r.item || 'General Material',
             reqQty: r.reqQty || 0,
             unit: r.unit || 'kg',
             date: r.requestDate ? new Date(r.requestDate).toISOString().split('T')[0] : (r.date || new Date().toISOString().split('T')[0]),
             status: r.status || 'Pending',
             remarks: r.remarks || ''
           }));
-          setRequestsList(formatted);
+          let localSaved = [];
+          try {
+            const stored = localStorage.getItem('serviq_branch_requests');
+            if (stored) localSaved = JSON.parse(stored);
+          } catch (e) {}
+
+          const seen = new Set();
+          const combined = [];
+          [...formatted, ...localSaved].forEach(item => {
+            const k = String(item._id || item.id || item.requestNo || '');
+            if (k && !seen.has(k)) {
+              seen.add(k);
+              combined.push(item);
+            }
+          });
+          setRequestsList(combined);
         }
       }
     } catch (err) {
@@ -88,12 +124,22 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     fetchRequests();
     fetchItems();
   }, [fetchRequests, fetchItems]);
+
+  useEffect(() => {
+    if (Array.isArray(initialRequests) && initialRequests.length > 0) {
+      setRequestsList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id)));
+        const newFromProps = initialRequests.filter(r => !existingIds.has(String(r.id || r._id)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [initialRequests]);
 
   const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
 
@@ -107,9 +153,9 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
     }));
   };
 
-  const displayRequests = requestsList.length > 0 ? requestsList : initialRequests;
+  const displayRequests = requestsList.length > 0 ? requestsList : (initialRequests || []);
   const branchScopedRequests = isBranchFiltered
-    ? displayRequests.filter(r => isBranchMatch(r, selectedBranchId, branches))
+    ? displayRequests.filter(r => isBranchMatch(r, selectedBranchId, branches) || isBranchMatch(r.branchId || r.branch, selectedBranchId, branches))
     : displayRequests;
 
   const filteredRequests = branchScopedRequests.filter(r => {
@@ -148,20 +194,84 @@ export default function BranchStockRequest({ requests: initialRequests, items: i
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
+    const targetBranchId = isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || undefined);
+    const targetBranch = branches.find(b => String(b._id || b.id || b.branchCode) === String(targetBranchId));
+    const branchName = targetBranch ? (targetBranch.branchName || targetBranch.name) : 'Branch';
+
+    const matchedItem = displayItems.find(i => (typeof i === 'string' ? i : (i.name || i.itemName)) === reqForm.item);
+    const matchedItemId = typeof matchedItem === 'object' && matchedItem ? (matchedItem._id || matchedItem.id) : undefined;
+
+    const payload = {
+      ...reqForm,
+      itemId: matchedItemId,
+      itemName: reqForm.item,
+      item: reqForm.item,
+      reqQty: Number(reqForm.reqQty),
+      quantity: Number(reqForm.reqQty),
+      requestedQuantity: Number(reqForm.reqQty),
+      unit: reqForm.unit || 'kg',
+      branchId: targetBranchId,
+      branch: branchName,
+      branchName: branchName,
+      date: new Date().toISOString().split('T')[0],
+      requestDate: new Date().toISOString(),
+      status: 'Pending',
+      remarks: reqForm.remarks || ''
+    };
+
     try {
-      const targetBranchId = isBranchFiltered ? selectedBranchId : (branches[0]?._id || branches[0]?.id || undefined);
-      const matchedBranch = branches.find(b => String(b._id || b.id) === String(targetBranchId));
-      await InventoryApi.createStockRequest({
-        ...reqForm,
+      // 1. Submit stock request to API
+      const res = await InventoryApi.createStockRequest(payload);
+
+      // 2. Dispatch notification so Company Admin receives notification
+      try {
+        await notificationApi.createNotification({
+          title: `Stock Request: ${reqForm.item}`,
+          message: `${branchName} requested ${reqForm.reqQty} ${reqForm.unit || 'kg'} of ${reqForm.item}`,
+          type: 'Stock Request',
+          requestType: 'Stock Request',
+          targetRole: 'Company Admin',
+          branch: branchName,
+          branchId: targetBranchId
+        });
+      } catch (notifErr) {
+        console.warn('Company notification dispatch note:', notifErr);
+      }
+
+      // 3. Immediately show added data in the table
+      const createdItem = res?.response?.data || res?.response?.request || res?.response || {};
+      const newEntry = {
+        id: createdItem._id || createdItem.id || `REQ-${Date.now().toString().slice(-4)}`,
+        _id: createdItem._id || createdItem.id || `REQ-${Date.now().toString().slice(-4)}`,
+        requestNo: createdItem.requestNo || `BR-REQ-${Date.now().toString().slice(-4)}`,
         branchId: targetBranchId,
-        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined,
-        branch: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
-      });
-      fetchRequests();
+        branchName: branchName,
+        branch: branchName,
+        item: reqForm.item,
+        itemName: reqForm.item,
+        reqQty: Number(reqForm.reqQty),
+        appQty: Number(reqForm.reqQty),
+        distQty: 0,
+        unit: reqForm.unit || 'kg',
+        date: new Date().toISOString().split('T')[0],
+        status: 'Pending',
+        remarks: reqForm.remarks || ''
+      };
+
+      // Save to localStorage so it is available to Company view immediately
+      try {
+        const existing = JSON.parse(localStorage.getItem('serviq_branch_requests') || '[]');
+        const updated = [newEntry, ...existing.filter(e => String(e.id || e._id) !== String(newEntry.id))];
+        localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+      } catch (e) {}
+
+      setRequestsList(prev => [newEntry, ...(Array.isArray(prev) ? prev : [])]);
+
+      if (onSaveStockRequest) onSaveStockRequest(newEntry);
+      await fetchRequests();
     } catch (err) {
       console.warn('Submit stock request error:', err);
     }
-    if (onSaveStockRequest) onSaveStockRequest(reqForm);
     setViewState(null);
   };
 

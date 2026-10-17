@@ -25,10 +25,9 @@ class OrderApi {
       if (params.customEndDate && !cleanParams.endDate) cleanParams.endDate = params.customEndDate;
 
       if (params.page !== undefined) {
-        const pNum = Number(params.page);
-        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        cleanParams.page = Math.max(0, Number(params.page) || 0);
       } else {
-        cleanParams.page = 1;
+        cleanParams.page = 0;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);

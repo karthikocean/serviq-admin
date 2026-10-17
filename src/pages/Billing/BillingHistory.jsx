@@ -350,8 +350,6 @@ export default function BillingHistory() {
           return payStatus === 'paid' || o.isPaid || o.status === 'paid' || o.status === 'done';
         });
         fallbackList = paid.length > 0 ? paid : [];
-      } else if (Array.isArray(initialBillingHistory) && initialBillingHistory.length > 0) {
-        fallbackList = initialBillingHistory;
       }
 
       if (items.length === 0 && fallbackList.length > 0) {

@@ -2,8 +2,11 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../config/AppContext';
 import { notificationApi, isDummyNotification } from '../api/Notification.js';
+import InventoryApi from '../api/Inventory.js';
+import { ticketApi } from '../api/Ticket.js';
 import ShowNotifications from '../helper/ShowNotifications.js';
 import { formatDateTimeDMY } from '../helper/DateHelper.js';
+import { isBranchMatch } from '../helper/BranchHelper.js';
 
 // Relative time formatting helper
 const formatRelativeTime = (dateInput) => {
@@ -27,6 +30,17 @@ const formatRelativeTime = (dateInput) => {
   } catch (e) {
     return 'Recent';
   }
+};
+
+// Safe label extraction helper to avoid "Objects are not valid as a React child"
+const extractLabel = (val, fallback = '') => {
+  if (!val) return fallback;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number') return String(val);
+  if (typeof val === 'object') {
+    return val.branchName || val.name || val.tableNumber || val.tableName || val.title || val.subject || val.code || val._id || fallback;
+  }
+  return String(val);
 };
 
 const renderNotificationIcon = (notif) => {
@@ -108,6 +122,27 @@ const renderNotificationIcon = (notif) => {
     );
   }
 
+  if (notif.adminType === 'BRANCH_REQUEST' || reqType.includes('BRANCH') || rawType.includes('BRANCH') || reqType.includes('TRANSFER')) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="3" width="15" height="13"></rect>
+        <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
+        <circle cx="5.5" cy="18.5" r="2.5"></circle>
+        <circle cx="18.5" cy="18.5" r="2.5"></circle>
+      </svg>
+    );
+  }
+
+  if (notif.adminType === 'SUPPORT_HELP' || reqType.includes('SUPPORT') || rawType.includes('TICKET') || reqType.includes('HELP') || rawType.includes('HELP')) {
+    return (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+    );
+  }
+
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -169,11 +204,21 @@ export const matchesNotificationFilter = (notif, filter) => {
 };
 
 export default function NotificationModal({ isOpen, onClose }) {
-  const { selectedBranchId } = useContext(AppContext);
+  const { selectedBranchId, activeRestaurant } = useContext(AppContext);
+  const branches = activeRestaurant?.branches || [];
   const navigate = useNavigate();
+
+  const isCompanyScope = !selectedBranchId ||
+    selectedBranchId === 'ALL' ||
+    selectedBranchId === 'All' ||
+    selectedBranchId === 'all' ||
+    String(selectedBranchId).toUpperCase() === 'COMPANY' ||
+    String(selectedBranchId).toLowerCase() === 'all branches';
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeSourceTab, setActiveSourceTab] = useState('CUSTOMER'); // 'CUSTOMER' | 'SUPERADMIN'
-  const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL' | 'ORDERS' | 'WATER' | 'BILL' | 'MESSAGE'
+  const [activeSourceTab, setActiveSourceTab] = useState(isCompanyScope ? 'CUSTOMER' : 'ADMIN'); // 'CUSTOMER' | 'SUPERADMIN' | 'ADMIN'
+  const [activeFilter, setActiveFilter] = useState('ALL'); // For CUSTOMER tab: 'ALL' | 'ORDERS' | 'WATER' | 'BILL' | 'MESSAGE'
+  const [activeAdminFilter, setActiveAdminFilter] = useState('ALL'); // For ADMIN tab: 'ALL' | 'BRANCH_REQUEST' | 'SUPPORT_HELP'
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [counts, setCounts] = useState({
@@ -183,6 +228,10 @@ export default function NotificationModal({ isOpen, onClose }) {
     customerWebsiteUnread: 0,
     superAdmin: 0,
     superAdminUnread: 0,
+    admin: 0,
+    adminUnread: 0,
+    branchRequests: 0,
+    supportHelp: 0,
     quickHelp: {
       orders: 0,
       water: 0,
@@ -191,6 +240,13 @@ export default function NotificationModal({ isOpen, onClose }) {
     }
   });
 
+  // Automatically switch tab away from SUPERADMIN if on Sub branch filter
+  useEffect(() => {
+    if (!isCompanyScope && activeSourceTab === 'SUPERADMIN') {
+      setActiveSourceTab('CUSTOMER');
+      setActiveFilter('ALL');
+    }
+  }, [isCompanyScope, activeSourceTab]);
 
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
   const [broadcastForm, setBroadcastForm] = useState({
@@ -201,72 +257,215 @@ export default function NotificationModal({ isOpen, onClose }) {
     branch: 'All Branches'
   });
 
-  // Fetch notifications from live backend API
+  // Fetch notifications from live backend API, stock requests, and tickets
   const fetchLiveNotifications = useCallback(async () => {
     if (!isOpen) return;
     setIsLoading(true);
 
-    const typeParam = activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin';
-    const params = {
-      type: typeParam,
-    };
-
-    if (selectedBranchId && selectedBranchId !== 'ALL') {
-      params.branchId = selectedBranchId;
-    }
-
     try {
-      const res = await notificationApi.getNotifications(params);
-      if (res.status && res.data) {
-        const data = res.data;
+      // 1. Fetch live notifications
+      const notifPromise = notificationApi.getNotifications({
+        type: 'all',
+        branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+      }).catch(err => {
+        console.warn('Notification fetch warning:', err);
+        return { status: false, data: {} };
+      });
 
-        // Extract raw arrays and filter out dummy / test notifications
-        const allCustomerRaw = (data.customerWebsiteNotifications || data.notifications || data.allNotifications || [])
-          .filter(item => (item.source !== 'SUPER_ADMIN' && item.requestType !== 'SuperAdmin'))
-          .filter(item => !isDummyNotification(item));
+      // 2. Fetch live stock requests (Branch Requests)
+      const stockReqPromise = InventoryApi.getStockRequests({
+        limit: 10,
+        page: 0,
+        branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+      }).catch(err => {
+        console.warn('Stock requests fetch warning:', err);
+        return { status: false, response: [] };
+      });
 
-        const allSuperAdminRaw = (data.superAdminNotifications || data.notifications || data.allNotifications || [])
-          .filter(item => (item.source === 'SUPER_ADMIN' || item.requestType === 'SuperAdmin'))
-          .filter(item => !isDummyNotification(item));
+      // 3. Fetch live tickets (Support & Help)
+      const ticketsPromise = ticketApi.getTickets({
+        limit: 10,
+        page: 0,
+        branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+      }).catch(err => {
+        console.warn('Tickets fetch warning:', err);
+        return { status: false, data: [] };
+      });
 
-        // Store counts calculated from real non-dummy notifications
-        setCounts({
-          totalActive: allCustomerRaw.length + allSuperAdminRaw.length,
-          totalCount: allCustomerRaw.length + allSuperAdminRaw.length,
-          customerWebsite: allCustomerRaw.length,
-          customerWebsiteUnread: allCustomerRaw.filter(n => !n.isRead).length,
-          superAdmin: allSuperAdminRaw.length,
-          superAdminUnread: allSuperAdminRaw.filter(n => !n.isRead).length,
-          quickHelp: {
-            orders: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'ORDERS')).length,
-            water: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'WATER')).length,
-            bill: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'BILL')).length,
-            message: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'MESSAGE')).length,
+      const [res, stockReqRes, ticketsRes] = await Promise.all([notifPromise, stockReqPromise, ticketsPromise]);
+
+      const data = res?.data || {};
+
+      // Filter raw notification items
+      const rawNotifications = (data.notifications || data.allNotifications || []);
+
+      const allCustomerRaw = (data.customerWebsiteNotifications || rawNotifications)
+        .filter(item => (item.source !== 'SUPER_ADMIN' && item.requestType !== 'SuperAdmin'))
+        .filter(item => !isDummyNotification(item));
+
+      const allSuperAdminRaw = (data.superAdminNotifications || rawNotifications)
+        .filter(item => (item.source === 'SUPER_ADMIN' || item.requestType === 'SuperAdmin'))
+        .filter(item => !isDummyNotification(item));
+
+      // Build live Stock Requests notifications list
+      let rawStockRequests = Array.isArray(stockReqRes?.response?.data) 
+        ? stockReqRes.response.data 
+        : (Array.isArray(stockReqRes?.response?.requests)
+            ? stockReqRes.response.requests
+            : (Array.isArray(stockReqRes?.response) ? stockReqRes.response : []));
+
+      // Also merge any locally saved branch requests (especially for Company Admin real-time view)
+      try {
+        const storedLocal = localStorage.getItem('serviq_branch_requests');
+        if (storedLocal) {
+          const parsed = JSON.parse(storedLocal);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingKeys = new Set(rawStockRequests.map(r => String(r._id || r.id || r.requestNo)));
+            const newLocal = parsed.filter(r => !existingKeys.has(String(r._id || r.id || r.requestNo)));
+            rawStockRequests = [...newLocal, ...rawStockRequests];
           }
-        });
-
-        // Determine notification list based on active tab
-        let rawList = [];
-        if (activeSourceTab === 'CUSTOMER') {
-          rawList = allCustomerRaw;
-        } else {
-          rawList = allSuperAdminRaw;
         }
+      } catch (e) {}
 
+      const scopedStockRequests = isCompanyScope
+        ? rawStockRequests
+        : rawStockRequests.filter(req => !selectedBranchId || selectedBranchId === 'ALL' || isBranchMatch(req, selectedBranchId, branches) || String(req.branchId || req.branch) === String(selectedBranchId));
 
-        // Map and format notifications
-        const formatted = (rawList || []).map((item) => {
+      const formattedBranchRequests = scopedStockRequests.map(req => {
+        const branchStr = extractLabel(req.branchName || req.branchId || req.branch, 'Branch');
+        return {
+          id: `stock-req-${req._id || req.id || req.requestNo}`,
+          adminType: 'BRANCH_REQUEST',
+          source: 'ADMIN',
+          type: isCompanyScope ? 'Stock Request' : 'Stock Distribution',
+          requestType: isCompanyScope ? 'Stock Request' : 'Stock Distribution',
+          title: `${isCompanyScope ? 'Stock Request' : 'Stock Distribution'}: ${req.requestNo || req._id || 'Stock'}`,
+          message: isCompanyScope 
+            ? `${branchStr} requested ${req.quantity || req.reqQty || ''} ${req.unit || ''} of ${extractLabel(req.item || req.itemName, 'stock')} (${req.status || 'Pending'})`
+            : `Stock distribution: ${req.quantity || req.reqQty || req.appQty || ''} ${req.unit || ''} ${extractLabel(req.item || req.itemName, 'stock')} (${req.status || 'Dispatched'})`,
+          table: branchStr,
+          branch: branchStr || 'Central Warehouse',
+          createdAt: req.createdAt || req.date,
+          timestamp: req.createdAt ? new Date(req.createdAt).getTime() : Date.now(),
+          time: formatRelativeTime(req.createdAt || req.date),
+          status: req.status || 'Pending',
+          isRead: false,
+          badgeBg: '#fff7ed',
+          badgeColor: '#ea580c',
+          actionUrl: isCompanyScope ? '/inventory/branch-requests' : '/inventory/stock-request'
+        };
+      });
+
+      // Build live Support & Help notifications list
+      const rawTickets = Array.isArray(ticketsRes?.data) ? ticketsRes.data : [];
+      const formattedTickets = rawTickets.map(ticket => {
+        const branchStr = extractLabel(ticket.branchName || ticket.branch, 'Support');
+        return {
+          id: `ticket-${ticket._id || ticket.id || ticket.ticketNo}`,
+          adminType: 'SUPPORT_HELP',
+          source: 'ADMIN',
+          type: 'Support & Help',
+          requestType: 'Support & Help',
+          title: `Ticket #${ticket.ticketNo || ticket._id}: ${extractLabel(ticket.subject, 'Support Ticket')}`,
+          message: `${extractLabel(ticket.message || ticket.description || ticket.subject, 'Ticket')} (${ticket.priority || 'Normal'} Priority - ${ticket.status || 'Open'})`,
+          table: branchStr,
+          branch: branchStr || 'Help Desk',
+          createdAt: ticket.createdAt,
+          timestamp: ticket.createdAt ? new Date(ticket.createdAt).getTime() : Date.now(),
+          time: formatRelativeTime(ticket.createdAt),
+          status: ticket.status || 'Open',
+          isRead: false,
+          badgeBg: '#ede9fe',
+          badgeColor: '#7c3aed',
+          actionUrl: '/help-support'
+        };
+      });
+
+      // In addition, any notification from `/notifications` relating to admin/tickets/branch requests
+      const additionalAdminNotifs = rawNotifications.filter(item => {
+        if (isDummyNotification(item)) return false;
+        const t = String(item.type || '').toUpperCase();
+        const r = String(item.requestType || '').toUpperCase();
+        const title = String(item.title || '').toUpperCase();
+        const msg = String(item.message || '').toUpperCase();
+        const target = String(item.targetRole || '').toUpperCase();
+        return target.includes('ADMIN') ||
+          t.includes('TICKET') || t.includes('SUPPORT') || t.includes('BRANCH') || t.includes('REQUEST') ||
+          r.includes('TICKET') || r.includes('SUPPORT') || r.includes('BRANCH') || r.includes('REQUEST') ||
+          title.includes('TICKET') || title.includes('SUPPORT') || title.includes('BRANCH') || title.includes('REQUEST') ||
+          msg.includes('TICKET') || msg.includes('BRANCH');
+      }).map(item => {
+        const isSupport = String(item.type || '').toUpperCase().includes('TICKET') ||
+          String(item.title || '').toUpperCase().includes('TICKET') ||
+          String(item.type || '').toUpperCase().includes('SUPPORT');
+        const branchStr = extractLabel(item.branch, 'Main Branch');
+        const tableStr = extractLabel(item.table, branchStr || (isSupport ? 'Support' : 'Branch'));
+        return {
+          id: item._id || item.id,
+          adminType: isSupport ? 'SUPPORT_HELP' : 'BRANCH_REQUEST',
+          source: 'ADMIN',
+          type: extractLabel(item.type, isSupport ? 'Support & Help' : 'Branch Request'),
+          requestType: extractLabel(item.requestType, isSupport ? 'Support & Help' : 'Branch Request'),
+          title: extractLabel(item.title, isSupport ? 'Support Ticket' : 'Branch Request'),
+          message: extractLabel(item.message, ''),
+          table: tableStr,
+          branch: branchStr,
+          createdAt: item.createdAt,
+          timestamp: item.createdAt ? new Date(item.createdAt).getTime() : Date.now(),
+          time: formatRelativeTime(item.createdAt),
+          status: item.status || 'Active',
+          isRead: !!item.isRead,
+          badgeBg: isSupport ? '#ede9fe' : '#fff7ed',
+          badgeColor: isSupport ? '#7c3aed' : '#ea580c',
+          actionUrl: isSupport ? '/help-support' : '/inventory/branch-requests'
+        };
+      });
+
+      // Combine admin notifications (avoiding duplicate IDs)
+      const adminMap = new Map();
+      [...formattedBranchRequests, ...formattedTickets, ...additionalAdminNotifs].forEach(item => {
+        if (!adminMap.has(item.id)) {
+          adminMap.set(item.id, item);
+        }
+      });
+      const allAdminRaw = Array.from(adminMap.values());
+
+      const branchRequestsTotal = allAdminRaw.filter(n => n.adminType === 'BRANCH_REQUEST').length;
+      const supportHelpTotal = allAdminRaw.filter(n => n.adminType === 'SUPPORT_HELP').length;
+      const adminTotal = allAdminRaw.length;
+
+      // Store counts
+      setCounts({
+        totalActive: isCompanyScope 
+          ? (allCustomerRaw.length + allSuperAdminRaw.length + adminTotal) 
+          : (allCustomerRaw.length + adminTotal),
+        totalCount: isCompanyScope 
+          ? (allCustomerRaw.length + allSuperAdminRaw.length + adminTotal) 
+          : (allCustomerRaw.length + adminTotal),
+        customerWebsite: allCustomerRaw.length,
+        customerWebsiteUnread: allCustomerRaw.filter(n => !n.isRead).length,
+        superAdmin: allSuperAdminRaw.length,
+        superAdminUnread: allSuperAdminRaw.filter(n => !n.isRead).length,
+        admin: adminTotal,
+        adminUnread: allAdminRaw.filter(n => !n.isRead).length,
+        branchRequests: branchRequestsTotal,
+        supportHelp: supportHelpTotal,
+        quickHelp: {
+          orders: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'ORDERS')).length,
+          water: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'WATER')).length,
+          bill: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'BILL')).length,
+          message: allCustomerRaw.filter(n => matchesNotificationFilter(n, 'MESSAGE')).length,
+        }
+      });
+
+      // Determine notification list based on active tab
+      let listToDisplay = [];
+      if (activeSourceTab === 'CUSTOMER') {
+        listToDisplay = allCustomerRaw.map(item => {
           const reqType = item.requestType || 'General';
-          const isSuper = item.source === 'SUPER_ADMIN' || reqType === 'SuperAdmin';
-          
-          // Badge colors
           let badgeBg = '#fff7ed';
           let badgeColor = '#ea580c';
-
-          if (isSuper) {
-            badgeBg = '#ede9fe';
-            badgeColor = '#7c3aed';
-          } else if (String(reqType).toUpperCase() === 'WATER') {
+          if (String(reqType).toUpperCase() === 'WATER') {
             badgeBg = '#f0f9ff';
             badgeColor = '#0284c7';
           } else if (String(reqType).toUpperCase() === 'BILL') {
@@ -279,41 +478,24 @@ export default function NotificationModal({ isOpen, onClose }) {
             badgeBg = '#f0fdf4';
             badgeColor = '#16a34a';
           }
-
-          // Extract table label if available
           let tableLabel = null;
           if (item.table) {
-            tableLabel = typeof item.table === 'object' ? (item.table.tableNumber || item.table.name) : item.table;
+            tableLabel = extractLabel(item.table, '');
           } else if (item.message && typeof item.message === 'string') {
             const match = item.message.match(/TBL-[A-Z0-9-]+/i) || item.message.match(/Table\s+[A-Za-z0-9-]+/i);
             if (match) tableLabel = match[0];
           }
-
-          if (!tableLabel) {
-            tableLabel = isSuper ? 'Super Admin' : 'Customer';
-          }
-
-          // Branch label
-          const branchLabel = item.branch?.branchName || (typeof item.branch === 'string' ? item.branch : 'Main Branch');
-
-          // Action URL
-          let actionUrl = null;
-          if (item.orderId || String(reqType).toUpperCase() === 'ORDERS' || String(item.type).includes('ORDER')) {
-            actionUrl = '/orders';
-          } else if (isSuper) {
-            if (String(item.type).includes('Subscription')) actionUrl = '/plans-management';
-            else if (String(item.type).includes('Ticket')) actionUrl = '/help-support';
-          }
+          if (!tableLabel) tableLabel = 'Customer';
 
           return {
             id: item._id || item.id,
             source: item.source,
-            type: item.type,
-            requestType: item.requestType,
-            title: item.title || 'Notification',
-            message: item.message || '',
+            type: extractLabel(item.type, 'General'),
+            requestType: extractLabel(item.requestType, 'General'),
+            title: extractLabel(item.title, 'Notification'),
+            message: extractLabel(item.message, ''),
             table: tableLabel,
-            branch: branchLabel,
+            branch: extractLabel(item.branch, 'Main Branch'),
             orderId: item.orderId,
             isRead: !!item.isRead,
             createdAt: item.createdAt,
@@ -322,20 +504,42 @@ export default function NotificationModal({ isOpen, onClose }) {
             status: item.status,
             badgeBg,
             badgeColor,
-            actionUrl
+            actionUrl: (item.orderId || String(reqType).toUpperCase() === 'ORDERS' || String(item.type).includes('ORDER')) ? '/orders' : null
           };
         });
-
-        // Sort descending by timestamp
-        formatted.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        setNotifications(formatted);
+      } else if (activeSourceTab === 'SUPERADMIN') {
+        listToDisplay = allSuperAdminRaw.map(item => ({
+          id: item._id || item.id,
+          source: 'SUPER_ADMIN',
+          type: extractLabel(item.type, 'SuperAdmin'),
+          requestType: 'SuperAdmin',
+          title: extractLabel(item.title, 'SuperAdmin Announcement'),
+          message: extractLabel(item.message, ''),
+          table: 'Super Admin',
+          branch: extractLabel(item.branch, 'Platform'),
+          isRead: !!item.isRead,
+          createdAt: item.createdAt,
+          timestamp: item.createdAt ? new Date(item.createdAt).getTime() : Date.now(),
+          time: formatRelativeTime(item.createdAt),
+          status: item.status,
+          badgeBg: '#ede9fe',
+          badgeColor: '#7c3aed',
+          actionUrl: String(item.type).includes('Subscription') ? '/plans-management' : (String(item.type).includes('Ticket') ? '/help-support' : null)
+        }));
+      } else {
+        // ADMIN tab
+        listToDisplay = allAdminRaw;
       }
+
+      // Sort descending by timestamp
+      listToDisplay.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      setNotifications(listToDisplay);
     } catch (e) {
       console.warn('Error fetching live notifications:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [isOpen, activeSourceTab, activeFilter, selectedBranchId]);
+  }, [isOpen, activeSourceTab, selectedBranchId, isCompanyScope]);
 
   useEffect(() => {
     fetchLiveNotifications();
@@ -350,7 +554,8 @@ export default function NotificationModal({ isOpen, onClose }) {
       totalActive: Math.max(0, (prev.totalActive || 1) - 1),
       totalCount: Math.max(0, (prev.totalCount || 1) - 1),
       customerWebsite: activeSourceTab === 'CUSTOMER' ? Math.max(0, (prev.customerWebsite || 1) - 1) : prev.customerWebsite,
-      superAdmin: activeSourceTab === 'SUPERADMIN' ? Math.max(0, (prev.superAdmin || 1) - 1) : prev.superAdmin
+      superAdmin: activeSourceTab === 'SUPERADMIN' ? Math.max(0, (prev.superAdmin || 1) - 1) : prev.superAdmin,
+      admin: activeSourceTab === 'ADMIN' ? Math.max(0, (prev.admin || 1) - 1) : prev.admin
     }));
     try {
       await notificationApi.markAsRead(id);
@@ -369,6 +574,10 @@ export default function NotificationModal({ isOpen, onClose }) {
       customerWebsiteUnread: activeSourceTab === 'CUSTOMER' ? 0 : prev.customerWebsiteUnread,
       superAdmin: activeSourceTab === 'SUPERADMIN' ? 0 : prev.superAdmin,
       superAdminUnread: activeSourceTab === 'SUPERADMIN' ? 0 : prev.superAdminUnread,
+      admin: activeSourceTab === 'ADMIN' ? 0 : prev.admin,
+      adminUnread: activeSourceTab === 'ADMIN' ? 0 : prev.adminUnread,
+      branchRequests: activeSourceTab === 'ADMIN' && activeAdminFilter === 'BRANCH_REQUEST' ? 0 : prev.branchRequests,
+      supportHelp: activeSourceTab === 'ADMIN' && activeAdminFilter === 'SUPPORT_HELP' ? 0 : prev.supportHelp,
       quickHelp: {
         orders: 0,
         water: 0,
@@ -377,15 +586,16 @@ export default function NotificationModal({ isOpen, onClose }) {
       }
     }));
     try {
+      const typeParam = activeSourceTab === 'CUSTOMER' ? 'customer' : (activeSourceTab === 'SUPERADMIN' ? 'superadmin' : 'admin');
       const res = await notificationApi.clearNotifications({
-        type: activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin',
+        type: typeParam,
         branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
       });
       if (res && res.status) {
         ShowNotifications.showAlertNotification(res.message || 'All active notifications cleared successfully.', true);
       } else {
         await notificationApi.markAllAsRead({
-          type: activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin',
+          type: typeParam,
           branchId: selectedBranchId && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
         });
       }
@@ -447,20 +657,48 @@ export default function NotificationModal({ isOpen, onClose }) {
       }
     }
 
-    // 2. Filter by search query
+    // 2. Filter by active sub-filter when on ADMIN tab
+    if (activeSourceTab === 'ADMIN' && activeAdminFilter !== 'ALL') {
+      if (activeAdminFilter === 'BRANCH_REQUEST' || activeAdminFilter === 'STOCK_REQUEST') {
+        const isBranchReq = item.adminType === 'BRANCH_REQUEST' ||
+          String(item.type || '').toUpperCase().includes('BRANCH') ||
+          String(item.title || '').toUpperCase().includes('BRANCH') ||
+          String(item.requestType || '').toUpperCase().includes('BRANCH') ||
+          String(item.type || '').toUpperCase().includes('REQUEST') ||
+          String(item.title || '').toUpperCase().includes('REQUEST') ||
+          String(item.title || '').toUpperCase().includes('STOCK') ||
+          String(item.message || '').toUpperCase().includes('STOCK REQUEST') ||
+          String(item.message || '').toUpperCase().includes('REQUEST');
+        if (!isBranchReq) return false;
+      } else if (activeAdminFilter === 'SUPPORT_HELP' || activeAdminFilter === 'TICKET') {
+        const isSupport = item.adminType === 'SUPPORT_HELP' ||
+          String(item.type || '').toUpperCase().includes('TICKET') ||
+          String(item.title || '').toUpperCase().includes('TICKET') ||
+          String(item.title || '').toUpperCase().includes('SUPPORT') ||
+          String(item.requestType || '').toUpperCase().includes('SUPPORT') ||
+          String(item.message || '').toUpperCase().includes('SUPPORT') ||
+          String(item.message || '').toUpperCase().includes('TICKET');
+        if (!isSupport) return false;
+      }
+    }
+
+    // 3. Filter by search query
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
-      (item.title && item.title.toLowerCase().includes(q)) ||
-      (item.message && item.message.toLowerCase().includes(q)) ||
-      (item.table && String(item.table).toLowerCase().includes(q)) ||
-      (item.branch && String(item.branch).toLowerCase().includes(q))
+      (item.title && extractLabel(item.title).toLowerCase().includes(q)) ||
+      (item.message && extractLabel(item.message).toLowerCase().includes(q)) ||
+      (item.table && extractLabel(item.table).toLowerCase().includes(q)) ||
+      (item.branch && extractLabel(item.branch).toLowerCase().includes(q))
     );
   });
 
   const customerTabCount = counts.customerWebsite || (activeSourceTab === 'CUSTOMER' ? notifications.length : 0);
   const superAdminTabCount = counts.superAdmin || (activeSourceTab === 'SUPERADMIN' ? notifications.length : 0);
-  const totalActiveCount = counts.totalActive || (customerTabCount + superAdminTabCount);
+  const adminTabCount = counts.admin || (activeSourceTab === 'ADMIN' ? notifications.length : 0);
+  const totalActiveCount = isCompanyScope 
+    ? (customerTabCount + superAdminTabCount + adminTabCount) 
+    : (customerTabCount + adminTabCount);
 
   const ordersCount = counts.quickHelp?.orders ?? notifications.filter(n => matchesNotificationFilter(n, 'ORDERS')).length;
   const waterCount = counts.quickHelp?.water ?? notifications.filter(n => matchesNotificationFilter(n, 'WATER')).length;
@@ -632,7 +870,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* PRIMARY TABS: Customer Website vs SuperAdmin */}
+          {/* PRIMARY TABS: Customer Website vs SuperAdmin vs Admin */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -642,6 +880,7 @@ export default function NotificationModal({ isOpen, onClose }) {
             marginBottom: '12px',
             gap: '4px'
           }}>
+            {/* 1. Customer Website tab: Available in BOTH Company and Sub-branch */}
             <button
               type="button"
               onClick={() => {
@@ -686,11 +925,57 @@ export default function NotificationModal({ isOpen, onClose }) {
               )}
             </button>
 
+            {/* 2. SuperAdmin tab: ONLY for Company filter */}
+            {isCompanyScope && (
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveSourceTab('SUPERADMIN');
+                  setActiveFilter('ALL');
+                }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '8px 14px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: activeSourceTab === 'SUPERADMIN' ? '#ffffff' : 'transparent',
+                  color: activeSourceTab === 'SUPERADMIN' ? '#0f172a' : '#64748b',
+                  fontWeight: activeSourceTab === 'SUPERADMIN' ? 800 : 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  boxShadow: activeSourceTab === 'SUPERADMIN' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={activeSourceTab === 'SUPERADMIN' ? '#7c3aed' : 'currentColor'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                SuperAdmin
+                {superAdminTabCount > 0 && (
+                  <span style={{
+                    background: activeSourceTab === 'SUPERADMIN' ? '#ede9fe' : '#e2e8f0',
+                    color: activeSourceTab === 'SUPERADMIN' ? '#7c3aed' : '#475569',
+                    fontSize: '11px',
+                    fontWeight: 800,
+                    padding: '1px 7px',
+                    borderRadius: '9999px'
+                  }}>
+                    {superAdminTabCount}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Admin Tab: Available in Company filter AND Sub-branch filter */}
             <button
               type="button"
               onClick={() => {
-                setActiveSourceTab('SUPERADMIN');
-                setActiveFilter('ALL');
+                setActiveSourceTab('ADMIN');
+                setActiveAdminFilter('ALL');
               }}
               style={{
                 flex: 1,
@@ -701,29 +986,32 @@ export default function NotificationModal({ isOpen, onClose }) {
                 padding: '8px 14px',
                 borderRadius: '9px',
                 border: 'none',
-                background: activeSourceTab === 'SUPERADMIN' ? '#ffffff' : 'transparent',
-                color: activeSourceTab === 'SUPERADMIN' ? '#0f172a' : '#64748b',
-                fontWeight: activeSourceTab === 'SUPERADMIN' ? 800 : 600,
+                background: activeSourceTab === 'ADMIN' ? '#ffffff' : 'transparent',
+                color: activeSourceTab === 'ADMIN' ? '#0f172a' : '#64748b',
+                fontWeight: activeSourceTab === 'ADMIN' ? 800 : 600,
                 fontSize: '13px',
                 cursor: 'pointer',
-                boxShadow: activeSourceTab === 'SUPERADMIN' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                boxShadow: activeSourceTab === 'ADMIN' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={activeSourceTab === 'SUPERADMIN' ? '#7c3aed' : 'currentColor'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={activeSourceTab === 'ADMIN' ? '#0284c7' : 'currentColor'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
               </svg>
-              SuperAdmin
-              {superAdminTabCount > 0 && (
+              Admin
+              {adminTabCount > 0 && (
                 <span style={{
-                  background: activeSourceTab === 'SUPERADMIN' ? '#ede9fe' : '#e2e8f0',
-                  color: activeSourceTab === 'SUPERADMIN' ? '#7c3aed' : '#475569',
+                  background: activeSourceTab === 'ADMIN' ? '#e0f2fe' : '#e2e8f0',
+                  color: activeSourceTab === 'ADMIN' ? '#0284c7' : '#475569',
                   fontSize: '11px',
                   fontWeight: 800,
                   padding: '1px 7px',
                   borderRadius: '9999px'
                 }}>
-                  {superAdminTabCount}
+                  {adminTabCount}
                 </span>
               )}
             </button>
@@ -743,7 +1031,10 @@ export default function NotificationModal({ isOpen, onClose }) {
           }}>
             {/* Left Action: View All */}
             <div 
-              onClick={() => setActiveFilter('ALL')}
+              onClick={() => {
+                if (activeSourceTab === 'CUSTOMER') setActiveFilter('ALL');
+                else if (activeSourceTab === 'ADMIN') setActiveAdminFilter('ALL');
+              }}
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -752,22 +1043,22 @@ export default function NotificationModal({ isOpen, onClose }) {
                 userSelect: 'none',
                 flexShrink: 0
               }}
-              title={`Click to view all ${activeSourceTab === 'CUSTOMER' ? 'customer' : 'superadmin'} notifications`}
+              title="Click to view all"
             >
               <div style={{
                 width: '32px',
                 height: '32px',
                 borderRadius: '8px',
-                backgroundColor: activeFilter === 'ALL' 
-                  ? (activeSourceTab === 'CUSTOMER' ? '#fff7ed' : '#f5f3ff')
+                backgroundColor: (activeSourceTab === 'CUSTOMER' && activeFilter === 'ALL') || (activeSourceTab === 'ADMIN' && activeAdminFilter === 'ALL') || activeSourceTab === 'SUPERADMIN'
+                  ? (activeSourceTab === 'CUSTOMER' ? '#fff7ed' : (activeSourceTab === 'SUPERADMIN' ? '#f5f3ff' : '#f0f9ff'))
                   : '#f8fafc',
-                border: activeFilter === 'ALL' 
-                  ? (activeSourceTab === 'CUSTOMER' ? '1.5px solid #fed7aa' : '1.5px solid #ddd6fe')
+                border: (activeSourceTab === 'CUSTOMER' && activeFilter === 'ALL') || (activeSourceTab === 'ADMIN' && activeAdminFilter === 'ALL') || activeSourceTab === 'SUPERADMIN'
+                  ? (activeSourceTab === 'CUSTOMER' ? '1.5px solid #fed7aa' : (activeSourceTab === 'SUPERADMIN' ? '1.5px solid #ddd6fe' : '1.5px solid #bae6fd'))
                   : '1px solid #e2e8f0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: activeSourceTab === 'CUSTOMER' ? '#ea580c' : '#7c3aed',
+                color: activeSourceTab === 'CUSTOMER' ? '#ea580c' : (activeSourceTab === 'SUPERADMIN' ? '#7c3aed' : '#0284c7'),
                 flexShrink: 0,
                 transition: 'all 0.15s'
               }}>
@@ -776,14 +1067,19 @@ export default function NotificationModal({ isOpen, onClose }) {
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                     <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                   </svg>
-                ) : (
+                ) : activeSourceTab === 'SUPERADMIN' ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
                   </svg>
                 )}
               </div>
               <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
-                {activeSourceTab === 'CUSTOMER' ? 'Quick Help' : 'SuperAdmin Alerts'}
+                {activeSourceTab === 'CUSTOMER' ? 'Quick Help' : (activeSourceTab === 'SUPERADMIN' ? 'SuperAdmin Alerts' : (isCompanyScope ? 'Admin Alerts' : 'Branch Admin Alerts'))}
               </span>
             </div>
 
@@ -906,10 +1202,70 @@ export default function NotificationModal({ isOpen, onClose }) {
                     Message {messageCount > 0 && `(${messageCount})`}
                   </button>
                 </>
-              ) : (
+              ) : activeSourceTab === 'SUPERADMIN' ? (
                 <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, padding: '4px 8px' }}>
                   Platform & SuperAdmin Notices
                 </div>
+              ) : (
+                /* ADMIN TAB SUB-FILTERS: 2 filter tabs for both Company & Sub-branch */
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminFilter(prev => (prev === 'BRANCH_REQUEST' || prev === 'STOCK_REQUEST') ? 'ALL' : 'BRANCH_REQUEST')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      border: (activeAdminFilter === 'BRANCH_REQUEST' || activeAdminFilter === 'STOCK_REQUEST') ? '1.5px solid #ea580c' : '1px solid #fed7aa',
+                      backgroundColor: (activeAdminFilter === 'BRANCH_REQUEST' || activeAdminFilter === 'STOCK_REQUEST') ? '#ffedd5' : '#fff7ed',
+                      color: '#ea580c',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="3" width="15" height="13"></rect>
+                      <polygon points="16 8 20 8 23 11 23 16 16 8"></polygon>
+                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                    </svg>
+                    {isCompanyScope ? 'Stock request' : 'Stock distribution'} {counts.branchRequests > 0 && `(${counts.branchRequests})`}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAdminFilter(prev => (prev === 'SUPPORT_HELP' || prev === 'TICKET') ? 'ALL' : 'SUPPORT_HELP')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      border: (activeAdminFilter === 'SUPPORT_HELP' || activeAdminFilter === 'TICKET') ? '1.5px solid #0284c7' : '1px solid #bae6fd',
+                      backgroundColor: (activeAdminFilter === 'SUPPORT_HELP' || activeAdminFilter === 'TICKET') ? '#e0f2fe' : '#f0f9ff',
+                      color: '#0284c7',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    Support & help {counts.supportHelp > 0 && `(${counts.supportHelp})`}
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -950,9 +1306,17 @@ export default function NotificationModal({ isOpen, onClose }) {
               </div>
               <div style={{ fontSize: '14px', fontWeight: 700, color: '#334155' }}>No notifications to display</div>
               <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
-                {activeFilter !== 'ALL' 
-                  ? `No active ${activeFilter.toLowerCase()} alerts.` 
-                  : (activeSourceTab === 'CUSTOMER' ? 'No active table or customer website alerts.' : 'No active SuperAdmin announcements.')}
+                {activeSourceTab === 'ADMIN' ? (
+                  activeAdminFilter === 'BRANCH_REQUEST' 
+                    ? (isCompanyScope ? 'No active stock requests.' : 'No active stock distributions.')
+                    : (activeAdminFilter === 'SUPPORT_HELP' 
+                        ? 'No active support & help tickets.' 
+                        : (isCompanyScope ? 'No active Admin notifications or requests.' : 'No active notifications for this branch.'))
+                ) : (
+                  activeFilter !== 'ALL' 
+                    ? `No active ${activeFilter.toLowerCase()} alerts.` 
+                    : (activeSourceTab === 'CUSTOMER' ? 'No active table or customer website alerts.' : 'No active SuperAdmin announcements.')
+                )}
               </div>
             </div>
           ) : (
@@ -994,7 +1358,7 @@ export default function NotificationModal({ isOpen, onClose }) {
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '13px', fontWeight: 800, color: '#0f172a' }}>
-                          {notif.title}
+                          {extractLabel(notif.title)}
                         </span>
 
                         {notif.table && (
@@ -1007,7 +1371,7 @@ export default function NotificationModal({ isOpen, onClose }) {
                             borderRadius: '4px',
                             letterSpacing: '0.3px'
                           }}>
-                            {notif.table}
+                            {extractLabel(notif.table)}
                           </span>
                         )}
 
@@ -1021,7 +1385,7 @@ export default function NotificationModal({ isOpen, onClose }) {
                             borderRadius: '4px',
                             border: '1px solid #ddd6fe'
                           }}>
-                            {notif.type || 'SuperAdmin'}
+                            {extractLabel(notif.type, 'SuperAdmin')}
                           </span>
                         )}
 
@@ -1037,11 +1401,11 @@ export default function NotificationModal({ isOpen, onClose }) {
                       </div>
 
                       <div style={{ fontSize: '12px', color: '#475569', lineHeight: '1.4' }}>
-                        {notif.message}
+                        {extractLabel(notif.message)}
                       </div>
 
                       <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', fontWeight: 600 }}>
-                        {notif.time} • {notif.branch}
+                        {notif.time} • {extractLabel(notif.branch)}
                       </div>
                     </div>
                   </div>

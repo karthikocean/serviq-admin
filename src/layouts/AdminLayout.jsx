@@ -6,6 +6,8 @@ import BranchSearchDropdown from '../components/BranchSearchDropdown';
 import ShowNotifications from '../helper/ShowNotifications';
 import NotificationModal from '../components/NotificationModal';
 import { notificationApi, isDummyNotification } from '../api/Notification.js';
+import InventoryApi from '../api/Inventory.js';
+import { ticketApi } from '../api/Ticket.js';
 
 export default function AdminLayout() {
   const {
@@ -64,20 +66,68 @@ export default function AdminLayout() {
   // Fetch live notifications count for badge
   useEffect(() => {
     let isMounted = true;
+    const isCompanyScope = !selectedBranchId ||
+      selectedBranchId === 'ALL' ||
+      selectedBranchId === 'All' ||
+      selectedBranchId === 'all' ||
+      String(selectedBranchId).toUpperCase() === 'COMPANY' ||
+      String(selectedBranchId).toLowerCase() === 'all branches';
+
     const fetchCounts = async () => {
       try {
-        const res = await notificationApi.getNotifications({
+        const notifPromise = notificationApi.getNotifications({
           type: 'all',
-          branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined
-        });
-        if (isMounted && res && res.status && res.data) {
-          const rawCustomer = (res.data.customerWebsiteNotifications || res.data.notifications || res.data.allNotifications || [])
+          branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        }).catch(() => ({ status: false, data: {} }));
+
+        const stockReqPromise = InventoryApi.getStockRequests({
+          limit: 10,
+          page: 0,
+          branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        }).catch(() => ({ status: false, response: [] }));
+
+        const ticketsPromise = ticketApi.getTickets({
+          limit: 10,
+          page: 0,
+          branchId: !isCompanyScope && selectedBranchId !== 'ALL' ? selectedBranchId : undefined
+        }).catch(() => ({ status: false, data: [] }));
+
+        const [res, stockReqRes, ticketsRes] = await Promise.all([notifPromise, stockReqPromise, ticketsPromise]);
+
+        if (isMounted) {
+          const rawNotifications = (res?.data?.notifications || res?.data?.allNotifications || []);
+          const rawCustomer = (res?.data?.customerWebsiteNotifications || rawNotifications)
             .filter(item => (item.source !== 'SUPER_ADMIN' && item.requestType !== 'SuperAdmin'))
             .filter(n => !isDummyNotification(n));
-          const rawSuper = (res.data.superAdminNotifications || res.data.notifications || res.data.allNotifications || [])
+          const rawSuper = (res?.data?.superAdminNotifications || rawNotifications)
             .filter(item => (item.source === 'SUPER_ADMIN' || item.requestType === 'SuperAdmin'))
             .filter(n => !isDummyNotification(n));
-          const totalValid = rawCustomer.length + rawSuper.length;
+
+          let rawStockRequests = Array.isArray(stockReqRes?.response?.data) 
+            ? stockReqRes.response.data 
+            : (Array.isArray(stockReqRes?.response?.requests)
+                ? stockReqRes.response.requests
+                : (Array.isArray(stockReqRes?.response) ? stockReqRes.response : []));
+
+          try {
+            const storedLocal = localStorage.getItem('serviq_branch_requests');
+            if (storedLocal) {
+              const parsed = JSON.parse(storedLocal);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const existingKeys = new Set(rawStockRequests.map(r => String(r._id || r.id || r.requestNo)));
+                const newLocal = parsed.filter(r => !existingKeys.has(String(r._id || r.id || r.requestNo)));
+                rawStockRequests = [...newLocal, ...rawStockRequests];
+              }
+            }
+          } catch (e) {}
+
+          const rawTickets = Array.isArray(ticketsRes?.data) ? ticketsRes.data : [];
+
+          const adminCount = rawStockRequests.length + rawTickets.length;
+          const totalValid = isCompanyScope
+            ? (rawCustomer.length + rawSuper.length + adminCount)
+            : (rawCustomer.length + adminCount);
+
           setNotificationCount(totalValid > 0 ? totalValid : 0);
         }
       } catch (e) {
@@ -635,14 +685,6 @@ export default function AdminLayout() {
                           <Link to="/inventory/distribution" style={{ display: 'flex', alignItems: 'center' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><path d="M16 3h5v5"></path><path d="M4 20L21 3"></path><path d="M21 16v5h-5"></path><path d="M15 15l6 6"></path><path d="M4 4l5 5"></path></svg>
                             <span>Stock Distribution</span>
-                          </Link>
-                        </li>
-                      )}
-                      {hasPermission('inventory_branch_transfer', 'view') && (
-                        <li className={`sidebar-item ${location.pathname === '/inventory/branch-transfer' ? 'active' : ''}`}>
-                          <Link to="/inventory/branch-transfer" style={{ display: 'flex', alignItems: 'center' }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px', flexShrink: 0 }}><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
-                            <span>Branch Transfer</span>
                           </Link>
                         </li>
                       )}

@@ -369,13 +369,11 @@ export default function Billing() {
       (selectedTable && selectedTable !== 'All' && selectedTable !== 'ALL')
     );
 
-    // Fall back to stored tenant billing data or initial dataset ONLY if API call failed
+    // Fall back to stored tenant billing data ONLY if API call failed
     if (!apiSuccess && fetchedTables.length === 0) {
       const sourceBills = (Array.isArray(activeRestaurant?.billingData) && activeRestaurant.billingData.length > 0)
         ? activeRestaurant.billingData
-        : (Array.isArray(initialBillingData) && initialBillingData.length > 0
-            ? initialBillingData
-            : []);
+        : [];
 
       if (sourceBills.length > 0) {
         let pool = sourceBills.map((b, idx) => {

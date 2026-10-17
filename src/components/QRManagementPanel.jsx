@@ -65,7 +65,7 @@ export default function QRManagementPanel({
   const displayQrs = scopedQrCodes;
 
   const [page, setPage] = useState(0);
-  const limit = 9;
+  const limit = 10;
   const totalPages = Math.max(1, Math.ceil(displayQrs.length / limit));
 
   useEffect(() => {

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { SearchIcon, EyeIcon, ArrowLeftIcon, getStockStatus, filterInputStyle, PaginationBar, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
+import ShowNotifications from '../../helper/ShowNotifications';
 import { useAppState } from '../../config/AppContext';
 import { isBranchMatch } from '../../helper/BranchHelper';
 
@@ -46,6 +47,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   const canEdit = typeof hasPermission === 'function' ? hasPermission('inventory_central_stock', 'edit') : true;
   const [itemsList, setItemsList] = useState(initialItems || []);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [itemFilter, setItemFilter] = useState('All');
@@ -55,9 +57,8 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
   // Detail View State (null | item)
   const [viewingItem, setViewingItem] = useState(null);
   const [adjustQty, setAdjustQty] = useState('');
+  const [adjustMinStock, setAdjustMinStock] = useState('');
   const [adjustReason, setAdjustReason] = useState('Stock Audit');
-
-  const categories = ['All', 'Grains', 'Oils', 'Spices', 'Meat', 'Dairy', 'Vegetables', 'Beverages', 'Packaging'];
 
   const PAGE_SIZE = 10;
   const [totalItemsCount, setTotalItemsCount] = useState(0);
@@ -67,37 +68,33 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     try {
       const queryParams = {
         branchId: isBranchFiltered ? selectedBranchId : undefined,
-        search: searchTerm ? searchTerm.trim() : undefined,
-        category: categoryFilter !== 'All' ? categoryFilter : undefined,
-        page: currentPage,
-        limit: PAGE_SIZE
+        limit: 100
       };
-      if (itemFilter !== 'All') {
-        queryParams.search = itemFilter;
-      }
-      if (stockStatusFilter !== 'All') {
-        queryParams.status = stockStatusFilter;
-      }
 
       const res = await InventoryApi.getItems(queryParams);
       if (res?.status && res?.response) {
         const rawItems = res.response.data || res.response.items || (Array.isArray(res.response) ? res.response : []);
         const serverTotal = res.response.totalItems ?? res.response.total ?? res.response.totalRecords ?? res.response.count ?? (Array.isArray(rawItems) ? rawItems.length : 0);
         if (Array.isArray(rawItems)) {
-          const formatted = rawItems.map(i => ({
-            id: i._id || i.id,
-            _id: i._id || i.id,
-            branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
-            branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
-            itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
-            name: i.name,
-            category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'General',
-            unit: i.unit || 'kg',
-            centralStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
-            currentStock: i.currentStock !== undefined ? i.currentStock : (i.centralStock || 0),
-            minStock: i.minAlertLevel !== undefined ? i.minAlertLevel : (i.minStock || 0),
-            status: i.status || 'Active'
-          }));
+          const formatted = rawItems.map(i => {
+            const currentStockNum = i.currentStock !== undefined ? Number(i.currentStock) : Number(i.centralStock || 0);
+            const minStockNum = i.minAlertLevel !== undefined ? Number(i.minAlertLevel) : Number(i.minStock || 0);
+            return {
+              id: i._id || i.id,
+              _id: i._id || i.id,
+              branchId: i.branchId || i.branch?._id || i.branch?.id || i.branch,
+              branchName: i.branchName || (typeof i.branchId === 'object' ? (i.branchId?.branchName || i.branchId?.name) : '') || i.branch || '',
+              itemCode: i.itemCode || i.sku || `INV-${String(i._id || '').slice(-3).toUpperCase()}`,
+              name: i.name,
+              category: i.category || (typeof i.categoryId === 'object' ? i.categoryId?.name : i.categoryId) || 'General',
+              unit: i.unit || 'kg',
+              centralStock: currentStockNum,
+              currentStock: currentStockNum,
+              minStock: minStockNum,
+              minAlertLevel: minStockNum,
+              status: i.status || 'Active'
+            };
+          });
           setItemsList(formatted);
           setTotalItemsCount(Number(serverTotal) || formatted.length);
         }
@@ -107,7 +104,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     } finally {
       setLoading(false);
     }
-  }, [isBranchFiltered, selectedBranchId, searchTerm, categoryFilter, itemFilter, stockStatusFilter, currentPage, PAGE_SIZE]);
+  }, [isBranchFiltered, selectedBranchId]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -116,7 +113,66 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     return () => clearTimeout(handler);
   }, [fetchCentralStock]);
 
+  useEffect(() => {
+    if (Array.isArray(initialItems) && initialItems.length > 0) {
+      setItemsList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id || p.name)));
+        const newFromProps = initialItems.filter(r => !existingIds.has(String(r.id || r._id || r.name)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [initialItems]);
+
   const displayItems = itemsList.length > 0 ? itemsList : (initialItems || []);
+
+  // Category and Item Options for dropdown filters
+  const categories = useMemo(() => {
+    const defaultCats = ['Grains', 'Oils', 'Spices', 'Meat', 'Dairy', 'Vegetables', 'Beverages', 'Packaging'];
+    const fromItems = displayItems.map(i => i.category).filter(Boolean);
+    const set = new Set([...defaultCats, ...fromItems]);
+    return ['All', ...Array.from(set).filter(c => c !== 'All')];
+  }, [displayItems]);
+
+  const itemOptions = useMemo(() => {
+    const names = new Set(displayItems.map(i => i.name).filter(Boolean));
+    return Array.from(names).sort();
+  }, [displayItems]);
+
+  // Client-side filtering guarantees instant, reliable multi-field filtering
+  const filteredItems = useMemo(() => {
+    return displayItems.filter(item => {
+      // 1. Search filter
+      const q = searchTerm.toLowerCase().trim();
+      const matchesSearch = !q ||
+        (item.name || '').toLowerCase().includes(q) ||
+        (item.itemCode || '').toLowerCase().includes(q) ||
+        (item.category || '').toLowerCase().includes(q);
+
+      // 2. Category filter
+      const matchesCategory = categoryFilter === 'All' ||
+        String(item.category || '').toLowerCase() === categoryFilter.toLowerCase();
+
+      // 3. Item filter
+      const matchesItem = itemFilter === 'All' ||
+        String(item.name || '').toLowerCase() === itemFilter.toLowerCase();
+
+      // 4. Stock status filter (dynamic check)
+      const curStock = Number(item.currentStock !== undefined ? item.currentStock : (item.centralStock || 0));
+      const minStock = Number(item.minStock !== undefined ? item.minStock : (item.minAlertLevel || 0));
+      const statusInfo = getStockStatus(curStock, minStock);
+      const itemStatusLabel = (statusInfo?.label || '').toLowerCase(); // 'in stock', 'low stock', 'out of stock'
+
+      let matchesStockStatus = true;
+      if (stockStatusFilter !== 'All') {
+        matchesStockStatus = itemStatusLabel === stockStatusFilter.toLowerCase();
+      }
+
+      // 5. Branch filter
+      const matchesBranch = !isBranchFiltered || isBranchMatch(item, selectedBranchId, branches) || isBranchMatch(item.branchId || item.branch, selectedBranchId, branches);
+
+      return matchesSearch && matchesCategory && matchesItem && matchesStockStatus && matchesBranch;
+    });
+  }, [displayItems, searchTerm, categoryFilter, itemFilter, stockStatusFilter, isBranchFiltered, selectedBranchId, branches]);
 
   // Summary Metrics for Central Stock
   const totalStockQty = displayItems.reduce((acc, item) => {
@@ -133,9 +189,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     return stock <= 0;
   }).length;
 
-  // Backend API handles all filtering and pagination
-  const filteredItems = displayItems;
-  const totalPages = Math.max(1, Math.ceil((totalItemsCount || filteredItems.length) / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
 
   useEffect(() => {
     setCurrentPage(0);
@@ -147,19 +201,78 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
     }
   }, [totalPages, currentPage]);
 
-  const paginatedItems = filteredItems;
+  const paginatedItems = filteredItems.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  const handleSaveStockAdjust = (e) => {
+  const handleOpenView = (item) => {
+    setViewingItem(item);
+    setAdjustQty((item.currentStock !== undefined ? item.currentStock : item.centralStock || 0).toString());
+    setAdjustMinStock((item.minStock !== undefined ? item.minStock : (item.minAlertLevel || 0)).toString());
+    setAdjustReason('Stock Audit');
+  };
+
+  const handleSaveStockAdjust = async (e) => {
     e.preventDefault();
-    if (!adjustQty || isNaN(adjustQty)) return;
-    if (onUpdateStock) onUpdateStock(viewingItem.id, Number(adjustQty), adjustReason);
-    setItemsList(prev => prev.map(i => i.id === viewingItem.id ? { ...i, centralStock: Number(adjustQty), currentStock: Number(adjustQty) } : i));
-    setViewingItem(null);
+    if (adjustQty === '' || isNaN(adjustQty)) {
+      ShowNotifications.showAlertNotification('Please enter a valid stock quantity.', false);
+      return;
+    }
+    const targetId = viewingItem._id || viewingItem.id;
+    const newQty = Number(adjustQty);
+    const newMin = adjustMinStock !== '' && !isNaN(adjustMinStock) ? Number(adjustMinStock) : Number(viewingItem.minStock || 0);
+
+    setIsSaving(true);
+    try {
+      // 1. Immediately update viewingItem so Stock Information card displays the change instantly
+      setViewingItem(prev => ({
+        ...prev,
+        centralStock: newQty,
+        currentStock: newQty,
+        minStock: newMin,
+        minAlertLevel: newMin
+      }));
+
+      // 2. Immediately update local itemsList
+      setItemsList(prev => prev.map(i => {
+        if (String(i.id || i._id) === String(targetId)) {
+          return {
+            ...i,
+            centralStock: newQty,
+            currentStock: newQty,
+            minStock: newMin,
+            minAlertLevel: newMin
+          };
+        }
+        return i;
+      }));
+
+      // 3. Notify parent callback
+      if (onUpdateStock) {
+        onUpdateStock(targetId, newQty, adjustReason, newMin);
+      }
+
+      // 4. Persist to API
+      await InventoryApi.updateItem(targetId, {
+        centralStock: newQty,
+        currentStock: newQty,
+        minStock: newMin,
+        minAlertLevel: newMin,
+        minStockThreshold: newMin
+      });
+
+      ShowNotifications.showAlertNotification(`Stock for "${viewingItem.name}" updated successfully!`, true);
+    } catch (err) {
+      console.warn('Save stock adjust note:', err);
+      ShowNotifications.showAlertNotification('Stock count updated locally.', true);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Render Stock Adjustment / Item Detail Page View
   if (viewingItem) {
-    const statusProps = getStockStatus(viewingItem.centralStock, viewingItem.minStock);
+    const currentStockNum = viewingItem.currentStock !== undefined ? viewingItem.currentStock : viewingItem.centralStock;
+    const minStockNum = viewingItem.minStock !== undefined ? viewingItem.minStock : (viewingItem.minAlertLevel || 0);
+    const statusProps = getStockStatus(currentStockNum, minStockNum);
     return (
       <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
@@ -191,7 +304,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
         </div>
 
         {/* Details Card */}
-        <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 1fr' : '1fr', gap: '24px', maxWidth: canEdit ? '800px' : '500px', marginBottom: '32px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 1fr' : '1fr', gap: '24px', maxWidth: canEdit ? '850px' : '500px', marginBottom: '32px' }}>
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
             <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Stock Information</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
@@ -209,16 +322,20 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>Current Stock:</span>
-                <strong style={{ color: '#ff5a1f', fontSize: '15px' }}>{viewingItem.currentStock !== undefined ? viewingItem.currentStock : viewingItem.centralStock} {viewingItem.unit}</strong>
+                <strong style={{ color: '#ff5a1f', fontSize: '16px', fontWeight: 800 }}>
+                  {(viewingItem.currentStock !== undefined ? viewingItem.currentStock : viewingItem.centralStock)} {viewingItem.unit}
+                </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#64748b' }}>Minimum Stock:</span>
-                <span style={{ color: '#0f172a', fontWeight: 600 }}>{viewingItem.minStock} {viewingItem.unit}</span>
+                <strong style={{ color: '#0f172a', fontSize: '14px', fontWeight: 700 }}>
+                  {(viewingItem.minStock !== undefined ? viewingItem.minStock : (viewingItem.minAlertLevel || 0))} {viewingItem.unit}
+                </strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#64748b' }}>Stock Status:</span>
                 <span style={{
-                  padding: '3px 10px',
+                  padding: '4px 12px',
                   borderRadius: '12px',
                   fontSize: '11px',
                   fontWeight: 800,
@@ -233,12 +350,12 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
 
           {/* Quick Adjustment Form */}
           {canEdit && (
-            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1' }}>
-              <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Quick Stock Adjustment</h4>
+            <div style={{ background: '#ffffff', padding: '20px', borderRadius: '10px', border: '1px solid #cbd5e1', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+              <h4 style={{ margin: '0 0 14px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>Quick Stock & Minimum Count Adjustment</h4>
               <form onSubmit={handleSaveStockAdjust}>
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ marginBottom: '14px' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                    New Current Stock Quantity ({viewingItem.unit})
+                    New Current Stock Quantity ({viewingItem.unit}) <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
                     type="number"
@@ -250,7 +367,21 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                   />
                 </div>
 
-                <div style={{ marginBottom: '20px' }}>
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                    Minimum Stock Alert Level ({viewingItem.unit}) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={adjustMinStock}
+                    placeholder={(viewingItem.minStock !== undefined ? viewingItem.minStock : (viewingItem.minAlertLevel || 0)).toString()}
+                    onChange={e => setAdjustMinStock(e.target.value)}
+                    style={{ ...filterInputStyle, height: '40px' }}
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: '18px' }}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                     Adjustment Reason
                   </label>
@@ -268,19 +399,26 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
 
                 <button
                   type="submit"
+                  disabled={isSaving}
                   style={{
                     width: '100%',
                     background: '#16a34a',
                     color: '#ffffff',
                     border: 'none',
-                    padding: '10px 16px',
+                    padding: '11px 16px',
                     borderRadius: '8px',
                     fontSize: '13px',
                     fontWeight: 700,
-                    cursor: 'pointer'
+                    cursor: isSaving ? 'not-allowed' : 'pointer',
+                    opacity: isSaving ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 2px 8px rgba(22, 163, 74, 0.25)'
                   }}
                 >
-                  Update Current Stock
+                  {isSaving ? 'Updating...' : 'Update Stock & Minimum Count'}
                 </button>
               </form>
             </div>
@@ -437,8 +575,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                 type="text"
                 placeholder="Search Central Stock..."
                 value={searchTerm}
-                onKeyDown={preventSpaceInput}
-                onChange={e => { setSearchTerm(e.target.value.replace(/\s/g, '')); setCurrentPage(0); }}
+                onChange={e => { setSearchTerm(e.target.value); setCurrentPage(0); }}
                 style={{ ...filterInputStyle, paddingLeft: '32px' }}
               />
             </div>
@@ -464,8 +601,8 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                 style={filterInputStyle}
               >
                 <option value="All">All Items</option>
-                {displayItems.map(i => (
-                  <option key={i.id || i._id} value={i.name}>{i.name}</option>
+                {itemOptions.map(name => (
+                  <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
@@ -483,6 +620,31 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                 <option value="out of stock">Out of Stock</option>
               </select>
             </div>
+
+            {(searchTerm || categoryFilter !== 'All' || itemFilter !== 'All' || stockStatusFilter !== 'All') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setCategoryFilter('All');
+                  setItemFilter('All');
+                  setStockStatusFilter('All');
+                  setCurrentPage(0);
+                }}
+                style={{
+                  background: '#f8fafc',
+                  color: '#64748b',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '8px',
+                  padding: '7px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
@@ -566,10 +728,7 @@ export default function CompanyCentralStock({ items: initialItems, onUpdateStock
                         {canView && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setViewingItem(item);
-                            setAdjustQty((item.currentStock !== undefined ? item.currentStock : item.centralStock || 0).toString());
-                          }}
+                          onClick={() => handleOpenView(item)}
                           title="View / Adjust Stock"
                           style={{
                             ...actionIconBtnStyle,

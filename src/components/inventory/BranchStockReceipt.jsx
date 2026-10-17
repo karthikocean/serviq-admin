@@ -11,8 +11,19 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
   const canAdd = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'add') : true;
   const canView = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'view') : true;
   const canDelete = typeof hasPermission === 'function' ? hasPermission('inventory_stock_receipt', 'delete') : true;
+  const [receiptsList, setReceiptsList] = useState(receipts || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
+
+  useEffect(() => {
+    if (Array.isArray(receipts)) {
+      setReceiptsList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id || p.receiptNo)));
+        const newFromProps = receipts.filter(r => !existingIds.has(String(r.id || r._id || r.receiptNo)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [receipts]);
 
   // View States: null | 'ADD' | 'VIEW_DETAIL'
   const [viewState, setViewState] = useState(null);
@@ -61,15 +72,15 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
   };
 
   const branchScopedReceipts = isBranchFiltered
-    ? (receipts || []).filter(r => isBranchMatch(r, selectedBranchId, branches) || isBranchMatch(r.branch, selectedBranchId, branches) || isBranchMatch(r.destination, selectedBranchId, branches))
-    : (receipts || []);
+    ? (receiptsList || []).filter(r => isBranchMatch(r, selectedBranchId, branches) || isBranchMatch(r.branch, selectedBranchId, branches) || isBranchMatch(r.destination, selectedBranchId, branches))
+    : (receiptsList || []);
 
   const filteredReceipts = branchScopedReceipts.filter(r => {
     const ref = r.reqTrfNo || r.refNo || r.requestNo || '';
     return !searchTerm.trim() ||
-      r.receiptNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.receiptNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       ref.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.item.toLowerCase().includes(searchTerm.toLowerCase());
+      (r.item || '').toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const PAGE_SIZE = 10;
@@ -98,7 +109,29 @@ export default function BranchStockReceipt({ receipts, distributions, transfers,
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSaveReceipt(recForm);
+    const targetBranch = activeRestaurant?.branches?.find(b => String(b._id || b.id) === String(selectedBranchId));
+    const targetBranchName = targetBranch ? (targetBranch.branchName || targetBranch.name) : 'Branch';
+    const recNo = `REC-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+    const recQty = Number(recForm.receivedQty);
+    const newEntry = {
+      id: `REC-${Date.now().toString().slice(-4)}`,
+      _id: `REC-${Date.now().toString().slice(-4)}`,
+      receiptNo: recNo,
+      reqTrfNo: recForm.reqTrfNo,
+      source: recForm.source,
+      item: recForm.item,
+      sentQty: recForm.sentQty || recQty,
+      recQty: recQty,
+      date: recForm.receivedDate,
+      status: 'Received',
+      remarks: recForm.remarks || 'Inspected and verified',
+      branchId: selectedBranchId,
+      branch: targetBranchName
+    };
+    setReceiptsList(prev => [newEntry, ...(Array.isArray(prev) ? prev : [])]);
+    if (onSaveReceipt) {
+      onSaveReceipt(recForm);
+    }
     setViewState(null);
   };
 

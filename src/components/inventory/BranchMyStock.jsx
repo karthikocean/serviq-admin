@@ -96,6 +96,16 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
     fetchBranchStock();
   }, [fetchBranchStock]);
 
+  useEffect(() => {
+    if (Array.isArray(initialItems) && initialItems.length > 0) {
+      setItemsList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id || p.name)));
+        const newFromProps = initialItems.filter(r => !existingIds.has(String(r.id || r._id || r.name)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [initialItems]);
+
   const rawDisplay = itemsList.length > 0 ? itemsList : (initialItems || []);
   const displayItems = isBranchFiltered
     ? rawDisplay.filter(i => isBranchMatch(i, selectedBranchId, branches))
@@ -148,8 +158,9 @@ export default function BranchMyStock({ items: initialItems, onUpdateBranchStock
   const handleSaveStockAdjust = (e) => {
     e.preventDefault();
     if (!adjustQty || isNaN(adjustQty)) return;
-    if (onUpdateBranchStock) onUpdateBranchStock(viewingItem.id, Number(adjustQty));
-    setItemsList(prev => prev.map(i => i.id === viewingItem.id ? { ...i, branchStock: Number(adjustQty), currentStock: Number(adjustQty) } : i));
+    const targetId = viewingItem._id || viewingItem.id;
+    if (onUpdateBranchStock) onUpdateBranchStock(targetId, Number(adjustQty));
+    setItemsList(prev => prev.map(i => (String(i.id || i._id) === String(targetId)) ? { ...i, branchStock: Number(adjustQty), currentStock: Number(adjustQty) } : i));
     setViewingItem(null);
   };
 

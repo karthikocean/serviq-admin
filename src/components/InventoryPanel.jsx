@@ -32,7 +32,7 @@ const INITIAL_RECEIPTS = [];
 const INITIAL_TRANSACTIONS = [];
 
 export default function InventoryPanel() {
-  const { currentUser, selectedBranchId, hasPermission } = useAppState();
+  const { currentUser, selectedBranchId, activeRestaurant, hasPermission } = useAppState();
   const location = useLocation();
 
   const isCompanyUser = isUserCompanyUser(currentUser);
@@ -42,7 +42,13 @@ export default function InventoryPanel() {
   // Shared Datasets
   const [items, setItems] = useState(INITIAL_INVENTORY_ITEMS);
   const [purchases, setPurchases] = useState(INITIAL_PURCHASES);
-  const [branchRequests, setBranchRequests] = useState(INITIAL_BRANCH_REQUESTS);
+  const [branchRequests, setBranchRequests] = useState(() => {
+    try {
+      const stored = localStorage.getItem('serviq_branch_requests');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return INITIAL_BRANCH_REQUESTS;
+  });
   const [distributions, setDistributions] = useState(INITIAL_DISTRIBUTIONS);
   const [transfers, setTransfers] = useState(INITIAL_TRANSFERS);
   const [receipts, setReceipts] = useState(INITIAL_RECEIPTS);
@@ -60,7 +66,6 @@ export default function InventoryPanel() {
     '/inventory/branch-requests',
     '/inventory/distribution',
     '/inventory/stock-distribution',
-    '/inventory/branch-transfer',
     '/inventory/transactions'
   ];
 
@@ -112,10 +117,15 @@ export default function InventoryPanel() {
     setItems(prev => prev.filter(i => (i._id || i.id) !== targetId));
   };
 
-  const handleUpdateCentralStock = (itemId, newQty, reason) => {
-    setItems(prev => prev.map(i => i.id === itemId ? { ...i, centralStock: newQty } : i));
+  const handleUpdateCentralStock = (itemId, newQty, reason, newMinStock) => {
+    setItems(prev => prev.map(i => (i.id === itemId || i._id === itemId) ? {
+      ...i,
+      centralStock: newQty,
+      currentStock: newQty,
+      ...(newMinStock !== undefined ? { minStock: newMinStock, minAlertLevel: newMinStock } : {})
+    } : i));
 
-    const matched = items.find(i => i.id === itemId);
+    const matched = items.find(i => (i.id === itemId || i._id === itemId));
     const newTxn = {
       id: `TXN-${Date.now().toString().slice(-4)}`,
       txnNo: `TXN-${new Date().getFullYear()}-${String(transactions.length + 1).padStart(3, '0')}`,
@@ -186,12 +196,24 @@ export default function InventoryPanel() {
   };
 
   const handleApproveRequest = (req) => {
-    setBranchRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Approved' } : r));
+    setBranchRequests(prev => {
+      const updated = prev.map(r => (String(r.id || r._id || r.requestNo) === String(req.id || req._id || req.requestNo)) ? { ...r, status: 'Approved' } : r);
+      try {
+        localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     ShowNotifications.showAlertNotification(`Branch Request ${req.requestNo} APPROVED!`, true);
   };
 
   const handleRejectRequest = (req) => {
-    setBranchRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: 'Rejected' } : r));
+    setBranchRequests(prev => {
+      const updated = prev.map(r => (String(r.id || r._id || r.requestNo) === String(req.id || req._id || req.requestNo)) ? { ...r, status: 'Rejected' } : r);
+      try {
+        localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     ShowNotifications.showAlertNotification(`Branch Request ${req.requestNo} REJECTED.`, false);
   };
 
@@ -212,7 +234,13 @@ export default function InventoryPanel() {
     };
 
     setDistributions(prev => [newDist, ...prev]);
-    setBranchRequests(prev => prev.map(r => r.requestNo === distForm.requestNo ? { ...r, distQty: qty, status: 'Dispatched' } : r));
+    setBranchRequests(prev => {
+      const updated = prev.map(r => (String(r.requestNo || r.id || r._id) === String(distForm.requestNo || selectedReq?.id || selectedReq?._id)) ? { ...r, distQty: qty, status: 'Dispatched' } : r);
+      try {
+        localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
     setItems(prev => prev.map(i => i.name === distForm.item ? { ...i, centralStock: Math.max(0, i.centralStock - qty) } : i));
 
     const newTxn = {
@@ -242,11 +270,15 @@ export default function InventoryPanel() {
   };
 
   const handleSaveStockRequest = (formData) => {
+    const targetBranch = activeRestaurant?.branches?.find(b => String(b._id || b.id) === String(selectedBranchId));
+    const targetBranchName = targetBranch ? (targetBranch.branchName || targetBranch.name) : (formData.branchName || formData.branch || 'Branch');
     const reqNo = `BR-REQ-${String(branchRequests.length + 1).padStart(3, '0')}`;
     const newReq = {
       id: `REQ-${Date.now().toString().slice(-4)}`,
       requestNo: reqNo,
-      branch: 'Serviq Chennai Branch',
+      branch: targetBranchName,
+      branchName: targetBranchName,
+      branchId: selectedBranchId,
       date: new Date().toISOString().split('T')[0],
       item: formData.item,
       reqQty: Number(formData.reqQty),
@@ -257,7 +289,13 @@ export default function InventoryPanel() {
       remarks: formData.remarks || 'Branch stock replenishment'
     };
 
-    setBranchRequests(prev => [newReq, ...prev]);
+    setBranchRequests(prev => {
+      const updated = [newReq, ...prev.filter(r => String(r.id || r._id) !== String(newReq.id))];
+      try {
+        localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
 
     const newTxn = {
       id: `TXN-${Date.now().toString().slice(-4)}`,
@@ -348,6 +386,9 @@ export default function InventoryPanel() {
     const recNo = `REC-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(3, '0')}`;
     const recQty = Number(formData.receivedQty);
 
+    const targetBranch = activeRestaurant?.branches?.find(b => String(b._id || b.id) === String(selectedBranchId));
+    const targetBranchName = targetBranch ? (targetBranch.branchName || targetBranch.name) : 'Branch';
+
     const newRec = {
       id: `REC-${Date.now().toString().slice(-4)}`,
       receiptNo: recNo,
@@ -358,7 +399,9 @@ export default function InventoryPanel() {
       recQty: recQty,
       date: formData.receivedDate,
       status: 'Received',
-      remarks: formData.remarks || 'Inspected and verified'
+      remarks: formData.remarks || 'Inspected and verified',
+      branchId: selectedBranchId,
+      branch: targetBranchName
     };
 
     setReceipts(prev => [newRec, ...prev]);
@@ -459,15 +502,6 @@ export default function InventoryPanel() {
           {(currentPath === '/inventory/distribution' || currentPath === '/inventory/stock-distribution') && (
             <CompanyStockDistribution
               distributions={distributions}
-              hasPermission={hasPermission}
-            />
-          )}
-
-          {currentPath === '/inventory/branch-transfer' && (
-            <BranchTransfer
-              transfers={transfers}
-              items={items}
-              onSaveTransfer={handleSaveTransfer}
               hasPermission={hasPermission}
             />
           )}

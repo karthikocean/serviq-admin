@@ -164,6 +164,16 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
     return () => clearTimeout(handler);
   }, [fetchData]);
 
+  useEffect(() => {
+    if (Array.isArray(initialPurchases) && initialPurchases.length > 0) {
+      setPurchasesList(prev => {
+        const existingIds = new Set(prev.map(p => String(p.id || p._id || p.purchaseNo)));
+        const newFromProps = initialPurchases.filter(r => !existingIds.has(String(r.id || r._id || r.purchaseNo)));
+        return [...newFromProps, ...prev];
+      });
+    }
+  }, [initialPurchases]);
+
   // Combined dropdown list sources
   const displayItems = itemsList.length > 0 ? itemsList : initialItems;
   const displayPurchases = purchasesList.length > 0 ? purchasesList : initialPurchases;
@@ -357,10 +367,33 @@ export default function CompanyPurchases({ purchases: initialPurchases, items: i
       };
 
       const res = await InventoryApi.recordPurchase(payload);
+      const created = (res?.status && (res?.response?.data || res?.response?.purchase || res?.response)) || {};
+      const newPurchase = {
+        id: created._id || created.id || `PUR-${Date.now().toString().slice(-4)}`,
+        _id: created._id || created.id || `PUR-${Date.now().toString().slice(-4)}`,
+        purchaseNo: created.purchaseNo || `PU-${Date.now().toString().slice(-3)}`,
+        purchaseType: purchaseForm.purchaseType,
+        supplier: purchaseForm.supplier,
+        supplierName: purchaseForm.supplier,
+        vendorId: purchaseForm.vendorId,
+        date: purchaseForm.purchaseDate,
+        purchaseDate: purchaseForm.purchaseDate,
+        invoiceNo: purchaseForm.invoiceNo || 'N/A',
+        item: purchaseForm.item,
+        quantity: Number(purchaseForm.quantity),
+        unit: purchaseForm.unit || 'kg',
+        rate: Number(purchaseForm.rate),
+        total: Number(purchaseForm.quantity) * Number(purchaseForm.rate),
+        remarks: purchaseForm.remarks || '',
+        branchId: targetBranchId,
+        branchName: matchedBranch ? (matchedBranch.branchName || matchedBranch.name) : undefined
+      };
+      setPurchasesList(prev => [newPurchase, ...(Array.isArray(prev) ? prev : [])]);
+      setTotalPurchasesCount(prev => prev + 1);
 
+      setViewState(null);
+      if (onSavePurchase) onSavePurchase(purchaseForm);
       if (res?.status) {
-        setViewState(null);
-        if (onSavePurchase) onSavePurchase(purchaseForm);
         fetchData();
       }
     } catch (err) {

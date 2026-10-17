@@ -48,10 +48,9 @@ class MenuApi {
       if (params.categoryId && !cleanParams.categoryId && params.categoryId !== 'All' && params.categoryId !== 'ALL') cleanParams.categoryId = params.categoryId;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
       if (params.page !== undefined) {
-        const pNum = Number(params.page);
-        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        cleanParams.page = Math.max(0, Number(params.page) || 0);
       } else {
-        cleanParams.page = 1;
+        cleanParams.page = 0;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
@@ -82,17 +81,16 @@ class MenuApi {
       if (searchVal && !cleanParams.search) cleanParams.search = searchVal;
       if (params.status && !cleanParams.status && params.status !== 'All' && params.status !== 'ALL') cleanParams.status = params.status;
       if (params.page !== undefined) {
-        const pNum = Number(params.page);
-        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        cleanParams.page = Math.max(0, Number(params.page) || 0);
       } else {
-        cleanParams.page = 1;
+        cleanParams.page = 0;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
       } else {
         cleanParams.limit = 10;
       }
-      
+
       let response;
       try {
         response = await apiClient.get("/menu/categories", { params: cleanParams });

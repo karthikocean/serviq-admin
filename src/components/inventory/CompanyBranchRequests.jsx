@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SearchIcon, EyeIcon, ArrowLeftIcon, filterInputStyle, formInputStyle, formLabelStyle, PaginationBar, preventSpaceInput, actionIconBtnStyle } from './InventoryCommon';
 import InventoryApi from '../../api/Inventory';
 
@@ -119,8 +119,53 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
     return () => clearTimeout(handler);
   }, [fetchRequests]);
 
-  const displayRequests = requestsList.length > 0 ? requestsList : initialRequests;
-  const branches = ['All', ...Array.from(new Set(displayRequests.map(r => r.branch)))];
+  // Combine server requests with local/initial requests without duplicate IDs
+  const combinedRequests = useMemo(() => {
+    let localSaved = [];
+    try {
+      const stored = localStorage.getItem('serviq_branch_requests');
+      if (stored) localSaved = JSON.parse(stored);
+    } catch (e) {}
+
+    const pool = [
+      ...(Array.isArray(localSaved) ? localSaved : []),
+      ...requestsList, 
+      ...(Array.isArray(initialRequests) ? initialRequests : [])
+    ];
+    const seen = new Map();
+    pool.forEach(r => {
+      const key = String(r._id || r.id || r.requestNo || '');
+      if (key) {
+        if (!seen.has(key)) {
+          seen.set(key, {
+            id: r._id || r.id,
+            _id: r._id || r.id,
+            requestNo: r.requestNo || `BR-REQ-${String(r._id || '').slice(-3).toUpperCase()}`,
+            branch: r.branchName || (typeof r.branchId === 'object' ? (r.branchId?.branchName || r.branchId?.name) : '') || r.branch || 'Branch Unit',
+            item: r.itemName || (typeof r.itemId === 'object' ? (r.itemId?.name || r.itemId?.itemName) : '') || r.item || 'General Material',
+            reqQty: r.reqQty || 0,
+            appQty: r.appQty !== undefined ? r.appQty : (r.reqQty || 0),
+            distQty: r.distQty || 0,
+            unit: r.unit || 'kg',
+            date: r.requestDate ? new Date(r.requestDate).toISOString().split('T')[0] : (r.date || new Date().toISOString().split('T')[0]),
+            status: r.status || 'Pending',
+            remarks: r.remarks || ''
+          });
+        } else {
+          const existing = seen.get(key);
+          if (existing.status === 'Pending' && r.status && r.status !== 'Pending') {
+            existing.status = r.status;
+            if (r.appQty !== undefined) existing.appQty = r.appQty;
+            if (r.distQty !== undefined) existing.distQty = r.distQty;
+          }
+        }
+      }
+    });
+    return Array.from(seen.values());
+  }, [requestsList, initialRequests]);
+
+  const displayRequests = combinedRequests;
+  const branches = ['All', ...Array.from(new Set(displayRequests.map(r => r.branch).filter(Boolean)))];
 
   // Summary Metrics
   const pendingCount = displayRequests.filter(r => r.status === 'Pending').length;
@@ -128,21 +173,23 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
   const dispatchedCount = displayRequests.filter(r => r.status === 'Dispatched').length;
   const completedCount = displayRequests.filter(r => r.status === 'Completed').length;
 
-  // Backend API handles all filtering and pagination
-  const filteredRequests = displayRequests;
-  const totalPages = Math.max(1, Math.ceil((totalRequestsCount || filteredRequests.length) / PAGE_SIZE));
+  // Filter requests according to active search, branch, and status filters
+  const filteredRequests = useMemo(() => {
+    return displayRequests.filter(r => {
+      const matchesSearch = !searchTerm.trim() ||
+        (r.requestNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.item || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.branch || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBranch = branchFilter === 'All' || r.branch === branchFilter;
+      const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
+      const matchesStart = !startDate || r.date >= startDate;
+      const matchesEnd = !endDate || r.date <= endDate;
+      return matchesSearch && matchesBranch && matchesStatus && matchesStart && matchesEnd;
+    });
+  }, [displayRequests, searchTerm, branchFilter, statusFilter, startDate, endDate]);
 
-  useEffect(() => {
-    setCurrentPage(0);
-  }, [searchTerm, branchFilter, statusFilter, startDate, endDate]);
-
-  useEffect(() => {
-    if (currentPage >= totalPages && totalPages > 0) {
-      setCurrentPage(Math.max(0, totalPages - 1));
-    }
-  }, [totalPages, currentPage]);
-
-  const paginatedRequests = filteredRequests;
+  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = filteredRequests.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
   const handleOpenView = (req) => {
     setSelectedReq(req);
@@ -158,6 +205,15 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
           remarks: req.remarks || 'Stock Request Approved'
         });
       }
+      try {
+        const stored = localStorage.getItem('serviq_branch_requests');
+        if (stored) {
+          const arr = JSON.parse(stored);
+          const updated = arr.map(item => (String(item._id || item.id || item.requestNo) === String(req._id || req.id || req.requestNo) ? { ...item, status: 'Approved', appQty: Number(req.reqQty || 0) } : item));
+          localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      setRequestsList(prev => prev.map(r => (String(r._id || r.id || r.requestNo) === String(req._id || req.id || req.requestNo) ? { ...r, status: 'Approved', appQty: Number(req.reqQty || 0) } : r)));
       if (onApprove) onApprove(req);
       setSelectedReq(prev => prev ? { ...prev, status: 'Approved' } : null);
       fetchRequests();
@@ -174,6 +230,15 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
       if (req?._id || req?.id) {
         await InventoryApi.rejectStockRequest(req._id || req.id);
       }
+      try {
+        const stored = localStorage.getItem('serviq_branch_requests');
+        if (stored) {
+          const arr = JSON.parse(stored);
+          const updated = arr.map(item => (String(item._id || item.id || item.requestNo) === String(req._id || req.id || req.requestNo) ? { ...item, status: 'Rejected' } : item));
+          localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      setRequestsList(prev => prev.map(r => (String(r._id || r.id || r.requestNo) === String(req._id || req.id || req.requestNo) ? { ...r, status: 'Rejected' } : r)));
       if (onReject) onReject(req);
       setViewState(null);
       fetchRequests();
@@ -224,6 +289,15 @@ export default function CompanyBranchRequests({ branchRequests: initialRequests,
           remarks: distForm.remarks
         });
       }
+      try {
+        const stored = localStorage.getItem('serviq_branch_requests');
+        if (stored) {
+          const arr = JSON.parse(stored);
+          const updated = arr.map(item => (String(item._id || item.id || item.requestNo) === String(selectedReq._id || selectedReq.id || selectedReq.requestNo) ? { ...item, status: 'Dispatched', distQty: Number(distForm.distributedQty) } : item));
+          localStorage.setItem('serviq_branch_requests', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      setRequestsList(prev => prev.map(r => (String(r._id || r.id || r.requestNo) === String(selectedReq._id || selectedReq.id || selectedReq.requestNo) ? { ...r, status: 'Dispatched', distQty: Number(distForm.distributedQty) } : r)));
 
       if (onDistribute) onDistribute(distForm, selectedReq);
       setViewState(null);

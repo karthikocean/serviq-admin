@@ -19,10 +19,9 @@ class InventoryApi {
       if (params.isActive !== undefined && params.isActive !== 'All' && params.isActive !== 'ALL') cleanParams.isActive = params.isActive;
 
       if (cleanParams.page !== undefined) {
-        const pNum = Number(cleanParams.page);
-        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
       } else {
-        cleanParams.page = 1;
+        cleanParams.page = 0;
       }
       if (cleanParams.limit !== undefined) {
         cleanParams.limit = Number(cleanParams.limit);
@@ -467,15 +466,16 @@ class InventoryApi {
 
   async getLogs(params = {}) {
     try {
-      const cleanParams = { limit: 10, page: 1 };
+      const cleanParams = { limit: 10, page: 0 };
       Object.keys(params).forEach(key => {
         if (params[key] !== undefined && params[key] !== null && params[key] !== '' && params[key] !== 'ALL' && params[key] !== 'All') {
           cleanParams[key] = params[key];
         }
       });
       if (cleanParams.page !== undefined) {
-        const pNum = Number(cleanParams.page);
-        cleanParams.page = pNum >= 0 ? pNum + 1 : 1;
+        cleanParams.page = Math.max(0, Number(cleanParams.page) || 0);
+      } else {
+        cleanParams.page = 0;
       }
       const response = await apiClient.get("/inventory/logs", { params: cleanParams });
       if (response.status === 200 || response.status === 201) {
