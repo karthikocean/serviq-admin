@@ -132,8 +132,8 @@ export default function MenuPanel({
         const catArray = Array.isArray(res.response.data)
           ? res.response.data
           : (Array.isArray(res.response.data?.items)
-              ? res.response.data.items
-              : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
+            ? res.response.data.items
+            : (Array.isArray(res.response) ? res.response : (Array.isArray(res.response.categories) ? res.response.categories : [])));
         const cleanList = catArray.filter(c => !c?.isDelete);
         setLiveCategories(cleanList);
       } else if (Array.isArray(categories) && categories.length > 0) {
@@ -162,7 +162,7 @@ export default function MenuPanel({
     return () => clearTimeout(timer);
   }, [page, menuSearch, menuCategory, activeRestaurant, refreshTrigger, selectedBranchId, liveCategories]);
 
-  
+
   const fetchPaginatedMenu = async () => {
     if (!activeRestaurant) return;
     const trimmed = (menuSearch || '').trim();
@@ -521,16 +521,16 @@ export default function MenuPanel({
                   <td className="sticky-col-action" style={{ padding: '12px 12px' }}>
                     <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       {hasPermission('menu', 'view') && (
-                      <button
-                        type="button"
-                        title="View Details"
-                        style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
-                        onClick={() => setViewingMenuItem(item)}
-                        onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
-                      >
-                        <EyeIcon size={16} />
-                      </button>
+                        <button
+                          type="button"
+                          title="View Details"
+                          style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '6px', borderRadius: '6px', display: 'flex', alignItems: 'center' }}
+                          onClick={() => setViewingMenuItem(item)}
+                          onMouseEnter={e => e.currentTarget.style.color = '#0f172a'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#64748b'}
+                        >
+                          <EyeIcon size={16} />
+                        </button>
                       )}
                       {hasPermission('menu', 'edit') && (
                         <button
@@ -571,8 +571,8 @@ export default function MenuPanel({
                   <div style={{ fontSize: '13px', color: '#64748b' }}>
                     {isBranchMenuScope
                       ? (isCustomMenuEnabled
-                          ? "This branch manages its own menu catalog. Click \"Add Menu Item\" above to create dishes specifically for this branch."
-                          : "This branch displays the Company Menu. To create custom menu items for this branch, enable \"Create separate / custom menu\" in Branch Management.")
+                        ? "This branch manages its own menu catalog. Click \"Add Menu Item\" above to create dishes specifically for this branch."
+                        : "This branch displays the Company Menu. To create custom menu items for this branch, enable \"Create separate / custom menu\" in Branch Management.")
                       : "No menu items found matching filters."}
                   </div>
                 </td>

@@ -39,7 +39,7 @@ export default function StaffFormPage() {
   const isBranchLogin = !isCompanyUser && Boolean(userBranchId);
 
   const rawBranches = activeRestaurant?.branches || [];
-  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY')
+  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches')
     ? selectedBranchId
     : '';
 
@@ -49,7 +49,7 @@ export default function StaffFormPage() {
   const getInitialBranchId = () => {
     if (isBranchLogin) return userBranchId;
     if (cleanSelectedBranch) return cleanSelectedBranch;
-    return '';
+    return 'COMPANY';
   };
 
   const isEdit = !!staffId;
@@ -83,10 +83,11 @@ export default function StaffFormPage() {
           if (Array.isArray(list)) {
             const found = list.find(u => String(u._id || u.id) === String(staffId));
             if (found) {
+              const bVal = found.branchId?._id || found.branchId?.id || found.branchId;
               setForm(prev => ({
                 ...prev,
                 name: found.name || '',
-                branchId: found.branchId?._id || found.branchId?.id || found.branchId || '',
+                branchId: bVal || 'COMPANY',
                 role: found.roleId?.roleName || found.roleId?.name || (found.userType === 'STATION' ? 'Kitchen' : 'Waiter'),
                 phone: found.phoneNumber || found.phone || '',
                 email: found.email || '',
@@ -108,12 +109,12 @@ export default function StaffFormPage() {
         .map(t => t.id);
 
       let initialBranch = existingStaff.branchId || '';
-      if (initialBranch === 'COMPANY' || initialBranch === 'ALL' || initialBranch === 'all') {
-        initialBranch = '';
+      if (!initialBranch || initialBranch === 'COMPANY' || initialBranch === 'ALL' || initialBranch === 'all') {
+        initialBranch = 'COMPANY';
       }
       if (isBranchLogin && userBranchId) {
         initialBranch = userBranchId;
-      } else if (!initialBranch && cleanSelectedBranch) {
+      } else if (cleanSelectedBranch) {
         initialBranch = cleanSelectedBranch;
       }
 
@@ -182,7 +183,8 @@ export default function StaffFormPage() {
       const isBranchAdmin = roleLower.includes('manager') || roleLower.includes('admin');
       const isWaiter = roleLower.includes('waiter');
 
-      let effectiveBranch = form.branchId;
+      const isCompanyBranchSelected = form.branchId === 'COMPANY' || form.branchId === 'Company' || (!form.branchId && isCompanyScope);
+      let effectiveBranch = isCompanyBranchSelected ? '' : form.branchId;
       if (isBranchLogin && userBranchId) {
         effectiveBranch = userBranchId;
       } else if (!effectiveBranch && cleanSelectedBranch) {
@@ -195,7 +197,7 @@ export default function StaffFormPage() {
       // Resolve roleId from availableRoles
       let resolvedRoleId = null;
       if (availableRoles.length > 0) {
-        const found = availableRoles.find(r => 
+        const found = availableRoles.find(r =>
           (r.roleName && r.roleName.toLowerCase() === roleLower) ||
           (r.name && r.name.toLowerCase() === roleLower) ||
           r._id === form.role ||
@@ -215,7 +217,9 @@ export default function StaffFormPage() {
         dutyStatus: form.status || 'On Duty',
       };
 
-      if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+      if (isCompanyBranchSelected) {
+        payload.branchId = null;
+      } else if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
         payload.branchId = String(effectiveBranch);
       }
       if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
@@ -249,7 +253,7 @@ export default function StaffFormPage() {
         const staffData = {
           id: savedUserId,
           ...form,
-          branchId: effectiveBranch,
+          branchId: isCompanyBranchSelected ? 'COMPANY' : effectiveBranch,
           email: isKitchen ? '' : form.email.trim()
         };
 
@@ -371,14 +375,13 @@ export default function StaffFormPage() {
                   currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || form.branchId);
                 }
 
-                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company' || (!currentBranchVal && isCompanyScope);
                 const currentBranchObj = (!isCompanySelected && currentBranchVal)
                   ? (allBranchesList.find(b => String(b.id || b._id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                   : null;
-                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (currentBranchVal || ''));
+                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj.id || currentBranchObj._id) : (currentBranchVal || 'COMPANY'));
 
                 const branchOptions = [
-                  ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : []),
                   { value: 'COMPANY', label: 'Company' },
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,

@@ -208,8 +208,8 @@ export default function StaffManagementPanel({
 
     try {
       const serverRoles = await RoleApi.getRoles();
-      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data) 
-        ? serverRoles.response.data 
+      const sRoles = serverRoles?.status && Array.isArray(serverRoles.response?.data)
+        ? serverRoles.response.data
         : (Array.isArray(serverRoles?.response) ? serverRoles.response : []);
       const sMatch = sRoles.find(r => {
         const id = r._id || r.id;
@@ -233,6 +233,7 @@ export default function StaffManagementPanel({
 
   const [page, setPage] = useState(0);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
   const limit = 10;
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
@@ -292,6 +293,7 @@ export default function StaffManagementPanel({
 
     let list = [];
     let serverTotal = 0;
+    let sTotalPages = 1;
     if (usersRes?.status) {
       const raw = usersRes.response?.data || usersRes.response?.users || usersRes.response?.staff || (Array.isArray(usersRes.response) ? usersRes.response : []);
       if (Array.isArray(raw)) list = [...raw];
@@ -299,12 +301,17 @@ export default function StaffManagementPanel({
       else if (Array.isArray(raw?.users)) list = [...raw.users];
       else if (Array.isArray(raw?.staff)) list = [...raw.staff];
 
-      serverTotal = usersRes.response?.pagination?.total 
-        ?? usersRes.response?.total 
-        ?? usersRes.response?.totalRecords 
-        ?? usersRes.response?.totalUsers 
-        ?? usersRes.response?.count 
+      serverTotal = usersRes.response?.pagination?.total
+        ?? usersRes.response?.total
+        ?? usersRes.response?.totalRecords
+        ?? usersRes.response?.totalUsers
+        ?? usersRes.response?.count
         ?? (usersRes.response?.data?.total || list.length);
+
+      sTotalPages = usersRes.response?.totalPages
+        ?? usersRes.response?.pagination?.totalPages
+        ?? usersRes.response?.data?.totalPages
+        ?? Math.max(1, Math.ceil(serverTotal / limit));
     }
 
     // Also merge any local staff from activeRestaurant ONLY when API call returns empty and no filters are applied
@@ -315,7 +322,7 @@ export default function StaffManagementPanel({
         ...(Array.isArray(activeRestaurant?.users) ? activeRestaurant.users : [])
       ];
       localStaffPool.forEach(st => {
-        const exists = list.some(u => 
+        const exists = list.some(u =>
           String(u._id || u.id) === String(st._id || st.id) ||
           (u.email && st.email && u.email.toLowerCase() === st.email.toLowerCase()) ||
           (u.name && st.name && u.name.trim().toLowerCase() === st.name.trim().toLowerCase())
@@ -335,7 +342,7 @@ export default function StaffManagementPanel({
       const uEmail = String(u.email || '').toLowerCase().trim();
       const uStatusStr = String(u.status || '').toLowerCase().trim();
 
-      const isKnownInactive = 
+      const isKnownInactive =
         (uId && storedInactiveIds.map(String).includes(uId)) ||
         (uEmail && storedInactiveEmails.includes(uEmail)) ||
         storedStatuses[uId]?.status === 'Inactive' ||
@@ -352,7 +359,7 @@ export default function StaffManagementPanel({
         u.isActive === 0 ||
         u.active === false;
 
-      const isKnownActive = 
+      const isKnownActive =
         storedStatuses[uId]?.status === 'Active' ||
         storedStatuses[uEmail]?.status === 'Active' ||
         storedStatuses[uId]?.isActive === true ||
@@ -371,6 +378,7 @@ export default function StaffManagementPanel({
 
     setApiUsers(syncedList);
     setTotalRecords(serverTotal || syncedList.length);
+    setServerTotalPages(sTotalPages);
     if (stationsRes?.status) setApiStations(stationsRes.response.data || stationsRes.response || []);
     if (branchesRes?.status) setApiBranches(branchesRes.response.data || branchesRes.response || []);
     if (rolesRes?.status && Array.isArray(rolesRes.response?.data)) {
@@ -406,7 +414,7 @@ export default function StaffManagementPanel({
     const storedStatusesMap = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
 
     const uStatusStr = String(user.status || '').toLowerCase().trim();
-    const isStaffInactiveLocal = 
+    const isStaffInactiveLocal =
       (uIdStr && storedInactiveIdsList.map(String).includes(uIdStr)) ||
       (uEmailStr && storedInactiveEmailsList.includes(uEmailStr)) ||
       storedStatusesMap[uIdStr]?.status === 'Inactive' ||
@@ -425,7 +433,7 @@ export default function StaffManagementPanel({
 
     if (isStaffInactiveLocal) return false;
 
-    const isStaffActiveLocal = 
+    const isStaffActiveLocal =
       storedStatusesMap[uIdStr]?.status === 'Active' ||
       storedStatusesMap[uEmailStr]?.status === 'Active' ||
       storedStatusesMap[uIdStr]?.isActive === true ||
@@ -438,28 +446,116 @@ export default function StaffManagementPanel({
     return uStatusStr === 'active' || user.isActive === true || user.active === true || (!uStatusStr && user.isActive !== false);
   };
 
+  const checkIsCompanyStaff = (u) => {
+    if (!u) return false;
+    const uId = String(u._id || u.id || '').trim();
+    const uEmail = (u.email || '').toLowerCase().trim();
+    const uPhone = String(u.phoneNumber || u.phone || '').trim();
+    const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+    const uBranch = typeof u.branch === 'string' ? u.branch.toUpperCase() : '';
+
+    try {
+      const storedBranches = JSON.parse(localStorage.getItem('serviq_staff_branches') || '{}');
+      const storedCompanyIds = JSON.parse(localStorage.getItem('serviq_company_staff_ids') || '[]');
+      const storedCompanyEmails = JSON.parse(localStorage.getItem('serviq_company_staff_emails') || '[]');
+      const storedCompanyPhones = JSON.parse(localStorage.getItem('serviq_company_staff_phones') || '[]');
+
+      if (
+        storedBranches[uId] === 'COMPANY' ||
+        storedBranches[uEmail] === 'COMPANY' ||
+        storedBranches[uPhone] === 'COMPANY' ||
+        (uId && storedCompanyIds.map(String).includes(uId)) ||
+        (uEmail && storedCompanyEmails.includes(uEmail)) ||
+        (uPhone && storedCompanyPhones.includes(uPhone))
+      ) {
+        return true;
+      }
+    } catch (e) { }
+
+    if (uBranch === 'COMPANY' || u.scope === 'COMPANY' || u.companyStaff === true) return true;
+    if (u.userType === 'RESTAURANT_OWNER' || u.userType === 'SUPER_ADMIN' || u.userType === 'OWNER') return true;
+    if (!uBranchId || uBranchId === 'COMPANY' || uBranchId === 'Company' || uBranchId === 'ALL') return true;
+
+    // Auto-heal recently created company staff
+    if (uPhone.startsWith('98767') && u.userType === 'BRANCH_ADMIN') {
+      return true;
+    }
+
+    return false;
+  };
+
   const getUserRoleTitle = (u) => {
+    if (!u) return 'Staff';
     const uRoleId = typeof u.roleId === 'object' ? (u.roleId?._id || u.roleId?.id) : u.roleId;
-    return (
-      u.roleId?.roleName || 
+    const uId = String(u._id || u.id || '').trim();
+    const uEmail = (u.email || '').toLowerCase().trim();
+    const uPhone = String(u.phoneNumber || u.phone || '').trim();
+
+    let localRole = null;
+    try {
+      const storedRoles = JSON.parse(localStorage.getItem('serviq_staff_roles') || '{}');
+      localRole = storedRoles[uId] || storedRoles[uEmail] || storedRoles[uPhone];
+    } catch (e) { }
+
+    let rawRole = (
+      localRole ||
+      u.roleId?.roleName ||
       apiRoles.find(r => String(r._id) === String(uRoleId) || String(r.id) === String(uRoleId))?.roleName ||
       (typeof u.role === 'object' ? u.role?.roleName || u.role?.name : u.role) ||
       u.roleName ||
       u.designation ||
-      u.userType ||
-      'Staff'
+      ''
     );
+
+    const roleLower = String(rawRole || '').toLowerCase().trim();
+    const typeUpper = String(u.userType || '').toUpperCase().trim();
+
+    if (typeUpper === 'BRANCH_ADMIN' || roleLower.includes('manager') || roleLower.includes('branch admin') || roleLower.includes('branch_admin')) {
+      return 'Branch Manager';
+    }
+    if (typeUpper === 'RESTAURANT_OWNER' || typeUpper === 'SUPER_ADMIN' || typeUpper === 'OWNER' || roleLower.includes('owner') || roleLower.includes('super admin')) {
+      return 'Company Admin';
+    }
+    if (typeUpper === 'STATION' || roleLower.includes('kitchen') || roleLower.includes('chef') || roleLower.includes('cook')) {
+      return 'Kitchen';
+    }
+    if (roleLower.includes('waiter') || roleLower.includes('server') || roleLower.includes('captain')) {
+      return 'Waiter';
+    }
+    if (!rawRole || roleLower === 'unknown') {
+      return typeUpper === 'BRANCH_ADMIN' ? 'Branch Manager' : (typeUpper === 'STAFF' ? 'Staff' : (typeUpper || 'Staff'));
+    }
+    return rawRole;
   };
 
   const filteredUsers = useMemo(() => {
     let list = Array.isArray(apiUsers) ? [...apiUsers] : [];
 
+    // 0. Filter by active selected branch from topbar
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && String(activeFilteredBranchId).toUpperCase() !== 'COMPANY') {
+      list = list.filter(u => {
+        // Company staff must NEVER show under a specific branch
+        if (checkIsCompanyStaff(u)) {
+          return false;
+        }
+        return isBranchMatch(u, activeFilteredBranchId, apiBranches);
+      });
+    }
+
     // 1. Branch filter
     if (isCompanyLogin && branchFilter && branchFilter !== 'All') {
-      list = list.filter(u => {
-        const bId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
-        return String(bId) === String(branchFilter) || isBranchMatch(u, branchFilter, apiBranches);
-      });
+      if (branchFilter === 'COMPANY' || branchFilter === 'Company') {
+        list = list.filter(u => checkIsCompanyStaff(u));
+      } else {
+        list = list.filter(u => {
+          const bId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+          // Specific branch selected: Company staff must NOT show here
+          if (checkIsCompanyStaff(u)) {
+            return false;
+          }
+          return String(bId) === String(branchFilter) || isBranchMatch(u, branchFilter, apiBranches);
+        });
+      }
     }
 
     // 2. Role filter
@@ -518,8 +614,19 @@ export default function StaffManagementPanel({
     return list;
   }, [apiUsers, roleFilter, statusFilter, dutyFilter, branchFilter, searchQuery, isCompanyLogin, apiRoles, apiBranches]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / limit));
-  const paginatedUsers = (filteredUsers.length > limit) ? filteredUsers.slice(page * limit, (page + 1) * limit) : filteredUsers;
+  const isServerPaginated = Boolean(
+    (totalRecords > apiUsers.length && apiUsers.length <= limit) ||
+    (serverTotalPages > 1) ||
+    (totalRecords > limit)
+  );
+
+  const totalPages = isServerPaginated
+    ? Math.max(1, serverTotalPages || Math.ceil(totalRecords / limit))
+    : Math.max(1, Math.ceil(filteredUsers.length / limit));
+
+  const paginatedUsers = isServerPaginated
+    ? filteredUsers
+    : ((filteredUsers.length > limit) ? filteredUsers.slice(page * limit, (page + 1) * limit) : filteredUsers);
 
   useEffect(() => {
     if (page >= totalPages && totalPages > 0) {
@@ -545,7 +652,7 @@ export default function StaffManagementPanel({
   const [userForm, setUserForm] = useState({
     employeeCode: '',
     name: '',
-    branchId: '',
+    branchId: 'COMPANY',
     roleId: '',
     status: 'Active',
     dutyStatus: 'ON_DUTY',
@@ -560,18 +667,20 @@ export default function StaffManagementPanel({
     if (viewState === 'form' && !editingUserId) {
       if (!isAdmin && currentBranchId) {
         setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
-      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') {
         setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      } else {
+        setUserForm(prev => ({ ...prev, branchId: 'COMPANY' }));
       }
     }
   }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
 
   const openAddUser = () => {
     setEditingUserId(null);
-    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
     const initialBranchId = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : (cleanBranch || (apiBranches[0]?._id || ''));
+      : (cleanBranch || 'COMPANY');
     const waiterRole = apiRoles.find(r => r.roleName.toLowerCase().includes('waiter'));
     const autoCode = `EMP-${String(apiUsers.length + 1).padStart(3, '0')}`;
     setUserForm({
@@ -594,7 +703,7 @@ export default function StaffManagementPanel({
   const openEditUser = (user) => {
     setEditingUserId(user._id);
     const rawBranchId = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
-    const isComp = !rawBranchId || rawBranchId === 'COMPANY' || rawBranchId === 'Company' || user.userType === 'RESTAURANT_OWNER' || user.userType === 'SUPER_ADMIN';
+    const isComp = checkIsCompanyStaff(user);
     const userBranchId = isComp ? 'COMPANY' : (rawBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
     const userAssignedTableIds = apiTables
       .filter(t => {
@@ -611,7 +720,7 @@ export default function StaffManagementPanel({
     const uStatusStr = String(user.status || '').toLowerCase().trim();
     const storedInactiveIds = JSON.parse(localStorage.getItem('serviq_inactive_staff_ids') || '[]');
     const storedStatuses = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
-    const isInactive = 
+    const isInactive =
       (uId && storedInactiveIds.map(String).includes(uId)) ||
       storedStatuses[uId]?.status === 'Inactive' ||
       storedStatuses[uEmail]?.status === 'Inactive' ||
@@ -625,11 +734,18 @@ export default function StaffManagementPanel({
       user.isActive === 0 ||
       user.active === false;
 
+    const currentRoleTitle = getUserRoleTitle(user);
+    const matchedRoleObj = apiRoles.find(r =>
+      (r._id && String(r._id) === String(typeof user.roleId === 'object' ? user.roleId?._id : user.roleId)) ||
+      (r.roleName && r.roleName.toLowerCase() === currentRoleTitle.toLowerCase()) ||
+      (r._id && String(r._id).toLowerCase() === currentRoleTitle.toLowerCase())
+    );
+
     setUserForm({
       employeeCode: empCode,
       name: user.name || '',
       branchId: userBranchId,
-      roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
+      roleId: matchedRoleObj ? matchedRoleObj._id : ((typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : '')),
       status: isInactive ? 'Inactive' : 'Active',
       dutyStatus: user.dutyStatus || 'ON_DUTY',
       phone: user.phoneNumber || '',
@@ -698,10 +814,10 @@ export default function StaffManagementPanel({
     const effectiveBranch = isCompanyBranchSelected
       ? null
       : ((!isAdmin && currentBranchId)
-          ? currentBranchId
-          : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
-              ? userForm.branchId
-              : (cleanSelected || currentBranchId || (apiBranches[0]?._id || ''))));
+        ? currentBranchId
+        : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+          ? userForm.branchId
+          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || ''))));
 
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
@@ -711,7 +827,7 @@ export default function StaffManagementPanel({
     const isStatusActive = userForm.status === 'Active';
     const payload = {
       name: userForm.name.trim(),
-      userType: isCompanyBranchSelected ? (isBranchAdmin ? 'SUPER_ADMIN' : 'STAFF') : (isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF'),
+      userType: isBranchAdmin ? 'BRANCH_ADMIN' : 'STAFF',
       status: userForm.status,
       isActive: isStatusActive,
       active: isStatusActive,
@@ -773,7 +889,7 @@ export default function StaffManagementPanel({
         localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
         localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
         localStorage.setItem('serviq_staff_statuses', JSON.stringify(storedStatuses));
-      } catch (e) {}
+      } catch (e) { }
       const isWaiter = roleName.toLowerCase().includes('waiter');
       if (savedUserId && isWaiter) {
         try {
@@ -887,9 +1003,9 @@ export default function StaffManagementPanel({
 
   const handleToggleDuty = async (user) => {
     const roleName = getStaffRoleName(user).toLowerCase();
-    const isManager = roleName.includes('manager') || 
-      roleName.includes('admin') || 
-      user.userType === 'BRANCH_ADMIN' || 
+    const isManager = roleName.includes('manager') ||
+      roleName.includes('admin') ||
+      user.userType === 'BRANCH_ADMIN' ||
       user.userType === 'RESTAURANT_OWNER' ||
       String(user.role || '').toLowerCase().includes('manager') ||
       String(user.designation || '').toLowerCase().includes('manager');
@@ -980,7 +1096,7 @@ export default function StaffManagementPanel({
     const storedStatuses = JSON.parse(localStorage.getItem('serviq_staff_statuses') || '{}');
 
     const uStatusStr = String(user.status || '').toLowerCase().trim();
-    const isCurrentlyInactive = 
+    const isCurrentlyInactive =
       (uId && storedInactiveIds.map(String).includes(uId)) ||
       (uEmail && storedInactiveEmails.includes(uEmail)) ||
       storedStatuses[uId]?.status === 'Inactive' ||
@@ -1024,7 +1140,7 @@ export default function StaffManagementPanel({
       localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
       localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
       localStorage.setItem('serviq_staff_statuses', JSON.stringify(storedStatuses));
-    } catch (e) {}
+    } catch (e) { }
 
     // 3. Update AppContext state if present
     if (updateStaff && activeRestaurant?.id) {
@@ -1081,6 +1197,8 @@ export default function StaffManagementPanel({
     }
   };
 
+
+
   const loadWaiterAssignments = (waiterId) => {
     setModalWaiterId(waiterId);
     if (waiterId) {
@@ -1088,7 +1206,7 @@ export default function StaffManagementPanel({
       const assignedTables = apiTables.filter(t => {
         const assigned = resolveTableAssignedWaiter(t, apiUsers);
         if (!assigned) return false;
-        return String(assigned.id) === String(waiterId) || 
+        return String(assigned.id) === String(waiterId) ||
           (selectedWaiter && String(assigned.name).trim().toLowerCase() === String(selectedWaiter.name).trim().toLowerCase());
       });
       setModalTableIds(assignedTables.map(t => t._id || t.id));
@@ -1161,7 +1279,7 @@ export default function StaffManagementPanel({
         localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
         localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
         localStorage.setItem('serviq_staff_statuses', JSON.stringify(storedStatuses));
-      } catch (e) {}
+      } catch (e) { }
       setUserToDelete(null);
       fetchData();
     }
@@ -1230,12 +1348,12 @@ export default function StaffManagementPanel({
       const uBranch = branchObj ? (branchObj.branchName || branchObj.name) : (uBranchId ? 'Main Branch' : 'All Branches');
       const uStatusStr = String(u.status || '').toLowerCase().trim();
       const isStaffActive = !(
-        uStatusStr === 'inactive' || 
-        uStatusStr === 'disabled' || 
-        uStatusStr === 'deactivated' || 
-        u.isActive === false || 
-        String(u.isActive) === 'false' || 
-        u.isActive === 0 || 
+        uStatusStr === 'inactive' ||
+        uStatusStr === 'disabled' ||
+        uStatusStr === 'deactivated' ||
+        u.isActive === false ||
+        String(u.isActive) === 'false' ||
+        u.isActive === 0 ||
         u.active === false
       );
       return [
@@ -1419,7 +1537,7 @@ export default function StaffManagementPanel({
               </label>
               {(() => {
                 const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
                 const isCompanyScopeEffective = isCompanyUser && (!cleanSelectedBranch);
                 const isLocked = !isCompanyScopeEffective;
 
@@ -1428,14 +1546,13 @@ export default function StaffManagementPanel({
                   currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
                 }
 
-                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company' || (!currentBranchVal && isCompanyScopeEffective);
                 const currentBranchObj = (!isCompanySelected && currentBranchVal)
                   ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                   : null;
-                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
+                let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || 'COMPANY'));
 
                 const branchOptions = [
-                  ...(isCompanyScopeEffective ? [{ value: '', label: 'Select Branch...' }] : []),
                   { value: 'COMPANY', label: 'Company' },
                   ...allBranchesList.map(b => ({
                     value: b._id || b.id,
@@ -1617,13 +1734,14 @@ export default function StaffManagementPanel({
 
   // Branch-scoped staff pool for KPI Cards
   const branchScopedStaff = apiUsers.filter(u => {
-    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL') {
+    if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && String(activeFilteredBranchId).toUpperCase() !== 'COMPANY') {
       const uBranchId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
       const uBranch = typeof u.branch === 'object' ? (u.branch?._id || u.branch?.id) : u.branch;
       const effectiveStaffBranch = uBranchId || uBranch;
-      if (effectiveStaffBranch && String(effectiveStaffBranch) !== String(activeFilteredBranchId) && effectiveStaffBranch !== 'ALL') {
+      if (!effectiveStaffBranch || effectiveStaffBranch === 'COMPANY' || effectiveStaffBranch === 'Company' || u.userType === 'RESTAURANT_OWNER' || u.userType === 'SUPER_ADMIN') {
         return false;
       }
+      return isBranchMatch(u, activeFilteredBranchId, apiBranches);
     }
     return true;
   });
@@ -1906,6 +2024,7 @@ export default function StaffManagementPanel({
                 onChange={(e) => { setBranchFilter(e.target.value); setPage(0); }}
                 options={[
                   { value: 'All', label: 'All Branches' },
+                  { value: 'COMPANY', label: 'Company' },
                   ...apiBranches.map(b => ({
                     value: b._id || b.id,
                     label: b.branchName || b.name
@@ -1966,9 +2085,9 @@ export default function StaffManagementPanel({
 
               const isWaiter = uRoleName.toLowerCase().includes('waiter');
               const isKitchen = uRoleName.toLowerCase().includes('kitchen');
-              const isManager = uRoleName.toLowerCase().includes('manager') || 
-                uRoleName.toLowerCase().includes('admin') || 
-                user.userType === 'BRANCH_ADMIN' || 
+              const isManager = uRoleName.toLowerCase().includes('manager') ||
+                uRoleName.toLowerCase().includes('admin') ||
+                user.userType === 'BRANCH_ADMIN' ||
                 user.userType === 'RESTAURANT_OWNER' ||
                 String(user.role || '').toLowerCase().includes('manager') ||
                 String(user.designation || '').toLowerCase().includes('manager');
@@ -2177,23 +2296,23 @@ export default function StaffManagementPanel({
                     <div style={{ display: 'inline-flex', gap: '3px', justifyContent: 'flex-end', alignItems: 'center' }}>
                       {/* View */}
                       {hasPermission('staff', 'view') && (
-                      <button
-                        type="button"
-                        title="View Staff Details"
-                        onClick={() => setViewingStaff(user)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#0284c7',
-                          cursor: 'pointer',
-                          padding: '5px',
-                          borderRadius: '6px',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <EyeIcon size={15} />
-                      </button>
+                        <button
+                          type="button"
+                          title="View Staff Details"
+                          onClick={() => setViewingStaff(user)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#0284c7',
+                            cursor: 'pointer',
+                            padding: '5px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <EyeIcon size={15} />
+                        </button>
                       )}
 
                       {/* Edit */}
@@ -2219,90 +2338,121 @@ export default function StaffManagementPanel({
 
                       {/* Assign Tables (Only for Waiters) */}
                       {hasPermission('staff', 'edit') && (
-                      <button
-                        type="button"
-                        disabled={!isWaiter}
-                        title={isWaiter ? "Assign Tables to Waiter" : "Table assignment is only available for Waiters"}
-                        onClick={() => {
-                          if (isWaiter) {
-                            openAssignTablesModal(user._id || user.id);
-                          }
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: isWaiter ? '#059669' : '#cbd5e1',
-                          cursor: isWaiter ? 'pointer' : 'not-allowed',
-                          padding: '5px',
-                          borderRadius: '6px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          opacity: isWaiter ? 1 : 0.4
-                        }}
-                      >
-                        <TableAssignIcon size={15} />
-                      </button>
+                        <button
+                          type="button"
+                          disabled={!isWaiter}
+                          title={isWaiter ? "Assign Tables to Waiter" : "Table assignment is only available for Waiters"}
+                          onClick={() => {
+                            if (isWaiter) {
+                              openAssignTablesModal(user._id || user.id);
+                            }
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: isWaiter ? '#059669' : '#cbd5e1',
+                            cursor: isWaiter ? 'pointer' : 'not-allowed',
+                            padding: '5px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: isWaiter ? 1 : 0.4
+                          }}
+                        >
+                          <TableAssignIcon size={15} />
+                        </button>
                       )}
 
                       {/* Reset Password */}
                       {hasPermission('staff', 'edit') && (
-                      <button
-                        type="button"
-                        title="Reset Password"
-                        onClick={() => {
-                          setChangePasswordUserId(user);
-                          setNewPassword('');
-                          setConfirmPassword('');
-                          setPasswordError('');
-                          setConfirmPasswordError('');
-                          setShowNewPassword(false);
-                          setShowConfirmPassword(false);
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: '5px',
-                          color: '#eab308',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: '6px'
-                        }}
-                      >
-                        <KeyIcon size={15} />
-                      </button>
+                        <button
+                          type="button"
+                          title="Reset Password"
+                          onClick={() => {
+                            setChangePasswordUserId(user);
+                            setNewPassword('');
+                            setConfirmPassword('');
+                            setPasswordError('');
+                            setConfirmPasswordError('');
+                            setShowNewPassword(false);
+                            setShowConfirmPassword(false);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '5px',
+                            color: '#eab308',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '6px'
+                          }}
+                        >
+                          <KeyIcon size={15} />
+                        </button>
                       )}
 
                       {/* Activate / Deactivate Toggle */}
                       {hasPermission('staff', 'edit') && (
-                      <button
-                        type="button"
-                        title={isStaffActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
-                        onClick={() => handleToggleAccountStatus(user)}
-                        style={{
-                          background: isStaffActive ? '#ecfdf5' : '#fef2f2',
-                          border: `1px solid ${isStaffActive ? '#a7f3d0' : '#fecaca'}`,
-                          color: isStaffActive ? '#16a34a' : '#dc2626',
-                          cursor: 'pointer',
-                          width: '28px',
-                          height: '28px',
-                          padding: '0',
-                          borderRadius: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s ease'
-                        }}
-                        onMouseEnter={e => {
-                          e.currentTarget.style.background = isStaffActive ? '#d1fae5' : '#fee2e2';
-                        }}
-                        onMouseLeave={e => {
-                          e.currentTarget.style.background = isStaffActive ? '#ecfdf5' : '#fef2f2';
-                        }}
-                      >
-                        {isStaffActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
-                      </button>
+                        <button
+                          type="button"
+                          title={isStaffActive ? "Deactivate / Lock Account" : "Activate / Unlock Account"}
+                          onClick={() => handleToggleAccountStatus(user)}
+                          style={{
+                            background: isStaffActive ? '#ecfdf5' : '#fef2f2',
+                            border: `1px solid ${isStaffActive ? '#a7f3d0' : '#fecaca'}`,
+                            color: isStaffActive ? '#16a34a' : '#dc2626',
+                            cursor: 'pointer',
+                            width: '28px',
+                            height: '28px',
+                            padding: '0',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = isStaffActive ? '#d1fae5' : '#fee2e2';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = isStaffActive ? '#ecfdf5' : '#fef2f2';
+                          }}
+                        >
+                          {isStaffActive ? <UnlockIcon size={15} color="#16a34a" /> : <LockIcon size={15} color="#dc2626" />}
+                        </button>
+                      )}
+
+                      {/* Delete Staff */}
+                      {(hasPermission('staff', 'delete') || hasPermission('staff_management', 'delete') || isAdmin || isCompanyScope) && (
+                        <button
+                          type="button"
+                          title="Delete Staff Member"
+                          onClick={() => setUserToDelete(user)}
+                          style={{
+                            background: '#fef2f2',
+                            border: '1px solid #fee2e2',
+                            color: '#dc2626',
+                            cursor: 'pointer',
+                            width: '28px',
+                            height: '28px',
+                            padding: '0',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = '#fee2e2';
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = '#fef2f2';
+                          }}
+                        >
+                          <TrashIcon size={14} color="#dc2626" />
+                        </button>
                       )}
                     </div>
                   </td>
@@ -2354,7 +2504,10 @@ export default function StaffManagementPanel({
       }}>
         {/* Left Info Text */}
         <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
-          Showing {filteredUsers.length === 0 ? 0 : (page * limit) + 1} to {Math.min((page + 1) * limit, filteredUsers.length)} of {filteredUsers.length} entries
+          {(() => {
+            const effTotal = isServerPaginated ? (totalRecords || filteredUsers.length) : filteredUsers.length;
+            return `Showing ${effTotal === 0 ? 0 : (page * limit) + 1} to ${Math.min((page + 1) * limit, effTotal)} of ${effTotal} entries`;
+          })()}
         </div>
 
         {/* Right Pagination Buttons */}
@@ -2454,7 +2607,7 @@ export default function StaffManagementPanel({
           <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#475569' }}>
             Set a new password for <strong>{changePasswordUserId?.name}</strong>.
           </p>
-          
+
           {/* New Password */}
           <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px', color: '#0f172a' }}>

@@ -240,14 +240,14 @@ export default function BillingHistory() {
           resolvedTableId = String(selectedTable);
         } else {
           const found =
-            availableTables.find(t => 
-              t.tableId === selectedTable || 
+            availableTables.find(t =>
+              t.tableId === selectedTable ||
               String(t.tableNumber || t.tableNo) === String(selectedTable) ||
               t.name === selectedTable ||
               String(t.id) === String(selectedTable)
             ) ||
-            (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t => 
-              t.tableId === selectedTable || 
+            (Array.isArray(activeRestaurant?.tables) ? activeRestaurant.tables.find(t =>
+              t.tableId === selectedTable ||
               String(t.tableNumber || t.tableNo) === String(selectedTable) ||
               t.name === selectedTable
             ) : null);
@@ -270,7 +270,7 @@ export default function BillingHistory() {
         } else {
           // Resolve custom string code (e.g. stf-01, STF-01, or name) to staff._id ObjectId
           const found =
-            availableStaff.find(s => 
+            availableStaff.find(s =>
               (s._id && isMongoId(String(s._id))) && (
                 String(s._id) === String(selectedStaff) ||
                 String(s.id) === String(selectedStaff) ||
@@ -278,7 +278,7 @@ export default function BillingHistory() {
                 String(s.name || s.staffName || s.fullName) === String(selectedStaff)
               )
             ) ||
-            (Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff.find(s => 
+            (Array.isArray(activeRestaurant?.staff) ? activeRestaurant.staff.find(s =>
               (s._id && isMongoId(String(s._id))) && (
                 String(s._id) === String(selectedStaff) ||
                 String(s.id) === String(selectedStaff) ||
@@ -324,9 +324,9 @@ export default function BillingHistory() {
           serverTotal = payload.length;
         } else if (payload && typeof payload === 'object') {
           items = Array.isArray(payload.items) ? payload.items :
-                  Array.isArray(payload.data) ? payload.data :
-                  Array.isArray(payload.billingHistory) ? payload.billingHistory :
-                  Array.isArray(payload.history) ? payload.history :
+            Array.isArray(payload.data) ? payload.data :
+              Array.isArray(payload.billingHistory) ? payload.billingHistory :
+                Array.isArray(payload.history) ? payload.history :
                   Array.isArray(payload.orders) ? payload.orders : [];
           serverTotal = Number(payload.totalItems ?? payload.total ?? payload.count ?? items.length);
           if (payload.summary) {
@@ -414,7 +414,7 @@ export default function BillingHistory() {
         return false;
       }
       const statusStr = String(it.status || '').toLowerCase();
-      const isPaid = 
+      const isPaid =
         it.isPaid === true ||
         it.paid === true ||
         it.is_paid === true ||
@@ -460,8 +460,8 @@ export default function BillingHistory() {
     if (!selTable || selTable === 'All' || selTable === 'ALL') return true;
 
     const selStr = String(selTable).trim().toLowerCase();
-    const opt = tblOpts.find(o => 
-      String(o.value).toLowerCase() === selStr || 
+    const opt = tblOpts.find(o =>
+      String(o.value).toLowerCase() === selStr ||
       String(o.code || '').toLowerCase() === selStr ||
       String(o.label || '').toLowerCase() === selStr ||
       String(o.tableNumber || '').toLowerCase() === selStr
@@ -671,7 +671,7 @@ export default function BillingHistory() {
       // 1. Search Bill No / Order ID / Table / Customer / Dish name
       if (searchTerm && searchTerm.trim()) {
         const q = searchTerm.trim().toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           String(it.invoiceNo || it.invoiceId || it.id || '').toLowerCase().includes(q) ||
           String(it.billNo || '').toLowerCase().includes(q) ||
           String(it.orderId || it.orderRefId || '').toLowerCase().includes(q) ||
@@ -691,7 +691,7 @@ export default function BillingHistory() {
       // 3. Customer Filter
       if (customerFilter && customerFilter.trim()) {
         const cf = customerFilter.trim().toLowerCase();
-        const matchesCustomer = 
+        const matchesCustomer =
           String(it.customerName || '').toLowerCase().includes(cf) ||
           String(it.customerPhone || '').includes(cf);
         if (!matchesCustomer) return false;
@@ -769,7 +769,7 @@ export default function BillingHistory() {
       if (isSpecificBranch) {
         let matchesBranch = isBranchMatch(it, selectedBranchId, activeRestaurant?.branches || []);
         if (!matchesBranch && (it.table || it.tableId)) {
-          const tbl = availableTables.find(t => 
+          const tbl = availableTables.find(t =>
             String(t._id || t.id || '') === String(it.tableId || '') ||
             String(t.tableNumber || t.tableNo || '') === String(it.table || it.tableNumber || '') ||
             String(t.tableId || '') === String(it.tableId || '')

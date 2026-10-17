@@ -194,6 +194,16 @@ export default function UserListPanel() {
     if (usersRes?.status) {
       const uData = usersRes.response?.data || usersRes.response || [];
       let list = Array.isArray(uData) ? uData : (Array.isArray(uData?.users) ? uData.users : (Array.isArray(usersRes.response?.users) ? usersRes.response.users : []));
+      if (activeFilteredBranchId && activeFilteredBranchId !== 'ALL' && String(activeFilteredBranchId).toUpperCase() !== 'COMPANY') {
+        list = list.filter(u => {
+          const bId = typeof u.branchId === 'object' ? (u.branchId?._id || u.branchId?.id) : u.branchId;
+          const bVal = u.branch || bId;
+          if (!bVal || bVal === 'COMPANY' || bVal === 'Company' || u.userType === 'RESTAURANT_OWNER' || u.userType === 'SUPER_ADMIN') {
+            return false;
+          }
+          return isBranchMatch(u, activeFilteredBranchId, currentBranches);
+        });
+      }
       setApiUsers(list);
       const totalNum = usersRes.response?.total ?? usersRes.response?.totalRecords ?? usersRes.response?.totalUsers ?? usersRes.response?.count ?? usersRes.response?.pagination?.total ?? (usersRes.response?.data?.total ?? list.length);
       setTotalRecords(totalNum);
@@ -267,21 +277,23 @@ export default function UserListPanel() {
     if (viewState === 'form' && !editingUserId) {
       if (!isAdmin && currentBranchId) {
         setUserForm(prev => ({ ...prev, branchId: currentBranchId }));
-      } else if (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') {
+      } else if (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') {
         setUserForm(prev => ({ ...prev, branchId: selectedBranchId }));
+      } else {
+        setUserForm(prev => ({ ...prev, branchId: 'COMPANY' }));
       }
     }
   }, [viewState, editingUserId, isAdmin, currentBranchId, selectedBranchId]);
 
   const openAddUser = () => {
     setEditingUserId(null);
-    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+    const cleanBranch = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
     const defaultBranch = (!isAdmin && currentBranchId)
       ? currentBranchId
-      : (cleanBranch || activeFilteredBranchId || (apiBranches.length > 0 ? apiBranches[0]._id : ''));
+      : (cleanBranch || activeFilteredBranchId || 'COMPANY');
     setUserForm({
       name: '',
-      branchId: defaultBranch || '',
+      branchId: defaultBranch || 'COMPANY',
       roleId: '',
       status: 'Active',
       phone: '',
@@ -297,7 +309,7 @@ export default function UserListPanel() {
     const userBranch = typeof user.branchId === 'object' ? user.branchId?._id : user.branchId;
     setUserForm({
       name: user.name || '',
-      branchId: (!isAdmin && currentBranchId) ? currentBranchId : (userBranch || (apiBranches.length > 0 ? apiBranches[0]._id : '')),
+      branchId: (!isAdmin && currentBranchId) ? currentBranchId : (userBranch || 'COMPANY'),
       roleId: (typeof user.roleId === 'object' ? user.roleId?._id : user.roleId) || (apiRoles.length > 0 ? apiRoles[0]._id : ''),
       status: user.isActive ? 'Active' : 'Inactive',
       phone: user.phoneNumber || '',
@@ -356,12 +368,15 @@ export default function UserListPanel() {
       return;
     }
 
-    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
-    const effectiveBranch = (!isAdmin && currentBranchId)
-      ? currentBranchId
-      : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
+    const isCompanyBranchSelected = userForm.branchId === 'COMPANY' || userForm.branchId === 'Company' || (!userForm.branchId && isCompanyScope);
+    const cleanSelected = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
+    const effectiveBranch = isCompanyBranchSelected
+      ? null
+      : ((!isAdmin && currentBranchId)
+        ? currentBranchId
+        : (userForm.branchId && userForm.branchId !== 'ALL' && userForm.branchId !== 'COMPANY'
           ? userForm.branchId
-          : (cleanSelected || currentBranchId || (apiBranches[0]?._id || '')));
+          : (cleanSelected || currentBranchId || 'COMPANY')));
 
     const resolvedRoleId = await ensureValidRoleId(userForm.roleId, apiRoles);
     const roleName = apiRoles.find(r => r._id === userForm.roleId || r._id === resolvedRoleId)?.roleName || (typeof userForm.roleId === 'string' ? userForm.roleId : '');
@@ -376,7 +391,9 @@ export default function UserListPanel() {
       active: isStatusActive,
     };
 
-    if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
+    if (isCompanyBranchSelected) {
+      payload.branchId = null;
+    } else if (effectiveBranch && /^[0-9a-fA-F]{24}$/.test(String(effectiveBranch))) {
       payload.branchId = String(effectiveBranch);
     }
     if (resolvedRoleId && /^[0-9a-fA-F]{24}$/.test(String(resolvedRoleId))) {
@@ -418,7 +435,7 @@ export default function UserListPanel() {
         }
         localStorage.setItem('serviq_inactive_staff_ids', JSON.stringify(storedInactiveIds));
         localStorage.setItem('serviq_inactive_staff_emails', JSON.stringify(storedInactiveEmails));
-      } catch (e) {}
+      } catch (e) { }
 
       setViewState('list');
       fetchData();
@@ -646,7 +663,7 @@ export default function UserListPanel() {
                 </label>
                 {(() => {
                   const allBranchesList = (apiBranches && apiBranches.length > 0) ? apiBranches : (activeRestaurant?.branches || []);
-                  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && String(selectedBranchId).toUpperCase() !== 'COMPANY') ? selectedBranchId : '';
+                  const cleanSelectedBranch = (selectedBranchId && selectedBranchId !== 'ALL' && selectedBranchId !== 'All' && String(selectedBranchId).toUpperCase() !== 'COMPANY' && String(selectedBranchId).toLowerCase() !== 'all branches') ? selectedBranchId : '';
                   const isCompanyScope = isCompanyUser && (!cleanSelectedBranch);
                   const isLocked = !isCompanyScope;
 
@@ -655,14 +672,13 @@ export default function UserListPanel() {
                     currentBranchVal = isBranchLogin && userBranchId ? userBranchId : (cleanSelectedBranch || userForm.branchId);
                   }
 
-                  const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company';
+                  const isCompanySelected = currentBranchVal === 'COMPANY' || currentBranchVal === 'Company' || (!currentBranchVal && isCompanyScope);
                   const currentBranchObj = (!isCompanySelected && currentBranchVal)
                     ? (allBranchesList.find(b => String(b._id || b.id) === String(currentBranchVal)) || allBranchesList.find(b => String(b.branchCode) === String(currentBranchVal)))
                     : null;
-                  let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || ''));
+                  let effectiveVal = isCompanySelected ? 'COMPANY' : (currentBranchObj ? (currentBranchObj._id || currentBranchObj.id) : (currentBranchVal || 'COMPANY'));
 
                   const branchOptions = [
-                    ...(isCompanyScope ? [{ value: '', label: 'Select Branch...' }] : []),
                     { value: 'COMPANY', label: 'Company' },
                     ...allBranchesList.map(b => ({
                       value: b._id || b.id,
@@ -744,7 +760,7 @@ export default function UserListPanel() {
                   Phone Number <span style={{ color: '#ef4444' }}>*</span>
                 </label>
                 <input
-                  type="text"                  maxLength={10}
+                  type="text" maxLength={10}
                   inputMode="numeric"
                   value={userForm.phone}
                   onChange={e => {

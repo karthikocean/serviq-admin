@@ -403,50 +403,38 @@ input:checked+.slider:before {
 .sticky-col-2,
 .sticky-col-3,
 .sticky-col-action {
-  position: sticky;
-  z-index: 1;
-  background-color: inherit;
+  position: static;
+  z-index: auto;
+  box-shadow: none;
 }
 
 .menu-items-table thead th.sticky-col-1,
 .menu-items-table thead th.sticky-col-2,
 .menu-items-table thead th.sticky-col-3,
 .menu-items-table thead th.sticky-col-action {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 25 !important;
-  background: #f8fafc !important;
-  background-color: #f8fafc !important;
-  color: #475569 !important;
-  border-top: none !important;
-  border-left: none !important;
-  border-right: none !important;
-  border-bottom: 2px solid #e2e8f0 !important;
+  position: static !important;
+  z-index: auto !important;
   box-shadow: none !important;
 }
 
 .sticky-col-1 {
-  left: 0;
   width: 70px;
   min-width: 70px;
   max-width: 70px;
 }
 
 .sticky-col-2 {
-  left: 70px;
   width: 80px;
   min-width: 80px;
   max-width: 80px;
 }
 
 .sticky-col-3 {
-  left: 150px;
   width: 250px;
   min-width: 250px;
 }
 
 .sticky-col-action {
-  right: 0;
   width: 120px;
   text-align: right;
 }
